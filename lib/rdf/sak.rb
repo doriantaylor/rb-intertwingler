@@ -1,3 +1,4 @@
+# -*- coding: undecided -*-
 require 'rdf/sak/version'
 require 'pathname'
 require 'mimemagic'
@@ -158,21 +159,22 @@ module RDF::SAK
               attempt << tmp.root.dup(1)
             end
             doc = attempt
-          elsif type =~ /^text/i
+          elsif type =~ /^text\/(?:plain|(?:x-)?markdown)/i
+            # just assume plain text is markdown
             doc = ::MD::Noko.new.ingest doc
           else
             raise "Don't know what to do with #{type}"
           end
         end
 
+        # now fix the namespaces for mangled html documents
         root = doc.root
         if root.name == 'html'
           unless root.namespace
             # clear this off or it will be duplicated in the output
             root.remove_attribute('xmlns')
             # now generate a new ns object
-            ns = root.add_namespace(
-              nil, 'http://www.w3.org/1999/xhtml')
+            ns = root.add_namespace(nil, 'http://www.w3.org/1999/xhtml')
             # *now* scan the document and add the namespace declaration
             root.traverse do |node|
               if node.element? && node.namespace.nil?
@@ -182,11 +184,13 @@ module RDF::SAK
             end
           end
 
+          # also add the magic blank doctype declaration if it's missing
           unless doc.internal_subset
             doc.create_internal_subset('html', nil, nil)
           end
         end
 
+        # voila
         @doc = doc
       end
     end
