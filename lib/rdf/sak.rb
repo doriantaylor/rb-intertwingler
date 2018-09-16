@@ -117,13 +117,16 @@ module RDF::SAK
       attr_reader :doc
 
       def initialize context, doc
-        raise "doc must be Pathname, IO, or Nokogiri node" unless
+        raise 'context must be a RDF::SAK::Context' unless
+          context.is_a? RDF::SAK::Context
+        raise 'doc must be Pathname, IO, or Nokogiri node' unless
           C_OK.any? { |c| doc.is_a? c } || doc.respond_to?(:to_s)
 
         @context = context
 
         # turn the document into an XML::Document
         if doc.is_a? Nokogiri::XML::Node
+          # a node that is not a document should be wrapped with one
           unless doc.is_a? Nokogiri::XML::Document
             d = doc.dup 1
             doc = Nokogiri::XML::Document.new
@@ -132,28 +135,31 @@ module RDF::SAK
         else
           type = nil
 
+          # pathnames turned into IO objects
           if doc.is_a? Pathname
             type = MimeMagic.by_path doc
-            doc  = doc.open
+            doc  = doc.open # this may raise if the file isn't there
           end
 
+          # squash everything else to a string
           doc = doc.to_s unless doc.is_a? IO
 
+          # check type by content
           type ||= MimeMagic.by_magic(doc) || default_type(doc)
 
           # can you believe there is a special bookmarks mime type good grief
           type = 'text/html' if type == 'application/x-mozilla-bookmarks'
 
-          # if the detected type is html, try it as strict xml first
+          # now we try to parse
           if type =~ /xml/i
             doc = Nokogiri.XML doc
           elsif type == 'text/html'
-            # try xml first
+            # if the detected type is html, try it as strict xml first
             attempt = nil
             begin
-              # try to parse strictn
               attempt = Nokogiri.XML doc, nil, nil, (1 << 11) # NONET
             rescue Nokogiri::XML::SyntaxError
+              # do not wrap this a second time; let it fail if it's gonna
               tmp = Nokogiri.HTML doc
               attempt = Nokogiri::XML::Document.new
               attempt << tmp.root.dup(1)
@@ -178,6 +184,7 @@ module RDF::SAK
             # *now* scan the document and add the namespace declaration
             root.traverse do |node|
               if node.element? && node.namespace.nil?
+                # downcasing the name may be cargo culting; need to check
                 node.name = node.name.downcase
                 node.namespace = ns
               end
