@@ -1,4 +1,4 @@
-# -*- coding: undecided -*-
+# -*- coding: utf-8 -*-
 require 'rdf/sak/version'
 require 'pathname'
 require 'mimemagic'
@@ -190,7 +190,7 @@ module RDF::SAK
           end
         end
 
-        # voila
+        # voilà
         @doc = doc
       end
     end
