@@ -11,7 +11,7 @@ This is the beginning of a library, command line tool, and interactive
 shell for Doing Things™ with RDF(a) content.
 
 Right now there isn't much to look at but a
-[whackload of comments](/doriantaylor/rb-rdf-sak/blob/master/lib/rdf/sak.rb).
+[whackload of comments](https://github.com/doriantaylor/rb-rdf-sak/blob/master/lib/rdf/sak.rb).
 
 ## Documentation
 
