@@ -1,16 +1,168 @@
 # -*- coding: utf-8 -*-
 require 'rdf/sak/version'
+
+# basic stuff
+require 'stringio'
 require 'pathname'
 require 'mimemagic'
+
+# rdf stuff
+require 'rdf'
+require 'rdf/reasoner'
+require 'linkeddata'
+
+# cli stuff
 require 'commander'
+
+# my stuff
 require 'xml-mixup'
 require 'md-noko'
 
 module RDF::SAK
 
+  # janky bolt-on MimeMagic
+  class MimeMagic < ::MimeMagic
+
+    # XXX this is not strictly correct but good enough for now
+    [
+      ['text/n3', %w(n3 ttl nt), %w(text/plain), [[0..256, '@prefix']]],
+    ].each do |magic|
+      self.add magic[0], extensions: magic[1], parents: magic[2],
+        magic: magic[3]
+    end
+
+    def self.binary? thing
+      sample = nil
+
+      # get some stuff out of the IO or get a substring
+      if thing.is_a? IO
+        pos = thing.tell
+        thing.seek 0, 0
+        sample = thing.read 100
+        thing.seek pos
+      else
+        sample = thing.to_s[0,100]
+      end
+
+      # consider this to be 'binary' if empty
+      return true if sample.length == 0
+      # control codes minus ordinary whitespace
+      sample.b =~ /[\x0-\x8\xe-\x1f\x7f]/ ? true : false
+    end
+
+    def self.default_type thing
+      new(self.binary?(thing) ? 'application/octet-stream' : 'text/plain')
+    end
+
+    def self.by_extension io
+      super(io) || default_type(io)
+    end
+
+    def self.by_path io
+      super(io) || default_type(io)
+    end
+
+    def self.by_magic io
+      super(io) || default_type(io)
+    end
+
+    def self.all_by_magic io
+      out = super(io)
+      out.length > 0 ? out : [default_type(io)]
+    end
+
+  end
+
   class Context
 
-    def initialize graph: nil, config: nil
+    private
+
+    G_OK = [RDF::Repository, RDF::Dataset, RDF::Graph].freeze
+    C_OK = [Pathname, IO, String].freeze
+
+    def coerce_graph graph = nil, type: nil
+      return RDF::Repository.new unless graph
+      return graph if G_OK.any? { |c| graph.is_a? c }
+      raise 'Graph must be some kind of RDF::Graph or RDF data file' unless
+        C_OK.any? { |c| graph.is_a? c } || graph.respond_to?(:to_s)
+
+      opts = {}
+      opts[:content_type] = type if type
+
+      if graph.is_a? Pathname
+        opts[:filename] = graph.expand_path.to_s
+        graph = graph.open
+      elsif graph.is_a? File
+        opts[:filename] = graph.path
+      end
+
+      graph = StringIO.new(graph.to_s) unless graph.is_a? IO
+      reader = RDF::Reader.for(opts) do
+        graph.rewind
+        sample = graph.read 1000
+        graph.rewind
+        sample
+      end or raise "Could not find an RDF::Reader for #{opts[:content_type]}"
+
+      out = RDF::Repository.new
+
+      reader = reader.new graph, **opts
+      reader.each_statement do |stmt|
+        out << stmt
+      end
+
+      out
+    end
+
+    public
+
+    attr_reader :graph
+
+    def initialize graph: nil, config: nil, type: nil
+      RDF::Reasoner.apply(:rdfs, :owl)
+      @graph = coerce_graph graph, type: type
+    end
+
+    def all_types
+      @graph.query([nil, RDF.type, nil]).collect do |s|
+        s.object
+      end.uniq
+    end
+
+    def all_related rdftype
+      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
+      q = [t] # queue
+      c = {}  # cache
+
+      while term = q.shift
+        # add term to cache
+        c[term] = term
+        # entail equivalent classes
+        term.entail(:equivalentClass).each do |ec|
+          # add equivalent classes to queue (if not already cached)
+          q.push ec unless c[ec]
+          c[ec] = ec unless ec == term
+        end
+        # entail subclasses
+        term.subClass.each do |sc|
+          # add subclasses to queue (if not already cached)
+          q.push sc unless c[sc]
+          c[sc] = sc unless sc == term
+        end
+      end
+
+      # smush the result 
+      c.keys
+    end
+
+    def all_of_type rdftype
+      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
+      out = []
+      (all_types & all_related(t)).each do |type|
+        out += @graph.query([nil, RDF.type, type]).collect { |s| s.subject }
+      end
+      
+      out.uniq
     end
 
     # holy cow this is actually a lot of stuff:
@@ -50,6 +202,7 @@ module RDF::SAK
     # generate atom feed
 
     def generate_atom_feed private: False
+      # find all things that are documents
     end
 
     # generate sass palettes
@@ -83,34 +236,12 @@ module RDF::SAK
 
     # fetch references for people/companies/concepts/etc from dbpedia/wikidata
 
-    # - document class -
+    # - document context class -
 
     class Document
       private
 
       C_OK = [Nokogiri::XML::Node, IO, Pathname].freeze
-
-      DERR = {
-        
-      }
-
-      def is_binary thing
-        sample = nil
-        if thing.is_a? IO
-          pos = thing.tell
-          thing.seek 0, 0
-          sample = thing.read 100
-          thing.seek pos
-        else
-          sample = thing.to_s[0,100]
-        end
-
-        sample.b =~ /[\x0-\x8\xe-\x1f\x7f]/ ? true : false
-      end
-
-      def default_type thing
-        is_binary(thing) ? 'application/octet-stream' : 'text/plain'
-      end
 
       public
 
@@ -137,7 +268,7 @@ module RDF::SAK
 
           # pathnames turned into IO objects
           if doc.is_a? Pathname
-            type = MimeMagic.by_path doc
+            type = RDF::SAK::MimeMagic.by_path doc
             doc  = doc.open # this may raise if the file isn't there
           end
 
@@ -145,12 +276,12 @@ module RDF::SAK
           doc = doc.to_s unless doc.is_a? IO
 
           # check type by content
-          type ||= MimeMagic.by_magic(doc) || default_type(doc)
+          type ||= RDF::SAK::MimeMagic.by_magic(doc)
 
           # can you believe there is a special bookmarks mime type good grief
           type = 'text/html' if type == 'application/x-mozilla-bookmarks'
 
-          # now we try to parse
+          # now we try to parse the blob
           if type =~ /xml/i
             doc = Nokogiri.XML doc
           elsif type == 'text/html'
@@ -185,7 +316,7 @@ module RDF::SAK
             root.traverse do |node|
               if node.element? && node.namespace.nil?
                 # downcasing the name may be cargo culting; need to check
-                node.name = node.name.downcase
+                # node.name = node.name.downcase # yup it is
                 node.namespace = ns
               end
             end
@@ -200,6 +331,8 @@ module RDF::SAK
         # voilà
         @doc = doc
       end
+
+
     end
 
   end

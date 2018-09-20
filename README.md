@@ -1,36 +1,34 @@
-# Rdf::Sak
+# RDF::SAK — Swiss Army Knife for RDF(a) Content
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/rdf/sak`. To experiment with that code, run `bin/console` for an interactive prompt.
+```
+$ rdf-sak
+> some-command
+some response!
+> 
+```
 
-TODO: Delete this and the text above, and describe your gem
+
+## Documentation
+
+Generated and deposited
+[in the usual place](http://www.rubydoc.info/gems/rdf-sak/).
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'rdf-sak'
-```
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
+You know how to do this:
 
     $ gem install rdf-sak
 
-## Usage
-
-TODO: Write usage instructions here
-
-## Development
-
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+Or, [download it off rubygems.org](https://rubygems.org/gems/rdf-sak).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/rdf-sak.
+Bug reports and pull requests are welcome at
+[the GitHub repository](https://github.com/doriantaylor/rb-rdf-sak).
 
+## Copyright & License
+
+©2018 [Dorian Taylor](https://doriantaylor.com/)
+
+This software is provided under
+the [Apache License, 2.0](https://www.apache.org/licenses/LICENSE-2.0).
