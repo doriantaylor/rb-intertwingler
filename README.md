@@ -7,11 +7,16 @@ some response!
 > 
 ```
 
+This is the beginning of a library, command line tool, and interactive
+shell for Doing Things™ with RDF(a) content.
+
+Right now there isn't much to look at but a
+[whackload of comments](/doriantaylor/rb-rdf-sak/blob/master/lib/rdf/sak.rb).
 
 ## Documentation
 
-Generated and deposited
-[in the usual place](http://www.rubydoc.info/gems/rdf-sak/).
+None to speak of, but when there is, it will be generated and
+deposited [in the usual place](http://www.rubydoc.info/gems/rdf-sak/).
 
 ## Installation
 
@@ -19,7 +24,8 @@ You know how to do this:
 
     $ gem install rdf-sak
 
-Or, [download it off rubygems.org](https://rubygems.org/gems/rdf-sak).
+Or, [download it off rubygems.org](https://rubygems.org/gems/rdf-sak)
+(when I put it on there).
 
 ## Contributing
 
