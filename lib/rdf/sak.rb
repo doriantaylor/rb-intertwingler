@@ -21,6 +21,7 @@ require 'xml-mixup'
 require 'md-noko'
 require 'uuid-ncname'
 require 'rdf/sak/ci'
+require 'rdf/sak/ibis'
 
 module RDF::SAK
 
@@ -119,6 +120,61 @@ module RDF::SAK
       out
     end
 
+    SCHEME_RANK = { https: 0, http: 1 }
+
+    def cmp_resource a, b, www: nil
+      raise 'Comparands must be instances of RDF::Value' unless
+        [a, b].all? { |x| x.is_a? RDF::Value }
+
+      # URI beats non-URI
+      if a.uri?
+        if b.uri?
+          # https beats http beats other
+          as = a.scheme.downcase.to_sym
+          bs = b.scheme.downcase.to_sym
+          cmp = SCHEME_RANK.fetch(as, 2) <=> SCHEME_RANK.fetch(bs, 2)
+
+          # bail out early
+          return cmp unless cmp == 0
+
+          # this would have returned if the schemes were different, as
+          # such we only need to test one of them
+          if [:http, :https].any?(as) and not www.nil?
+            # if www is non-nil, prefer www or no-www depending on
+            # truthiness of `www` parameter
+            pref = [false, true].zip(www ? [1, 0] : [0, 1]).to_h
+            re = /^(?:(www)\.)?(.*?)$/
+
+            ah = re.match(a.host.to_s.downcase)[1,2]
+            bh = re.match(b.host.to_s.downcase)[1,2]
+
+            # compare hosts sans www
+            cmp = ah[1] <=> bh[1]
+            return cmp unless cmp == 0
+
+            # now compare presence of www
+            cmp = pref[ah[0] == 'www'] <=> pref[bh[0] == 'www']
+            return cmp unless cmp == 0
+
+            # if we're still here, compare the path/query/fragment
+            re = /^.*?\/\/.*?(\/.*)$/
+            al = re.match(a.to_s)[1].to_s
+            bl = re.match(b.to_s)[1].to_s
+
+            return al <=> bl
+          end
+
+          return a <=> b
+        else
+          return -1
+        end
+      elsif b.uri?
+        return 1
+      else
+        return a <=> b
+      end
+    end
+
     def struct_for subject
       rsrc = {}
       @graph.query([subject, nil, nil]).each do |stmt|
@@ -185,11 +241,25 @@ module RDF::SAK
       out.uniq
     end
 
-    def canonical_uri subject
-      
+    def canonical_uri subject, unique: true
+      out = []
+
+      [CI.canonical, RDF::OWL.sameAs].each do |p|
+        o = @graph.query([subject, p, nil]).collect { |st| st.object }
+        out += o.sort { |a, b| cmp_resource(a, b) }
+      end
+
+      unique ? out.first : out.uniq
     end
 
-    def label_for subject, unique: true, lang: nil, alt: false, predicates: nil
+    def label_for subject, unique: true, type: nil, lang: nil, alt: false
+      # get type(s) if not supplied
+
+      # get label predicate stack(s) for RDF type(s)
+
+      # get all predicates in order (use alt stack if doubly specified)
+
+      # filter out language
     end
 
     # holy cow this is actually a lot of stuff:
