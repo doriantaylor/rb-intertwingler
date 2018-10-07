@@ -7,6 +7,8 @@ require 'pathname'
 require 'mimemagic'
 
 # rdf stuff
+require 'uri'
+require 'uri/urn'
 require 'rdf'
 require 'rdf/reasoner'
 require 'linkeddata'
@@ -17,6 +19,8 @@ require 'commander'
 # my stuff
 require 'xml-mixup'
 require 'md-noko'
+require 'uuid-ncname'
+require 'rdf/sak/ci'
 
 module RDF::SAK
 
@@ -74,6 +78,7 @@ module RDF::SAK
   end
 
   class Context
+    include XML::Mixup
 
     private
 
@@ -112,6 +117,21 @@ module RDF::SAK
       end
 
       out
+    end
+
+    def struct_for subject
+      rsrc = {}
+      @graph.query([subject, nil, nil]).each do |stmt|
+        o = rsrc[stmt.predicate] ||= []
+        o.push stmt.object
+      end
+
+      # XXX in here we can do fun stuff like filter/sort by language/datatype
+      rsrc.each do |k, v|
+        v.sort!
+      end
+
+      rsrc
     end
 
     public
@@ -165,6 +185,13 @@ module RDF::SAK
       out.uniq
     end
 
+    def canonical_uri subject
+      
+    end
+
+    def label_for subject, unique: true, lang: nil, alt: false, predicates: nil
+    end
+
     # holy cow this is actually a lot of stuff:
 
     # turn markdown into xhtml (via md-noko)
@@ -201,15 +228,59 @@ module RDF::SAK
 
     # generate atom feed
 
-    def generate_atom_feed private: False
-      # find all things that are documents
+    def generate_atom_feed id, published: true
+      # 
+
+      # find all UUIDs that are documents
+      docs = all_of_type(RDF::Vocab::FOAF.Document).select do |x|
+        x =~ /^urn:uuid:/
+      end
+
+      # prune out all but the published documents if specified
+      if published
+        p = RDF::Vocab::BIBO.status
+        o = RDF::Vocabulary.find_term(
+          'http://purl.org/ontology/bibo/status/published')
+        docs = docs.select do |s|
+          @graph.has_statement? RDF::Statement(s, p, o)
+        end
+      end
+
+      # now we create a hash keyed by uuid containing the metadata
+      authors = {}
+      entries = {}
+      docs.each do |uu|
+        # basically make a jsonld-like structure
+        rsrc = struct_for uu
+
+        # get id (got it already duh)
+        
+        # get canonical link
+        canon = ((rsrc[CI.canonical] || []) +
+          (rsrc[RDF::OWL.sameAs] || [])).find(-> { uu }) { |x| x.resource? }
+        canon = URI.parse canon.to_s
+        
+        entries[uu] = canon
+
+        # get title
+        # get abstract
+        # get author 
+        # get created date
+        # get latest updated date
+      end
+
+      # now we sort by creation (not update) date
+
+      # now we punt out the file
+
+      entries
     end
 
     # generate sass palettes
 
     # generate rewrite map(s)
 
-    def generate_rewrite_maps private: False
+    def generate_rewrite_maps published: true
       # slug to uuid (internal)
       # uuid/slug to canonical slug (308)
       # retired slugs/uuids (410)
@@ -223,7 +294,7 @@ module RDF::SAK
 
     # write public and private variants to target
 
-    def write_xhtml private: False
+    def write_xhtml published: true
     end
 
     # write modified rdf

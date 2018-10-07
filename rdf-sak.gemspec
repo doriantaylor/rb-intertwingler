@@ -30,6 +30,7 @@ Gem::Specification.new do |spec|
   # stuff we use
   spec.add_runtime_dependency 'rdf',              '~> 3.0.2'
   spec.add_runtime_dependency 'linkeddata',       '~> 3.0.1'
+  spec.add_runtime_dependency 'uri-urn',          '~> 0.0.3'
   spec.add_runtime_dependency 'sass',             '~> 3.5.6'
   spec.add_runtime_dependency 'shared-mime-info', '~> 3.5.6'
   spec.add_runtime_dependency 'commander',        '~> 4.4.5' # my patch
