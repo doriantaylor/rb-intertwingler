@@ -83,6 +83,125 @@ module RDF::SAK
 
     private
 
+    # okay labels: what do we want to do about them? poor man's fresnel!
+
+    # basic structure is an asserted base class corresponding to a
+    # ranked list of asserted predicates. to the subject we first
+    # match the closest class, then the closest property.
+
+    # if the instance data doesn't have an exact property mentioned in
+    # the spec, it may have an equivalent property or subproperty we
+    # may be able to use. we could imagine a scoring system analogous
+    # to the one used by CSS selectors, albeit using the topological
+    # distance of classes/predicates in the spec versus those in the
+    # instance data.
+
+    # think about dcterms:title is a subproperty of dc11:title even
+    # though they are actually more like equivalent properties;
+    # owl:equivalentProperty is not as big a conundrum as
+    # rdfs:subPropertyOf. 
+
+    # if Q rdfs:subPropertyOf P then S Q O implies S P O. this is
+    # great but property Q may not be desirable to display.
+
+    # it may be desirable to be able to express properties to never
+    # use as a label, such as skos:hiddenLabel
+
+    # consider ranked alternates, sequences, sequences of alternates.
+    # (this is what fresnel does fyi)
+
+    STRINGS = {
+      RDF::RDFS.Resource => {
+        label: [
+          # main
+          [RDF::Vocab::SKOS.prefLabel, RDF::RDFS.label,
+            RDF::Vocab::DC.title, RDF::Vocab::DC11.title],
+          # alt
+          [RDF::Vocab::SKOS.altLabel, RDF::Vocab::DC.alternative],
+        ],
+        desc: [
+          # main will be cloned into alt
+          [RDF::Vocab::DC.description, RDF::Vocab::DC11.description,
+            RDF::RDFS.comment, RDF::Vocab::SKOS.note],
+        ],
+      },
+      RDF::Vocab::FOAF.Document => {
+        label: [
+          # main
+          [RDF::Vocab::DC.title, RDF::Vocab::DC11.title],
+          # alt
+          [RDF::Vocab::BIBO.shortTitle, RDF::Vocab::DC.alternative],
+        ],
+        desc: [
+          # main
+          [RDF::Vocab::BIBO.abstract, RDF::Vocab::DC.abstract,
+            RDF::Vocab::DC.description, RDF::Vocab::DC11.description],
+          # alt
+          [RDF::Vocab::BIBO.shortDescription],
+        ],
+      },
+      RDF::Vocab::FOAF.Agent => {
+        label: [
+          # main (will get cloned into alt)
+          [RDF::Vocab::FOAF.name],
+        ],
+        desc: [
+          # main cloned into alt
+          [RDF::Vocab::FOAF.status],
+        ],
+      },
+    }
+    STRINGS[RDF::OWL.Thing] = STRINGS[RDF::RDFS.Resource]
+
+    RDF::Reasoner.apply(:rdfs, :owl)
+
+    # note this is to_a because "can't modify a hash during iteration"
+    # which i guess is sensible, so we generate a set of pairs first
+    STRINGS.to_a.each do |type, struct|
+      struct.values.each do |lst|
+        # assert a whole bunch of stuff
+        raise 'STRINGS content must be an array of arrays' unless
+          lst.is_a? Array
+        raise 'Spec must contain 1 or 2 Array elements' if lst.empty?
+        raise 'Spec must be array of arrays of terms' unless
+          lst.all? { |x| x.is_a? Array and x.all? { |y|
+            RDF::Vocabulary.find_term(y) } }
+
+        # prune this to two elements (not that there should be more than)
+        lst.slice!(2, lst.length) if lst.length > 2
+
+        # pre-fill equivalent properties
+        lst.each do |preds|
+          # for each predicate, find its equivalent properties
+
+          # splice them in after the current predicate only if they
+          # are not already explicitly in the list
+          i = 0
+          loop do
+            equiv = preds[i].entail(:equivalentProperty) - preds
+            preds.insert(i + 1, *equiv) unless equiv.empty?
+
+            i += equiv.length + 1
+            break if i >= preds.length
+          end
+
+          # this just causes too many problems otherwise
+          # preds.map! { |p| p.to_s }
+        end
+
+        # duplicate main predicates to alternatives
+        lst[1] ||= lst[0]
+      end
+
+      # may as well seed equivalent classes so we don't have to look them up
+      type.entail(:equivalentClass).each do |equiv|
+        STRINGS[equiv] ||= struct
+      end
+
+      # tempting to do subclasses too but it seems pretty costly in
+      # this framework; save it for the clojure version
+    end
+
     G_OK = [RDF::Repository, RDF::Dataset, RDF::Graph].freeze
     C_OK = [Pathname, IO, String].freeze
 
@@ -174,20 +293,22 @@ module RDF::SAK
         return a <=> b
       end
     end
+    
+    # rdf term type tests
+    NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
+    NMAP   = ({ iri: :uri, bnode: :blank }.merge(
+      [:uri, :blank, :literal].map { |x| [x, x] }.to_h)).freeze
 
-    def struct_for subject
-      rsrc = {}
-      @graph.query([subject, nil, nil]).each do |stmt|
-        o = rsrc[stmt.predicate] ||= []
-        o.push stmt.object
-      end
+    def coerce_node_spec spec
+      spec = [spec] unless spec.respond_to? :to_a
+      spec = spec - [:resource] + [:uri, :blank] if spec.include? :resource
+      spec = NMAP.values_at(*spec).reject(&:nil?).uniq
+      spec = NTESTS.keys if spec.length == 0
+      spec
+    end
 
-      # XXX in here we can do fun stuff like filter/sort by language/datatype
-      rsrc.each do |k, v|
-        v.sort!
-      end
-
-      rsrc
+    def node_matches? node, spec
+      spec.any? { |k| node.send NTESTS[k] }
     end
 
     public
@@ -197,6 +318,26 @@ module RDF::SAK
     def initialize graph: nil, config: nil, type: nil
       RDF::Reasoner.apply(:rdfs, :owl)
       @graph = coerce_graph graph, type: type
+    end
+
+    def struct_for subject, only: []
+      only = coerce_node_spec only
+
+      rsrc = {}
+      @graph.query([subject, nil, nil]).each do |stmt|
+        # this will skip over any term not matching the type
+        next unless node_matches? stmt.object, only
+        p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
+        o = rsrc[p] ||= []
+        o.push stmt.object
+      end
+
+      # XXX in here we can do fun stuff like filter/sort by language/datatype
+      rsrc.each do |k, v|
+        v.sort!
+      end
+
+      rsrc
     end
 
     def all_types
@@ -241,6 +382,61 @@ module RDF::SAK
       out.uniq
     end
 
+    def type_strata rdftype
+      # first we coerce this to an array
+      if rdftype.respond_to? :to_a
+        rdftype = rdftype.to_a
+      else
+        rdftype = [rdftype]
+      end
+      
+      # now squash
+      rdftype.uniq!
+
+      # bail out early
+      return [] if rdftype.count == 0
+
+      # essentially what we want to do is construct a layer of
+      # asserted classes and their inferred equivalents, then probe
+      # the classes in the first layer for subClassOf assertions,
+      # which will form the second layer, and so on.
+
+      queue  = [rdftype]
+      strata = []
+      seen   = {}
+
+      while qin = queue.shift
+        qwork = []
+
+        qin.each do |q|
+          qwork << q # entail doesn't include q
+          qwork += q.entail(:equivalentClass)
+        end
+
+        # grep and flatten
+        qwork = qwork.select { |t| t.uri? and not seen[t] }.uniq
+
+        # push current layer out
+        strata.push qwork if qwork.length > 0
+     
+        # now deal with subClassOf
+        qsuper = []
+        qwork.each do |q|
+          seen[q] = true
+          qsuper += q.subClassOf
+        end
+
+        # grep and flatten this too
+        qsuper = qsuper.select { |t| t.uri? and not seen[t] }.uniq
+
+        # same deal, conditionally push the input queue
+        queue.push qsuper if qsuper.length > 0
+      end
+
+      # voila
+      strata
+    end
+
     def canonical_uri subject, unique: true
       out = []
 
@@ -254,12 +450,57 @@ module RDF::SAK
 
     def label_for subject, unique: true, type: nil, lang: nil, alt: false
       # get type(s) if not supplied
+      asserted = nil
+      if type
+        type = type.respond_to?(:to_a) ? type.to_a : [type]
+        asserted = type.select { |t| t.is_a? RDF::Value }
+      end
+      asserted ||= @graph.query([subject, RDF.type, nil]).collect do |st|
+        RDF::Vocabulary.find_term st.object
+      end
+      asserted.select! { |t| t && t.uri? }
+      asserted.uniq!
+
+      # get all the inferred types by layer; add default class if needed
+      strata = type_strata asserted
+      strata.push [RDF::RDFS.Resource] if
+        strata.length == 0 or not strata[-1].include?(RDF::RDFS.Resource)
+
+      # get the key-value pairs for the subject
+      candidates = struct_for subject, only: :literal
+
+      seen  = {}
+      accum = []
+      strata.each do |lst|
+        lst.each do |cls|
+          next unless STRINGS[cls] and
+            preds = STRINGS[cls][:label][alt ? 1 : 0]
+          # warn cls
+          preds.each do |p|
+            # warn p.inspect
+            next unless vals = candidates[p]
+            vals.each do |v|
+              pair = [p, v]
+              accum.push(pair) unless seen[pair]
+              seen[pair] = true
+            end
+          end
+        end
+      end
+
+      # try that for now
+      accum[0]
+
+      # what we want to do is match the predicates from the subject to
+      # the predicates in the label designation
 
       # get label predicate stack(s) for RDF type(s)
 
       # get all predicates in order (use alt stack if doubly specified)
 
-      # filter out language
+      # filter out desired language(s)
+
+      # XXX note we will probably want to return the predicate as well
     end
 
     # holy cow this is actually a lot of stuff:
