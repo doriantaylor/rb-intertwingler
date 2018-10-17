@@ -20,8 +20,12 @@ require 'commander'
 require 'xml-mixup'
 require 'md-noko'
 require 'uuid-ncname'
+
+# ontologies, mine in particular
 require 'rdf/sak/ci'
 require 'rdf/sak/ibis'
+# others not included in rdf.rb
+require 'rdf/sak/pav'
 
 module RDF::SAK
 
@@ -82,6 +86,8 @@ module RDF::SAK
     include XML::Mixup
 
     private
+
+    RDF::Reasoner.apply(:rdfs, :owl)
 
     # okay labels: what do we want to do about them? poor man's fresnel!
 
@@ -152,8 +158,6 @@ module RDF::SAK
       },
     }
     STRINGS[RDF::OWL.Thing] = STRINGS[RDF::RDFS.Resource]
-
-    RDF::Reasoner.apply(:rdfs, :owl)
 
     # note this is to_a because "can't modify a hash during iteration"
     # which i guess is sensible, so we generate a set of pairs first
@@ -311,14 +315,55 @@ module RDF::SAK
       spec.any? { |k| node.send NTESTS[k] }
     end
 
+    AUTHOR  = [RDF::SAK::PAV.authoredBy, RDF::Vocab::DC.creator,
+      RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
+    CONTRIB = [RDF::SAK::PAV.contributedBy, RDF::Vocab::DC.contributor,
+      RDF::Vocab::DC11.contributor]
+    [AUTHOR, CONTRIB].each do |preds|
+      i = 0
+      loop do
+        equiv = preds[i].entail(:equivalentProperty) - preds
+        preds.insert(i + 1, *equiv) unless equiv.empty?
+        i += equiv.length + 1
+        break if i >= preds.length
+      end
+
+      preds.freeze
+    end
+
+    def term_list terms
+      terms = terms.respond_to?(:to_a) ? terms.to_a : [terms]
+      terms.uniq.map { |t| RDF::Vocabulary.find_term }.compact
+    end
+
     public
 
     attr_reader :graph
 
-    def initialize graph: nil, config: nil, type: nil
-      RDF::Reasoner.apply(:rdfs, :owl)
+    # Initialize a context.
+    #
+    # @param graph
+    # @param base
+    # @param config
+    # @param type
+    #
+    # @return [RDF::SAK::Context] the new context object.
+
+    def initialize graph: nil, base: nil, config: nil, type: nil
+      # RDF::Reasoner.apply(:rdfs, :owl)
+
       @graph = coerce_graph graph, type: type
+      @base  = RDF::URI.new base.to_s if base
     end
+
+    # Obtain a key-value structure for the given subject, optionally
+    # constraining the result by node type (:resource, :uri/:iri,
+    # :blank/:bnode, :literal)
+    #
+    # @param subject
+    # @param only
+    #
+    # @return [Hash]
 
     def struct_for subject, only: []
       only = coerce_node_spec only
@@ -340,11 +385,38 @@ module RDF::SAK
       rsrc
     end
 
+    # Obtain everything in the graph that is an `rdf:type` of something.
+    # 
+    # @return [Array]
+
     def all_types
       @graph.query([nil, RDF.type, nil]).collect do |s|
         s.object
       end.uniq
     end
+
+    # Obtain every subject that is rdf:type the given type or its subtypes.
+    #
+    # @param rdftype [RDF::Term]
+    #
+    # @return [Array]
+
+    def all_of_type rdftype
+      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
+      out = []
+      (all_types & all_related(t)).each do |type|
+        out += @graph.query([nil, RDF.type, type]).collect { |s| s.subject }
+      end
+      
+      out.uniq
+    end
+
+    # Obtain everything that is an owl:equivalentClass or
+    # rdfs:subClassOf the given type.
+    #
+    # @param rdftype [RDF::Term]
+    #
+    # @return [Array]
 
     def all_related rdftype
       t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
@@ -372,15 +444,15 @@ module RDF::SAK
       c.keys
     end
 
-    def all_of_type rdftype
-      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
-      out = []
-      (all_types & all_related(t)).each do |type|
-        out += @graph.query([nil, RDF.type, type]).collect { |s| s.subject }
-      end
-      
-      out.uniq
-    end
+    # Obtain a stack of types for an asserted initial type or set
+    # thereof. Returns an array of arrays, where the first is the
+    # asserted types and their inferred equivalents, and subsequent
+    # elements are immediate superclasses and their equivalents. A
+    # given URI will only appear once in the entire structure.
+    #
+    # @param rdftype [RDF::Term, :to_a]
+    #
+    # @return [Array]
 
     def type_strata rdftype
       # first we coerce this to an array
@@ -390,8 +462,8 @@ module RDF::SAK
         rdftype = [rdftype]
       end
       
-      # now squash
-      rdftype.uniq!
+      # now squash and coerce
+      rdftype = rdftype.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
 
       # bail out early
       return [] if rdftype.count == 0
@@ -403,7 +475,7 @@ module RDF::SAK
 
       queue  = [rdftype]
       strata = []
-      seen   = {}
+      seen   = Set.new
 
       while qin = queue.shift
         qwork = []
@@ -414,20 +486,21 @@ module RDF::SAK
         end
 
         # grep and flatten
-        qwork = qwork.select { |t| t.uri? and not seen[t] }.uniq
+        qwork = qwork.map { |t| RDF::Vocabulary.find_term t }.compact.uniq
+        qwork -= seen.to_a
+        seen |= qwork
 
         # push current layer out
         strata.push qwork if qwork.length > 0
      
         # now deal with subClassOf
         qsuper = []
-        qwork.each do |q|
-          seen[q] = true
-          qsuper += q.subClassOf
-        end
+        qwork.each { |q| qsuper += q.subClassOf }
 
         # grep and flatten this too
-        qsuper = qsuper.select { |t| t.uri? and not seen[t] }.uniq
+        qsuper = qsuper.map { |t| RDF::Vocabulary.find_term t }.compact.uniq
+        qsuper -= seen.to_a
+        seen |= qsuper
 
         # same deal, conditionally push the input queue
         queue.push qsuper if qsuper.length > 0
@@ -437,6 +510,35 @@ module RDF::SAK
       strata
     end
 
+    # Obtain all and only the rdf:types directly asserted on the subject.
+    # 
+    # @param subject [RDF::Resource]
+    # @param type [RDF::Term, :to_a]
+    #
+    # @return [Array]
+
+    def asserted_types subject, type = nil
+      asserted = nil
+      if type
+        type = type.respond_to?(:to_a) ? type.to_a : [type]
+        asserted = type.select { |t| t.is_a? RDF::Value }.map do |t|
+          RDF::Vocabulary.find_term t
+        end
+      end
+      asserted ||= @graph.query([subject, RDF.type, nil]).collect do |st|
+        RDF::Vocabulary.find_term st.object
+      end
+      asserted.select { |t| t && t.uri? }.uniq
+    end
+
+    # Obtain the "best" dereferenceable URI for the subject.
+    # Optionally returns all candidates.
+    # 
+    # @param subject [RDF::Resource]
+    # @param unique [true, false]
+    #
+    # @return [RDF::URI, Array]
+
     def canonical_uri subject, unique: true
       out = []
 
@@ -445,21 +547,130 @@ module RDF::SAK
         out += o.sort { |a, b| cmp_resource(a, b) }
       end
 
+      # try to generate 
+      if out.empty? and subject.uri?
+        uri = URI.parse subject.to_s
+        if @base and uri.respond_to? :uuid
+          b = @base.clone
+          b.query = b.fragment = nil
+          b.path = '/' + uri.uuid
+          out << RDF::URI.new(b.to_s)
+        end
+      end
+
       unique ? out.first : out.uniq
     end
 
-    def label_for subject, unique: true, type: nil, lang: nil, alt: false
+    # Obtain the objects for a given subject-predicate pair.
+    #
+    # @param subject [RDF::Resource]
+    # @param predicate [RDF::URI]
+    # @param entail [false, true]
+    # @param only [:uri, :iri, :resource, :blank, :bnode, :literal]
+    # @param datatype [RDF::Term]
+    #
+    # @return [Array]
+
+    def objects_for subject, predicate, entail: true, only: [], datatype: nil
+      raise 'Subject must be a resource' unless subject.is_a? RDF::Resource
+      predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
+      raise 'Predicate must be some kind of term' unless
+        predicate.all? { |p| p.is_a? RDF::URI }
+
+      predicate = predicate.map { |x| RDF::Vocabulary.find_term x }.compact
+
+      only = coerce_node_spec only
+
+      datatype = (
+        datatype.respond_to?(:to_a) ? datatype.to_a : [datatype]).compact
+      raise 'Datatype must be some kind of term' unless
+        datatype.all? { |p| p.is_a? RDF::URI }
+
+      # XXX we really should wrap this up huh
+      if entail
+        i = 0
+        loop do
+          equiv = predicate[i].entail(:equivalentProperty) - predicate
+          predicate.insert(i + 1, *equiv) unless equiv.empty?
+          i += equiv.length + 1
+          break if i >= predicate.length
+        end
+      end
+
+      out = []
+      predicate.each do |p|
+        @graph.query([subject, p, nil]).each do |stmt|
+          o = stmt.object
+
+          # warn o
+
+          # make sure it's in the spec
+          next unless node_matches? o, only
+
+          # constrain output
+          next if o.literal? and
+            !(datatype.empty? or datatype.include?(o.datatype))
+
+          out.push o
+        end
+      end
+
+      out.uniq
+    end
+
+    # Assuming the subject is a thing that has authors, return the
+    # list of authors. Try bibo:authorList first for an explicit
+    # ordering, then continue to the various other predicates.
+    #
+    # @param subject [RDF::Resource]
+    # @param unique  [false, true] only return the first author
+    # @param contrib [false, true] return contributors instead of authors
+    #
+    # @return [RDF::Value, Array]
+
+    def authors_for subject, unique: false, contrib: false
+      authors = []
+
+      # try the author list
+      lp = [RDF::Vocab::BIBO[contrib ? :contributorList : :authorList]]
+      lp += lp[0].entail(:equivalentProperty) # XXX cache this
+      lp.each do |pred|
+        o = @graph.first_object([subject, pred, nil])
+        next unless o
+        # note this use of RDF::List is not particularly well-documented
+        authors += RDF::List.new(subject: o, graph: @graph).to_a
+      end
+
+      # now try various permutations of the author/contributor predicate
+      unsorted = []
+      preds = contrib ? CONTRIB : AUTHOR
+      preds.each do |pred|
+        unsorted += @graph.query([subject, pred, nil]).collect { |x| x.object }
+      end
+
+      authors += unsorted.uniq.sort { |a, b| label_for(a) <=> label_for(b) }
+
+      unique ? authors.first : authors.uniq
+    end
+
+    # Obtain the most appropriate label(s) for the subject's type(s).
+    # Returns one or more (depending on the `unique` flag)
+    # predicate-object pairs in order of preference.
+    #
+    # @param subject [RDF::Resource]
+    # @param unique [true, false] only return the first pair
+    # @param type [RDF::Term, Array] supply asserted types if already retrieved
+    # @param lang [nil] not currently implemented (will be conneg)
+    # @param desc [false, true] retrieve description instead of label
+    # @param alt  [false, true] retrieve alternate instead of main
+    #
+    # @return [Array] either a predicate-object pair or an array of pairs.
+
+    def label_for subject, unique: true, type: nil,
+        lang: nil, desc: false, alt: false
+      return unless subject and subject.is_a? RDF::Value and subject.resource?
       # get type(s) if not supplied
-      asserted = nil
-      if type
-        type = type.respond_to?(:to_a) ? type.to_a : [type]
-        asserted = type.select { |t| t.is_a? RDF::Value }
-      end
-      asserted ||= @graph.query([subject, RDF.type, nil]).collect do |st|
-        RDF::Vocabulary.find_term st.object
-      end
-      asserted.select! { |t| t && t.uri? }
-      asserted.uniq!
+      asserted = asserted_types subject, type
 
       # get all the inferred types by layer; add default class if needed
       strata = type_strata asserted
@@ -474,7 +685,7 @@ module RDF::SAK
       strata.each do |lst|
         lst.each do |cls|
           next unless STRINGS[cls] and
-            preds = STRINGS[cls][:label][alt ? 1 : 0]
+            preds = STRINGS[cls][desc ? :desc : :label][alt ? 1 : 0]
           # warn cls
           preds.each do |p|
             # warn p.inspect
@@ -501,6 +712,71 @@ module RDF::SAK
       # filter out desired language(s)
 
       # XXX note we will probably want to return the predicate as well
+    end
+
+    SKOS_HIER = [
+      {
+        element: :subject,
+        pattern: -> c, p { [nil, p, c] },
+        preds: [RDF::Vocab::SKOS.broader,  RDF::Vocab::SKOS.broaderTransitive],
+      },
+      {
+        element: :object,
+        pattern: -> c, p { [c, p, nil] },
+        preds: [RDF::Vocab::SKOS.narrower, RDF::Vocab::SKOS.narrowerTransitive],
+      }
+    ]
+    SKOS_HIER.each do |struct|
+      # lol how many times are we gonna cart this thing around
+      preds = struct[:preds]
+      i = 0
+      loop do
+        equiv = preds[i].entail(:equivalentProperty) - preds
+        preds.insert(i + 1, *equiv) unless equiv.empty?
+        i += equiv.length + 1;
+        break if i >= preds.length
+      end
+    end
+
+    def sub_concepts concept, extra: []
+      raise 'Concept must be exactly one concept' unless
+        concept.is_a? RDF::Resource
+      extra = term_list extra
+
+      # we need an array for a queue, and a set to accumulate the
+      # output as well as a separate 'seen' set
+      queue = [concept]
+      seen  = Set.new queue.dup
+      out   = seen.dup
+
+      # it turns out that the main SKOS hierarchy terms, while not
+      # being transitive themselves, are subproperties of transitive
+      # relations which means they are as good as being transitive.
+
+      while c = queue.shift
+        SKOS_HIER.each do |struct|
+          elem, pat, preds = struct.values_at(:element, :pattern, :preds)
+          preds.each do |p|
+            @graph.query(pat.call c, p).each do |stmt|
+              # obtain hierarchical element
+              hierc = stmt.send elem
+
+              # skip any further processing if we have seen this concept
+              next if seen.include? hierc
+              seen << hierc
+
+              next if !extra.empty? and !extra.any? do |t|
+                @graph.has_statement? RDF::Statement.new(hierc, RDF.type, t)
+              end
+
+              queue << hierc
+              out   << hierc
+            end
+          end
+        end
+      end
+
+      out.to_a.sort
     end
 
     # holy cow this is actually a lot of stuff:
@@ -539,8 +815,12 @@ module RDF::SAK
 
     # generate atom feed
 
+    #
+
     def generate_atom_feed id, published: true
-      # 
+      raise 'ID must be a resource' unless id.is_a? RDF::Resource
+
+      feed = struct_for id
 
       # find all UUIDs that are documents
       docs = all_of_type(RDF::Vocab::FOAF.Document).select do |x|
@@ -559,32 +839,90 @@ module RDF::SAK
 
       # now we create a hash keyed by uuid containing the metadata
       authors = {}
+      dates   = {}
       entries = {}
       docs.each do |uu|
         # basically make a jsonld-like structure
-        rsrc = struct_for uu
+        #rsrc = struct_for uu
 
         # get id (got it already duh)
         
         # get canonical link
-        canon = ((rsrc[CI.canonical] || []) +
-          (rsrc[RDF::OWL.sameAs] || [])).find(-> { uu }) { |x| x.resource? }
-        canon = URI.parse canon.to_s
-        
-        entries[uu] = canon
+        # canon = ((rsrc[CI.canonical] || []) +
+        #   (rsrc[RDF::OWL.sameAs] || [])).find(-> { uu }) { |x| x.resource? }
+        # canon = URI.parse canon.to_s
 
-        # get title
-        # get abstract
-        # get author 
-        # get created date
+        canon = URI.parse(canonical_uri(uu).to_s)
+        
+        xml = { '#entry' => [
+          { '#link' => nil, rel: :alternate, href: canon, type: 'text/html' },
+          { '#id' => uu.to_s }
+        ] }
+
+        # get published date first
+        published = (objects_for uu,
+                     [RDF::Vocab::DC.issued, RDF::Vocab::DC.created],
+                     datatype: RDF::XSD.dateTime)[0]
+        
         # get latest updated date
+        updated = (objects_for uu, RDF::Vocab::DC.modified,
+                   datatype: RDF::XSD.dateTime).sort[-1]
+        updated ||= published || RDF::Literal::DateTime.new(DateTime.now)
+        dates[uu] = updated = Time.parse(updated.to_s).utc
+
+        xml['#entry'].push({ '#updated' => updated.iso8601 })
+        if published
+          published = Time.parse(published.to_s).utc
+          xml['#entry'].push({ '#published' => published.iso8601 })
+          dates[uu] = published
+        end
+
+        # get author(s)
+        al = []
+        authors_for(uu).each do |a|
+          unless authors[a]
+            n = label_for a
+            x = authors[a] = { '#author' => [{ '#name' => n[1].to_s }] }
+
+            hp = @graph.first_object [a, RDF::Vocab::FOAF.homepage, nil]
+            hp ||= canonical_uri a
+            
+            x['#author'].push({ '#uri' => hp.to_s }) if hp
+          end
+
+          al.push authors[a]
+        end
+
+        xml['#entry'] += al unless al.empty?
+
+        # get title (note unshift)
+        if (t = label_for uu)
+          xml['#entry'].unshift({ '#title' => t[1].to_s })
+        end
+        
+        # get abstract
+        if (d = label_for uu, desc: true)
+          xml['#entry'].push({ '#summary' => d[1].to_s })
+        end
+        
+        entries[uu] = xml
       end
 
-      # now we sort by creation (not update) date
+      # note we overwrite the entries hash here with a sorted array
+      entries = entries.values_at(
+        *entries.keys.sort { |a, b| dates[a] <=> dates[b] })
+      # ugggh god forgot the asterisk and lost an hour
 
       # now we punt out the file
 
-      entries
+      preamble = [
+        # { '#title' =>
+        # { id = id.to_s },
+        
+      ]
+
+      markup(spec: { '#feed' => preamble + entries,
+        xmlns: 'http://www.w3.org/2005/Atom' }).document
     end
 
     # generate sass palettes
