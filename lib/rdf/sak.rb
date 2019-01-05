@@ -121,7 +121,7 @@ module RDF::SAK
         label: [
           # main
           [RDF::Vocab::SKOS.prefLabel, RDF::RDFS.label,
-            RDF::Vocab::DC.title, RDF::Vocab::DC11.title],
+            RDF::Vocab::DC.title, RDF::Vocab::DC11.title, RDF::RDFV.value],
           # alt
           [RDF::Vocab::SKOS.altLabel, RDF::Vocab::DC.alternative],
         ],
@@ -243,6 +243,46 @@ module RDF::SAK
       out
     end
 
+    def normalize_hash h
+      out = {}
+      h.each do |k, v|
+        out[k.to_s.to_sym] = v.is_a?(Hash) ? normalize_hash(v) : v
+      end
+      out
+    end
+
+    def coerce_config config
+      # config must either be a hash or a file name/pathname/io object
+      unless config.respond_to? :to_h
+        require 'parseconfig'
+        cf = config.is_a?(IO) ? config : Pathname.new(config).expand_path
+        config = ParseConfig.new(cf).params
+      end
+
+      config = normalize_hash config
+
+      # config MUST have source and target dirs
+      raise 'Config must have :source and :target' unless
+        ([:source, :target] - config.keys).empty?
+      [:source, :target].each do |path|
+        dir = config[path] = Pathname.new(config[path]).expand_path
+        raise "#{dir} is not a readable directory" unless
+          dir.directory? && dir.readable?
+      end
+      raise "Target directory #{config[:target]} is not writable" unless
+        config[:target].writable?
+      raise "Source and target directories are the same: #{config[:source]}" if
+        config[:source] == config[:target]
+
+      # config MAY have graph location(s) but we can test this other
+      # ways, same goes for base URI
+      if config[:graph] and config[:graph].is_a? String
+        config[:graph] = Pathname.new(config[:graph]).expand_path
+      end
+
+      config
+    end
+
     SCHEME_RANK = { https: 0, http: 1 }
 
     def cmp_resource a, b, www: nil
@@ -333,7 +373,36 @@ module RDF::SAK
 
     def term_list terms
       terms = terms.respond_to?(:to_a) ? terms.to_a : [terms]
-      terms.uniq.map { |t| RDF::Vocabulary.find_term }.compact
+      terms.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
+    end
+
+    def coerce_resource arg
+      return arg if arg.is_a? RDF::URI
+
+      blank = /^_:(.*)/.match arg
+      return RDF::Node blank[1] if blank
+
+      arg = URI(@base.to_s) + arg.to_s
+
+      RDF::URI(arg.to_s)
+    end
+
+    def coerce_uuid_urn arg
+      # if this is an ncname then change it
+      if ([URI, RDF::URI] & arg.class.ancestors).empty? &&
+          arg.respond_to?(:to_s)
+        arg = arg.to_s
+
+        # coerce ncname to uuid
+        arg = UUID::NCName::from_ncname(arg, version: 1) if arg =~
+          /^[A-P](?:[0-9A-Z_-]{20}|[2-7A-Z]{24})[A-P]$/i
+
+        # now the string is either a UUID or it isn't
+        
+        arg = "urn:uuid:#{arg}" unless arg.start_with? 'urn:uuid:'
+      end
+
+      arg = coerce_resource arg
     end
 
     public
@@ -352,8 +421,13 @@ module RDF::SAK
     def initialize graph: nil, base: nil, config: nil, type: nil
       # RDF::Reasoner.apply(:rdfs, :owl)
 
-      @graph = coerce_graph graph, type: type
-      @base  = RDF::URI.new base.to_s if base
+      @config = coerce_config config
+
+      graph ||= @config[:graph] if @config[:graph]
+      base  ||= @config[:base]  if @config[:base]
+      
+      @graph  = coerce_graph graph, type: type
+      @base   = RDF::URI.new base.to_s if base
     end
 
     # Obtain a key-value structure for the given subject, optionally
@@ -560,6 +634,7 @@ module RDF::SAK
 
       unique ? out.first : out.uniq
     end
+
 
     # Obtain the objects for a given subject-predicate pair.
     #
@@ -799,6 +874,8 @@ module RDF::SAK
 
     # add title attribute to all links
 
+    # add alt attribute to all images
+
     # segmentation of composite documents into multiple files
 
     # aggregation of simple documents into composites
@@ -928,6 +1005,34 @@ module RDF::SAK
     # generate sass palettes
 
     # generate rewrite map(s)
+    def generate_rewrite_map published: true
+    end
+
+    # give me all UUIDs of all documents, filter for published if
+    # applicable
+    # 
+    # find the "best" (relative) URL for the UUID and map the pair
+    # together
+    def generate_uuid_redirect_map published: true
+      
+    end
+
+    # find all URIs/slugs that are *not* canonical, map them to slugs
+    # that *are* canonical
+    def generate_slug_redirect_map published: true
+    end
+
+    # you know what, it's entirely possible that these ought never be
+    # called individually and the work to get one would duplicate the
+    # work of getting the other, so maybe just do 'em both at once
+
+    def generate_redirect_map published: true
+      generate_uuid_redirect_map(published) +
+        generate_slug_redirect_map(published)
+    end
+
+    def generate_gone_map published: true
+    end
 
     def generate_rewrite_maps published: true
       # slug to uuid (internal)
@@ -936,6 +1041,19 @@ module RDF::SAK
     end
 
     # - io stuff -
+
+    # locate
+    def locate uri
+      uri = coerce_uuid_urn uri
+
+      tu = URI(uri) # copy of uri for testing content
+      if tu.scheme == 'urn' and tu.nid == 'uuid'
+      end
+
+      warn @source
+
+      uri
+    end
 
     # read from source
 
@@ -967,7 +1085,7 @@ module RDF::SAK
 
       attr_reader :doc
 
-      def initialize context, doc
+      def initialize context, doc, uri: nil
         raise 'context must be a RDF::SAK::Context' unless
           context.is_a? RDF::SAK::Context
         raise 'doc must be Pathname, IO, or Nokogiri node' unless
@@ -1048,11 +1166,127 @@ module RDF::SAK
           end
         end
 
+        @uri = URI.parse(uri || base_for(doc))
+
         # voilà
         @doc = doc
       end
 
+      def base_for doc: nil
+        doc ||= @doc
+        base = @uri
+        if doc.root.name.to_sym == :html
+          base = doc.at_xpath(
+            '(/html:html/html:head/html:base[@href])[1]/@href',
+            { html: 'http://www.w3.org/1999/xhtml' })
+        elsif doc.root['xml:base']
+          base = doc.root['xml:base']
+        end
 
+        base
+      end
+
+      def rewrite_links
+      end
+
+      # sponge the document for rdfa
+      def triples_for
+      end
+
+      # give us the rdf subject of the node itself
+      def subject_for node: nil, is_ancestor: false
+        node ||= @doc.root
+        raise 'Node must be an element' unless
+          node.is_a? Nokogiri::XML::Element
+
+        # first we check for an ancestor element with @property and no
+        # @content; if we find one then we reevaluate with that
+        # element as the starting point
+        if n = node.at_xpath('(ancestor::*[@property][not(@content)])[1]')
+          return subject_for n
+        end
+
+        subject = nil
+        is_root = !node.parent or node.parent.document?
+
+        # if parent is false we first check for an @about
+        if is_ancestor
+          [:resource, :href, :src].each do |attr|
+            if node.key? attr
+              subject = node[attr]
+              break
+            end
+          end
+
+          subject = node[:about] if subject.nil? and node.key? :about
+        else
+          # 
+          subject = node[:about] if node.key? :about
+          # now we need to check @inlist and @typeof
+
+          # @typeof is easy because if it's there and @about isn't
+          # then the subject is a bnode (we'll generate-id(@typeof)
+          # and derive the bnode ID from that)
+
+          # @inlist on the other hand is hard, because we want the
+          # actual list node
+
+        end
+
+        # XXX actually no we don't want this. subject definitions on
+        # the current node should only ever come from @about or blank
+        # nodes if a @typeof or @inlist is present. the only time
+        # @resource/@href/@src ought to be considered is when parent
+        # is true (ie we are scanning an ancestor of the initial
+        # node).
+
+        # also maybe we should memoize this shit
+
+        # then we check @resource, @href, @src
+        if subject.nil? and is_ancestor
+          [:resource, :href, :src].each do |attr|
+            if node.key? attr
+              subject = node[attr]
+              break
+            end
+          end
+
+          # if parent is true, *now* we check for @about
+          if subject.nil? and node.key? :about
+            subject = node[:about]
+          end
+        end
+
+        # if there is still no viable subject, check if the element is
+        # the root, and if so, treat it as if there is an empty @about
+        # (ie use base href)
+        subject = @uri if subject.nil? and is_root
+
+        # if there is still no viable subject, then before proceeding,
+        # check if this is an (x)html head or body element, in which
+        # case short-circuit to the parent node
+        if subject.nil? and [:head, :body].include? node.name.to_sym
+          subject_for node.parent, true
+        end
+
+        # (blank node time)
+
+        # if there are none of those, we check for a @typeof
+
+        # if there is no @typeof, check for @inlist
+
+        return subject if subject
+
+        # if we couldn't find anything suitable as a subject, recurse to
+        # the parent node
+
+        subject_for(node.parent, true) if node.parent and node.parent.element?
+      end
+
+      # backlink structure
+      def generate_backlinks private: false
+        
+      end
     end
 
   end
@@ -1071,7 +1305,13 @@ module RDF::SAK
 
     # constructor
 
-    def initialize
+    # configuration:
+
+    # directories: source, target, private
+    # files (or file names): graph, rewrite_map, redirect_map, gone_map
+    # URIs: base, aliases
+
+    def initialize config: {}
     end
 
     # vestigial
