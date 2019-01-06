@@ -11,3 +11,4 @@ syntax: glob
 /pkg/
 /spec/reports/
 /tmp/
+sample.conf

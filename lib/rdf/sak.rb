@@ -262,8 +262,8 @@ module RDF::SAK
       config = normalize_hash config
 
       # config MUST have source and target dirs
-      raise 'Config must have :source and :target' unless
-        ([:source, :target] - config.keys).empty?
+      raise 'Config must have :source, :target, and :private directories' unless
+        ([:source, :target, :private] - config.keys).empty?
       [:source, :target].each do |path|
         dir = config[path] = Pathname.new(config[path]).expand_path
         raise "#{dir} is not a readable directory" unless
@@ -273,6 +273,17 @@ module RDF::SAK
         config[:target].writable?
       raise "Source and target directories are the same: #{config[:source]}" if
         config[:source] == config[:target]
+
+      # we try to create the private directory
+      config[:private] = config[:target] + config[:private]
+      if config[:private].exist?
+        raise "#{config[:private]} is not a readable/writable directory" unless
+          [:directory?, :readable?, :writable?].all? do |m|
+          config[:private].send m
+        end
+      else
+        config[:private].mkpath
+      end
 
       # config MAY have graph location(s) but we can test this other
       # ways, same goes for base URI
@@ -1042,17 +1053,55 @@ module RDF::SAK
 
     # - io stuff -
 
-    # locate
+    # Locate the file in the source directory associated with the given URI.
+    #
+    # @param [RDF::URI, URI, :to_s] the URI requested
+    # 
+    # @return [Pathname] of the corresponding file or nil if no file was found.
+
     def locate uri
       uri = coerce_uuid_urn uri
 
+      base = URI(@base.to_s)
+
       tu = URI(uri) # copy of uri for testing content
       if tu.scheme == 'urn' and tu.nid == 'uuid'
+      else
+        # TODO locate uuid subject
+        raise 'not implemented sucka'
       end
 
-      warn @source
+      # xxx bail if the uri isn't a subject in the graph
 
-      uri
+      candidates = [@config[:source] + tu.uuid]
+      (canonical_uri uri, unique: false).each do |u|
+        u = URI(u.to_s)
+        next unless u.hostname == base.hostname
+        p = u.path[/^\/*(.*?)$/, 1]
+        candidates.push(@config[:source] + p)
+      end
+
+      files = candidates.uniq.map do |c|
+        Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
+      end.reduce(:+).uniq
+
+      # XXX implement negotiation algorithm
+      return files[0]
+
+      # return the filename from the source
+      # nil
+    end
+
+    # Visit (open) the document at the given URI.
+    # 
+    # @param uri [RDF::URI, URI, :to_s]
+    # 
+    # @return [RDF::SAK::Context::Document] or nil
+
+    def visit uri
+      path = locate uri
+      return unless path
+      Document.new self, path, uri: uri
     end
 
     # read from source
@@ -1120,7 +1169,7 @@ module RDF::SAK
           type = 'text/html' if type == 'application/x-mozilla-bookmarks'
 
           # now we try to parse the blob
-          if type =~ /xml/i
+          if type.to_s =~ /xml/i
             doc = Nokogiri.XML doc
           elsif type == 'text/html'
             # if the detected type is html, try it as strict xml first
