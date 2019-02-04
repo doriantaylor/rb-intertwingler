@@ -4,6 +4,7 @@ require 'rdf/sak/version'
 # basic stuff
 require 'stringio'
 require 'pathname'
+require 'tempfile'
 require 'mimemagic'
 
 # rdf stuff
@@ -393,7 +394,7 @@ module RDF::SAK
       blank = /^_:(.*)/.match arg
       return RDF::Node blank[1] if blank
 
-      arg = URI(@base.to_s) + arg.to_s
+      arg = URI(@base.to_s).merge! arg.to_s
 
       RDF::URI(arg.to_s)
     end
@@ -411,14 +412,19 @@ module RDF::SAK
         # now the string is either a UUID or it isn't
         
         arg = "urn:uuid:#{arg}" unless arg.start_with? 'urn:uuid:'
+      else
+        arg = arg.class.new arg.to_s.downcase unless arg == arg.to_s.downcase
       end
+
+      raise 'not a UUID' unless
+        arg.to_s =~ /^urn:uuid:[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
 
       arg = coerce_resource arg
     end
 
     public
 
-    attr_reader :graph
+    attr_reader :config, :graph, :base
 
     # Initialize a context.
     #
@@ -628,13 +634,13 @@ module RDF::SAK
       out = []
 
       [CI.canonical, RDF::OWL.sameAs].each do |p|
-        o = @graph.query([subject, p, nil]).collect { |st| st.object }
+        o = @graph.query([subject, p, nil]).objects # collect { |st| st.object }
         out += o.sort { |a, b| cmp_resource(a, b) }
       end
 
       # try to generate 
       if out.empty? and subject.uri?
-        uri = URI.parse subject.to_s
+        uri = ::URI.parse subject.to_s
         if @base and uri.respond_to? :uuid
           b = @base.clone
           b.query = b.fragment = nil
@@ -646,6 +652,99 @@ module RDF::SAK
       unique ? out.first : out.uniq
     end
 
+    # Obtain the canonical UUID for the given URI
+    #
+    # @param uri [RDF::URI, URI, to_s]
+    # @param unique [true, false]
+    # 
+    # @return [RDF::URI, Array]
+
+    def canonical_uuid uri, unique: true
+      uri = coerce_resource uri
+      tu  = ::URI.parse uri.to_s
+      # first we check if this is a subject uuid
+      if tu.scheme == 'urn' and tu.nid == 'uuid'
+        return unique ? uri : [uri] if @graph.first([uri, nil, nil])
+      end
+
+      # next we test for direct relation via ci:canonical and owl:sameAs
+      candidates = ([CI.canonical, RDF::OWL.sameAs].reduce([]) do |a, p|
+        a += @graph.query([uri, p, nil]).objects
+      end + @graph.query(
+        [nil, RDF::OWL.sameAs, uri]).subjects).uniq.select do |x|
+        x.to_s.start_with? 'urn:uuid:'
+      end.sort
+
+      # return if we find anything
+      return unique ? candidates[0] : candidates unless candidates.empty?
+
+      # if the supplied URI has a path, we test the path slugs
+      if tu.hierarchical?
+        # construct a set of resources for each segment in the path,
+        # testing first against ci:canonical-slug, then ci:slug
+        segs = Pathname(tu.path).cleanpath.to_s.split(/\/+/).drop 1
+        sets = segs.map do |segment|
+          s = []
+          [CI['canonical-slug'], CI.slug, RDF::Vocab::DC.identifier,
+            RDF::Vocab::DC11.identifier].each do |p|
+            [RDF::XSD.token, RDF::XSD.string].each do |t|
+              s += @graph.query(
+                [nil, p, RDF::Literal(segment, datatype: t)]).subjects
+            end
+          end
+          Set.new s
+        end
+
+        # (at this point if there is not at least one resource in each
+        # set, we return nil)
+        return unique ? nil : [] if sets.empty? or sets.any? { |x| x.empty? }
+
+        # all resources in the last column for which there is an
+        # unbroken path from front to back are candidates
+
+        candidates = []
+        if sets.length == 1
+          # shortcut
+          candidates = sets[0].to_a
+        else
+          # build up a list of links between the ith and ith + 1
+          # resource(s) matching each path segment slug; check in both
+          # directions
+          links = {}
+          (1 .. sets.length).each do |i|
+            sets[i - 1].each do |a|
+              links[a] ||= Set.new [a]
+              sets[i].each do |b|
+                next if links[a].include? b
+                [[a, nil, b], [b, nil, a]].each do |q|
+                  if @graph.first(q)
+                    links[a] << b
+                    next
+                  end
+                end
+              end
+            end
+
+            # this is the intersection of the preceding segment
+            # candidate's links with the current segment's candidates
+            c = links.values_at(*sets[i-1]).reduce(Set.new, :union) & sets[i]
+            # if the set is empty, the pseudohierarchy is broken
+            break if c.empty?
+
+            # if we have made it to the end then this intersection is
+            # our set of candidates
+            candidates = c.to_a if i == sets.length
+          end
+        end
+
+        return unique ? nil : [] if candidates.empty?
+
+        # if the call was for unique, sort the UUIDs lexically (for now)
+        # and return the first one
+        candidates.sort!
+        unique ? candidates[0] : candidates
+      end
+    end
 
     # Obtain the objects for a given subject-predicate pair.
     #
@@ -1060,15 +1159,14 @@ module RDF::SAK
     # @return [Pathname] of the corresponding file or nil if no file was found.
 
     def locate uri
-      uri = coerce_uuid_urn uri
+      uri = coerce_resource uri
 
       base = URI(@base.to_s)
 
       tu = URI(uri) # copy of uri for testing content
-      if tu.scheme == 'urn' and tu.nid == 'uuid'
-      else
-        # TODO locate uuid subject
-        raise 'not implemented sucka'
+      unless tu.scheme == 'urn' and tu.nid == 'uuid'
+        raise "could not find UUID for #{uri}" unless uuid = canonical_uuid(uri)
+        tu = URI(uri = uuid)
       end
 
       # xxx bail if the uri isn't a subject in the graph
@@ -1101,7 +1199,7 @@ module RDF::SAK
     def visit uri
       path = locate uri
       return unless path
-      Document.new self, path, uri: uri
+      Document.new self, path, uri, uri: canonical_uri(uri)
     end
 
     # read from source
@@ -1126,21 +1224,26 @@ module RDF::SAK
     # - document context class -
 
     class Document
+      include XML::Mixup
+
       private
 
       C_OK = [Nokogiri::XML::Node, IO, Pathname].freeze
 
       public
 
-      attr_reader :doc
+      attr_reader :doc, :uuid
 
-      def initialize context, doc, uri: nil
+      def initialize context, doc, uuid, uri: nil
         raise 'context must be a RDF::SAK::Context' unless
           context.is_a? RDF::SAK::Context
         raise 'doc must be Pathname, IO, or Nokogiri node' unless
           C_OK.any? { |c| doc.is_a? c } || doc.respond_to?(:to_s)
+        raise 'uuid must be an RDF::URI' unless
+          uuid.is_a? RDF::URI and uuid.to_s.start_with? 'urn:uuid:'
 
         @context = context
+        @uuid    = uuid
 
         # turn the document into an XML::Document
         if doc.is_a? Nokogiri::XML::Node
@@ -1215,7 +1318,7 @@ module RDF::SAK
           end
         end
 
-        @uri = URI.parse(uri || base_for(doc))
+        @uri = URI(uri || base_for(doc) || ctx.canonical_uri(uuid))
 
         # voilà
         @doc = doc
@@ -1333,11 +1436,34 @@ module RDF::SAK
       end
 
       # backlink structure
-      def generate_backlinks private: false
+      def generate_backlinks published: true
         
       end
-    end
 
+      def write_to_target published: true
+        uuid = URI(@uuid.to_s)
+        # obtain target directory
+        target = @context.config[published ? :target : :private]
+
+        # we assume the directory has already been verified to be
+        # present and writable, so try opening a write handle
+        fh = Tempfile.create('xml', target)
+        path = Pathname(fh.path)
+
+        # write the doc to the target
+        body = @doc.at_css('body').dup 1
+        doc  = xhtml_stub(transform: '/transform', body: body).document
+        doc.write_to fh
+        fh.close
+
+        newpath = path.dirname + "#{uuid.uuid}.xml"
+
+        File.chmod(0644, path)
+        File.rename(path, newpath)
+
+        newpath
+      end
+    end
   end
 
   class CLI
