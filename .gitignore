@@ -12,3 +12,4 @@ syntax: glob
 /spec/reports/
 /tmp/
 sample.conf
+.byebug_history

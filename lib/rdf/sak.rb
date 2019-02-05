@@ -292,6 +292,18 @@ module RDF::SAK
         config[:graph] = Pathname.new(config[:graph]).expand_path
       end
 
+      # deal with prefix map
+      if config[:prefixes]
+        config[:prefixes] = config[:prefixes].transform_values do |p|
+          # we have to wrap this in case it fails
+          begin
+            RDF::Vocabulary.find_term(p) || RDF::URI(p)
+          rescue
+            RDF::URI(p)
+          end
+        end
+      end
+
       config
     end
 
@@ -391,10 +403,10 @@ module RDF::SAK
     def coerce_resource arg
       return arg if arg.is_a? RDF::URI
 
-      blank = /^_:(.*)/.match arg
+      blank = /^_:(.*)/.match arg.to_s
       return RDF::Node blank[1] if blank
 
-      arg = URI(@base.to_s).merge! arg.to_s
+      arg = URI(@base.to_s).merge arg.to_s
 
       RDF::URI(arg.to_s)
     end
@@ -447,31 +459,81 @@ module RDF::SAK
       @base   = RDF::URI.new base.to_s if base
     end
 
+    # Get the prefix mappings from the configuration.
+    #
+    # @return [Hash]
+
+    def prefixes
+      @config[:prefixes] || {}
+    end
+
+    # Abbreviate a set of terms against the registered namespace
+    # prefixes and optional default vocabulary, or otherwise return a
+    # string representation of the original URI.
+    
+    # @param 
+    # @param
+    #
+    # @return
+
+    def abbreviate term, vocab: nil
+      vocab  = coerce_resource(vocab).to_s if vocab
+      scalar = true
+
+      if term.respond_to? :to_a
+        term   = term.to_a
+        scalar = false
+      else
+        term = [term]
+      end
+
+      rev = prefixes.invert.transform_keys { |k| k.to_s }
+
+      term.map! do |t|
+        t  = t.to_s
+        vt = t.delete_prefix(vocab) if vocab
+        if vt.nil? or vt == t or vt.match?(/:/)
+          rev.sort { |a, b| b.length <=> a.length }.each do |k, v|
+            if (vt = t.delete_prefix(k)) != t
+              vt = '%s:%s' % [v, vt]
+              break
+            else
+              vt = nil
+            end
+          end
+        end
+        vt || t
+      end
+
+      scalar ? term[0] : term.sort
+    end
+
     # Obtain a key-value structure for the given subject, optionally
     # constraining the result by node type (:resource, :uri/:iri,
     # :blank/:bnode, :literal)
     #
     # @param subject
+    # @param rev
     # @param only
     #
     # @return [Hash]
 
-    def struct_for subject, only: []
+    def struct_for subject, rev: false, only: []
       only = coerce_node_spec only
 
       rsrc = {}
-      @graph.query([subject, nil, nil]).each do |stmt|
+      pattern = rev ? [nil, nil, subject] : [subject, nil, nil]
+      @graph.query(pattern).each do |stmt|
         # this will skip over any term not matching the type
-        next unless node_matches? stmt.object, only
+        node = rev ? stmt.subject : stmt.object
+        next unless node_matches? node, only
         p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
         o = rsrc[p] ||= []
-        o.push stmt.object
+        o.push node
       end
 
       # XXX in here we can do fun stuff like filter/sort by language/datatype
-      rsrc.each do |k, v|
-        v.sort!
-      end
+      rsrc.values.each { |v| v.sort! }
 
       rsrc
     end
@@ -626,11 +688,13 @@ module RDF::SAK
     # Optionally returns all candidates.
     # 
     # @param subject [RDF::Resource]
-    # @param unique [true, false]
+    # @param unique [true, false] flag for unique return value
+    # @param rdf    [true, false] flag to specify RDF::URI vs URI 
     #
-    # @return [RDF::URI, Array]
+    # @return [RDF::URI, URI, Array]
 
-    def canonical_uri subject, unique: true
+    def canonical_uri subject, unique: true, rdf: true
+      subject = coerce_resource subject
       out = []
 
       [CI.canonical, RDF::OWL.sameAs].each do |p|
@@ -648,6 +712,8 @@ module RDF::SAK
           out << RDF::URI.new(b.to_s)
         end
       end
+
+      out.map! { |u| URI(u.to_s) } unless rdf
 
       unique ? out.first : out.uniq
     end
@@ -851,7 +917,7 @@ module RDF::SAK
     #
     # @return [Array] either a predicate-object pair or an array of pairs.
 
-    def label_for subject, unique: true, type: nil,
+    def label_for subject, candidates: nil, unique: true, type: nil,
         lang: nil, desc: false, alt: false
       return unless subject and subject.is_a? RDF::Value and subject.resource?
       # get type(s) if not supplied
@@ -863,7 +929,7 @@ module RDF::SAK
         strata.length == 0 or not strata[-1].include?(RDF::RDFS.Resource)
 
       # get the key-value pairs for the subject
-      candidates = struct_for subject, only: :literal
+      candidates ||= struct_for subject, only: :literal
 
       seen  = {}
       accum = []
@@ -1230,6 +1296,8 @@ module RDF::SAK
 
       C_OK = [Nokogiri::XML::Node, IO, Pathname].freeze
 
+      XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
+
       public
 
       attr_reader :doc, :uuid
@@ -1301,7 +1369,7 @@ module RDF::SAK
             # clear this off or it will be duplicated in the output
             root.remove_attribute('xmlns')
             # now generate a new ns object
-            ns = root.add_namespace(nil, 'http://www.w3.org/1999/xhtml')
+            ns = root.add_namespace(nil, XHTMLNS)
             # *now* scan the document and add the namespace declaration
             root.traverse do |node|
               if node.element? && node.namespace.nil?
@@ -1318,7 +1386,7 @@ module RDF::SAK
           end
         end
 
-        @uri = URI(uri || base_for(doc) || ctx.canonical_uri(uuid))
+        @uri = URI(uri || @context.canonical_uri(uuid))
 
         # voilà
         @doc = doc
@@ -1330,15 +1398,44 @@ module RDF::SAK
         if doc.root.name.to_sym == :html
           base = doc.at_xpath(
             '(/html:html/html:head/html:base[@href])[1]/@href',
-            { html: 'http://www.w3.org/1999/xhtml' })
+            { html: XHTMLNS })
         elsif doc.root['xml:base']
           base = doc.root['xml:base']
         end
 
-        base
+        URI(base)
       end
 
+      # notice these are only RDFa attributes that take URIs
+      RDFA_ATTR  = [:about, :resource, :typeof].freeze
+      LINK_ATTR  = [:href, :src, :data, :action, :longdesc].freeze
+      LINK_XPATH = ('//html:*[not(self::html:base)][%s]' %
+        (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
+
       def rewrite_links
+        base  = base_for
+        count = 0
+        cache = {}
+        @doc.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
+          LINK_ATTR.each do |attr|
+            attr = attr.to_s
+            next unless elem.has_attribute? attr
+
+            abs = base.merge elem[attr].strip
+            if abs.host == @uri.host and abs.scheme != @uri.scheme
+              tmp          = @uri.dup
+              tmp.path     = abs.path
+              tmp.query    = abs.query
+              tmp.fragment = abs.fragment
+              abs          = tmp
+            end
+            abs = cache[abs] ||= @context.canonical_uri(abs, rdf: false) || abs
+            elem[attr] = @uri.route_to(abs).to_s
+            count += 1
+          end
+        end
+
+        count
       end
 
       # sponge the document for rdfa
@@ -1444,22 +1541,96 @@ module RDF::SAK
         uuid = URI(@uuid.to_s)
         # obtain target directory
         target = @context.config[published ? :target : :private]
+        struct = @context.struct_for @uuid
+
+        resources = {}
+        literals  = {}
+        uuids     = {}
+        types     = Set.new
+        title     = (@context.label_for @uuid, candidates: struct)[1]
+
+        struct.each do |k, v|
+          v.each do |x|
+            if x.literal?
+              literals[x] ||= Set.new
+              literals[x].add k
+            else
+              resources[x] ||= Set.new
+              resources[x].add k
+              # harvest proper URIs
+              uuids[x] ||= @context.canonical_uri(x) if
+                x.to_s.start_with? 'urn:uuid:'
+              # add to type
+              types.add x if k == RDF::RDFV.type
+            end
+          end
+        end
+        urev = uuids.invert
+
+        labels = resources.keys.map do |k|
+          [k, @context.label_for(k) || []]
+        end.to_h
+
+        xhv = 'http://www.w3.org/1999/xhtml/vocab#'
+
+        # XXX abbreviae
+        #tp    = (literals[title] || []).map { |p| ns.abbreviate(p) }.sort
+        tdt   = @context.abbreviate(title.datatype)
+        tl    = title.language
+        title = { '#title' => title,
+          property: @context.abbreviate(literals[title].to_a, vocab: xhv) }
+        if tl
+          title['xml:lang'] = tl # if xmlns
+          title['lang'] = tl
+        elsif tdt
+          title[:datatype] = tdt
+        end
+
+        body = @doc.at_css('body').dup 1
+        # attrs = body.attribute_nodes.map { |a| a
+        body = { '#body' => body.children.to_a }
+
+        # XXX abbreviate
+        body[:typeof] = @context.abbreviate(types.to_a, vocab: xhv) unless
+          types.empty?
+
+        pfx = @context.prefixes.transform_values { |v| v.to_s }
+
+        doc = xhtml_stub(
+          base: @uri, prefix: pfx, vocab: xhv, lang: 'en', title: title, 
+          transform: '/transform', body: body).document
+
+        doc.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
+          vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
+          vocab = URI(vocab.to_s) if vocab
+          if elem.key?('href') or elem.key?('src')
+            vu = elem['href'] || elem['src']
+            tu = RDF::URI(@uri.merge(vu))
+            label = labels[urev[tu] || tu]
+            if label and (!elem.key?('title') or elem['title'].strip == '')
+              elem['title'] = label[1].to_s
+            end
+          end
+        end
 
         # we assume the directory has already been verified to be
         # present and writable, so try opening a write handle
-        fh = Tempfile.create('xml', target)
-        path = Pathname(fh.path)
+        begin
+          fh = Tempfile.create('xml', target)
+          path = Pathname(fh.path)
 
-        # write the doc to the target
-        body = @doc.at_css('body').dup 1
-        doc  = xhtml_stub(transform: '/transform', body: body).document
-        doc.write_to fh
-        fh.close
+          # write the doc to the target
+          doc.write_to fh
+          fh.close
 
-        newpath = path.dirname + "#{uuid.uuid}.xml"
+          newpath = path.dirname + "#{uuid.uuid}.xml"
 
-        File.chmod(0644, path)
-        File.rename(path, newpath)
+          File.chmod(0644, path)
+          File.rename(path, newpath)
+        rescue
+          File.unlink path
+          return
+        end
 
         newpath
       end
