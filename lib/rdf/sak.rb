@@ -304,6 +304,12 @@ module RDF::SAK
         end
       end
 
+      # rewrite maps
+      config[:maps] = {} unless config[:maps].is_a? Hash
+      %w(rewrite redirect gone).each do |type|
+        config[:maps][type.to_sym] ||= ".#{type}.map"
+      end
+
       config
     end
 
@@ -1069,12 +1075,7 @@ module RDF::SAK
     # generate atom feed
 
     #
-
-    def generate_atom_feed id, published: true
-      raise 'ID must be a resource' unless id.is_a? RDF::Resource
-
-      feed = struct_for id
-
+    def all_internal_docs published: true
       # find all UUIDs that are documents
       docs = all_of_type(RDF::Vocab::FOAF.Document).select do |x|
         x =~ /^urn:uuid:/
@@ -1089,6 +1090,16 @@ module RDF::SAK
           @graph.has_statement? RDF::Statement(s, p, o)
         end
       end
+      
+      docs
+    end
+
+    def generate_atom_feed id, published: true
+      raise 'ID must be a resource' unless id.is_a? RDF::Resource
+
+      # feed = struct_for id
+
+      docs = all_internal_docs published: published
 
       # now we create a hash keyed by uuid containing the metadata
       authors = {}
@@ -1180,8 +1191,53 @@ module RDF::SAK
 
     # generate sass palettes
 
+    # private?
+
+    def map_location type
+      # find file name in config
+      fn = @config[:maps][type] or return
+
+      # concatenate to target directory
+      @config[:target] + fn
+    end
+
+    # private?
+
+    def write_map_file data, location
+
+      # open file
+      fh = File.new location, 'w'
+      data.sort.each { |k, v| fh.write "#{k}\t#{v}\n" }
+      fh.close # return value is return value from close
+    end
+
     # generate rewrite map(s)
-    def generate_rewrite_map published: true
+    def generate_rewrite_map published: false, docs: nil
+      docs ||= all_internal_docs published: published
+      base = URI(@base.to_s)
+      rwm  = {}
+      docs.each do |doc|
+        tu = URI(doc.to_s)
+        cu = canonical_uri doc, rdf: false
+        next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
+
+        # skip external links obvs
+        next unless base.route_to(cu).relative?
+
+        # skip /uuid form
+        cp = cu.request_uri.delete_prefix '/'
+        next if cu.host == base.host and tu.uuid == cp
+        
+        rwm[cp] = tu.uuid
+      end
+
+      rwm
+    end
+
+    def write_rewrite_map published: false, docs: nil
+      data = generate_rewrite_map published: published, docs: docs
+      loc  = map_location :rewrite
+      write_map_file data, loc
     end
 
     # give me all UUIDs of all documents, filter for published if
@@ -1189,25 +1245,94 @@ module RDF::SAK
     # 
     # find the "best" (relative) URL for the UUID and map the pair
     # together
-    def generate_uuid_redirect_map published: true
-      
+    def generate_uuid_redirect_map published: false, docs: nil
+      docs ||= all_internal_docs published: published
+
+      base = URI(@base.to_s)
+
+      # keys are /uuid, values are 
+      out = {}
+      docs.each do |doc|
+        tu = URI(doc.to_s)
+        cu = canonical_uri doc, rdf: false
+        next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
+
+        # skip /uuid form
+        cp = cu.request_uri.delete_prefix '/'
+        next if cu.host == base.host && tu.uuid == cp
+
+        # all redirect links are absolute
+        out[tu.uuid] = cu.to_s
+      end
+      out
     end
 
     # find all URIs/slugs that are *not* canonical, map them to slugs
     # that *are* canonical
-    def generate_slug_redirect_map published: true
+    def generate_slug_redirect_map published: false, docs: nil
+      docs ||= all_internal_docs published: published
+
+      out = {}
+
+      docs.each do |doc|
+        uris  = canonical_uri doc, unique: false, rdf: false
+        if uris.length > 1
+          canon = uris.shift
+          next unless canon.respond_to? :request_uri
+
+          uris.each do |uri|
+            next unless uri.respond_to? :request_uri
+            next if canon == uri
+            uri = uri.request_uri.delete_prefix '/'
+
+            # remove uuids as we already have them
+            next if uri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
+            out[uri] = canon.to_s
+          end
+        end
+      end
+
+      out
     end
 
     # you know what, it's entirely possible that these ought never be
     # called individually and the work to get one would duplicate the
     # work of getting the other, so maybe just do 'em both at once
 
-    def generate_redirect_map published: true
-      generate_uuid_redirect_map(published) +
-        generate_slug_redirect_map(published)
+    def generate_redirect_map published: false, docs: nil
+      generate_uuid_redirect_map(published: published, docs: docs).merge(
+        generate_slug_redirect_map(published: published, docs: docs))
     end
 
-    def generate_gone_map published: true
+    def write_redirect_map published: false, docs: nil
+      data = generate_redirect_map published: published, docs: docs
+      loc  = map_location :redirect
+      write_map_file data, loc
+    end
+
+    def generate_gone_map published: false, docs: nil
+      # published is a no-op for this one because these docs are by
+      # definition not published
+      docs ||= all_internal_docs published: false
+      p    = RDF::Vocab::BIBO.status
+      base = URI(@base.to_s)
+      out  = {}
+      docs.select { |s|
+        @graph.has_statement? RDF::Statement(s, p, CI.retired) }.each do |doc|
+        canon = canonical_uri doc, rdf: false
+        next unless base.route_to(canon).relative?
+        canon = canon.request_uri.delete_prefix '/'
+        # value of the gone map doesn't matter
+        out[canon] = canon
+      end
+
+      out
+    end
+
+    def write_gone_map published: true, docs: nil
+      data = generate_gone_map published: published, docs: docs
+      loc  = map_location :gone
+      write_map_file data, loc
     end
 
     def generate_rewrite_maps published: true
