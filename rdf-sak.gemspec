@@ -34,13 +34,13 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'rdf',              '~> 3.0.2'
   spec.add_runtime_dependency 'linkeddata',       '~> 3.0.1'
   spec.add_runtime_dependency 'uri-urn',          '~> 0.0.3'
-  spec.add_runtime_dependency 'sass',             '~> 3.5.6'
-  spec.add_runtime_dependency 'shared-mime-info', '~> 3.5.6'
+  spec.add_runtime_dependency 'sass',             '~> 3.7.3'
+  spec.add_runtime_dependency 'shared-mime-info', '~> 0.2.0'
   spec.add_runtime_dependency 'commander',        '~> 4.4.5' # my patch
 
   # stuff i wrote
   spec.add_runtime_dependency 'xml-mixup',   '~> 0.1.6'
-  spec.add_runtime_dependency 'uuid-ncname', '~> 0.1.2'
+  spec.add_runtime_dependency 'uuid-ncname', '~> 0.2.2'
   spec.add_runtime_dependency 'md-noko',     '~> 0.1.0'
   
 end

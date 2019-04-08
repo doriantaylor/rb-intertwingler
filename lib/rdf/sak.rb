@@ -14,9 +14,6 @@ require 'rdf'
 require 'rdf/reasoner'
 require 'linkeddata'
 
-# cli stuff
-require 'commander'
-
 # my stuff
 require 'xml-mixup'
 require 'md-noko'
@@ -704,7 +701,7 @@ module RDF::SAK
       out = []
 
       [CI.canonical, RDF::OWL.sameAs].each do |p|
-        o = @graph.query([subject, p, nil]).objects # collect { |st| st.object }
+        o = @graph.query([subject, p, nil]).objects
         out += o.sort { |a, b| cmp_resource(a, b) }
       end
 
@@ -1759,36 +1756,6 @@ module RDF::SAK
 
         newpath
       end
-    end
-  end
-
-  class CLI
-    # This is a command-line interface
-
-    include XML::Mixup
-    include Commander::Methods
-
-    # bunch of data declarations etc we don't want to expose
-    private
-
-    # actual methods
-    public
-
-    # constructor
-
-    # configuration:
-
-    # directories: source, target, private
-    # files (or file names): graph, rewrite_map, redirect_map, gone_map
-    # URIs: base, aliases
-
-    def initialize config: {}
-    end
-
-    # vestigial
-
-    def run
-      run!
     end
   end
 end
