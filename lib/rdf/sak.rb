@@ -208,43 +208,52 @@ module RDF::SAK
     C_OK = [Pathname, IO, String].freeze
 
     def coerce_graph graph = nil, type: nil
-      return RDF::Repository.new unless graph
-      return graph if G_OK.any? { |c| graph.is_a? c }
-      raise 'Graph must be some kind of RDF::Graph or RDF data file' unless
-        C_OK.any? { |c| graph.is_a? c } || graph.respond_to?(:to_s)
-
-      opts = {}
-      opts[:content_type] = type if type
-
-      if graph.is_a? Pathname
-        opts[:filename] = graph.expand_path.to_s
-        graph = graph.open
-      elsif graph.is_a? File
-        opts[:filename] = graph.path
-      end
-
-      graph = StringIO.new(graph.to_s) unless graph.is_a? IO
-      reader = RDF::Reader.for(opts) do
-        graph.rewind
-        sample = graph.read 1000
-        graph.rewind
-        sample
-      end or raise "Could not find an RDF::Reader for #{opts[:content_type]}"
-
+      # begin with empty graph
       out = RDF::Repository.new
 
-      reader = reader.new graph, **opts
-      reader.each_statement do |stmt|
-        out << stmt
+      return out unless graph
+      return graph if G_OK.any? { |c| graph.is_a? c }
+
+      # now turn into an array
+      graph = [graph] unless graph.is_a? Array
+
+      graph.each do |g|
+        raise 'Graph must be some kind of RDF::Graph or RDF data file' unless
+          C_OK.any? { |c| g.is_a? c } || g.respond_to?(:to_s)
+
+        opts = {}
+        opts[:content_type] = type if type
+
+        if g.is_a? Pathname
+          opts[:filename] = g.expand_path.to_s
+          g = g.open
+        elsif g.is_a? File
+          opts[:filename] = g.path
+        end
+
+        g = StringIO.new(g.to_s) unless g.is_a? IO
+        reader = RDF::Reader.for(opts) do
+          g.rewind
+          sample = g.read 1000
+          g.rewind
+          sample
+        end or raise "Could not find an RDF::Reader for #{opts[:content_type]}"
+
+        reader = reader.new g, **opts
+        reader.each_statement do |stmt|
+          out << stmt
+        end
       end
 
       out
     end
 
     def normalize_hash h
+      return h unless h.is_a? Hash
       out = {}
       h.each do |k, v|
-        out[k.to_s.to_sym] = v.is_a?(Hash) ? normalize_hash(v) : v
+        out[k.to_s.to_sym] = v.is_a?(Hash) ? normalize_hash(v) :
+          v.respond_to?(:to_a) ? v.to_a.map { |x| normalize_hash x } : v
       end
       out
     end
@@ -252,9 +261,13 @@ module RDF::SAK
     def coerce_config config
       # config must either be a hash or a file name/pathname/io object
       unless config.respond_to? :to_h
-        require 'parseconfig'
-        cf = config.is_a?(IO) ? config : Pathname.new(config).expand_path
-        config = ParseConfig.new(cf).params
+        # when in rome
+        require 'yaml'
+        config = if config.is_a? IO
+                   YAML.load config
+                 else 
+                   YAML.load_file Pathname.new(config).expand_path
+                 end
       end
 
       config = normalize_hash config
@@ -285,8 +298,10 @@ module RDF::SAK
 
       # config MAY have graph location(s) but we can test this other
       # ways, same goes for base URI
-      if config[:graph] and config[:graph].is_a? String
-        config[:graph] = Pathname.new(config[:graph]).expand_path
+      if config[:graph]
+        g = config[:graph]
+        g = [g] unless g.is_a? Array
+        config[:graph] = g.map { |x| Pathname.new(x).expand_path }
       end
 
       # deal with prefix map
@@ -561,7 +576,7 @@ module RDF::SAK
       t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
       out = []
       (all_types & all_related(t)).each do |type|
-        out += @graph.query([nil, RDF.type, type]).collect { |s| s.subject }
+        out += @graph.query([nil, RDF.type, type]).subjects
       end
       
       out.uniq
@@ -1033,6 +1048,18 @@ module RDF::SAK
       out.to_a.sort
     end
 
+    def audiences_for uuid, proximate: false, invert: false
+      p = invert ? CI['non-audience'] : RDF::Vocab::DC.audience
+      return @graph.query([uuid, p, nil]).objects if proximate
+
+      out = []
+      @graph.query([uuid, p, nil]).objects.each do |o|
+        out += sub_concepts o
+      end
+
+      out
+    end
+
     # holy cow this is actually a lot of stuff:
 
     # turn markdown into xhtml (via md-noko)
@@ -1091,27 +1118,63 @@ module RDF::SAK
       docs
     end
 
-    def generate_atom_feed id, published: true
+    def generate_atom_feed id, published: true, related: []
       raise 'ID must be a resource' unless id.is_a? RDF::Resource
 
+      # prepare relateds
+      raise 'related must be an array' unless related.is_a? Array
+      related -= [id]
+
       # feed = struct_for id
+
+      faudy = audiences_for id
+      faudn = audiences_for id, invert: true
+      faudy -= faudn
 
       docs = all_internal_docs published: published
 
       # now we create a hash keyed by uuid containing the metadata
       authors = {}
+      titles  = {}
       dates   = {}
       entries = {}
+      latest  = nil
       docs.each do |uu|
         # basically make a jsonld-like structure
         #rsrc = struct_for uu
 
         # get id (got it already duh)
         
-        # get canonical link
-        # canon = ((rsrc[CI.canonical] || []) +
-        #   (rsrc[RDF::OWL.sameAs] || [])).find(-> { uu }) { |x| x.resource? }
-        # canon = URI.parse canon.to_s
+        # get audiences
+        audy = audiences_for uu, proximate: true
+        audn = audiences_for uu, proximate: true, invert: true
+
+        #warn "#{faudy.to_s} & #{faud"
+
+        skip = false
+        if audy.empty?
+          # if document audience is unspecified, skip unless feed
+          # audience is also unspecified
+
+          skip = true unless faudy.empty?
+        else
+          # if document audience matches feed non-audience, disqualify
+          skip = true unless (faudn & audy).empty?
+
+          if faudy.empty?
+            # if document audience minus feed non-audience has
+            # members, re-qualify
+            skip = false unless (audy - faudn).empty?
+          else
+            # if document audience matches feed audience, re-qualify
+            skip = false unless (faudy & audy).empty?
+          end
+        end
+
+        # if document non-audience matches feed audience, re-disqualify
+        skip = true if !(audn.empty? || faudy.empty?) && !(faudy & audn).empty?
+
+        next if skip
 
         canon = URI.parse(canonical_uri(uu).to_s)
         
@@ -1129,13 +1192,17 @@ module RDF::SAK
         updated = (objects_for uu, RDF::Vocab::DC.modified,
                    datatype: RDF::XSD.dateTime).sort[-1]
         updated ||= published || RDF::Literal::DateTime.new(DateTime.now)
-        dates[uu] = updated = Time.parse(updated.to_s).utc
+        updated = Time.parse(updated.to_s).utc
+        latest = updated if !latest or latest < updated
 
         xml['#entry'].push({ '#updated' => updated.iso8601 })
+
         if published
           published = Time.parse(published.to_s).utc
           xml['#entry'].push({ '#published' => published.iso8601 })
-          dates[uu] = published
+          dates[uu] = [published, updated]
+        else
+          dates[uu] = [updated, updated]
         end
 
         # get author(s)
@@ -1158,7 +1225,10 @@ module RDF::SAK
 
         # get title (note unshift)
         if (t = label_for uu)
+          titles[uu] = t[1].to_s
           xml['#entry'].unshift({ '#title' => t[1].to_s })
+        else
+          titles[uu] = uu.to_s
         end
         
         # get abstract
@@ -1170,20 +1240,57 @@ module RDF::SAK
       end
 
       # note we overwrite the entries hash here with a sorted array
+      entrycmp = -> a, b {
+        # first we sort by published date
+        p = dates[a][0] <=> dates[b][0]
+        # if the published dates are the same, sort by updated date
+        u = dates[a][1] <=> dates[b][1]
+        # to break any ties, finally sort by title
+        p == 0 ? u == 0 ? titles[a] <=> titles[b] : u : p }
       entries = entries.values_at(
-        *entries.keys.sort { |a, b| dates[a] <=> dates[b] })
+        *entries.keys.sort { |a, b| entrycmp.call(a, b) })
       # ugggh god forgot the asterisk and lost an hour
 
-      # now we punt out the file
+      # now we punt out the doc
 
       preamble = [
-        # { '#title' =>
-        # { id = id.to_s },
-        
-      ]
+        { '#id' => id.to_s },
+        { '#updated' => latest.iso8601 },
+        { '#generator' => 'RDF::SAK', version: RDF::SAK::VERSION,
+          uri: "https://github.com/doriantaylor/rb-rdf-sak" },
+        { nil => :link, rel: :self, type: 'application/atom+xml',
+          href: canonical_uri(id) },
+        { nil => :link, rel: :alternate, type: 'text/html',
+          href: @base },
+      ] + related.map do |r|
+        { nil => :link, rel: :related, type: 'application/atom+xml',
+         href: canonical_uri(r) }
+      end
+
+      if (t = label_for id)
+        preamble.unshift({ '#title' => t[1].to_s })
+      end
+
+      if (r = @graph.first_literal [id, RDF::Vocab::DC.rights, nil])
+        rh = { '#rights' => r.to_s, type: :text }
+        rh['xml:lang'] = r.language if r.has_language?
+        preamble.push rh
+      end
 
       markup(spec: { '#feed' => preamble + entries,
         xmlns: 'http://www.w3.org/2005/Atom' }).document
+    end
+
+    def write_feeds type: RDF::Vocab::DCAT.Distribution, published: true
+      feeds = all_of_type type
+      target = @config[published ? :target : :private]
+      feeds.each do |feed|
+        tu  = URI(feed.to_s)
+        doc = generate_atom_feed feed, published: published, related: feeds
+        fh  = (target + "#{tu.uuid}.xml").open('w')
+        doc.write_to fh
+        fh.close
+      end
     end
 
     # generate sass palettes
