@@ -87,6 +87,8 @@ module RDF::SAK
 
     RDF::Reasoner.apply(:rdfs, :owl)
 
+    UUID_RE = /^(?:urn:uuid:)?([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})$/i
+
     # okay labels: what do we want to do about them? poor man's fresnel!
 
     # basic structure is an asserted base class corresponding to a
@@ -494,7 +496,7 @@ module RDF::SAK
     #
     # @return
 
-    def abbreviate term, vocab: nil
+    def abbreviate term, vocab: nil, noop: true, sort: true
       vocab  = coerce_resource(vocab).to_s if vocab
       scalar = true
 
@@ -511,7 +513,7 @@ module RDF::SAK
         t  = t.to_s
         vt = t.delete_prefix(vocab) if vocab
         if vt.nil? or vt == t or vt.match?(/:/)
-          rev.sort { |a, b| b.length <=> a.length }.each do |k, v|
+          rev.sort { |a, b| b[0].length <=> a[0].length }.each do |k, v|
             if (vt = t.delete_prefix(k)) != t
               vt = '%s:%s' % [v, vt]
               break
@@ -520,10 +522,14 @@ module RDF::SAK
             end
           end
         end
-        vt || t
+        vt ||= t if noop
+        vt
       end
 
-      scalar ? term[0] : term.sort
+      # only sort if noop is set
+      term.sort! if noop && sort
+
+      scalar ? term[0] : term
     end
 
     # Obtain a key-value structure for the given subject, optionally
@@ -749,13 +755,16 @@ module RDF::SAK
       # first we check if this is a subject uuid
       if tu.scheme == 'urn' and tu.nid == 'uuid'
         return unique ? uri : [uri] if @graph.first([uri, nil, nil])
+      elsif (m = UUID_RE.match(tu.path.delete_prefix('/')))
+        xu = RDF::URI('urn:uuid:' + m[1])
+        return unique ? xu : [xu] if @graph.first([xu, nil, nil])
       end
 
       # next we test for direct relation via ci:canonical and owl:sameAs
       candidates = ([CI.canonical, RDF::OWL.sameAs].reduce([]) do |a, p|
-        a += @graph.query([uri, p, nil]).objects
+        a += @graph.query([nil, p, uri]).subjects
       end + @graph.query(
-        [nil, RDF::OWL.sameAs, uri]).subjects).uniq.select do |x|
+        [uri, RDF::OWL.sameAs]).objects).uniq.select do |x|
         x.to_s.start_with? 'urn:uuid:'
       end.sort
 
@@ -1153,14 +1162,14 @@ module RDF::SAK
 
         skip = false
         if audy.empty?
-          # if document audience is unspecified, skip unless feed
-          # audience is also unspecified
-
+          # an unspecified audience implies "everybody", but if the
+          # feed's audience *is* specified, then it's not for everybody
           skip = true unless faudy.empty?
         else
           # if document audience matches feed non-audience, disqualify
           skip = true unless (faudn & audy).empty?
 
+          # absence of an explicit feed audience implies "everybody"
           if faudy.empty?
             # if document audience minus feed non-audience has
             # members, re-qualify
@@ -1295,26 +1304,6 @@ module RDF::SAK
 
     # generate sass palettes
 
-    # private?
-
-    def map_location type
-      # find file name in config
-      fn = @config[:maps][type] or return
-
-      # concatenate to target directory
-      @config[:target] + fn
-    end
-
-    # private?
-
-    def write_map_file data, location
-
-      # open file
-      fh = File.new location, 'w'
-      data.sort.each { |k, v| fh.write "#{k}\t#{v}\n" }
-      fh.close # return value is return value from close
-    end
-
     # generate rewrite map(s)
     def generate_rewrite_map published: false, docs: nil
       docs ||= all_internal_docs published: published
@@ -1336,12 +1325,6 @@ module RDF::SAK
       end
 
       rwm
-    end
-
-    def write_rewrite_map published: false, docs: nil
-      data = generate_rewrite_map published: published, docs: docs
-      loc  = map_location :rewrite
-      write_map_file data, loc
     end
 
     # give me all UUIDs of all documents, filter for published if
@@ -1408,12 +1391,6 @@ module RDF::SAK
         generate_slug_redirect_map(published: published, docs: docs))
     end
 
-    def write_redirect_map published: false, docs: nil
-      data = generate_redirect_map published: published, docs: docs
-      loc  = map_location :redirect
-      write_map_file data, loc
-    end
-
     def generate_gone_map published: false, docs: nil
       # published is a no-op for this one because these docs are by
       # definition not published
@@ -1433,16 +1410,54 @@ module RDF::SAK
       out
     end
 
-    def write_gone_map published: true, docs: nil
-      data = generate_gone_map published: published, docs: docs
-      loc  = map_location :gone
-      write_map_file data, loc
+    # private?
+
+    def map_location type
+      # find file name in config
+      fn = @config[:maps][type] or return
+
+      # concatenate to target directory
+      @config[:target] + fn
     end
 
-    def generate_rewrite_maps published: true
+    # private?
+
+    def write_map_file location, data
+      # open file
+      fh = File.new location, 'w'
+      data.sort.each { |k, v| fh.write "#{k}\t#{v}\n" }
+      fh.close # return value is return value from close
+    end
+
+    # public again
+
+    def write_rewrite_map published: false, docs: nil
+      data = generate_rewrite_map published: published, docs: docs
+      loc  = map_location :rewrite
+      write_map_file loc, data
+    end
+
+    def write_redirect_map published: false, docs: nil
+      data = generate_redirect_map published: published, docs: docs
+      loc  = map_location :redirect
+      write_map_file loc, data
+    end
+
+    def write_gone_map published: false, docs: nil
+      data = generate_gone_map published: published, docs: docs
+      loc  = map_location :gone
+      write_map_file loc, data
+    end
+
+    def write_maps published: true, docs: nil
+      docs ||= all_internal_docs published: false
       # slug to uuid (internal)
+      write_rewrite_map docs: docs
       # uuid/slug to canonical slug (308)
+      write_redirect_map docs: docs
       # retired slugs/uuids (410)
+      write_gone_map docs: docs
+      true
     end
 
     # - io stuff -
@@ -1476,7 +1491,12 @@ module RDF::SAK
 
       files = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
-      end.reduce(:+).uniq
+      end.reduce(:+).reject do |x|
+        x.directory? or
+          RDF::SAK::MimeMagic.by_path(x).to_s !~ /.*(?:x?ht|x)ml.*/i
+      end.uniq
+
+      warn files
 
       # XXX implement negotiation algorithm
       return files[0]
@@ -1495,6 +1515,51 @@ module RDF::SAK
       path = locate uri
       return unless path
       Document.new self, path, uri, uri: canonical_uri(uri)
+    end
+
+    # resolve documents from source
+    def resolve_documents
+      src = @config[:source]
+      out = []
+      src.find do |f|
+        Find.prune if f.basename.to_s[0] == ?.
+        next if f.directory?
+        out << f
+      end
+      out
+    end
+
+    def resolve_file path
+      return unless path.file?
+      path = Pathname('/') + path.relative_path_from(@config[:source])
+      base = URI(@base.to_s)
+      uri  = base + path.to_s
+
+      #warn "trying #{uri}"
+
+      until (out = canonical_uuid uri)
+        # iteratively strip off
+        break if uri.path.end_with? '/'
+
+        dn = path.dirname
+        bn = path.basename '.*'
+
+        # try index first
+        if bn.to_s == 'index'
+          p = dn.to_s
+          p << '/' unless p.end_with? '/'
+          uri = base + p
+        elsif bn == path.basename
+          break
+        else
+          path = dn + bn
+          uri = base + path.to_s
+        end
+
+        # warn "trying #{uri}"
+      end
+
+      out
     end
 
     # read from source
@@ -1541,6 +1606,7 @@ module RDF::SAK
 
         @context = context
         @uuid    = uuid
+        @mtime   = doc.respond_to?(:mtime) ? doc.mtime : Time.now
 
         # turn the document into an XML::Document
         if doc.is_a? Nokogiri::XML::Node
@@ -1587,7 +1653,7 @@ module RDF::SAK
             # just assume plain text is markdown
             doc = ::MD::Noko.new.ingest doc
           else
-            raise "Don't know what to do with #{type}"
+            raise "Don't know what to do with #{uuid} (#{type})"
           end
         end
 
@@ -1621,15 +1687,18 @@ module RDF::SAK
         @doc = doc
       end
 
-      def base_for doc: nil
-        doc ||= @doc
-        base = @uri
+      def base_for node = nil
+        node ||= @doc
+        doc  = node.document
+        base = @uri.to_s
         if doc.root.name.to_sym == :html
-          base = doc.at_xpath(
+          b = doc.at_xpath(
             '(/html:html/html:head/html:base[@href])[1]/@href',
-            { html: XHTMLNS })
-        elsif doc.root['xml:base']
-          base = doc.root['xml:base']
+            { html: XHTMLNS }).to_s.strip
+          base = b if URI(b).absolute?
+        elsif b = doc.at_xpath('ancestor-or-self::*[@xml:base][1]/@xml:base')
+          b = b.to_s.strip
+          base = b if URI(b).absolute?
         end
 
         URI(base)
@@ -1638,19 +1707,19 @@ module RDF::SAK
       # notice these are only RDFa attributes that take URIs
       RDFA_ATTR  = [:about, :resource, :typeof].freeze
       LINK_ATTR  = [:href, :src, :data, :action, :longdesc].freeze
-      LINK_XPATH = ('//html:*[not(self::html:base)][%s]' %
+      LINK_XPATH = ('.//html:*[not(self::html:base)][%s]' %
         (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
-      def rewrite_links
-        base  = base_for
+      def rewrite_links node = @doc, &block
+        base  = base_for node
         count = 0
         cache = {}
-        @doc.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
+        node.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
           LINK_ATTR.each do |attr|
             attr = attr.to_s
             next unless elem.has_attribute? attr
 
-            abs = base.merge elem[attr].strip
+            abs = base.merge uri_pp(elem[attr].strip)
             if abs.host == @uri.host and abs.scheme != @uri.scheme
               tmp          = @uri.dup
               tmp.path     = abs.path
@@ -1662,6 +1731,8 @@ module RDF::SAK
             elem[attr] = @uri.route_to(abs).to_s
             count += 1
           end
+
+          block.call elem if block
         end
 
         count
@@ -1766,23 +1837,90 @@ module RDF::SAK
         
       end
 
-      def write_to_target published: true
-        uuid = URI(@uuid.to_s)
-        # obtain target directory
-        target = @context.config[published ? :target : :private]
-        struct = @context.struct_for @uuid
+      def generate_twitter_meta
+        # get author
+        author = @context.authors_for(@uuid, unique: true) or return
 
+        # get author's twitter account
+        twitter = @context.objects_for(author, RDF::Vocab::FOAF.account,
+                                       only: :resource).select do |t|
+          t.to_s =~ /twitter\.com/
+        end.sort.first or return
+        twitter = URI(twitter.to_s).path.split(/\/+/)[1]
+        twitter = ?@ + twitter unless twitter.start_with? ?@
+
+        # get title
+        title = @context.label_for(@uuid) or return
+
+        out = [
+          { nil => :meta, name: 'twitter:card', content: :summary },
+          { nil => :meta, name: 'twitter:site', content: twitter },
+          { nil => :meta, name: 'twitter:title', content: title[1].to_s }
+        ]
+
+        # get abstract
+        if desc = @context.label_for(@uuid, desc: true)
+          out.push({ nil => :meta, name: 'twitter:description',
+            content: desc[1].to_s })
+        end
+
+        # get image (foaf:depiction)
+        img = @context.objects_for(@uuid, RDF::Vocab::FOAF.depiction,
+                                   only: :resource)
+        unless img.empty?
+          img = img[0].to_s
+          out.push({ nil => :meta, name: 'twitter:image', content: img })
+          out[0][:content] = :summary_large_image
+        end
+
+        # return the appropriate xml-mixup structure
+        out
+      end
+
+      XHV = 'http://www.w3.org/1999/xhtml/vocab#'
+      QF  = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
+      SF  = /[^[:alpha:][:digit:]\/\?:@!$&'()*+,;=._~-]/
+
+      def uri_pp uri
+        m = QF.match uri.to_s
+        out = m[1]
+        [[2, ??], [3, ?#]].each do |i, c|
+          next if m[i].nil?
+          clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
+          out += c + clean
+        end
+
+        out
+      end
+
+      def transform_xhtml published: true
+        # before we do any more work make sure this is html
+        doc  = @doc.dup 1
+        body = doc.at_xpath('//html:body[1]', { html: XHTMLNS }) or return
+
+        # initial stuff
+        struct    = @context.struct_for @uuid
         resources = {}
         literals  = {}
         uuids     = {}
+        datatypes = Set.new
         types     = Set.new
-        title     = (@context.label_for @uuid, candidates: struct)[1]
+        authors   = @context.authors_for(@uuid)
+        title     = @context.label_for @uuid, candidates: struct
+        desc      = @context.label_for @uuid, candidates: struct, desc: true
+
+        # rewrite content
+        title = title[1] if title
+        desc  = desc[1]  if desc
 
         struct.each do |k, v|
           v.each do |x|
             if x.literal?
               literals[x] ||= Set.new
               literals[x].add k
+
+              # collect the datatype
+              datatypes.add x.datatype if x.has_datatype?
             else
               resources[x] ||= Set.new
               resources[x].add k
@@ -1797,44 +1935,37 @@ module RDF::SAK
         urev = uuids.invert
 
         labels = resources.keys.map do |k|
-          [k, @context.label_for(k) || []]
+          # turn this into a pair which subsequently gets turned into a hash
+          [k, @context.label_for(k) ]
         end.to_h
 
-        xhv = 'http://www.w3.org/1999/xhtml/vocab#'
+        # warn labels
 
-        # XXX abbreviae
-        #tp    = (literals[title] || []).map { |p| ns.abbreviate(p) }.sort
-        tdt   = @context.abbreviate(title.datatype)
-        tl    = title.language
-        title = { '#title' => title,
-          property: @context.abbreviate(literals[title].to_a, vocab: xhv) }
-        if tl
-          title['xml:lang'] = tl # if xmlns
-          title['lang'] = tl
-        elsif tdt
-          title[:datatype] = tdt
+        # handle the title
+        title ||= RDF::Literal('')
+        tm = { '#title' => title,
+          property: @context.abbreviate(literals[title].to_a, vocab: XHV) }
+        if tl = title.language
+          tm['xml:lang'] = tl # if xmlns
+          tm['lang'] = tl
+        elsif tdt = title.datatype and tdt != RDF::XSD.string
+          tm[:datatype] = @context.abbreviate(tdt)
         end
 
-        body = @doc.at_css('body').dup 1
-        # attrs = body.attribute_nodes.map { |a| a
-        body = { '#body' => body.children.to_a }
-
-        # XXX abbreviate
-        body[:typeof] = @context.abbreviate(types.to_a, vocab: xhv) unless
-          types.empty?
-
-        pfx = @context.prefixes.transform_values { |v| v.to_s }
-
-        doc = xhtml_stub(
-          base: @uri, prefix: pfx, vocab: xhv, lang: 'en', title: title, 
-          transform: '/transform', body: body).document
-
-        doc.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
+        bodylinks = {}
+        rewrite_links body do |elem|
           vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
-          vocab = URI(vocab.to_s) if vocab
+          vocab = uri_pp(vocab.to_s) if vocab
+
           if elem.key?('href') or elem.key?('src')
-            vu = elem['href'] || elem['src']
+            vu = uri_pp(elem['href'] || elem['src'])
             tu = RDF::URI(@uri.merge(vu))
+            bodylinks[urev[tu] || tu] = true
+
+            if rel = resources[urev[tu] || tu]
+              elem['rel'] = (@context.abbreviate rel, vocab: vocab).join ' '
+            end
+
             label = labels[urev[tu] || tu]
             if label and (!elem.key?('title') or elem['title'].strip == '')
               elem['title'] = label[1].to_s
@@ -1842,25 +1973,124 @@ module RDF::SAK
           end
         end
 
+        links = []
+        resources.reject { |k, _| bodylinks[k] }.each do |k, v|
+          v = v.dup.delete RDF::RDFV.type
+          next if v.empty?
+          rel = @context.abbreviate v.to_a, vocab: XHV
+          k   = @uri.route_to(uri_pp (uuids[k] || k).to_s)
+          links.push({ nil => :link, rel: rel, href: k.to_s })
+        end
+
+        links.sort! do |a, b|
+          # sort by rel, then by href
+          # warn a.inspect, b.inspect
+          s = 0
+          [:rel, :rev, :href, :title].each do |k|
+            s = a.fetch(k, '').to_s <=> b.fetch(k, '').to_s
+            break if s != 0
+          end
+          s
+        end
+
+        meta = []
+
+        # include author names as old school meta tags
+        authors.each do |a|
+          name  = labels[urev[a] || a] or next
+          datatypes.add name[0] # a convenient place to chuck this
+          prop  = @context.abbreviate(name[0])
+          name  = name[1]
+          about = @uri.route_to((uuids[a] || a).to_s)
+          tag   = { nil => :meta, about: about.to_s, name: :author,
+                   property: prop, content: name.to_s }
+
+          if name.has_datatype? and name.datatype != RDF::XSD.string
+            tag[:datatype] = @context.abbreviate(name.datatype)
+          elsif name.has_language?
+            tag['xml:lang'] = tag[:lang] = name.language
+          end
+          meta.push tag
+        end
+
+        literals.each do |k, v|
+          next if k == title
+          rel = @context.abbreviate v.to_a, vocab: XHV
+          elem = { nil => :meta, property: rel, content: k.to_s }
+          elem[:name] = :description if k == desc
+
+          if k.has_datatype?
+            datatypes.add k.datatype # so we get the prefix
+            elem[:datatype] = @context.abbreviate k.datatype, vocab: XHV
+          end
+
+          meta.push(elem)
+        end
+
+        meta.sort! do |a, b|
+          s = 0
+          [:about, :property, :datatype, :content, :name].each do |k|
+            # warn a.inspect, b.inspect
+            s = a.fetch(k, '').to_s <=> b.fetch(k, '').to_s
+            break if s != 0
+          end
+          s
+        end
+
+        body = body.dup 1
+        body = { '#body' => body.children.to_a, about: '' }
+        body[:typeof] = @context.abbreviate(types.to_a, vocab: XHV) unless
+          types.empty?
+
+        # prepare only the prefixes we need to resolve the data we need
+        rsc = @context.abbreviate(
+          (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
+          noop: false).map do |x|
+          next if x.nil?
+          x.split(?:)[0].to_sym
+        end.select { |x| not x.nil? }.to_set
+
+        pfx = @context.prefixes.select do |k, _|
+          rsc.include? k
+        end.transform_values { |v| v.to_s }
+
+        # and now for the document
+        xf  = @context.config[:transform]
+        doc = xhtml_stub(
+          base: @uri, prefix: pfx, vocab: XHV, lang: 'en', title: tm, 
+          link: links, meta: meta, extra: generate_twitter_meta || [],
+          transform: xf, body: body).document
+      end
+
+      def write_to_target published: true
+        # obtain target directory
+        target = @context.config[published ? :target : :private]
+
+        # just deal with html for now
+        doc = transform_xhtml(published: published) or return
+
         # we assume the directory has already been verified to be
         # present and writable, so try opening a write handle
         begin
-          fh = Tempfile.create('xml', target)
+          fh   = Tempfile.create('xml', target)
           path = Pathname(fh.path)
 
           # write the doc to the target
           doc.write_to fh
           fh.close
 
+          uuid = URI(@uuid.to_s)
           newpath = path.dirname + "#{uuid.uuid}.xml"
 
           File.chmod(0644, path)
           File.rename(path, newpath)
+          File.utime(@mtime, @mtime, newpath)
         rescue
           File.unlink path
           return
         end
 
+        # return something? iunno
         newpath
       end
     end
