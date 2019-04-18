@@ -15,7 +15,7 @@ module RDF::SAK
       comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.).freeze,
       "dc:created": "2012-01-23T11:52:00-08:00".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze],
+      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze],
       "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DataStructureDefinition".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DimensionProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_MeasureProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_Observation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze],
       "dc:subject": "ci:".freeze,
       "dc:title": "A Content Inventory Vocabulary".freeze,
@@ -23,7 +23,7 @@ module RDF::SAK
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci".freeze,
       isDefinedBy: "ci:".freeze,
       "owl:imports": ["bibo:".freeze, "dc:".freeze, "foaf:".freeze, "http://purl.org/NET/c4dm/event.owl#".freeze, "http://purl.org/linked-data/cube#".freeze],
-      "owl:versionInfo": "0.7".freeze,
+      "owl:versionInfo": "0.8".freeze,
       type: ["bibo:Webpage".freeze, "owl:Ontology".freeze],
       "xhv:license": "http://creativecommons.org/licenses/by/2.5/ca/".freeze
 
@@ -71,6 +71,14 @@ module RDF::SAK
       "rdfs:seeAlso": "dc:educationLevel".freeze,
       subPropertyOf: "dc:references".freeze,
       type: "owl:ObjectProperty".freeze
+    property :"aware-of",
+      comment: %(This property relates an Audience to a SKOS concept that is likely to be in the orbit of the audience's members: they are aware that the concept exists, although they may not necessarily understand it.).freeze,
+      domain: "ci:audience".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "aware-of".freeze,
+      range: "skos:Concept".freeze,
+      subPropertyOf: "skos:related".freeze,
+      type: "owl:ObjectProperty".freeze
     property :block,
       comment: %(A block count is conceptually similar to a word or section count, though it counts the total of elements in the document considered to be text blocks, such as paragraphs, tables, lists and figures. It is suited for document types that have no concept of \(semantic\) sections, such as HTML. The purpose of this measurement is to provide a sort of ratio to the word count, to glean how well-proportioned the document is.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -106,6 +114,15 @@ module RDF::SAK
       label: "desired-outcome".freeze,
       subPropertyOf: "dc:type".freeze,
       type: "owl:ObjectProperty".freeze
+    property :disdains,
+      comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to actively eschew or regard with contempt. This relation is intended to represent the complement of values.).freeze,
+      domain: "ci:audience".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "disdains".freeze,
+      range: "skos:Concept".freeze,
+      "rdfs:seeAlso": "ci:values".freeze,
+      subPropertyOf: "skos:related".freeze,
+      type: "owl:ObjectProperty".freeze
     property :document,
       comment: %(Document Reference).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -136,6 +153,12 @@ module RDF::SAK
       range: "xsd:number".freeze,
       "rdfs:seeAlso": "http://en.wikipedia.org/wiki/Directed_graph#Indegree_and_outdegree".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :indexed,
+      comment: %(This is a boolean value to indicate whether or not a resource ought to be indexed. It does not necessarily ascribe a policy: an absence of an explicit true value does not necessarily imply the resource ought not be indexed, but the presence of a false value probably should.).freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "indexed".freeze,
+      range: "xsd:boolean".freeze,
+      type: ["owl:DatatypeProperty".freeze, "owl:FunctionalProperty".freeze]
     property :introduces,
       comment: %(The document defines, describes, or otherwise introduces the audience to this concept.).freeze,
       domain: "foaf:Document".freeze,
@@ -250,7 +273,16 @@ module RDF::SAK
       label: "understands".freeze,
       range: "skos:Concept".freeze,
       "rdfs:seeAlso": "dc:educationLevel".freeze,
-      subPropertyOf: "dc:references".freeze,
+      subPropertyOf: "ci:aware-of".freeze,
+      type: "owl:ObjectProperty".freeze
+    property :values,
+      comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to value, that is, to find meaningful in an axiological sense.).freeze,
+      domain: "ci:audience".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "values".freeze,
+      range: "skos:Concept".freeze,
+      "rdfs:seeAlso": "ci:disdains".freeze,
+      subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
     property :words,
       comment: %(This indicates the number of words in a document, similar to the familiar function in a word processor. The exact method of counting words may vary by document type, language etc., and is thus out of scope from this document.).freeze,

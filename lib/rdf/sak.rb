@@ -1152,6 +1152,9 @@ module RDF::SAK
         # basically make a jsonld-like structure
         #rsrc = struct_for uu
 
+        indexed = objects_for uu, RDF::SAK::CI.indexed, only: :literal
+        next if !indexed.empty? and indexed.any? { |f| f == false }
+
         # get id (got it already duh)
         
         # get audiences
