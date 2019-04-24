@@ -25,6 +25,58 @@ require 'rdf/sak/ibis'
 # others not included in rdf.rb
 require 'rdf/sak/pav'
 
+# uhh why don't we just cool it with this mkay
+
+# XXX REMOVE THIS ONCE REASONER >0.5.2 RELEASED
+module RDF::Reasoner::RDFS
+  def self.included(mod)
+    mod.add_entailment :subClassOf, :_entail_subClassOf
+    mod.add_entailment :subClass, :_entail_subClass
+    mod.add_entailment :subProperty, :_entail_subProperty
+    mod.add_entailment :subPropertyOf, :_entail_subPropertyOf
+    mod.add_entailment :domain, :_entail_domain
+    mod.add_entailment :range, :_entail_range
+  end
+
+  def descendant_property_cache
+    @@descendant_property_cache ||= RDF::Util::Cache.new(-1)
+  end
+
+  def subProperty_cache
+    @@subProperty_cache ||= RDF::Util::Cache.new(-1)
+  end
+
+  def subProperty
+    raise RDF::Reasoner::Error,
+      "#{self} Can't entail subProperty" unless property?
+    vocabs = [self.vocab] + self.vocab.imported_from
+    subProperty_cache[self] ||= vocabs.map do |v|
+      Array(v.properties).select do |p|
+        p.property? && Array(p.subPropertyOf).include?(self)
+      end
+    end.flatten.compact
+  end
+
+  def _entail_subProperty
+    case self
+    when RDF::URI, RDF::Node
+      unless property?
+        yield self if block_given?
+        return Array(self)
+      end
+
+      terms = descendant_property_cache[self] ||= (
+        Array(self.subProperty).map do |c|
+          c._entail_subProperty rescue c
+        end.flatten + Array(self)).compact
+
+      terms.each {|t| yield t } if block_given?
+      terms
+    else []
+    end
+  end
+end
+
 module RDF::SAK
 
   # janky bolt-on MimeMagic
@@ -387,12 +439,16 @@ module RDF::SAK
     NMAP   = ({ iri: :uri, bnode: :blank }.merge(
       [:uri, :blank, :literal].map { |x| [x, x] }.to_h)).freeze
 
-    def coerce_node_spec spec
+    # 
+    def coerce_node_spec spec, rev: false
       spec = [spec] unless spec.respond_to? :to_a
       spec = spec - [:resource] + [:uri, :blank] if spec.include? :resource
+      raise 'Subjects are never literals' if rev and spec.include? :literal
+
       spec = NMAP.values_at(*spec).reject(&:nil?).uniq
-      spec = NTESTS.keys if spec.length == 0
-      spec
+      spec = NTESTS.keys if spec.empty?
+      spec.delete :literal if rev
+      spec.uniq
     end
 
     def node_matches? node, spec
@@ -742,12 +798,155 @@ module RDF::SAK
       unique ? out.first : out.uniq
     end
 
+    # Find the terminal replacements for the given subject, if any exist.
+    # 
+    #
+    #
+    # @param subject
+    # @param published indicate the context is published
+    #
+    # @return [Set]
+    def replacements_for subject, published: true
+      subject = coerce_resource subject
+
+      # `seen` is a hash mapping resources to publication status. it collects 
+
+      # if we're calling from a published context, we return the
+      # (topologically) last published resources, even if they are
+      # replaced ultimately by unpublished resources.
+
+      seen  = {}
+      queue = [subject]
+      while (test = queue.shift)
+        # fwd is "replaces", rev is "replaced by"
+        entry = seen[test] ||= {
+          pub: published?(test), fwd: Set.new, rev: Set.new }
+        queue += (
+          subjects_for(RDF::Vocab::DC.replaces, subject) +
+            objects_for(subject, RDF::Vocab::DC.isReplacedBy, only: :resource)
+        ).uniq.map do |r|
+          next if seen.include? r
+          seen[r] ||= { pub: published?(r), fwd: Set.new, rev: Set.new }
+          seen[r][:fwd] << test
+          entry[:rev] << r
+          r
+        end.compact.uniq
+      end
+
+      seen
+
+    end
+
+    # Get the last non-empty path segment of the URI
+    #
+    # @param uri
+    #
+    # @return [String]
+
+    def terminal_slug uri
+      uri = coerce_resource uri
+      if p = uri.path
+        if p = /^\/+(.*?)\/*$/.match(p)
+          if p = p[1].split(/\/+/)[-1]
+            return p.split(/;+/)[0] || ''
+          end
+        end        
+      end
+      ''
+    end
+
+    # Obtain dates for the subject as instances of Date(Time). This is
+    # just shorthand for a common application of `objects_for`.
+    #
+    # @param subject
+    # @param predicate
+    # @param datatype
+    #
+    # @return [Array] of dates
+    def dates_for subject, predicate: RDF::Vocab::DC.date,
+        datatype: [RDF::XSD.date, RDF::XSD.dateTime]
+      objects_for(subject, predicate, only: :literal, datatype: datatype) do |o|
+        o.object
+      end.sort.uniq
+    end
+
     # Obtain the canonical UUID for the given URI
     #
     # @param uri [RDF::URI, URI, to_s]
     # @param unique [true, false]
     # 
     # @return [RDF::URI, Array]
+
+    # it is so lame i have to do this
+    BITS = { nil => 0, false => 0, true => 1 }
+
+    def soon_canonical_uuid uri, unique: true, published: false
+      # make sure this is actually a uri
+      uri = coerce_resource uri
+      tu  = URI(uri.to_s)
+
+      # now check if it's a uuid
+      if tu.respond_to? :uuid
+        # if it's a uuid, check that we have it as a subject
+        # if we have it as a subject, return it
+        return uri if @context.graph.has_subject? uri
+        # note i don't want to screw around right now dealing with the
+        # case that a UUID might not itself be canonical
+      end
+
+      # otherwise we proceed:
+
+      # goal: return the most "appropriate" UUID for the given URI
+
+      # rank (0 is higher):
+      # * (00) exact & canonical == 0,
+      # * (01) exact == 1,
+      # * (10) inexact & canonical == 2,
+      # * (11) inexact == 3. 
+
+      # collect the candidates by URI
+      sa = predicate_set [RDF::SAK::CI.canonical, RDF::OWL.sameAs]
+      candidates = subjects_for(sa, uri, entail: false) do |s, f|
+        # there is no #to_i for booleans and also we xor this number
+        [s, { rank: BITS[f.include?(RDF::SAK::CI.canonical)] ^ 1,
+          published: published?(s), mtime: dates_for(s).last || DateTime.new }]
+      end.to_h
+
+      # now collect by slug
+      if (slug = terminal_slug uri) != ''
+        exact = uri == coerce_resource(slug) # slug represents exact match
+        sl = [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug]
+        [RDF::XSD.string, RDF::XSD.token].each do |t|
+          subjects_for(sl, RDF::Literal(slug, datatype: t)) do |s, f|
+            # default to lowest rank if this candidate is new
+            entry = candidates[s] ||= { rank: 0b11, published: published?(s),
+              mtime: dates_for(s).last || DateTime.new }
+            # true is 1 and false is zero so we xor this too
+            rank  = (BITS[exact] << 1 | BITS[f.include?(sl[0])]) ^ 0b11
+            # now amend the rank if we have found a better one
+            entry[:rank] = rank if rank < entry[:rank]
+          end
+        end
+      end
+
+      candidates
+
+      # an exact match is better than an inexact one
+
+      # a canonical match is better than non-canonical
+
+      # note this is four bits: exact, canon(exact), inexact, canon(inexact)
+      # !canon(exact) should rank higher than canon(inexact)
+
+      # unreplaced is better than replaced
+
+      # newer is better than older (though no reason an older item
+      # can't replace a newer one)
+
+      # published is better than not, unless the context is
+      # unpublished and an unpublished document replaces a published one
+    end
+
 
     def canonical_uuid uri, unique: true
       uri = coerce_resource uri
@@ -849,6 +1048,101 @@ module RDF::SAK
     #
     # @return [Array]
 
+    def predicate_set predicates, seen: Set.new
+      predicates = Set[predicates] if predicates.is_a? RDF::URI
+      unless predicates.is_a? Set
+        raise "predicates must be a set" unless predicates.respond_to? :to_set
+        predicates = predicates.to_set
+      end
+
+      # shortcut
+      return predicates if predicates.empty?
+
+      raise 'predicates must all be RDF::URI' unless predicates.all? do |p|
+        p.is_a? RDF::URI
+      end
+
+      # first we generate the set of equivalent properties for the given
+      # properties
+      predicates += predicates.map do |p|
+        p.entail :equivalentProperty
+      end.flatten.to_set
+
+      # then we take the resulting set of properties and
+      # compute their subproperties
+      subp = Set.new
+      (predicates - seen).each do |p|
+        subp += p.subProperty.flatten.to_set
+      end
+
+      # uhh this whole "seen" business might not be necessary
+      predicates + predicate_set(subp - predicates - seen, seen: predicates)
+    end
+
+    # Returns subjects from the graph with entailment.
+    #
+    # @param predicate
+    # @param object
+    # @param entail
+    # @param only
+    #
+    # @return [RDF::Resource]
+    def subjects_for predicate, object, entail: true, only: []
+      raise 'Subject must be a Term' unless object.is_a? RDF::Term
+      predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
+      raise 'Predicate must be some kind of term' unless
+        predicate.all? { |p| p.is_a? RDF::URI }
+
+      only = coerce_node_spec only, rev: true
+
+      predicate = predicate.map { |x| RDF::Vocabulary.find_term x }.compact
+      predicate = predicate_set predicate if entail
+
+      out  = {}
+      revp = Set.new
+      predicate.each do |p|
+        @graph.query([nil, p, object]).subjects.each do |s|
+          next unless node_matches? s, only
+
+          entry = out[s] ||= [Set.new, Set.new]
+          entry[0] << p
+        end
+
+        # do this here while we're at it
+        unless object.literal?
+          revp += p.inverseOf.to_set
+          revp << p if p.type.include? RDF::OWL.SymmetricProperty
+        end
+      end
+
+      unless object.literal?
+        revp = predicate_set revp if entail
+
+        revp.each do |p|
+          @graph.query([object, p, nil]).objects.each do |o|
+            next unless node_matches? o, only
+
+            entry = out[o] ||= [Set.new, Set.new]
+            entry[1] << p
+          end
+        end
+      end
+
+      # run this through a block to get access to the predicates
+      return out.map { |p, v| yield p, *v } if block_given?
+
+      out.keys
+    end
+    
+    # Returns objects from the graph with entailment.
+    #
+    # @param subject
+    # @param predicate
+    # @param entail
+    # @param only
+    # @param datatype
+    #
+    # @return [RDF::Term]
     def objects_for subject, predicate, entail: true, only: [], datatype: nil
       raise 'Subject must be a resource' unless subject.is_a? RDF::Resource
       predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
@@ -864,23 +1158,12 @@ module RDF::SAK
       raise 'Datatype must be some kind of term' unless
         datatype.all? { |p| p.is_a? RDF::URI }
 
-      # XXX we really should wrap this up huh
-      if entail
-        i = 0
-        loop do
-          equiv = predicate[i].entail(:equivalentProperty) - predicate
-          predicate.insert(i + 1, *equiv) unless equiv.empty?
-          i += equiv.length + 1
-          break if i >= predicate.length
-        end
-      end
+      # fluff this out 
+      predicate = predicate_set predicate if entail
 
-      out = []
+      out = {}
       predicate.each do |p|
-        @graph.query([subject, p, nil]).each do |stmt|
-          o = stmt.object
-
-          # warn o
+        @graph.query([subject, p, nil]).objects.each do |o|
 
           # make sure it's in the spec
           next unless node_matches? o, only
@@ -889,11 +1172,37 @@ module RDF::SAK
           next if o.literal? and
             !(datatype.empty? or datatype.include?(o.datatype))
 
-          out.push o
+          entry = out[o] ||= [Set.new, Set.new]
+          entry[0] << p
         end
       end
 
-      out.uniq
+      # now we do the reverse
+      unless only == [:literal]
+        # generate reverse predicates
+        revp = Set.new
+        predicate.each do |p|
+          revp += p.inverseOf.to_set
+          revp << p if p.type.include? RDF::OWL.SymmetricProperty
+        end
+        revp = predicate_set revp if entail
+
+        # now scan 'em
+        revp.each do |p|
+          @graph.query([nil, p, subject]).subjects.each do |s|
+            next unless node_matches? s, only
+            # no need to check datatype; subject is never a literal
+
+            entry = out[s] ||= [Set.new, Set.new]
+            entry[1] << p
+          end
+        end
+      end
+
+      # run this through a block to get access to the predicates
+      return out.map { |p, v| yield p, *v } if block_given?
+
+      out.keys
     end
 
     # Assuming the subject is a thing that has authors, return the
@@ -1515,9 +1824,10 @@ module RDF::SAK
     # @return [RDF::SAK::Context::Document] or nil
 
     def visit uri
+      uri  = canonical_uuid uri
       path = locate uri
       return unless path
-      Document.new self, path, uri, uri: canonical_uri(uri)
+      Document.new self, uri, uri: canonical_uri(uri), doc: path
     end
 
     # resolve documents from source
@@ -1529,6 +1839,7 @@ module RDF::SAK
         next if f.directory?
         out << f
       end
+
       out
     end
 
@@ -1565,6 +1876,39 @@ module RDF::SAK
       out
     end
 
+    # Determine whether the URI represents a published document.
+    # 
+    # @param uri
+    # 
+    # @return [true, false]
+    def published? uri, circulated: false
+      uri = coerce_resource uri
+      candidates = objects_for(
+        uri, RDF::Vocab::BIBO.status, only: :resource).to_set
+
+      test = Set[RDF::Vocab::BIBO['status/published']]
+      test << RDF::SAK::CI.circulated if circulated
+
+      # warn candidates, test, candidates & test
+
+      !(candidates & test).empty?
+    end
+
+    # Find a destination pathname for the document
+    #
+    # @param uri
+    # @param published
+    # 
+    # @return [Pathname]
+    def target_for uri, published: false
+      uri = coerce_resource uri
+      uri = canonical_uuid uri
+      target = @config[published?(uri) && published ? :target : :private]
+
+      # target is a pathname so this makes a pathname
+      target + "#{URI(uri.to_s).uuid}.xml"
+    end
+
     # read from source
 
     # write (manipulated (x|x?ht)ml) back to source
@@ -1595,21 +1939,44 @@ module RDF::SAK
 
       XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
 
+      XHV = 'http://www.w3.org/1999/xhtml/vocab#'
+      QF  = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
+      SF  = /[^[:alpha:][:digit:]\/\?:@!$&'()*+,;=._~-]/
+
+      # need this URI preprocessor because uri.rb is dumb
+      def uri_pp uri
+        m = QF.match uri.to_s
+        out = m[1]
+        [[2, ??], [3, ?#]].each do |i, c|
+          next if m[i].nil?
+          clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
+          out += c + clean
+        end
+
+        out
+      end
+
       public
 
       attr_reader :doc, :uuid
 
-      def initialize context, doc, uuid, uri: nil
+      def initialize context, uuid, doc: nil, uri: nil, mtime: nil
         raise 'context must be a RDF::SAK::Context' unless
           context.is_a? RDF::SAK::Context
-        raise 'doc must be Pathname, IO, or Nokogiri node' unless
-          C_OK.any? { |c| doc.is_a? c } || doc.respond_to?(:to_s)
         raise 'uuid must be an RDF::URI' unless
           uuid.is_a? RDF::URI and uuid.to_s.start_with? 'urn:uuid:'
 
+        doc ||= context.locate uuid
+        raise 'doc must be Pathname, IO, or Nokogiri node' unless
+          C_OK.any? { |c| doc.is_a? c } || doc.respond_to?(:to_s)
+
+        # set some instance variables
         @context = context
         @uuid    = uuid
-        @mtime   = doc.respond_to?(:mtime) ? doc.mtime : Time.now
+        @mtime   = mtime || doc.respond_to?(:mtime) ? doc.mtime : Time.now
+        @target  = context.target_for uuid
+
+        # now process the document
 
         # turn the document into an XML::Document
         if doc.is_a? Nokogiri::XML::Node
@@ -1684,10 +2051,17 @@ module RDF::SAK
           end
         end
 
+        # aaand set some more instance variables
+
         @uri = URI(uri || @context.canonical_uri(uuid))
 
         # voilà
         @doc = doc
+      end
+
+      # proxy for context published
+      def published?
+        @context.published? @uuid
       end
 
       def base_for node = nil
@@ -1840,6 +2214,7 @@ module RDF::SAK
         
       end
 
+      # goofy twitter-specific metadata
       def generate_twitter_meta
         # get author
         author = @context.authors_for(@uuid, unique: true) or return
@@ -1877,22 +2252,6 @@ module RDF::SAK
         end
 
         # return the appropriate xml-mixup structure
-        out
-      end
-
-      XHV = 'http://www.w3.org/1999/xhtml/vocab#'
-      QF  = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
-      SF  = /[^[:alpha:][:digit:]\/\?:@!$&'()*+,;=._~-]/
-
-      def uri_pp uri
-        m = QF.match uri.to_s
-        out = m[1]
-        [[2, ??], [3, ?#]].each do |i, c|
-          next if m[i].nil?
-          clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
-          out += c + clean
-        end
-
         out
       end
 
@@ -1982,14 +2341,20 @@ module RDF::SAK
           next if v.empty?
           rel = @context.abbreviate v.to_a, vocab: XHV
           k   = @uri.route_to(uri_pp (uuids[k] || k).to_s)
-          links.push({ nil => :link, rel: rel, href: k.to_s })
+          name = :link
+          attr = :href
+          unless (v.to_set & Set[RDF::Vocab::DC.requires]).empty?
+            name = :script
+            attr = :src
+          end
+          links.push({ nil => name, rel: rel, attr => k.to_s })
         end
 
         links.sort! do |a, b|
           # sort by rel, then by href
           # warn a.inspect, b.inspect
           s = 0
-          [:rel, :rev, :href, :title].each do |k|
+          [nil, :rel, :rev, :href, :title].each do |k|
             s = a.fetch(k, '').to_s <=> b.fetch(k, '').to_s
             break if s != 0
           end
@@ -2057,6 +2422,10 @@ module RDF::SAK
           rsc.include? k
         end.transform_values { |v| v.to_s }
 
+
+        # extra = [
+        # ] + generate_twitter_meta
+
         # and now for the document
         xf  = @context.config[:transform]
         doc = xhtml_stub(
@@ -2065,37 +2434,50 @@ module RDF::SAK
           transform: xf, body: body).document
       end
 
+      # Actually write the transformed document to the target
+      #
+      # @param published [true, false] 
+      #
+      # @return [Array] pathname(s) written
       def write_to_target published: true
-        # obtain target directory
-        target = @context.config[published ? :target : :private]
 
-        # just deal with html for now
-        doc = transform_xhtml(published: published) or return
+        # in all cases we write to private target
+        states = [false]
+        # document has to be publishable
+        states.push true if published && @context.published?(@uuid)
 
-        # we assume the directory has already been verified to be
-        # present and writable, so try opening a write handle
-        begin
-          fh   = Tempfile.create('xml', target)
-          path = Pathname(fh.path)
+        ok = []
+        states.each do |state|
+          target = @context.config[state ? :target : :private]
 
-          # write the doc to the target
-          doc.write_to fh
-          fh.close
+          # XXX this is dumb; it should do something more robust if it
+          # fails
+          doc = transform_xhtml(published: state) or next
 
-          uuid = URI(@uuid.to_s)
-          newpath = path.dirname + "#{uuid.uuid}.xml"
+          begin
+            fh   = Tempfile.create('xml-', target)
+            path = Pathname(fh.path)
 
-          File.chmod(0644, path)
-          File.rename(path, newpath)
-          File.utime(@mtime, @mtime, newpath)
-        rescue
-          File.unlink path
-          return
+            # write the doc to the target
+            doc.write_to fh
+            fh.close
+
+            uuid = URI(@uuid.to_s)
+            newpath = path.dirname + "#{uuid.uuid}.xml"
+            ok.push newpath
+
+            File.chmod(0644, path)
+            File.rename(path, newpath)
+            File.utime(@mtime, @mtime, newpath)
+          rescue
+            # XXX this should only rescue a specific class of errors
+            File.unlink bad
+          end
         end
 
-        # return something? iunno
-        newpath
+        ok
       end
+
     end
   end
 end
