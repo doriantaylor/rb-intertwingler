@@ -809,11 +809,11 @@ module RDF::SAK
     def replacements_for subject, published: true
       subject = coerce_resource subject
 
-      # `seen` is a hash mapping resources to publication status. it collects 
-
-      # if we're calling from a published context, we return the
-      # (topologically) last published resources, even if they are
-      # replaced ultimately by unpublished resources.
+      # `seen` is a hash mapping resources to publication status and
+      # subsequent replacements. it collects all the resources in the
+      # replacement chain in :fwd (replaces) and :rev (replaced-by)
+      # members, along with a boolean :pub. `seen` also performs a
+      # duty as cycle-breaking sentinel.
 
       seen  = {}
       queue = [subject]
@@ -824,7 +824,7 @@ module RDF::SAK
         queue += (
           subjects_for(RDF::Vocab::DC.replaces, subject) +
             objects_for(subject, RDF::Vocab::DC.isReplacedBy, only: :resource)
-        ).uniq.map do |r|
+        ).uniq.map do |r| # r = replacement
           next if seen.include? r
           seen[r] ||= { pub: published?(r), fwd: Set.new, rev: Set.new }
           seen[r][:fwd] << test
@@ -833,7 +833,35 @@ module RDF::SAK
         end.compact.uniq
       end
 
-      seen
+      # if we're calling from a published context, we return the
+      # (topologically) last published resource(s), even if they are
+      # replaced ultimately by unpublished resources.
+      
+      out = seen.map { |k, v| v[:rev].empty? ? k : nil }.compact - [subject]
+
+      # now we modify `out` based on the publication status of the context
+      if published
+        pubout = out.select { |o| seen[o][:pub] }
+        # if there is anything left after this, return it
+        return pubout unless pubout.empty?
+        # now we want to find the penultimate elements of `seen` that
+        # are farthest along the replacement chain but whose status is
+        # published
+
+        # start with `out`, take the union of their :fwd members, then
+        # take the subset of those which are published. if the result
+        # is empty, repeat. (this is walking backwards through the
+        # graph we just walked forwards through to construct `seen`)
+        loop do
+          # XXX THIS NEEDS A TEST CASE
+          out = seen.values_at(*out).map { |v| v[:fwd] }.reduce(:+).to_a
+          break if out.empty?
+          pubout = out.select { |o| seen[o][:pub] }
+          return pubout unless pubout.empty?
+        end
+      end
+
+      out
 
     end
 
@@ -929,7 +957,42 @@ module RDF::SAK
         end
       end
 
-      candidates
+      # scan all the candidates for replacements and remove any
+      # candidates that have been replaced
+      candidates.to_a.each do |k, v|
+        # note that 
+        reps = replacements_for(k, published: published) - [k]
+        unless reps.empty?
+          v[:replaced] = true
+          reps.each do |r|
+            c = candidates[r] ||= { rank: v[:rank], published: published?(r),
+              mtime: dates_for(r).last || v[:mtime] || DateTime.new }
+            # we give the replacement the rank and mtime of the
+            # resource being replaced if it scores better
+            c[:rank]  = v[:rank]  if v[:rank]  < c[:rank]
+            c[:mtime] = v[:mtime] if v[:mtime] > c[:mtime]
+          end
+        end
+      end
+
+      # now we can remove all unpublished candidates if the context is
+      # published
+      candidates.select! do |_, v|
+        !v[:replaced] && (published ? v[:published] : true)
+      end
+
+      # now we sort by rank and date; the highest-ranking newest
+      # candidate is the one
+
+      out = candidates.sort do |a, b|
+        _, va = a
+        _, vb = b
+        cb = published ? BITS[vb[:published]] <=> BITS[va[:published]] : 0
+        cr = va[:rank] <=> vb[:rank]
+        cb == 0 ? cr == 0 ? vb[:mtime] <=> va[:mtime] : cr : cb
+      end.map { |x| x.first }.compact
+
+      unique ? out.first : out
 
       # an exact match is better than an inexact one
 
@@ -946,7 +1009,6 @@ module RDF::SAK
       # published is better than not, unless the context is
       # unpublished and an unpublished document replaces a published one
     end
-
 
     def canonical_uuid uri, unique: true
       uri = coerce_resource uri
