@@ -127,13 +127,54 @@ module RDF::SAK
 
     def self.all_by_magic io
       out = super(io)
-      out.length > 0 ? out : [default_type(io)]
+      out.empty? ? [default_type(io)] : out
+    end
+
+    private
+
+    def method_missing id
+      @type.send id
+    end
+
+  end
+
+  module Util
+    R3986 = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
+    QF = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
+    SF = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/
+
+    # need this URI preprocessor because uri.rb is dumb
+    def uri_pp uri
+      # m = R3986.match uri.to_s
+
+      # # bail out only if it matches an authority component
+      # return uri.to_s unless m[3]
+
+      # out = m[1] + m[3]
+      # [[5, ''], [7, ??], [9, ?#]].each do |i, c|
+      #   next if m[i].nil?
+      #   clean = m[i].gsub(SF) { |s| sprintf '%%%X', s.ord }
+      #   out += c + clean
+      # end
+
+      # warn out
+
+      m = QF.match uri.to_s
+      out = m[1]
+      [[2, ??], [3, ?#]].each do |i, c|
+        next if m[i].nil?
+        clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
+        out += c + clean
+      end
+
+      out
     end
 
   end
 
   class Context
     include XML::Mixup
+    include Util
 
     private
 
@@ -179,8 +220,9 @@ module RDF::SAK
         ],
         desc: [
           # main will be cloned into alt
-          [RDF::Vocab::DC.description, RDF::Vocab::DC11.description,
-            RDF::RDFS.comment, RDF::Vocab::SKOS.note],
+          [RDF::Vocab::DC.abstract, RDF::Vocab::DC.description,
+            RDF::Vocab::DC11.description, RDF::RDFS.comment,
+            RDF::Vocab::SKOS.note],
         ],
       },
       RDF::Vocab::FOAF.Document => {
@@ -482,7 +524,12 @@ module RDF::SAK
       blank = /^_:(.*)/.match arg.to_s
       return RDF::Node blank[1] if blank
 
-      arg = URI(@base.to_s).merge arg.to_s
+      begin
+        arg = URI(@base.to_s).merge arg.to_s
+      rescue URI::InvalidURIError => e
+        warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
+        return
+      end
 
       RDF::URI(arg.to_s)
     end
@@ -533,6 +580,8 @@ module RDF::SAK
       
       @graph  = coerce_graph graph, type: type
       @base   = RDF::URI.new base.to_s if base
+      @ucache = RDF::Util::Cache.new(-1)
+      @scache = {} # wtf rdf util cache doesn't like booleans
     end
 
     # Get the prefix mappings from the configuration.
@@ -592,14 +641,20 @@ module RDF::SAK
     # constraining the result by node type (:resource, :uri/:iri,
     # :blank/:bnode, :literal)
     #
-    # @param subject
-    # @param rev
-    # @param only
+    # @param subject of the inquiry
+    # @param rev map in reverse
+    # @param only one or more node types
+    # @param uuids coerce resources to if possible
     #
     # @return [Hash]
 
-    def struct_for subject, rev: false, only: []
+    def struct_for subject, rev: false, only: [], uuids: false, canon: false
       only = coerce_node_spec only
+
+      ucache = {}
+
+      # coerce the subject
+      subject = (ucache[subject] = canonical_uuid(subject)) || subject if uuids 
 
       rsrc = {}
       pattern = rev ? [nil, nil, subject] : [subject, nil, nil]
@@ -607,13 +662,22 @@ module RDF::SAK
         # this will skip over any term not matching the type
         node = rev ? stmt.subject : stmt.object
         next unless node_matches? node, only
+        # coerce the node to uuid if told to
+        if node.resource?
+          if uuids
+            uu = (ucache[node] = canonical_uuid(node)) unless ucache.key? node
+            node = uu || (canon ? canonical_uri(node) : node)
+          elsif canon
+            node = canonical_uri(node)
+          end
+        end
         p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
         o = rsrc[p] ||= []
         o.push node
       end
 
       # XXX in here we can do fun stuff like filter/sort by language/datatype
-      rsrc.values.each { |v| v.sort! }
+      rsrc.values.each { |v| v.sort!.uniq! }
 
       rsrc
     end
@@ -777,19 +841,22 @@ module RDF::SAK
       subject = coerce_resource subject
       out = []
 
+      # try to find it first
       [CI.canonical, RDF::OWL.sameAs].each do |p|
         o = @graph.query([subject, p, nil]).objects
         out += o.sort { |a, b| cmp_resource(a, b) }
       end
 
-      # try to generate 
+      # try to generate in lieu
       if out.empty? and subject.uri?
-        uri = ::URI.parse subject.to_s
+        uri = URI(uri_pp(subject.to_s))
         if @base and uri.respond_to? :uuid
           b = @base.clone
           b.query = b.fragment = nil
           b.path = '/' + uri.uuid
           out << RDF::URI.new(b.to_s)
+        else
+          out << subject
         end
       end
 
@@ -898,28 +965,57 @@ module RDF::SAK
       end.sort.uniq
     end
 
+    # Obtain any specified MIME types for the subject. Just shorthand
+    # for a common application of `objects_for`.
+    #
+    # @param subject
+    # @param predicate
+    # @param datatype
+    #
+    # @return [Array] of internet media types
+    def formats_for subject, predicate: RDF::Vocab::DC.format,
+        datatype: [RDF::XSD.token]
+      objects_for(subject, predicate, only: :literal, datatype: datatype) do |o|
+        t = o.object
+        t =~ /\// ? RDF::SAK::MimeMagic.new(t.to_s.downcase) : nil
+      end.compact.sort.uniq
+    end
+
     # Obtain the canonical UUID for the given URI
     #
-    # @param uri [RDF::URI, URI, to_s]
-    # @param unique [true, false]
+    # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
+    # @param unique [true, false] return a single resource/nil or an array
+    # @param published [true, false] whether to restrict to published docs
     # 
     # @return [RDF::URI, Array]
 
     # it is so lame i have to do this
     BITS = { nil => 0, false => 0, true => 1 }
 
-    def soon_canonical_uuid uri, unique: true, published: false
+    def canonical_uuid uri, unique: true, published: false
       # make sure this is actually a uri
-      uri = coerce_resource uri
-      tu  = URI(uri.to_s)
+      orig = uri = coerce_resource uri
+      tu  = URI(uri_pp(uri).to_s)
+
+      if tu.path && (uu = tu.path.delete_prefix('/')) =~ UUID_RE
+        tu  = URI('urn:uuid:' + uu.downcase)
+        uri = RDF::URI(tu.to_s)
+      end
 
       # now check if it's a uuid
       if tu.respond_to? :uuid
+        warn "lol uuid #{orig}"
         # if it's a uuid, check that we have it as a subject
         # if we have it as a subject, return it
-        return uri if @context.graph.has_subject? uri
+        return uri if @scache[uri] ||= @graph.has_subject?(uri)
         # note i don't want to screw around right now dealing with the
         # case that a UUID might not itself be canonical
+      end
+
+      # spit up the cache if present
+      if out = @ucache[orig]
+        warn "lol cached #{orig}"
+        return unique ? out.first : out
       end
 
       # otherwise we proceed:
@@ -957,6 +1053,8 @@ module RDF::SAK
         end
       end
 
+      candidates.delete_if { |s, _| s.to_s !~ /^urn:uuid:/ }
+
       # scan all the candidates for replacements and remove any
       # candidates that have been replaced
       candidates.to_a.each do |k, v|
@@ -992,6 +1090,11 @@ module RDF::SAK
         cb == 0 ? cr == 0 ? vb[:mtime] <=> va[:mtime] : cr : cb
       end.map { |x| x.first }.compact
 
+      # set cache
+      @ucache[orig] = out
+
+      warn "lol not cached #{orig}"
+
       unique ? out.first : out
 
       # an exact match is better than an inexact one
@@ -1008,96 +1111,6 @@ module RDF::SAK
 
       # published is better than not, unless the context is
       # unpublished and an unpublished document replaces a published one
-    end
-
-    def canonical_uuid uri, unique: true
-      uri = coerce_resource uri
-      tu  = ::URI.parse uri.to_s
-      # first we check if this is a subject uuid
-      if tu.scheme == 'urn' and tu.nid == 'uuid'
-        return unique ? uri : [uri] if @graph.first([uri, nil, nil])
-      elsif (m = UUID_RE.match(tu.path.delete_prefix('/')))
-        xu = RDF::URI('urn:uuid:' + m[1])
-        return unique ? xu : [xu] if @graph.first([xu, nil, nil])
-      end
-
-      # next we test for direct relation via ci:canonical and owl:sameAs
-      candidates = ([CI.canonical, RDF::OWL.sameAs].reduce([]) do |a, p|
-        a += @graph.query([nil, p, uri]).subjects
-      end + @graph.query(
-        [uri, RDF::OWL.sameAs]).objects).uniq.select do |x|
-        x.to_s.start_with? 'urn:uuid:'
-      end.sort
-
-      # return if we find anything
-      return unique ? candidates[0] : candidates unless candidates.empty?
-
-      # if the supplied URI has a path, we test the path slugs
-      if tu.hierarchical?
-        # construct a set of resources for each segment in the path,
-        # testing first against ci:canonical-slug, then ci:slug
-        segs = Pathname(tu.path).cleanpath.to_s.split(/\/+/).drop 1
-        sets = segs.map do |segment|
-          s = []
-          [CI['canonical-slug'], CI.slug, RDF::Vocab::DC.identifier,
-            RDF::Vocab::DC11.identifier].each do |p|
-            [RDF::XSD.token, RDF::XSD.string].each do |t|
-              s += @graph.query(
-                [nil, p, RDF::Literal(segment, datatype: t)]).subjects
-            end
-          end
-          Set.new s
-        end
-
-        # (at this point if there is not at least one resource in each
-        # set, we return nil)
-        return unique ? nil : [] if sets.empty? or sets.any? { |x| x.empty? }
-
-        # all resources in the last column for which there is an
-        # unbroken path from front to back are candidates
-
-        candidates = []
-        if sets.length == 1
-          # shortcut
-          candidates = sets[0].to_a
-        else
-          # build up a list of links between the ith and ith + 1
-          # resource(s) matching each path segment slug; check in both
-          # directions
-          links = {}
-          (1 .. sets.length).each do |i|
-            sets[i - 1].each do |a|
-              links[a] ||= Set.new [a]
-              sets[i].each do |b|
-                next if links[a].include? b
-                [[a, nil, b], [b, nil, a]].each do |q|
-                  if @graph.first(q)
-                    links[a] << b
-                    next
-                  end
-                end
-              end
-            end
-
-            # this is the intersection of the preceding segment
-            # candidate's links with the current segment's candidates
-            c = links.values_at(*sets[i-1]).reduce(Set.new, :union) & sets[i]
-            # if the set is empty, the pseudohierarchy is broken
-            break if c.empty?
-
-            # if we have made it to the end then this intersection is
-            # our set of candidates
-            candidates = c.to_a if i == sets.length
-          end
-        end
-
-        return unique ? nil : [] if candidates.empty?
-
-        # if the call was for unique, sort the UUIDs lexically (for now)
-        # and return the first one
-        candidates.sort!
-        unique ? candidates[0] : candidates
-      end
     end
 
     # Obtain the objects for a given subject-predicate pair.
@@ -1438,6 +1451,19 @@ module RDF::SAK
       end
 
       out
+    end
+
+    # Get all "reachable" UUID-identified entities (subjects which are
+    # also objects)
+    def reachable published: false
+      # obtain the objects which are URIs
+      o = @graph.objects.select(&:uri?).to_set
+      # cache this so we don't ask the same question thousands of times
+      p = published ? -> x { published?(x) } : -> x { true }
+      # now get the subjects which are also objecst
+      @graph.subjects.select do |s|
+        s.uri? && s =~ /^urn:uuid:/ && o.include?(s) && p.call(s)
+      end
     end
 
     # holy cow this is actually a lot of stuff:
@@ -1870,7 +1896,7 @@ module RDF::SAK
           RDF::SAK::MimeMagic.by_path(x).to_s !~ /.*(?:x?ht|x)ml.*/i
       end.uniq
 
-      warn files
+      #warn files
 
       # XXX implement negotiation algorithm
       return files[0]
@@ -1994,6 +2020,7 @@ module RDF::SAK
 
     class Document
       include XML::Mixup
+      include Util
 
       private
 
@@ -2002,25 +2029,10 @@ module RDF::SAK
       XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
 
       XHV = 'http://www.w3.org/1999/xhtml/vocab#'
-      QF  = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
-      SF  = /[^[:alpha:][:digit:]\/\?:@!$&'()*+,;=._~-]/
-
-      # need this URI preprocessor because uri.rb is dumb
-      def uri_pp uri
-        m = QF.match uri.to_s
-        out = m[1]
-        [[2, ??], [3, ?#]].each do |i, c|
-          next if m[i].nil?
-          clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
-          out += c + clean
-        end
-
-        out
-      end
 
       public
 
-      attr_reader :doc, :uuid
+      attr_reader :doc, :uuid, :uri
 
       def initialize context, uuid, doc: nil, uri: nil, mtime: nil
         raise 'context must be a RDF::SAK::Context' unless
@@ -2149,7 +2161,7 @@ module RDF::SAK
       LINK_XPATH = ('.//html:*[not(self::html:base)][%s]' %
         (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
-      def rewrite_links node = @doc, &block
+      def rewrite_links node = @doc, uuids: {}, uris: {}, &block
         base  = base_for node
         count = 0
         cache = {}
@@ -2159,6 +2171,8 @@ module RDF::SAK
             next unless elem.has_attribute? attr
 
             abs = base.merge uri_pp(elem[attr].strip)
+
+            # fix e.g. http->https
             if abs.host == @uri.host and abs.scheme != @uri.scheme
               tmp          = @uri.dup
               tmp.path     = abs.path
@@ -2166,8 +2180,17 @@ module RDF::SAK
               tmp.fragment = abs.fragment
               abs          = tmp
             end
-            abs = cache[abs] ||= @context.canonical_uri(abs, rdf: false) || abs
-            elem[attr] = @uri.route_to(abs).to_s
+
+            abs = RDF::URI(abs.to_s)
+
+            # round-trip to uuid and back if we can
+            if uuid = uuids[abs] ||= @context.canonical_uuid(abs)
+              abs = cache[abs] ||= @context.canonical_uri(uuid)
+            else
+              abs = cache[abs] ||= @context.canonical_uri(abs)
+            end
+
+            elem[attr] = @uri.route_to(abs.to_s).to_s
             count += 1
           end
 
@@ -2323,10 +2346,12 @@ module RDF::SAK
         body = doc.at_xpath('//html:body[1]', { html: XHTMLNS }) or return
 
         # initial stuff
-        struct    = @context.struct_for @uuid
+        struct    = @context.struct_for @uuid, uuids: true, canon: true
+        # rstruct   = @context.struct_for @uuid, uuids: true, rev: true
         resources = {}
         literals  = {}
-        uuids     = {}
+        ufwd      = {} # uuid -> uri
+        urev      = {} # uri  -> uuid
         datatypes = Set.new
         types     = Set.new
         authors   = @context.authors_for(@uuid)
@@ -2337,26 +2362,38 @@ module RDF::SAK
         title = title[1] if title
         desc  = desc[1]  if desc
 
-        struct.each do |k, v|
-          v.each do |x|
-            if x.literal?
-              literals[x] ||= Set.new
-              literals[x].add k
+        # `struct` and `rstruct` will contain all the links and
+        # metadata for forward and backward neighbours, respectively,
+        # which we need to mine (predicates, classes, datatypes) for
+        # prefixes among other things.
+
+        struct.each do |p, v|
+          v.each do |o|
+            if o.literal?
+              literals[o] ||= Set.new
+              literals[o].add p
 
               # collect the datatype
-              datatypes.add x.datatype if x.has_datatype?
+              datatypes.add o.datatype if o.has_datatype?
             else
-              resources[x] ||= Set.new
-              resources[x].add k
-              # harvest proper URIs
-              uuids[x] ||= @context.canonical_uri(x) if
-                x.to_s.start_with? 'urn:uuid:'
+              # normalize URIs
+              if o.to_s.start_with? 'urn:uuid:'
+                ufwd[o] ||= @context.canonical_uri o
+              elsif cu = @context.canonical_uuid(o)
+                o = urev[o] ||= cu
+              end
+
+
+              # collect the resource
+              resources[o] ||= Set.new
+              resources[o].add p
+
               # add to type
-              types.add x if k == RDF::RDFV.type
+              types.add o if p == RDF::RDFV.type
             end
           end
         end
-        urev = uuids.invert
+        urev.merge! ufwd.invert
 
         labels = resources.keys.map do |k|
           # turn this into a pair which subsequently gets turned into a hash
@@ -2376,40 +2413,53 @@ module RDF::SAK
           tm[:datatype] = @context.abbreviate(tdt)
         end
 
+        # we accumulate a record of the links in the body so we know
+        # which ones to skip in the head
         bodylinks = {}
-        rewrite_links body do |elem|
+        rewrite_links body, uuids: ufwd, uris: urev do |elem|
           vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
           vocab = uri_pp(vocab.to_s) if vocab
 
           if elem.key?('href') or elem.key?('src')
             vu = uri_pp(elem['href'] || elem['src'])
-            tu = RDF::URI(@uri.merge(vu))
-            bodylinks[urev[tu] || tu] = true
+            ru = RDF::URI(@uri.merge(vu))
+            bodylinks[urev[ru] || ru] = true
 
-            if rel = resources[urev[tu] || tu]
+            if rel = resources[urev[ru] || ru]
               elem['rel'] = (@context.abbreviate rel, vocab: vocab).join ' '
             end
 
-            label = labels[urev[tu] || tu]
+            label = labels[urev[ru] || ru]
             if label and (!elem.key?('title') or elem['title'].strip == '')
               elem['title'] = label[1].to_s
             end
           end
         end
 
+        # and now we do the head
         links = []
         resources.reject { |k, _| bodylinks[k] }.each do |k, v|
           v = v.dup.delete RDF::RDFV.type
           next if v.empty?
+          mts = @context.formats_for k
+
+          # warn k, v.inspect
+
+          # warn k, mts.inspect
+
           rel = @context.abbreviate v.to_a, vocab: XHV
-          k   = @uri.route_to(uri_pp (uuids[k] || k).to_s)
-          name = :link
-          attr = :href
-          unless (v.to_set & Set[RDF::Vocab::DC.requires]).empty?
-            name = :script
-            attr = :src
+          ru  = @uri.route_to(uri_pp (ufwd[k] || k).to_s)
+          ln  = { nil => :link, rel: rel, href: ru.to_s }
+
+          # add type=lol/wut
+          ln[:type] = mts.first.to_s unless mts.empty?
+
+          if ln[:type] =~ /(java|ecma)script/i ||
+              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
+            ln[nil]  = :script
+            ln[:src] = ln.delete :href
           end
-          links.push({ nil => name, rel: rel, attr => k.to_s })
+          links.push ln
         end
 
         links.sort! do |a, b|
@@ -2431,7 +2481,7 @@ module RDF::SAK
           datatypes.add name[0] # a convenient place to chuck this
           prop  = @context.abbreviate(name[0])
           name  = name[1]
-          about = @uri.route_to((uuids[a] || a).to_s)
+          about = @uri.route_to((ufwd[a] || a).to_s)
           tag   = { nil => :meta, about: about.to_s, name: :author,
                    property: prop, content: name.to_s }
 
@@ -2531,9 +2581,10 @@ module RDF::SAK
             File.chmod(0644, path)
             File.rename(path, newpath)
             File.utime(@mtime, @mtime, newpath)
-          rescue
+          rescue Exception => e
             # XXX this should only rescue a specific class of errors
-            File.unlink bad
+            warn e.class, e
+            File.unlink path if path.exist?
           end
         end
 
