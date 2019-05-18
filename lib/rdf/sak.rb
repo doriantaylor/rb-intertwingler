@@ -139,9 +139,16 @@ module RDF::SAK
   end
 
   module Util
-    R3986 = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
-    QF = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
-    SF = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/
+    private
+
+    R3986   = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
+    QF      = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
+    SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/
+
+    public
+
+    XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
+    XHV     = 'http://www.w3.org/1999/xhtml/vocab#'.freeze
 
     # need this URI preprocessor because uri.rb is dumb
     def uri_pp uri
@@ -1460,7 +1467,7 @@ module RDF::SAK
       o = @graph.objects.select(&:uri?).to_set
       # cache this so we don't ask the same question thousands of times
       p = published ? -> x { published?(x) } : -> x { true }
-      # now get the subjects which are also objecst
+      # now get the subjects which are also objects
       @graph.subjects.select do |s|
         s.uri? && s =~ /^urn:uuid:/ && o.include?(s) && p.call(s)
       end
@@ -1706,7 +1713,7 @@ module RDF::SAK
 
     # generate rewrite map(s)
     def generate_rewrite_map published: false, docs: nil
-      docs ||= all_internal_docs published: published
+      docs ||= reachable published: published
       base = URI(@base.to_s)
       rwm  = {}
       docs.each do |doc|
@@ -1733,7 +1740,7 @@ module RDF::SAK
     # find the "best" (relative) URL for the UUID and map the pair
     # together
     def generate_uuid_redirect_map published: false, docs: nil
-      docs ||= all_internal_docs published: published
+      docs ||= reachable published: published
 
       base = URI(@base.to_s)
 
@@ -1757,25 +1764,47 @@ module RDF::SAK
     # find all URIs/slugs that are *not* canonical, map them to slugs
     # that *are* canonical
     def generate_slug_redirect_map published: false, docs: nil
-      docs ||= all_internal_docs published: published
+      docs ||= reachable published: published
+      base = URI(@base.to_s)
 
+      # for redirects we collect all the docs, plus all their URIs,
+      # separate canonical from the rest
+
+      # actually an easy way to do this is just harvest all the
+      # multi-addressed docs, remove the first one, then ask for the
+      # canonical uuid back,
+
+      fwd = {}
+      rev = {}
       out = {}
 
       docs.each do |doc|
         uris  = canonical_uri doc, unique: false, rdf: false
-        if uris.length > 1
-          canon = uris.shift
-          next unless canon.respond_to? :request_uri
+        canon = uris.shift
+        next unless canon.respond_to? :request_uri
 
+        # cache the forward direction
+        fwd[doc] = canon
+
+        unless uris.empty?
           uris.each do |uri|
             next unless uri.respond_to? :request_uri
             next if canon == uri
-            uri = uri.request_uri.delete_prefix '/'
+            next unless base.route_to(uri).relative?
 
-            # remove uuids as we already have them
-            next if uri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
-            out[uri] = canon.to_s
+            requri = uri.request_uri.delete_prefix '/'
+            next if requri == '' ||
+              requri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
+
+            # cache the reverse direction
+            rev[uri] = requri
           end
+        end
+      end
+
+      rev.each do |uri, requri|
+        if (doc = canonical_uuid(uri)) and fwd[doc]
+          out[requri] = fwd[doc].to_s
         end
       end
 
@@ -1794,7 +1823,7 @@ module RDF::SAK
     def generate_gone_map published: false, docs: nil
       # published is a no-op for this one because these docs are by
       # definition not published
-      docs ||= all_internal_docs published: false
+      docs ||= reachable published: false
       p    = RDF::Vocab::BIBO.status
       base = URI(@base.to_s)
       out  = {}
@@ -1850,7 +1879,7 @@ module RDF::SAK
     end
 
     def write_maps published: true, docs: nil
-      docs ||= all_internal_docs published: false
+      docs ||= reachable published: false
       # slug to uuid (internal)
       write_rewrite_map docs: docs
       # uuid/slug to canonical slug (308)
@@ -1858,6 +1887,34 @@ module RDF::SAK
       # retired slugs/uuids (410)
       write_gone_map docs: docs
       true
+    end
+
+    # whoops lol we forgot the book list
+
+    def reading_lists published: true
+      out = all_of_type RDF::Vocab::SiocTypes.ReadingList
+      return out unless published
+      out.select { |r| published? r }
+    end
+
+    def generate_reading_list subject, published: true
+      # struct = struct_for subject
+
+      # find all the books, sort them by title
+
+      # for each book, give title, authors, inbound references
+
+      # punt out xhtml
+    end
+
+    def write_reading_lists published: true
+      reading_lists(published: published).each do |rl|
+        tu  = URI(rl.to_s)
+        doc = generate_reading_list rl, published: published
+        fh  = (target + "#{tu.uuid}.xml").open('w')
+        doc.write_to fh
+        fh.close
+      end
     end
 
     # - io stuff -
@@ -2025,10 +2082,6 @@ module RDF::SAK
       private
 
       C_OK = [Nokogiri::XML::Node, IO, Pathname].freeze
-
-      XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
-
-      XHV = 'http://www.w3.org/1999/xhtml/vocab#'
 
       public
 
@@ -2400,7 +2453,7 @@ module RDF::SAK
           [k, @context.label_for(k) ]
         end.to_h
 
-        # warn labels
+        #warn labels
 
         # handle the title
         title ||= RDF::Literal('')
@@ -2450,6 +2503,9 @@ module RDF::SAK
           rel = @context.abbreviate v.to_a, vocab: XHV
           ru  = @uri.route_to(uri_pp (ufwd[k] || k).to_s)
           ln  = { nil => :link, rel: rel, href: ru.to_s }
+          if (label = labels[urev[k] || k])
+            ln[:title] = label[1].to_s
+          end
 
           # add type=lol/wut
           ln[:type] = mts.first.to_s unless mts.empty?
