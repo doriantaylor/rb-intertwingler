@@ -2257,8 +2257,54 @@ module RDF::SAK
       def triples_for
       end
 
+      OBJS = [:href, :src].freeze
+      
+      # ancestor node always with (@property and not @content) and
+      # not @resource|@href|@src unless @rel|@rev
+      LITXP = ['(ancestor::*[@property][not(@content)]',
+        '[not(@resource|@href|@src) or @rel|@rev])[1]' ].join('').freeze
+      # note parentheses cause the index to be counted from the root
+
+      def vocab_for node
+        if node[:vocab]
+          vocab = node[:vocab].strip
+          return nil if vocab == ''
+          return vocab
+        end
+        parent = node.parent
+        vocab_for parent if parent and parent.element?
+      end
+
+      def prefixes_for node, prefixes = {}
+        # start with namespaces
+        pfx = node.namespaces.select do |k, _|
+          k.start_with? 'xmlns:'
+        end.transform_keys do |k|
+          k.delete_prefix 'xmlns:'
+        end
+
+        # then add @prefix overtop of the namespaces
+        if node[:prefix]
+          x = node[:prefix].strip.split(/\s+/)
+          a = []
+          b = []
+          x.each_index { |i| (i % 2 == 0 ? a : b).push x[i] }
+          # if the size is uneven the values will be nil, so w drop em
+          pfx.merge! a.zip(b).to_h.reject { |_, v| v.nil? }
+        end
+
+        # since we're ascending the tree, input takes precedence
+        prefixes = pfx.merge prefixes
+      
+        if node.parent and node.parent.element?
+          prefixes_for(node.parent, prefixes)
+        else
+          prefixes
+        end
+      end
+
       # give us the rdf subject of the node itself
-      def subject_for node: nil, is_ancestor: false
+      def subject_for node = nil, rdf: false, is_ancestor: false
         node ||= @doc.root
         raise 'Node must be an element' unless
           node.is_a? Nokogiri::XML::Element
@@ -2266,85 +2312,77 @@ module RDF::SAK
         # first we check for an ancestor element with @property and no
         # @content; if we find one then we reevaluate with that
         # element as the starting point
-        if n = node.at_xpath('(ancestor::*[@property][not(@content)])[1]')
+        if n = node.at_xpath(LITXP)
           return subject_for n
         end
 
+        # answer a bunch of helpful questions about this element
         subject = nil
-        is_root = !node.parent or node.parent.document?
+        base    = base_for node
+        parent  = node.parent
+        ns_href = node.namespace.href if node.namespace
+        up_ok   = %i{rel rev}.none? { |a| node[a] }
+        is_root = !parent or parent.document?
+        special = /^(?:[^:]+:)?(?:head|body)$/i === node.name and
+          (ns_href == 'http://www.w3.org/1999/xhtml' or
+          /^(?:[^:]+:)?html$/xi === parent.name)
 
-        # if parent is false we first check for an @about
+        # if the node is being inspected as an ancestor to the
+        # original node, we have to check it backwards.
         if is_ancestor
-          [:resource, :href, :src].each do |attr|
-            if node.key? attr
-              subject = node[attr]
-              break
+          # ah right @resource gets special treatment
+          if subject = node[:resource]
+            subject.strip!
+            if m = /^\[(.*?)\]$/.match(subject)
+            end
+          else
+            OBJS.each do |attr|
+              if node[attr]
+                # merge with the root and return it
+                subject = base + node[attr]
+                break
+              end
             end
           end
 
-          subject = node[:about] if subject.nil? and node.key? :about
+          return rdf ? RDF::URI(subject.to_s) : subject
+
+          # note if we are being called with is_ancestor, that means
+          # the original node (or indeed any of the nodes previously
+          # tested) have anything resembling a resource in them. this
+          # means @rel/@rev should be ignored, and we should keep
+          # looking for a subject.
+        end
+
+        if node[:about]
+          
+          if m = /^_:(.*)$/.match(node[:about])
+          end
+            
+          subject = base + node[:about]
+          
+        elsif is_root
+          subject = base
+        elsif special
+          subject = subject_for parent
+        elsif node[:typeof]
+          # bnode the typeof attr
+
+          # note we return bnodes irrespective of the rdf flag
+          return RDF::Node('id-%16x' % node.attributes['typeof'].pointer)
+        elsif node[:inlist]
+          # bnode the inlist attr
+          return RDF::Node('id-%16x' % node.attributes['inlist'].pointer)
+        elsif (parent[:inlist] && OBJS.none? { |a| parent[a] }) ||
+            (is_ancestor && !up_ok)
+          # bnode the element
+          return RDF::Node('id-%16x' % node.pointer)
         else
-          # 
-          subject = node[:about] if node.key? :about
-          # now we need to check @inlist and @typeof
-
-          # @typeof is easy because if it's there and @about isn't
-          # then the subject is a bnode (we'll generate-id(@typeof)
-          # and derive the bnode ID from that)
-
-          # @inlist on the other hand is hard, because we want the
-          # actual list node
-
+          subject = subject_for parent, is_ancestor: true
         end
 
-        # XXX actually no we don't want this. subject definitions on
-        # the current node should only ever come from @about or blank
-        # nodes if a @typeof or @inlist is present. the only time
-        # @resource/@href/@src ought to be considered is when parent
-        # is true (ie we are scanning an ancestor of the initial
-        # node).
+        rdf 
 
-        # also maybe we should memoize this shit
-
-        # then we check @resource, @href, @src
-        if subject.nil? and is_ancestor
-          [:resource, :href, :src].each do |attr|
-            if node.key? attr
-              subject = node[attr]
-              break
-            end
-          end
-
-          # if parent is true, *now* we check for @about
-          if subject.nil? and node.key? :about
-            subject = node[:about]
-          end
-        end
-
-        # if there is still no viable subject, check if the element is
-        # the root, and if so, treat it as if there is an empty @about
-        # (ie use base href)
-        subject = @uri if subject.nil? and is_root
-
-        # if there is still no viable subject, then before proceeding,
-        # check if this is an (x)html head or body element, in which
-        # case short-circuit to the parent node
-        if subject.nil? and [:head, :body].include? node.name.to_sym
-          subject_for node.parent, true
-        end
-
-        # (blank node time)
-
-        # if there are none of those, we check for a @typeof
-
-        # if there is no @typeof, check for @inlist
-
-        return subject if subject
-
-        # if we couldn't find anything suitable as a subject, recurse to
-        # the parent node
-
-        subject_for(node.parent, true) if node.parent and node.parent.element?
       end
 
       # backlink structure
