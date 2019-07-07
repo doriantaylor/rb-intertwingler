@@ -177,6 +177,151 @@ module RDF::SAK
       out
     end
 
+    # stateless term abbreviation method
+    def abbreviate term, prefixes: {}, vocab: nil, noop: true, sort: true
+      vocab  = coerce_resource(vocab).to_s if vocab
+      scalar = true
+
+      if term.respond_to? :to_a
+        term   = term.to_a
+        scalar = false
+      else
+        term = [term]
+      end
+
+      rev = prefixes.invert.transform_keys { |k| k.to_s }
+
+      term.map! do |t|
+        t  = t.to_s
+        vt = t.delete_prefix(vocab) if vocab
+        if vt.nil? or vt == t or vt.match?(/:/)
+          rev.sort { |a, b| b[0].length <=> a[0].length }.each do |k, v|
+            if (vt = t.delete_prefix(k)) != t
+              vt = '%s:%s' % [v, vt]
+              break
+            else
+              vt = nil
+            end
+          end
+        end
+        vt ||= t if noop
+        vt
+      end
+
+      # only sort if noop is set
+      term.sort! if noop && sort
+
+      scalar ? term[0] : term
+    end
+
+    # 
+    def prepare_collation struct, &block
+      resources = {}
+      literals  = {}
+      datatypes = Set.new
+      types     = Set.new
+
+      struct.each do |p, v|
+        v.each do |o|
+          block.call p, o if block
+
+          if o.literal?
+            literals[o] ||= Set.new
+            literals[o].add p
+            # collect the datatype
+            datatypes.add o.datatype if o.has_datatype?
+          else
+            if  p == RDF::RDFV.type
+              # separate the type
+              types.add o
+            else
+              # collect the resource
+              resources[o] ||= Set.new
+              resources[o].add p
+            end
+          end
+        end
+      end
+
+      { resources: resources, literals: literals,
+        datatypes: datatypes, types: types }
+    end
+
+    # 
+    def prefix_subset prefixes, nodes
+      raise 'prefixes must be a hash' unless prefixes.is_a? Hash
+      raise 'nodes must be arrayable' unless nodes.respond_to? :to_a
+
+      # sniff out all the URIs and datatypes
+      resources = Set.new
+      nodes.each do |n|
+        next unless n.is_a? RDF::Term
+        if n.literal? && n.datatype?
+          resources << n.datatype
+        elsif n.uri?
+          resources << n
+        end
+      end
+
+      # now we abbreviate all the resources
+      pfx = abbreviate(resources.to_a,
+        prefixes: prefixes, noop: false, sort: false).uniq.compact.map do |p|
+        p.split(?:)[0].to_sym
+      end.uniq.to_set
+
+      # now we return the subset 
+      prefixes.select { |k, _| pfx.include? k.to_sym }
+    end
+
+    # turns any data structure into a set of nodes
+    def smush_struct struct
+      out = Set.new
+
+      if struct.is_a? RDF::Term
+        out << struct
+      elsif struct.respond_to? :to_a
+        out |= struct.to_a.map { |s| smush_struct(s).to_a }.flatten.to_set
+      end
+
+      out
+    end
+
+    def invert_struct struct
+      nodes = {}
+
+      struct.each do |p, v|
+        v.each do |o|
+          nodes[o] ||= Set.new
+          nodes[o] << p
+        end
+      end
+
+      nodes
+    end
+
+    def title_tag predicates, content,
+        prefixes: {}, vocab: nil, lang: nil, xhtml: true
+
+      # begin with the tag
+      tag = { '#title' => content.to_s,
+        property: abbreviate(predicates, prefixes: prefixes, vocab: vocab) }
+
+      # we set the language if it exists and is different from the
+      # body OR if it is xsd:string we set it to the empty string
+      lang = (content.language? && content.language != lang ?
+        content.language : nil) || (content.datatype == RDF::XSD.string &&
+        lang ? '' : nil)
+      if lang
+        tag['xml:lang'] = lang if xhtml
+        tag[:lang] = lang
+      end
+      if content.datatype? && content.datatype != RDF::XSD.string
+        tag[:datatype] = abbreviate(content.datatype,
+          prefixes: prefixes, vocab: vocab)
+      end
+
+      tag
+    end
   end
 
   class Context
@@ -608,40 +753,9 @@ module RDF::SAK
     #
     # @return
 
-    def abbreviate term, vocab: nil, noop: true, sort: true
-      vocab  = coerce_resource(vocab).to_s if vocab
-      scalar = true
-
-      if term.respond_to? :to_a
-        term   = term.to_a
-        scalar = false
-      else
-        term = [term]
-      end
-
-      rev = prefixes.invert.transform_keys { |k| k.to_s }
-
-      term.map! do |t|
-        t  = t.to_s
-        vt = t.delete_prefix(vocab) if vocab
-        if vt.nil? or vt == t or vt.match?(/:/)
-          rev.sort { |a, b| b[0].length <=> a[0].length }.each do |k, v|
-            if (vt = t.delete_prefix(k)) != t
-              vt = '%s:%s' % [v, vt]
-              break
-            else
-              vt = nil
-            end
-          end
-        end
-        vt ||= t if noop
-        vt
-      end
-
-      # only sort if noop is set
-      term.sort! if noop && sort
-
-      scalar ? term[0] : term
+    def abbreviate term, prefixes: @config[:prefixes],
+        vocab: nil, noop: true, sort: true
+      super term, prefixes: prefixes || {}, vocab: vocab, noop: noop, sort: sort
     end
 
     # Obtain a key-value structure for the given subject, optionally
@@ -1170,7 +1284,7 @@ module RDF::SAK
     #
     # @return [RDF::Resource]
     def subjects_for predicate, object, entail: true, only: []
-      raise 'Subject must be a Term' unless object.is_a? RDF::Term
+      raise 'Object must be a Term' unless object.is_a? RDF::Term
       predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
       raise 'Predicate must be some kind of term' unless
         predicate.all? { |p| p.is_a? RDF::URI }
@@ -1506,6 +1620,357 @@ module RDF::SAK
     # generate indexes of people, groups, and organizations
 
     # generate indexes of books, not-books, and other external links
+
+    def head_links subject, struct: nil, nodes: nil, prefixes: {},
+        ignore: [], uris: {}, labels: {}, vocab: nil
+
+      raise 'ignore must be Array or Set' unless
+        [Array, Set].any? { |c| ignore.is_a? c }
+
+      struct ||= struct_for subject
+      nodes  ||= invert_struct struct
+
+      # make sure these are actually URI objects not RDF::URI
+      uris = uris.transform_values { |v| URI(uri_pp v.to_s) }
+      uri  = uris[subject] || canonical_uri(subject, rdf: false)
+
+      ignore = ignore.to_set
+
+      # output
+      links = []
+
+      nodes.reject { |n, _| ignore.include?(n) || !n.uri? }.each do |k, v|
+        # first nuke rdf:type, that's never in there
+        v = v.dup.delete RDF::RDFV.type
+        next if v.empty?
+
+        unless uris[k]
+          cu = canonical_uri k
+          uris[k] = cu || uri_pp(k.to_s)
+        end
+
+        # munge the url and make the tag
+        rel = abbreviate v.to_a, vocab: vocab
+        ru  = uri.route_to(uris[k])
+        ln  = { nil => :link, rel: rel, href: ru.to_s }
+
+        # add the title
+        if lab = labels[k]
+          ln[:title] = lab[1].to_s
+        end
+
+        # add type attribute
+        unless (mts = formats_for k).empty?
+          ln[:type] = mts.first.to_s
+
+          if ln[:type] =~ /(java|ecma)script/i ||
+              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
+            ln[nil]  = :script
+            ln[:src] = ln.delete :href
+          end
+        end
+
+        # finally add the link
+        links.push ln
+      end
+
+      links.sort! do |a, b|
+        # sort by rel, then by href
+        # warn a.inspect, b.inspect
+        s = 0
+        [nil, :rel, :rev, :href, :title].each do |k|
+          s = a.fetch(k, '').to_s <=> b.fetch(k, '').to_s
+          break if s != 0
+        end
+        s
+      end
+
+      links
+    end
+
+    def head_meta subject, struct: nil, nodes: nil, prefixes: {},
+        ignore: [], meta_names: {}, vocab: nil, lang: nil, xhtml: true
+
+      raise 'ignore must be Array or Set' unless
+        [Array, Set].any? { |c| ignore.is_a? c }
+
+      struct ||= struct_for subject
+      nodes  ||= invert_struct struct
+
+      ignore = ignore.to_set
+
+      meta = []
+      nodes.select { |n| n.literal? && !ignore.include?(n) }.each do |k, v|
+        rel  = abbreviate v.to_a, vocab: vocab
+        tag  = { nil => :meta, property: rel, content: k.to_s }
+
+        lang = (k.language? && k.language != lang ? k.language : nil) ||
+          (k.datatype == RDF::XSD.string && lang ? '' : nil)
+        if lang
+          tag['xml:lang'] = lang if xhtml
+          tag[:lang] = lang
+        end
+
+        tag[:datatype] = abbreviate k.datatype, vocab: XHV if k.datatype?
+        tag[:name] = meta_names[k] if meta_names[k]
+
+        meta << tag
+      end
+
+      meta.sort! do |a, b|
+        s = 0
+        [:about, :property, :datatype, :content, :name].each do |k|
+          # warn a.inspect, b.inspect
+          s = a.fetch(k, '').to_s <=> b.fetch(k, '').to_s
+          break if s != 0
+        end
+        s
+      end
+
+      meta
+    end
+
+    def generate_twitter_meta subject
+      # get author
+      author = authors_for(subject, unique: true) or return
+
+        # get author's twitter account
+        twitter = objects_for(author, RDF::Vocab::FOAF.account,
+                              only: :resource).select { |t|
+          t.to_s =~ /twitter\.com/
+        }.sort.first or return
+        twitter = URI(twitter.to_s).path.split(/\/+/)[1]
+        twitter = ?@ + twitter unless twitter.start_with? ?@
+
+        # get title
+        title = label_for(subject) or return
+
+        out = [
+          { nil => :meta, name: 'twitter:card', content: :summary },
+          { nil => :meta, name: 'twitter:site', content: twitter },
+          { nil => :meta, name: 'twitter:title', content: title[1].to_s }
+        ]
+
+        # get abstract
+        if desc = label_for(subject, desc: true)
+          out.push({ nil => :meta, name: 'twitter:description',
+            content: desc[1].to_s })
+        end
+
+        # get image (foaf:depiction)
+        img = objects_for(subject, RDF::Vocab::FOAF.depiction, only: :resource)
+        unless img.empty?
+          img = img[0].to_s
+          out.push({ nil => :meta, name: 'twitter:image', content: img })
+          out[0][:content] = :summary_large_image
+        end
+
+        # return the appropriate xml-mixup structure
+        out
+    end
+
+    AUTHOR_SPEC = [
+      ['By:', [RDF::Vocab::BIBO.authorList, RDF::Vocab::DC.creator]],
+      ['With:', [RDF::Vocab::BIBO.contributorList, RDF::Vocab::DC.contributor]],
+      ['Edited by:', [RDF::Vocab::BIBO.editorList, RDF::Vocab::BIBO.editor]],
+      ['Translated by:', [RDF::Vocab::BIBO.translator]],
+    ].freeze
+
+    def generate_bibliography id, published: true
+      id  = canonical_uuid id
+      uri = canonical_uri id
+      struct = struct_for id
+      nodes     = Set[id] + smush_struct(struct)
+      bodynodes = Set.new
+      parts     = {}
+      referents = {}
+      labels    = { id => label_for(id, candidates: struct) }
+      canon     = {}
+
+      # uggh put these somewhere
+      preds = {
+        hp:    predicate_set(RDF::Vocab::DC.hasPart),
+        sa:    predicate_set(RDF::RDFS.seeAlso),
+        canon: predicate_set([RDF::OWL.sameAs, CI.canonical]),
+        ref:   predicate_set(RDF::Vocab::DC.references),
+        al:    predicate_set(RDF::Vocab::BIBO.contributorList),
+        cont:  predicate_set(RDF::Vocab::DC.contributor),
+      }
+
+      # collect up all the parts (as in dct:hasPart)
+      objects_for(id, preds[:hp], entail: false, only: :resource).each do |part|
+        bodynodes << part
+
+        # gather up all the possible alias urls this thing can have
+        sa = ([part] + objects_for(part,
+          preds[:sa], only: :uri, entail: false)).map do |x|
+          [x] + subjects_for(preds[:canon], x, only: :uri, entail: false)
+        end.flatten.uniq
+
+        # collect all the referents
+        reftmp = {}
+        sa.each do |u|
+          subjects_for preds[:ref], u, only: :uri, entail: false do |s, *p|
+            reftmp[s] ||= Set.new
+            reftmp[s] += p[0].to_set
+          end
+        end
+
+        # if we are producing a list of references identified by only
+        # published resources, prune out all the unpublished referents
+        reftmp.select! { |x, _| published? x } if published
+
+        # unconditionally skip this item if nothing references it
+        next if reftmp.empty?
+
+        referents[part] = reftmp
+
+        reftmp.each do |r, _|
+          labels[r] ||= label_for r
+          canon[r]  ||= canonical_uri r
+        end
+
+        # collect all the authors and author lists
+
+        objects_for(part, preds[:al], only: :resource, entail: false) do |o|
+          RDF::List.new(subject: o, graph: @graph).each do |a|
+            labels[a] ||= label_for a
+          end
+        end
+
+        objects_for(part, preds[:cont], only: :uri, entail: false) do |a|
+          labels[a] ||= label_for a
+        end
+
+        ps = struct_for part
+        nodes |= smush_struct ps
+
+        parts[part] = ps
+      end
+
+      bmap = prepare_collation struct
+      pf = -> x { abbreviate bmap[x.literal? ? :literals : :resources][x] }
+
+      body = []
+      parts.sort { |a, b|
+        label_for(a[0], candidates: a[1]) <=>
+          label_for(b[0], candidates: b[1]) }.each do |k, v|
+
+        mapping = prepare_collation v
+        p = -> x {
+          abbreviate mapping[x.literal? ? :literals : :resources][x] }
+        t = abbreviate mapping[:types]
+
+        lp = label_for k, candidates: v
+        h2c = [lp[1].to_s]
+        h2  = { h2c => :h2 }
+        cu  = canonical_uri k
+        rel = nil
+        unless cu.scheme.downcase.start_with? 'http'
+          if sa = v[RDF::RDFS.seeAlso]
+            rel = p.call sa[0]
+            cu = canonical_uri sa[0]
+          else
+            cu = nil
+          end
+        end
+
+        if cu
+          h2c[0] = { [lp[1].to_s] => :a, rel: rel,
+            property: p.call(lp[1]), href: cu.to_s }
+        else
+          h2[:property] = p.call(lp[1])  
+        end
+
+        # authors &c
+        # authors contributors editors translators
+        al = []
+        AUTHOR_SPEC.each do |label, pl|
+          dd = []
+          seen = Set.new
+          pl.each do |pred|
+            # first check if the struct has the predicate
+            next unless v[pred]
+            li = []
+            ul = { li => :ul, rel: abbreviate(pred) }
+            v[pred].sort do |a, b|
+              (labels[a] || [_, a])[1] <=> (labels[b] || [_, b])[1]
+            end.each do |o|
+              # check if this is a list
+              tl = RDF::List.new subject: o, graph: @graph
+              if tl.empty? and !seen.include? o
+                seen << o
+                lab = labels[o] ? { [labels[o][1]] => :span,
+                  property: abbreviate(labels[o][0]) } : o
+                li << { [lab] => :li, resource: o }
+              else
+                tl.each do |a|
+                  seen << a 
+                  lab = labels[a] ? { [labels[a][1]] => :span,
+                    property: abbreviate(labels[a][0]) } : a
+                  li << { [lab] => :li, inlist: '', resource: a }
+                end
+              end
+            end
+            dd << ul unless li.empty?
+          end
+          al += [{ [label] => :dt }, { dd => :dd }] unless dd.empty?
+        end
+
+        # ref list
+        rl = referents[k].sort { |a, b|
+          (labels[a[1]] || '') <=> (labels[b[1]] || '') }.map do |ref, pset|
+          lab = labels[ref] ? { [labels[ref][1]] => :span,
+            property: abbreviate(labels[ref][0]) } : ref
+                  
+          { [{ [lab] => :a, rev: abbreviate(pset), href: canon[ref] }] => :li }
+        end
+
+        contents = [h2, {
+          al + [{ ['Referenced in:'] => :dt },
+            { [{ rl => :ul }] => :dd }] => :dl }]
+
+        body << { contents => :section,
+          rel: pf.call(k), resource: k.to_s, typeof: t }
+      end
+
+      # prepend abstract to body if it exists
+      abs = label_for id, candidates: struct, desc: true
+      if abs
+        tag = { '#p' => abs[1], property: abbreviate(abs[0]) }
+        body.unshift tag
+      end
+
+      # add labels to nodes
+      nodes += smush_struct labels
+
+      # get prefixes
+      pfx = prefix_subset prefixes, nodes
+
+      # get title tag
+      title = title_tag labels[id][0], labels[id][1],
+        prefixes: prefixes, lang: 'en'
+
+      # get links
+      link = head_links id,
+        struct: struct, ignore: bodynodes, labels: labels, vocab: XHV
+
+      # get metas
+      mn = {}
+      mn[abs[1]] = :description if abs
+      mi = Set.new
+      mi << labels[id][1] if labels[id]
+      meta = head_meta id,
+        struct: struct, lang: 'en', ignore: mi, meta_names: mn, vocab: XHV
+
+      tm = generate_twitter_meta id
+      meta += tm if tm
+
+      xhtml_stub(base: uri, prefix: pfx, lang: 'en', title: title, vocab: XHV,
+        link: link, meta: meta, transform: @config[:transform],
+        body: { body => :body,
+          typeof: abbreviate(struct[RDF::RDFV.type] || []) }).document
+    end
 
     # generate skos concept schemes
 
@@ -2392,49 +2857,17 @@ module RDF::SAK
 
       # goofy twitter-specific metadata
       def generate_twitter_meta
-        # get author
-        author = @context.authors_for(@uuid, unique: true) or return
-
-        # get author's twitter account
-        twitter = @context.objects_for(author, RDF::Vocab::FOAF.account,
-                                       only: :resource).select do |t|
-          t.to_s =~ /twitter\.com/
-        end.sort.first or return
-        twitter = URI(twitter.to_s).path.split(/\/+/)[1]
-        twitter = ?@ + twitter unless twitter.start_with? ?@
-
-        # get title
-        title = @context.label_for(@uuid) or return
-
-        out = [
-          { nil => :meta, name: 'twitter:card', content: :summary },
-          { nil => :meta, name: 'twitter:site', content: twitter },
-          { nil => :meta, name: 'twitter:title', content: title[1].to_s }
-        ]
-
-        # get abstract
-        if desc = @context.label_for(@uuid, desc: true)
-          out.push({ nil => :meta, name: 'twitter:description',
-            content: desc[1].to_s })
-        end
-
-        # get image (foaf:depiction)
-        img = @context.objects_for(@uuid, RDF::Vocab::FOAF.depiction,
-                                   only: :resource)
-        unless img.empty?
-          img = img[0].to_s
-          out.push({ nil => :meta, name: 'twitter:image', content: img })
-          out[0][:content] = :summary_large_image
-        end
-
-        # return the appropriate xml-mixup structure
-        out
+        @context.generate_twitter_meta @uuid
       end
 
       def transform_xhtml published: true
         # before we do any more work make sure this is html
         doc  = @doc.dup 1
         body = doc.at_xpath('//html:body[1]', { html: XHTMLNS }) or return
+
+        # eliminate comments
+        doc.xpath('//comment()').each do |c|
+        end
 
         # initial stuff
         struct    = @context.struct_for @uuid, uuids: true, canon: true
@@ -2611,6 +3044,9 @@ module RDF::SAK
           s
         end
 
+        # don't forget style tag
+        style = doc.xpath('/html:html/html:head/html:style', { html: XHTMLNS })
+
         body = body.dup 1
         body = { '#body' => body.children.to_a, about: '' }
         body[:typeof] = @context.abbreviate(types.to_a, vocab: XHV) unless
@@ -2635,9 +3071,9 @@ module RDF::SAK
         # and now for the document
         xf  = @context.config[:transform]
         doc = xhtml_stub(
-          base: @uri, prefix: pfx, vocab: XHV, lang: 'en', title: tm, 
-          link: links, meta: meta, extra: generate_twitter_meta || [],
-          transform: xf, body: body).document
+          base: @uri, prefix: pfx, vocab: XHV, lang: 'en', title: tm,
+          link: links, meta: meta, style: style, transform: xf,
+          extra: generate_twitter_meta || [], body: body).document
       end
 
       # Actually write the transformed document to the target
