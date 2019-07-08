@@ -627,6 +627,26 @@ module RDF::SAK
         return a <=> b
       end
     end
+
+    def cmp_label a, b, labels: nil, supplant: true, reverse: false
+      labels ||= {}
+
+      # try supplied label or fall back
+      pair = [a, b].map do |x|
+        if labels[x]
+          labels[x][1]
+        elsif supplant and y = label_for(x)
+          labels[x] = y
+          y[1]
+        else
+          x
+        end
+      end
+
+      pair.reverse! if reverse
+      # warn "#{pair[0]} <=> #{pair[1]}"
+      pair[0].to_s <=> pair[1].to_s
+    end
     
     # rdf term type tests
     NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
@@ -808,9 +828,7 @@ module RDF::SAK
     # @return [Array]
 
     def all_types
-      @graph.query([nil, RDF.type, nil]).collect do |s|
-        s.object
-      end.uniq
+      @graph.query([nil, RDF.type, nil]).objects.uniq
     end
 
     # Obtain every subject that is rdf:type the given type or its subtypes.
@@ -943,9 +961,9 @@ module RDF::SAK
           RDF::Vocabulary.find_term t
         end
       end
-      asserted ||= @graph.query([subject, RDF.type, nil]).collect do |st|
-        RDF::Vocabulary.find_term st.object
-      end
+      asserted ||= @graph.query([subject, RDF.type, nil]).objects.map do |o|
+        RDF::Vocabulary.find_term o
+      end.compact
       asserted.select { |t| t && t.uri? }.uniq
     end
 
@@ -1730,43 +1748,79 @@ module RDF::SAK
       meta
     end
 
+    def generate_backlinks subject, published: true, ignore: nil
+      uri    = canonical_uri(subject, rdf: false) || URI(uri_pp subject)
+      ignore ||= Set.new
+      raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
+      ignore = ignore.to_set
+      nodes  = {}
+      labels = {}
+      types  = {}
+      @graph.query([nil, nil, subject]).each do |stmt|
+        next if ignore.include?(sj = stmt.subject)
+        preds = nodes[sj] ||= Set.new
+        preds << (pr = stmt.predicate)
+        types[sj]  ||= asserted_types sj
+        labels[sj] ||= label_for sj
+        labels[pr] ||= label_for pr
+      end
+
+      # prune out 
+      nodes.select! { |k, _| published? k } if published
+      
+      return if nodes.empty?
+
+      li = nodes.sort do |a, b|
+        cmp_label a[0], b[0], labels: labels
+      end.map do |rsrc, preds|
+        cu  = canonical_uri(rsrc, rdf: false) or next
+        lab = labels[rsrc] || [nil, rsrc]
+        lp  = abbreviate(lab[0]) if lab[0]
+        ty  = abbreviate(types[rsrc]) if types[rsrc]
+        
+        { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
+          href: uri.route_to(cu), typeof: ty, rev: abbreviate(preds) }] => :li }
+      end.compact
+
+      { [{ li => :ul }] => :nav }
+    end
+
     def generate_twitter_meta subject
       # get author
       author = authors_for(subject, unique: true) or return
 
-        # get author's twitter account
-        twitter = objects_for(author, RDF::Vocab::FOAF.account,
-                              only: :resource).select { |t|
-          t.to_s =~ /twitter\.com/
-        }.sort.first or return
-        twitter = URI(twitter.to_s).path.split(/\/+/)[1]
-        twitter = ?@ + twitter unless twitter.start_with? ?@
+      # get author's twitter account
+      twitter = objects_for(author, RDF::Vocab::FOAF.account,
+        only: :resource).select { |t| t.to_s =~ /twitter\.com/
+      }.sort.first or return
+      twitter = URI(twitter.to_s).path.split(/\/+/)[1]
+      twitter = ?@ + twitter unless twitter.start_with? ?@
 
-        # get title
-        title = label_for(subject) or return
+      # get title
+      title = label_for(subject) or return
 
-        out = [
-          { nil => :meta, name: 'twitter:card', content: :summary },
-          { nil => :meta, name: 'twitter:site', content: twitter },
-          { nil => :meta, name: 'twitter:title', content: title[1].to_s }
-        ]
+      out = [
+        { nil => :meta, name: 'twitter:card', content: :summary },
+        { nil => :meta, name: 'twitter:site', content: twitter },
+        { nil => :meta, name: 'twitter:title', content: title[1].to_s }
+      ]
 
-        # get abstract
-        if desc = label_for(subject, desc: true)
-          out.push({ nil => :meta, name: 'twitter:description',
-            content: desc[1].to_s })
-        end
+      # get abstract
+      if desc = label_for(subject, desc: true)
+        out.push({ nil => :meta, name: 'twitter:description',
+          content: desc[1].to_s })
+      end
 
-        # get image (foaf:depiction)
-        img = objects_for(subject, RDF::Vocab::FOAF.depiction, only: :resource)
-        unless img.empty?
-          img = img[0].to_s
-          out.push({ nil => :meta, name: 'twitter:image', content: img })
-          out[0][:content] = :summary_large_image
-        end
+      # get image (foaf:depiction)
+      img = objects_for(subject, RDF::Vocab::FOAF.depiction, only: :resource)
+      unless img.empty?
+        img = img[0].to_s
+        out.push({ nil => :meta, name: 'twitter:image', content: img })
+        out[0][:content] = :summary_large_image
+      end
 
-        # return the appropriate xml-mixup structure
-        out
+      # return the appropriate xml-mixup structure
+      out
     end
 
     AUTHOR_SPEC = [
@@ -1843,6 +1897,7 @@ module RDF::SAK
         end
 
         ps = struct_for part
+        labels[part] = label_for part, candidates: ps
         nodes |= smush_struct ps
 
         parts[part] = ps
@@ -1852,10 +1907,7 @@ module RDF::SAK
       pf = -> x { abbreviate bmap[x.literal? ? :literals : :resources][x] }
 
       body = []
-      parts.sort { |a, b|
-        label_for(a[0], candidates: a[1]) <=>
-          label_for(b[0], candidates: b[1]) }.each do |k, v|
-
+      parts.sort { |a, b| cmp_label a[0], b[0], labels: labels }.each do |k, v|
         mapping = prepare_collation v
         p = -> x {
           abbreviate mapping[x.literal? ? :literals : :resources][x] }
@@ -1893,9 +1945,7 @@ module RDF::SAK
             next unless v[pred]
             li = []
             ul = { li => :ul, rel: abbreviate(pred) }
-            v[pred].sort do |a, b|
-              (labels[a] || [_, a])[1] <=> (labels[b] || [_, b])[1]
-            end.each do |o|
+            v[pred].sort { |a, b| cmp_label a, b, labels: labels }.each do |o|
               # check if this is a list
               tl = RDF::List.new subject: o, graph: @graph
               if tl.empty? and !seen.include? o
@@ -1904,11 +1954,14 @@ module RDF::SAK
                   property: abbreviate(labels[o][0]) } : o
                 li << { [lab] => :li, resource: o }
               else
+                # XXX this will actually not be right if there are
+                # multiple lists but FINE FOR NOW
+                ul[:inlist] ||= ''
                 tl.each do |a|
                   seen << a 
                   lab = labels[a] ? { [labels[a][1]] => :span,
                     property: abbreviate(labels[a][0]) } : a
-                  li << { [lab] => :li, inlist: '', resource: a }
+                  li << { [lab] => :li, resource: a }
                 end
               end
             end
@@ -1918,8 +1971,9 @@ module RDF::SAK
         end
 
         # ref list
-        rl = referents[k].sort { |a, b|
-          (labels[a[1]] || '') <=> (labels[b[1]] || '') }.map do |ref, pset|
+        rl = referents[k].sort do |a, b|
+          cmp_label a[0], b[0], labels: labels
+        end.map do |ref, pset|
           lab = labels[ref] ? { [labels[ref][1]] => :span,
             property: abbreviate(labels[ref][0]) } : ref
                   
@@ -1963,12 +2017,11 @@ module RDF::SAK
       meta = head_meta id,
         struct: struct, lang: 'en', ignore: mi, meta_names: mn, vocab: XHV
 
-      tm = generate_twitter_meta id
-      meta += tm if tm
+      meta += generate_twitter_meta(id) || []
 
       xhtml_stub(base: uri, prefix: pfx, lang: 'en', title: title, vocab: XHV,
         link: link, meta: meta, transform: @config[:transform],
-        body: { body => :body,
+        body: { body => :body, about: '',
           typeof: abbreviate(struct[RDF::RDFV.type] || []) }).document
     end
 
@@ -2851,8 +2904,8 @@ module RDF::SAK
       end
 
       # backlink structure
-      def generate_backlinks published: true
-        
+      def generate_backlinks published: true, ignore: nil
+        @context.generate_backlinks @uuid, published: published, ignore: ignore
       end
 
       # goofy twitter-specific metadata
@@ -3064,16 +3117,20 @@ module RDF::SAK
           rsc.include? k
         end.transform_values { |v| v.to_s }
 
-
-        # extra = [
-        # ] + generate_twitter_meta
+        # XXX deal with the qb:Observation separately (just nuke it for now)
+        extra = generate_twitter_meta || []
+        if bl = generate_backlinks(published: published,
+          ignore: @context.graph.query(
+            [nil, CI.document, @uuid]).subjects.to_set)
+          extra << { [bl] => :template }
+        end
 
         # and now for the document
         xf  = @context.config[:transform]
         doc = xhtml_stub(
           base: @uri, prefix: pfx, vocab: XHV, lang: 'en', title: tm,
           link: links, meta: meta, style: style, transform: xf,
-          extra: generate_twitter_meta || [], body: body).document
+          extra: extra, body: body).document
       end
 
       # Actually write the transformed document to the target

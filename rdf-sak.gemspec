@@ -39,7 +39,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'commander',        '~> 4.4.5' # my patch
 
   # stuff i wrote
-  spec.add_runtime_dependency 'xml-mixup',   '~> 0.1.6'
+  spec.add_runtime_dependency 'xml-mixup',   '~> 0.1.10'
   spec.add_runtime_dependency 'uuid-ncname', '~> 0.2.2'
   spec.add_runtime_dependency 'md-noko',     '~> 0.1.0'
   
