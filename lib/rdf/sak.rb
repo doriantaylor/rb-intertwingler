@@ -152,20 +152,6 @@ module RDF::SAK
 
     # need this URI preprocessor because uri.rb is dumb
     def uri_pp uri
-      # m = R3986.match uri.to_s
-
-      # # bail out only if it matches an authority component
-      # return uri.to_s unless m[3]
-
-      # out = m[1] + m[3]
-      # [[5, ''], [7, ??], [9, ?#]].each do |i, c|
-      #   next if m[i].nil?
-      #   clean = m[i].gsub(SF) { |s| sprintf '%%%X', s.ord }
-      #   out += c + clean
-      # end
-
-      # warn out
-
       m = QF.match uri.to_s
       out = m[1]
       [[2, ??], [3, ?#]].each do |i, c|
@@ -175,6 +161,28 @@ module RDF::SAK
       end
 
       out
+    end
+
+    def split_qp uri, only: false
+      uri = URI(uri_pp uri)
+      qp  = URI::decode_www_form(uri.query)
+      return qp if only
+      uri.query = nil
+      [uri] + qp
+    end
+
+    def split_pp uri, only: false
+      u = URI(uri_pp uri)
+      return only ? [] : [uri] unless u.path
+      uri = u
+
+      ps = uri.path.split '/', -1
+      pp = ps.pop.split ';', -1
+      bp = (ps + [pp.shift]).join '/'
+      uri = uri.dup
+      uri.path = bp
+      return pp if only
+      [uri] + pp
     end
 
     # stateless term abbreviation method
@@ -322,6 +330,44 @@ module RDF::SAK
 
       tag
     end
+
+    # Obtain everything that is an owl:equivalentClass or
+    # rdfs:subClassOf the given type.
+    #
+    # @param rdftype [RDF::Term]
+    #
+    # @return [Array]
+
+    def self.all_related rdftype
+      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
+      q = [t] # queue
+      c = {}  # cache
+
+      while term = q.shift
+        # add term to cache
+        c[term] = term
+        # entail equivalent classes
+        term.entail(:equivalentClass).each do |ec|
+          # add equivalent classes to queue (if not already cached)
+          q.push ec unless c[ec]
+          c[ec] = ec unless ec == term
+        end
+        # entail subclasses
+        term.subClass.each do |sc|
+          # add subclasses to queue (if not already cached)
+          q.push sc unless c[sc]
+          c[sc] = sc unless sc == term
+        end
+      end
+
+      # smush the result 
+      c.keys
+    end
+
+    def all_related rdftype
+        Util.all_related rdftype
+    end
+
   end
 
   class Context
@@ -454,6 +500,13 @@ module RDF::SAK
 
     G_OK = [RDF::Repository, RDF::Dataset, RDF::Graph].freeze
     C_OK = [Pathname, IO, String].freeze
+
+    def coerce_to_path_or_io obj
+      return obj if obj.is_a? IO
+      return obj.expand_path if obj.is_a? Pathname
+      raise "#{obj.inspect} is not stringable" unless obj.respond_to? :to_s
+      Pathname(obj.to_s).expand_path
+    end
 
     def coerce_graph graph = nil, type: nil
       # begin with empty graph
@@ -686,6 +739,7 @@ module RDF::SAK
     end
 
     def term_list terms
+      return [] if terms.nil?
       terms = terms.respond_to?(:to_a) ? terms.to_a : [terms]
       terms.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
     end
@@ -837,47 +891,15 @@ module RDF::SAK
     #
     # @return [Array]
 
-    def all_of_type rdftype
+    def all_of_type rdftype, exclude: []
+      exclude = term_list exclude
       t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
       out = []
-      (all_types & all_related(t)).each do |type|
+      (all_types & all_related(t) - exclude).each do |type|
         out += @graph.query([nil, RDF.type, type]).subjects
       end
       
       out.uniq
-    end
-
-    # Obtain everything that is an owl:equivalentClass or
-    # rdfs:subClassOf the given type.
-    #
-    # @param rdftype [RDF::Term]
-    #
-    # @return [Array]
-
-    def all_related rdftype
-      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
-      q = [t] # queue
-      c = {}  # cache
-
-      while term = q.shift
-        # add term to cache
-        c[term] = term
-        # entail equivalent classes
-        term.entail(:equivalentClass).each do |ec|
-          # add equivalent classes to queue (if not already cached)
-          q.push ec unless c[ec]
-          c[ec] = ec unless ec == term
-        end
-        # entail subclasses
-        term.subClass.each do |sc|
-          # add subclasses to queue (if not already cached)
-          q.push sc unless c[sc]
-          c[sc] = sc unless sc == term
-        end
-      end
-
-      # smush the result 
-      c.keys
     end
 
     # Obtain a stack of types for an asserted initial type or set
@@ -902,7 +924,7 @@ module RDF::SAK
       rdftype = rdftype.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
 
       # bail out early
-      return [] if rdftype.count == 0
+      return [] if rdftype.empty?
 
       # essentially what we want to do is construct a layer of
       # asserted classes and their inferred equivalents, then probe
@@ -922,24 +944,32 @@ module RDF::SAK
         end
 
         # grep and flatten
-        qwork = qwork.map { |t| RDF::Vocabulary.find_term t }.compact.uniq
-        qwork -= seen.to_a
+        qwork = qwork.map do |t|
+          next t if t.is_a? RDF::Vocabulary::Term
+          RDF::Vocabulary.find_term t
+        end.compact.uniq - seen.to_a
         seen |= qwork
 
+        # warn "qwork == #{qwork.inspect}"
+
         # push current layer out
-        strata.push qwork if qwork.length > 0
+        strata.push qwork.dup unless qwork.empty?
      
         # now deal with subClassOf
         qsuper = []
         qwork.each { |q| qsuper += q.subClassOf }
 
         # grep and flatten this too
-        qsuper = qsuper.map { |t| RDF::Vocabulary.find_term t }.compact.uniq
-        qsuper -= seen.to_a
-        seen |= qsuper
+        qsuper = qsuper.map do |t|
+          next t if t.is_a? RDF::Vocabulary::Term
+          RDF::Vocabulary.find_term t
+        end.compact.uniq - seen.to_a
+        # do not append qsuper to seen!
+
+        # warn "qsuper == #{qsuper.inspect}"
 
         # same deal, conditionally push the input queue
-        queue.push qsuper if qsuper.length > 0
+        queue.push qsuper.dup unless qsuper.empty?
       end
 
       # voila
@@ -1167,13 +1197,37 @@ module RDF::SAK
       # * (10) inexact & canonical == 2,
       # * (11) inexact == 3. 
 
+      # handle path parameters by generating a bunch of candidates
+      uris = if uri.respond_to? :path and uri.path.start_with? ?/
+               # split any path parameters off
+               uu, *pp = split_pp uri
+               if pp.empty?
+                 [uri] # no path parameters
+               else
+                 uu = RDF::URI(uu.to_s)
+                 bp = uu.path # base path
+                 (0..pp.length).to_a.reverse.map do |i|
+                   u = uu.dup
+                   u.path = ([bp] + pp.take(i)).join(';')
+                   u
+                 end
+               end
+             else
+               [uri] # not a pathful URI
+             end
+
       # collect the candidates by URI
       sa = predicate_set [RDF::SAK::CI.canonical, RDF::OWL.sameAs]
-      candidates = subjects_for(sa, uri, entail: false) do |s, f|
-        # there is no #to_i for booleans and also we xor this number
-        [s, { rank: BITS[f.include?(RDF::SAK::CI.canonical)] ^ 1,
-          published: published?(s), mtime: dates_for(s).last || DateTime.new }]
-      end.to_h
+      candidates = nil
+      uris.each do |u|
+        candidates = subjects_for(sa, u, entail: false) do |s, f|
+          # there is no #to_i for booleans and also we xor this number
+          [s, { rank: BITS[f.include?(RDF::SAK::CI.canonical)] ^ 1,
+            published: published?(s),
+            mtime: dates_for(s).last || DateTime.new }]
+        end.compact.to_h
+        break unless candidates.empty?
+      end
 
       # now collect by slug
       if (slug = terminal_slug uri) != ''
@@ -1476,7 +1530,7 @@ module RDF::SAK
       # get all the inferred types by layer; add default class if needed
       strata = type_strata asserted
       strata.push [RDF::RDFS.Resource] if
-        strata.length == 0 or not strata[-1].include?(RDF::RDFS.Resource)
+        strata.empty? or not strata[-1].include?(RDF::RDFS.Resource)
 
       # get the key-value pairs for the subject
       candidates ||= struct_for subject, only: :literal
@@ -1501,7 +1555,7 @@ module RDF::SAK
       end
 
       # try that for now
-      accum[0]
+      unique ? accum[0] : accum.uniq
 
       # what we want to do is match the predicates from the subject to
       # the predicates in the label designation
@@ -2027,14 +2081,173 @@ module RDF::SAK
 
     # generate skos concept schemes
 
+    CONCEPTS = Util.all_related(RDF::Vocab::SKOS.Concept).to_set
+
+    def generate_audience_csv file = nil, published: true
+      require 'csv'
+      file = coerce_to_path_or_io file if file
+      lab = {}
+
+      out = all_internal_docs(published: published,
+                              exclude: RDF::Vocab::FOAF.Image).map do |s|
+        u = canonical_uri s
+        x = struct_for s
+        c = x[RDF::Vocab::DC.created] ? x[RDF::Vocab::DC.created][0] : nil
+        _, t = label_for s, candidates: x
+        _, d = label_for s, candidates: x, desc: true
+
+        # audience(s)
+        a = objects_for(s, RDF::Vocab::DC.audience).map do |au|
+          next lab[au] if lab[au]
+          _, al = label_for au
+          lab[au] = al
+        end.map(&:to_s).sort.join '; '
+
+        # explicit non-audience(s)
+        n = objects_for(s, RDF::SAK::CI['non-audience']).map do |au|
+          next lab[au] if lab[au]
+          _, al = label_for au
+          lab[au] = al
+        end.map(&:to_s).sort.join '; '
+
+        # concepts???
+        concepts = [RDF::Vocab::DC.subject, CI.introduces,
+                    CI.assumes, CI.mentions].map do |pred|
+          objects_for(s, pred, only: :resource).map do |o|
+            con = self.objects_for(o, RDF.type).to_set & CONCEPTS
+            next if con.empty?
+            next lab[o] if lab[o]
+            _, ol = label_for o
+            lab[o] = ol
+          end.compact.map(&:to_s).sort.join '; '
+        end
+
+        [s, u, c, t, d, a, n].map(&:to_s) + concepts
+      end.sort { |a, b| a[2] <=> b[2] }
+
+      out.unshift ['ID', 'URL', 'Created', 'Title', 'Description', 'Audience',
+        'Non-Audience', 'Subject', 'Introduces', 'Assumes', 'Mentions']
+
+      if file
+        # don't open until now
+        file = file.expand_path.open('wb') unless file.is_a? IO
+
+        csv = CSV.new file
+        out.each { |x| csv << x }
+        file.flush
+      end
+
+      out
+    end
+
+    CSV_PRED = {
+      audience:    RDF::Vocab::DC.audience,
+      nonaudience: CI['non-audience'],
+      subject:     RDF::Vocab::DC.subject,
+      assumes:     CI.assumes,
+      introduces:  CI.introduces,
+      mentions:    CI.mentions,
+    }
+
+    def ingest_csv file
+      file = coerce_to_path_or_io file
+
+      require 'csv'
+
+      # key mapper
+      km = { uuid: :id, url: :uri }
+      kt = -> (k) { km[k] || k }
+
+      # grab all the concepts and audiences
+
+      audiences = {}
+      all_of_type(CI.Audience).map do |c|
+        s = struct_for c
+
+        # homogenize the labels
+        lab = [false, true].map do |b|
+          label_for(c, candidates: s, unique: false, alt: b).map { |x| x[1] }
+        end.flatten.map { |x| x.to_s.strip.downcase }
+
+        # we want all the keys to share the same set
+        set = nil
+        lab.each { |t| set = audiences[t] ||= set || Set.new }
+        set << c
+      end
+
+      concepts = {}
+      all_of_type(RDF::Vocab::SKOS.Concept).map do |c|
+        s = struct_for c
+
+        # homogenize the labels
+        lab = [false, true].map do |b|
+          label_for(c, candidates: s, unique: false, alt: b).map { |x| x[1] }
+        end.flatten.map { |x| x.to_s.strip.downcase }
+
+        # we want all the keys to share the same set
+        set = nil
+        lab.each { |t| set = concepts[t] ||= set || Set.new }
+        set << c
+      end
+
+      data = CSV.read(file, headers: true,
+                      header_converters: :symbol).map do |o|
+        o = o.to_h.transform_keys(&kt)
+        s = canonical_uuid(o.delete :id) or next
+
+        # LOLOL wtf
+
+        # handle audience
+        [:audience, :nonaudience].each do |a|
+          if o[a]
+            o[a] = o[a].strip.split(/\s*[;,]+\s*/, -1).map do |t|
+              if t =~ /^[a-z+-]+:[^[:space:]]+$/
+                u = RDF::URI(t)
+                canonical_uuid(u) || u
+              elsif audiences[t.downcase]
+                audiences[t.downcase].to_a
+              end
+            end.flatten.compact.uniq
+          else
+            o[a] = []
+          end
+        end
+
+        # handle concepts
+        [:subject, :introduces, :assumes, :mentions].each do |a|
+          if o[a]
+            o[a] = o[a].strip.split(/\s*[;,]+\s*/, -1).map do |t|
+              if t =~ /^[a-z+-]+:[^[:space:]]+$/
+                u = RDF::URI(t)
+                canonical_uuid(u) || u
+              elsif concepts[t.downcase]
+                concepts[t.downcase].to_a
+              end
+            end.flatten.compact.uniq
+          else
+            o[a] = []
+          end
+
+        end
+
+        CSV_PRED.each do |sym, pred|
+          o[sym].each do |obj|
+            @graph << [s, pred, obj]
+          end
+        end
+
+        [s, o]
+      end.compact.to_h
+      data
+    end
+
     # generate atom feed
 
     #
-    def all_internal_docs published: true
+    def all_internal_docs published: true, exclude: []
       # find all UUIDs that are documents
-      docs = all_of_type(RDF::Vocab::FOAF.Document).select do |x|
-        x =~ /^urn:uuid:/
-      end
+      docs = all_of_type(RDF::Vocab::FOAF.Document,
+        exclude: exclude).select { |x| x =~ /^urn:uuid:/ }
 
       # prune out all but the published documents if specified
       if published
@@ -2752,6 +2965,9 @@ module RDF::SAK
               abs          = tmp
             end
 
+            # harvest query string
+            pp = split_pp abs, only: true
+
             abs = RDF::URI(abs.to_s)
 
             # round-trip to uuid and back if we can
@@ -2760,6 +2976,13 @@ module RDF::SAK
             else
               abs = cache[abs] ||= @context.canonical_uri(abs)
             end
+
+            # reinstate the path parameters
+            if !pp.empty? && split_pp(abs, only: true).empty?
+              abs = abs.dup
+              abs.path = ([abs.path] + pp).join(';')
+            end
+            
 
             elem[attr] = @uri.route_to(abs.to_s).to_s
             count += 1
@@ -3122,7 +3345,7 @@ module RDF::SAK
         if bl = generate_backlinks(published: published,
           ignore: @context.graph.query(
             [nil, CI.document, @uuid]).subjects.to_set)
-          extra << { [bl] => :template }
+          extra << { [bl] => :object }
         end
 
         # and now for the document
