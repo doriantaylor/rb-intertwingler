@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = "~> 2.0"
 
   # dev/test dependencies
-  spec.add_development_dependency 'bundler', '~> 1.11'
+  spec.add_development_dependency 'bundler', '~> 2.0.2'
   spec.add_development_dependency 'rake',    '~> 10.0'
   spec.add_development_dependency 'rspec',   '~> 3.0'
 
@@ -34,9 +34,10 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'rdf',              '~> 3.0.2'
   spec.add_runtime_dependency 'linkeddata',       '~> 3.0.1'
   spec.add_runtime_dependency 'uri-urn',          '~> 0.0.3'
-  spec.add_runtime_dependency 'sass',             '~> 3.7.3'
+  spec.add_runtime_dependency 'sassc',            '~> 2.0.1'
   spec.add_runtime_dependency 'shared-mime-info', '~> 0.2.0'
   spec.add_runtime_dependency 'commander',        '~> 4.4.5' # my patch
+  spec.add_runtime_dependency 'mimemagic',        '~> 0.3.3'
 
   # stuff i wrote
   spec.add_runtime_dependency 'xml-mixup',   '~> 0.1.10'

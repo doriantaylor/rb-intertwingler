@@ -2096,19 +2096,28 @@ module RDF::SAK
         _, t = label_for s, candidates: x
         _, d = label_for s, candidates: x, desc: true
 
-        # audience(s)
-        a = objects_for(s, RDF::Vocab::DC.audience).map do |au|
-          next lab[au] if lab[au]
-          _, al = label_for au
-          lab[au] = al
-        end.map(&:to_s).sort.join '; '
+        # # audience(s)
+        # a = objects_for(s, RDF::Vocab::DC.audience).map do |au|
+        #   next lab[au] if lab[au]
+        #   _, al = label_for au
+        #   lab[au] = al
+        # end.map(&:to_s).sort.join '; '
 
-        # explicit non-audience(s)
-        n = objects_for(s, RDF::SAK::CI['non-audience']).map do |au|
-          next lab[au] if lab[au]
-          _, al = label_for au
-          lab[au] = al
-        end.map(&:to_s).sort.join '; '
+        # # explicit non-audience(s)
+        # n = objects_for(s, RDF::SAK::CI['non-audience']).map do |au|
+        #   next lab[au] if lab[au]
+        #   _, al = label_for au
+        #   lab[au] = al
+        # end.map(&:to_s).sort.join '; '
+
+        # audience and non-audience
+        a, n = [RDF::Vocab::DC.audience, CI['non-audience']].map do |ap|
+          objects_for(s, ap).map do |au|
+            next lab[au] if lab[au]
+            _, al = label_for au
+            lab[au] = al
+          end.map(&:to_s).sort.join '; '
+        end
 
         # concepts???
         concepts = [RDF::Vocab::DC.subject, CI.introduces,
@@ -2239,6 +2248,39 @@ module RDF::SAK
         [s, o]
       end.compact.to_h
       data
+    end
+
+    def generate_sitemap published: true
+      urls = {}
+
+      # do feeds separately
+      feeds = all_of_type RDF::Vocab::DCAT.Distribution
+      #feeds.select! { |f| published? f } if published
+      feeds.each do |f|
+        uri = canonical_uri(f)
+        f = generate_atom_feed f, published: published, related: feeds
+        mt = f.at_xpath('/atom:feed/atom:updated[1]/text()',
+          { atom: 'http://www.w3.org/2005/Atom' })
+        urls[uri] = { [{ [uri.to_s] => :loc }, { [mt] => :lastmod }] => :url }
+      end
+
+      # build up hash of urls
+      all_internal_docs(published: published).each do |doc|
+        next if asserted_types(doc).include? RDF::Vocab::FOAF.Image
+        uri  = canonical_uri(doc)
+        next unless uri.authority && @base && uri.authority == base.authority
+        mods = objects_for(doc, [RDF::Vocab::DC.created,
+          RDF::Vocab::DC.modified, RDF::Vocab::DC.issued],
+          datatype: RDF::XSD.dateTime).sort
+        nodes = [{ [uri.to_s] => :loc }]
+        nodes << { [mods[-1].to_s] => :lastmod } unless mods.empty?
+        urls[uri] = { nodes => :url }
+      end
+
+      urls = urls.sort.map { |_, v| v }
+
+      markup(spec: { urls => :urlset,
+        xmlns: 'http://www.sitemaps.org/schemas/sitemap/0.9' }).document
     end
 
     # generate atom feed
@@ -3257,10 +3299,14 @@ module RDF::SAK
           # add type=lol/wut
           ln[:type] = mts.first.to_s unless mts.empty?
 
-          if ln[:type] =~ /(java|ecma)script/i ||
-              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
+          if !ln[:type] and v.include?(RDF::Vocab::XHV.stylesheet)
+            ln[:type] = 'text/css'
+          elsif ln[:type] =~ /(java|ecma)script/i or
+              v.include?(RDF::Vocab::DC.requires)
+#              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
             ln[nil]  = :script
             ln[:src] = ln.delete :href
+            ln[:type] ||= 'text/javascript'
           end
           links.push ln
         end

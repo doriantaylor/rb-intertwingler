@@ -15,7 +15,7 @@ module RDF::SAK
       comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.).freeze,
       "dc:created": "2012-01-23T11:52:00-08:00".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze],
+      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze],
       "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DataStructureDefinition".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DimensionProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_MeasureProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_Observation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze],
       "dc:subject": "ci:".freeze,
       "dc:title": "A Content Inventory Vocabulary".freeze,
@@ -23,7 +23,7 @@ module RDF::SAK
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci".freeze,
       isDefinedBy: "ci:".freeze,
       "owl:imports": ["bibo:".freeze, "dc:".freeze, "foaf:".freeze, "http://purl.org/NET/c4dm/event.owl#".freeze, "http://purl.org/linked-data/cube#".freeze],
-      "owl:versionInfo": "0.9".freeze,
+      "owl:versionInfo": "0.10".freeze,
       type: ["bibo:Webpage".freeze, "owl:Ontology".freeze],
       "xhv:license": "http://creativecommons.org/licenses/by/2.5/ca/".freeze
 
@@ -120,15 +120,6 @@ module RDF::SAK
       label: "desired-outcome".freeze,
       subPropertyOf: "dc:type".freeze,
       type: "owl:ObjectProperty".freeze
-    property :disdains,
-      comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to actively eschew or regard with contempt. This relation is intended to represent the complement of values.).freeze,
-      domain: "ci:audience".freeze,
-      isDefinedBy: "ci:".freeze,
-      label: "disdains".freeze,
-      range: "skos:Concept".freeze,
-      "rdfs:seeAlso": "ci:values".freeze,
-      subPropertyOf: "skos:related".freeze,
-      type: "owl:ObjectProperty".freeze
     property :document,
       comment: %(Document Reference).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -142,6 +133,15 @@ module RDF::SAK
       isDefinedBy: "ci:".freeze,
       label: "embed".freeze,
       subPropertyOf: "dc:hasPart".freeze,
+      type: "owl:ObjectProperty".freeze
+    property :eschews,
+      comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values.).freeze,
+      domain: "ci:audience".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "eschews".freeze,
+      range: "skos:Concept".freeze,
+      "rdfs:seeAlso": "ci:values".freeze,
+      subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
     property :"high-quartile",
       comment: %(Third Quartile).freeze,
@@ -287,7 +287,7 @@ module RDF::SAK
       isDefinedBy: "ci:".freeze,
       label: "values".freeze,
       range: "skos:Concept".freeze,
-      "rdfs:seeAlso": "ci:disdains".freeze,
+      "rdfs:seeAlso": "ci:eschews".freeze,
       subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
     property :words,
