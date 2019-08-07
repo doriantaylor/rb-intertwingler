@@ -1737,8 +1737,10 @@ module RDF::SAK
 
           if ln[:type] =~ /(java|ecma)script/i ||
               !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
-            ln[nil]  = :script
             ln[:src] = ln.delete :href
+            # make sure we pass in an empty string so there is a closing tag
+            ln.delete nil
+            ln[['']] = :script
           end
         end
 
@@ -3400,6 +3402,14 @@ module RDF::SAK
           base: @uri, prefix: pfx, vocab: XHV, lang: 'en', title: tm,
           link: links, meta: meta, style: style, transform: xf,
           extra: extra, body: body).document
+
+        # goddamn script tags and text/html
+        doc.xpath('//html:script[@src][not(node())]',
+          { html: XHTMLNS }).each do |script|
+          script << doc.create_text_node('')
+        end
+
+        doc
       end
 
       # Actually write the transformed document to the target
