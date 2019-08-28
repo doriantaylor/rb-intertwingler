@@ -940,7 +940,7 @@ module RDF::SAK
 
         qin.each do |q|
           qwork << q # entail doesn't include q
-          qwork += q.entail(:equivalentClass)
+          qwork += q.entail(:equivalentClass) if q.uri?
         end
 
         # grep and flatten
@@ -1166,7 +1166,7 @@ module RDF::SAK
       orig = uri = coerce_resource uri
       tu  = URI(uri_pp(uri).to_s)
 
-      if tu.path && (uu = tu.path.delete_prefix('/')) =~ UUID_RE
+      if tu.path && !tu.fragment && (uu = tu.path.delete_prefix(?/)) =~ UUID_RE
         tu  = URI('urn:uuid:' + uu.downcase)
         uri = RDF::URI(tu.to_s)
       end
@@ -2567,6 +2567,8 @@ module RDF::SAK
             next if canon == uri
             next unless base.route_to(uri).relative?
 
+            # warn "#{canon} <=> #{uri}"
+
             requri = uri.request_uri.delete_prefix '/'
             next if requri == '' ||
               requri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
@@ -2578,7 +2580,8 @@ module RDF::SAK
       end
 
       rev.each do |uri, requri|
-        if (doc = canonical_uuid(uri)) and fwd[doc]
+        if (doc = canonical_uuid(uri, published: published)) and
+            fwd[doc] and fwd[doc] != uri
           out[requri] = fwd[doc].to_s
         end
       end
@@ -3186,8 +3189,8 @@ module RDF::SAK
         body = doc.at_xpath('//html:body[1]', { html: XHTMLNS }) or return
 
         # eliminate comments
-        doc.xpath('//comment()').each do |c|
-        end
+        doc.xpath('//comment()[not(ancestor::html:script)]',
+          { html: XHTMLNS }).each { |c| c.unlink }
 
         # initial stuff
         struct    = @context.struct_for @uuid, uuids: true, canon: true
