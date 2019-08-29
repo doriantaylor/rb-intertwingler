@@ -3,7 +3,7 @@
 This library can be understood as something of a workbench for the
 development of a set of patterns and protocols for Web content—a
 [content management
-meta-system_](https://doriantaylor.com/content-management-meta-system).
+_meta-system_](https://doriantaylor.com/content-management-meta-system).
 The proximate goals of this implementation are as follows:
 
 * Durable addresses with fine-grained addressability of content,
@@ -75,7 +75,7 @@ like the following (complete) entry:
 @prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .
 
 <urn:uuid:b5c16511-6904-4130-b4e4-dd553f31bdd8>
-    dct:abstract "Yet another slapdash about-me page." ;
+    dct:abstract "Yet another slapdash about-me page."@en ;
     dct:created "2019-03-11T08:14:10+00:00"^^xsd:dateTime ;
     dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     dct:hasPart <https://www.youtube.com/embed/eV84dXJUvY8> ;
@@ -92,7 +92,7 @@ like the following (complete) entry:
         <urn:uuid:ef4587cd-d8c6-4b3d-aa01-d07ab49eda4f> ;
     dct:replaces <urn:uuid:1944f86f-cafb-42f7-bca3-ad518f9b6ec7>,
         <urn:uuid:d30a49d7-71ed-4355-bc44-4bbe3d90e000> ;
-    dct:title "Hello, Internet" ;
+    dct:title "Hello, Internet"@en ;
     bibo:status bs:published ;
     a bibo:Note ;
     xhv:alternate <urn:uuid:4a13ab5a-67a5-4e1a-970f-3425df7035bb>,
