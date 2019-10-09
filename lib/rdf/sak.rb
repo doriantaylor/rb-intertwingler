@@ -172,9 +172,11 @@ module RDF::SAK
     end
 
     def split_pp uri, only: false
-      u = URI(uri_pp uri)
+      u = URI(uri_pp uri).normalize
       return only ? [] : [uri] unless u.path
       uri = u
+
+      # warn "URI WTF #{uri}"
 
       ps = uri.path.split '/', -1
       pp = ps.pop.split ';', -1
@@ -1003,10 +1005,11 @@ module RDF::SAK
     # @param subject [RDF::Resource]
     # @param unique [true, false] flag for unique return value
     # @param rdf    [true, false] flag to specify RDF::URI vs URI 
+    # @param slugs  [true, false] flag to include slugs
     #
     # @return [RDF::URI, URI, Array]
 
-    def canonical_uri subject, unique: true, rdf: true
+    def canonical_uri subject, unique: true, rdf: true, slugs: false
       subject = coerce_resource subject
       out = []
 
@@ -1017,7 +1020,13 @@ module RDF::SAK
       end
 
       # try to generate in lieu
-      if out.empty? and subject.uri?
+      if subject.uri? and (out.empty? or slugs)
+
+        out += objects_for(subject,
+          [CI['canonical-slug'], CI.slug], only: :literal).map do |o|
+          @base + o.value
+        end if slugs
+
         uri = URI(uri_pp(subject.to_s))
         if @base and uri.respond_to? :uuid
           b = @base.clone
@@ -1164,12 +1173,14 @@ module RDF::SAK
     def canonical_uuid uri, unique: true, published: false
       # make sure this is actually a uri
       orig = uri = coerce_resource uri
-      tu  = URI(uri_pp(uri).to_s)
+      tu  = URI(uri_pp(uri).to_s).normalize
 
       if tu.path && !tu.fragment && (uu = tu.path.delete_prefix(?/)) =~ UUID_RE
         tu  = URI('urn:uuid:' + uu.downcase)
-        uri = RDF::URI(tu.to_s)
       end
+
+      # unconditionally overwrite uri
+      uri = RDF::URI(tu.to_s)
 
       # now check if it's a uuid
       if tu.respond_to? :uuid
@@ -1196,6 +1207,8 @@ module RDF::SAK
       # * (01) exact == 1,
       # * (10) inexact & canonical == 2,
       # * (11) inexact == 3. 
+
+      # warn "WTF URI #{uri}"
 
       # handle path parameters by generating a bunch of candidates
       uris = if uri.respond_to? :path and uri.path.start_with? ?/
@@ -2717,18 +2730,22 @@ module RDF::SAK
       # xxx bail if the uri isn't a subject in the graph
 
       candidates = [@config[:source] + tu.uuid]
-      (canonical_uri uri, unique: false).each do |u|
+
+      # try all canonical URIs
+      (canonical_uri uri, unique: false, slugs: true).each do |u|
         u = URI(u.to_s)
         next unless u.hostname == base.hostname
-        p = u.path[/^\/*(.*?)$/, 1]
+        p = URI.unescape u.path[/^\/*(.*?)$/, 1]
         candidates.push(@config[:source] + p)
       end
+
+      # warn candidates
 
       files = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).reject do |x|
-        x.directory? or
-          RDF::SAK::MimeMagic.by_path(x).to_s !~ /.*(?:x?ht|x)ml.*/i
+        x.directory? or RDF::SAK::MimeMagic.by_path(x).to_s !~ 
+          /.*(?:markdown|(?:x?ht|x)ml).*/i
       end.uniq
 
       #warn files
@@ -2924,7 +2941,7 @@ module RDF::SAK
               attempt << tmp.root.dup(1)
             end
             doc = attempt
-          elsif type =~ /^text\/(?:plain|(?:x-)?markdown)/i
+          elsif type.to_s =~ /^text\/(?:plain|(?:x-)?markdown)/i
             # just assume plain text is markdown
             doc = ::MD::Noko.new.ingest doc
           else
