@@ -32,6 +32,7 @@ Gem::Specification.new do |spec|
 
   # stuff we use
   spec.add_runtime_dependency 'rdf',              '~> 3.0.2'
+  spec.add_runtime_dependency 'rdf-reasoner',     '~> 0.5.2' # my patch
   spec.add_runtime_dependency 'linkeddata',       '~> 3.0.1'
   spec.add_runtime_dependency 'uri-urn',          '~> 0.0.3'
   spec.add_runtime_dependency 'sassc',            '~> 2.0.1'

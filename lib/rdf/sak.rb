@@ -18,64 +18,13 @@ require 'linkeddata'
 require 'xml-mixup'
 require 'md-noko'
 require 'uuid-ncname'
+require 'rdf/sak/util'
 
 # ontologies, mine in particular
 require 'rdf/sak/ci'
 require 'rdf/sak/ibis'
 # others not included in rdf.rb
 require 'rdf/sak/pav'
-
-# uhh why don't we just cool it with this mkay
-
-# XXX REMOVE THIS ONCE REASONER >0.5.2 RELEASED
-module RDF::Reasoner::RDFS
-  def self.included(mod)
-    mod.add_entailment :subClassOf, :_entail_subClassOf
-    mod.add_entailment :subClass, :_entail_subClass
-    mod.add_entailment :subProperty, :_entail_subProperty
-    mod.add_entailment :subPropertyOf, :_entail_subPropertyOf
-    mod.add_entailment :domain, :_entail_domain
-    mod.add_entailment :range, :_entail_range
-  end
-
-  def descendant_property_cache
-    @@descendant_property_cache ||= RDF::Util::Cache.new(-1)
-  end
-
-  def subProperty_cache
-    @@subProperty_cache ||= RDF::Util::Cache.new(-1)
-  end
-
-  def subProperty
-    raise RDF::Reasoner::Error,
-      "#{self} Can't entail subProperty" unless property?
-    vocabs = [self.vocab] + self.vocab.imported_from
-    subProperty_cache[self] ||= vocabs.map do |v|
-      Array(v.properties).select do |p|
-        p.property? && Array(p.subPropertyOf).include?(self)
-      end
-    end.flatten.compact
-  end
-
-  def _entail_subProperty
-    case self
-    when RDF::URI, RDF::Node
-      unless property?
-        yield self if block_given?
-        return Array(self)
-      end
-
-      terms = descendant_property_cache[self] ||= (
-        Array(self.subProperty).map do |c|
-          c._entail_subProperty rescue c
-        end.flatten + Array(self)).compact
-
-      terms.each {|t| yield t } if block_given?
-      terms
-    else []
-    end
-  end
-end
 
 module RDF::SAK
 
@@ -134,240 +83,6 @@ module RDF::SAK
 
     def method_missing id
       @type.send id
-    end
-
-  end
-
-  module Util
-    private
-
-    R3986   = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
-    QF      = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
-    SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/
-
-    public
-
-    XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
-    XHV     = 'http://www.w3.org/1999/xhtml/vocab#'.freeze
-
-    # need this URI preprocessor because uri.rb is dumb
-    def uri_pp uri
-      m = QF.match uri.to_s
-      out = m[1]
-      [[2, ??], [3, ?#]].each do |i, c|
-        next if m[i].nil?
-        clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
-        out += c + clean
-      end
-
-      out
-    end
-
-    def split_qp uri, only: false
-      uri = URI(uri_pp uri)
-      qp  = URI::decode_www_form(uri.query)
-      return qp if only
-      uri.query = nil
-      [uri] + qp
-    end
-
-    def split_pp uri, only: false
-      u = URI(uri_pp uri).normalize
-      return only ? [] : [uri] unless u.path
-      uri = u
-
-      # warn "URI WTF #{uri}"
-
-      ps = uri.path.split '/', -1
-      pp = ps.pop.split ';', -1
-      bp = (ps + [pp.shift]).join '/'
-      uri = uri.dup
-      uri.path = bp
-      return pp if only
-      [uri] + pp
-    end
-
-    # stateless term abbreviation method
-    def abbreviate term, prefixes: {}, vocab: nil, noop: true, sort: true
-      vocab  = coerce_resource(vocab).to_s if vocab
-      scalar = true
-
-      if term.respond_to? :to_a
-        term   = term.to_a
-        scalar = false
-      else
-        term = [term]
-      end
-
-      rev = prefixes.invert.transform_keys { |k| k.to_s }
-
-      term.map! do |t|
-        t  = t.to_s
-        vt = t.delete_prefix(vocab) if vocab
-        if vt.nil? or vt == t or vt.match?(/:/)
-          rev.sort { |a, b| b[0].length <=> a[0].length }.each do |k, v|
-            if (vt = t.delete_prefix(k)) != t
-              vt = '%s:%s' % [v, vt]
-              break
-            else
-              vt = nil
-            end
-          end
-        end
-        vt ||= t if noop
-        vt
-      end
-
-      # only sort if noop is set
-      term.sort! if noop && sort
-
-      scalar ? term[0] : term
-    end
-
-    # 
-    def prepare_collation struct, &block
-      resources = {}
-      literals  = {}
-      datatypes = Set.new
-      types     = Set.new
-
-      struct.each do |p, v|
-        v.each do |o|
-          block.call p, o if block
-
-          if o.literal?
-            literals[o] ||= Set.new
-            literals[o].add p
-            # collect the datatype
-            datatypes.add o.datatype if o.has_datatype?
-          else
-            if  p == RDF::RDFV.type
-              # separate the type
-              types.add o
-            else
-              # collect the resource
-              resources[o] ||= Set.new
-              resources[o].add p
-            end
-          end
-        end
-      end
-
-      { resources: resources, literals: literals,
-        datatypes: datatypes, types: types }
-    end
-
-    # 
-    def prefix_subset prefixes, nodes
-      raise 'prefixes must be a hash' unless prefixes.is_a? Hash
-      raise 'nodes must be arrayable' unless nodes.respond_to? :to_a
-
-      # sniff out all the URIs and datatypes
-      resources = Set.new
-      nodes.each do |n|
-        next unless n.is_a? RDF::Term
-        if n.literal? && n.datatype?
-          resources << n.datatype
-        elsif n.uri?
-          resources << n
-        end
-      end
-
-      # now we abbreviate all the resources
-      pfx = abbreviate(resources.to_a,
-        prefixes: prefixes, noop: false, sort: false).uniq.compact.map do |p|
-        p.split(?:)[0].to_sym
-      end.uniq.to_set
-
-      # now we return the subset 
-      prefixes.select { |k, _| pfx.include? k.to_sym }
-    end
-
-    # turns any data structure into a set of nodes
-    def smush_struct struct
-      out = Set.new
-
-      if struct.is_a? RDF::Term
-        out << struct
-      elsif struct.respond_to? :to_a
-        out |= struct.to_a.map { |s| smush_struct(s).to_a }.flatten.to_set
-      end
-
-      out
-    end
-
-    def invert_struct struct
-      nodes = {}
-
-      struct.each do |p, v|
-        v.each do |o|
-          nodes[o] ||= Set.new
-          nodes[o] << p
-        end
-      end
-
-      nodes
-    end
-
-    def title_tag predicates, content,
-        prefixes: {}, vocab: nil, lang: nil, xhtml: true
-
-      # begin with the tag
-      tag = { '#title' => content.to_s,
-        property: abbreviate(predicates, prefixes: prefixes, vocab: vocab) }
-
-      # we set the language if it exists and is different from the
-      # body OR if it is xsd:string we set it to the empty string
-      lang = (content.language? && content.language != lang ?
-        content.language : nil) || (content.datatype == RDF::XSD.string &&
-        lang ? '' : nil)
-      if lang
-        tag['xml:lang'] = lang if xhtml
-        tag[:lang] = lang
-      end
-      if content.datatype? && content.datatype != RDF::XSD.string
-        tag[:datatype] = abbreviate(content.datatype,
-          prefixes: prefixes, vocab: vocab)
-      end
-
-      tag
-    end
-
-    # Obtain everything that is an owl:equivalentClass or
-    # rdfs:subClassOf the given type.
-    #
-    # @param rdftype [RDF::Term]
-    #
-    # @return [Array]
-
-    def self.all_related rdftype
-      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
-      q = [t] # queue
-      c = {}  # cache
-
-      while term = q.shift
-        # add term to cache
-        c[term] = term
-        # entail equivalent classes
-        term.entail(:equivalentClass).each do |ec|
-          # add equivalent classes to queue (if not already cached)
-          q.push ec unless c[ec]
-          c[ec] = ec unless ec == term
-        end
-        # entail subclasses
-        term.subClass.each do |sc|
-          # add subclasses to queue (if not already cached)
-          q.push sc unless c[sc]
-          c[sc] = sc unless sc == term
-        end
-      end
-
-      # smush the result 
-      c.keys
-    end
-
-    def all_related rdftype
-        Util.all_related rdftype
     end
 
   end
@@ -746,20 +461,24 @@ module RDF::SAK
       terms.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
     end
 
+    # def coerce_resource arg
+    #   return arg if arg.is_a? RDF::URI
+
+    #   blank = /^_:(.*)/.match arg.to_s
+    #   return RDF::Node blank[1] if blank
+
+    #   begin
+    #     arg = URI(@base.to_s).merge arg.to_s
+    #   rescue URI::InvalidURIError => e
+    #     warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
+    #     return
+    #   end
+
+    #   RDF::URI(arg.to_s)
+    # end
+
     def coerce_resource arg
-      return arg if arg.is_a? RDF::URI
-
-      blank = /^_:(.*)/.match arg.to_s
-      return RDF::Node blank[1] if blank
-
-      begin
-        arg = URI(@base.to_s).merge arg.to_s
-      rescue URI::InvalidURIError => e
-        warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
-        return
-      end
-
-      RDF::URI(arg.to_s)
+      super arg, @base
     end
 
     def coerce_uuid_urn arg
@@ -824,8 +543,8 @@ module RDF::SAK
     # prefixes and optional default vocabulary, or otherwise return a
     # string representation of the original URI.
     
-    # @param 
-    # @param
+    # @param term [RDF::Term]
+    # @param prefixes [Hash]
     #
     # @return
 
@@ -859,6 +578,7 @@ module RDF::SAK
         # this will skip over any term not matching the type
         node = rev ? stmt.subject : stmt.object
         next unless node_matches? node, only
+
         # coerce the node to uuid if told to
         if node.resource?
           if uuids
@@ -868,9 +588,10 @@ module RDF::SAK
             node = canonical_uri(node)
           end
         end
+
         p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
         o = rsrc[p] ||= []
-        o.push node
+        o.push node if node # may be nil
       end
 
       # XXX in here we can do fun stuff like filter/sort by language/datatype
@@ -1002,14 +723,16 @@ module RDF::SAK
     # Obtain the "best" dereferenceable URI for the subject.
     # Optionally returns all candidates.
     # 
-    # @param subject [RDF::Resource]
-    # @param unique [true, false] flag for unique return value
-    # @param rdf    [true, false] flag to specify RDF::URI vs URI 
-    # @param slugs  [true, false] flag to include slugs
+    # @param subject  [RDF::Resource]
+    # @param unique   [true, false] flag for unique return value
+    # @param rdf      [true, false] flag to specify RDF::URI vs URI 
+    # @param slugs    [true, false] flag to include slugs
+    # @param fragment [true, false] flag to include fragment URIs
     #
     # @return [RDF::URI, URI, Array]
 
-    def canonical_uri subject, unique: true, rdf: true, slugs: false
+    def canonical_uri subject,
+        unique: true, rdf: true, slugs: false, fragment: false
       subject = coerce_resource subject
       out = []
 
@@ -1038,7 +761,14 @@ module RDF::SAK
         end
       end
 
-      out.map! { |u| URI(u.to_s) } unless rdf
+      # remove all URIs with fragments unless specified
+      unless fragment
+        tmp = out.reject(&:fragment)
+        out = tmp unless tmp.empty?
+      end
+
+      # coerce to URI objects if specified
+      out.map! { |u| URI(uri_pp u.to_s) } unless rdf
 
       unique ? out.first : out.uniq
     end
@@ -1662,13 +1392,10 @@ module RDF::SAK
     # Get all "reachable" UUID-identified entities (subjects which are
     # also objects)
     def reachable published: false
-      # obtain the objects which are URIs
-      o = @graph.objects.select(&:uri?).to_set
-      # cache this so we don't ask the same question thousands of times
       p = published ? -> x { published?(x) } : -> x { true }
       # now get the subjects which are also objects
       @graph.subjects.select do |s|
-        s.uri? && s =~ /^urn:uuid:/ && o.include?(s) && p.call(s)
+        s.uri? && s =~ /^urn:uuid:/ && @graph.has_object?(s) && p.call(s)
       end
     end
 
@@ -3162,31 +2889,41 @@ module RDF::SAK
         if node[:about]
           
           if m = /^_:(.*)$/.match(node[:about])
+            return RDF::Node(m[1])
           end
-            
+
+          # XXX resolve @about against potential curie
           subject = base + node[:about]
           
         elsif is_root
           subject = base
         elsif special
           subject = subject_for parent
+        elsif node[:resource]
+          # XXX resolve @about against potential curie
+          subject = base + node[:resource]
+        elsif node[:href]
+          subject = base + node[:href]
+        elsif node[:src]
+          subject = base + node[:src]
         elsif node[:typeof]
           # bnode the typeof attr
 
           # note we return bnodes irrespective of the rdf flag
-          return RDF::Node('id-%16x' % node.attributes['typeof'].pointer)
+          return RDF::Node('id-%016x' % node.attributes['typeof'].pointer_id)
         elsif node[:inlist]
           # bnode the inlist attr
-          return RDF::Node('id-%16x' % node.attributes['inlist'].pointer)
+          return RDF::Node('id-%016x' % node.attributes['inlist'].pointer_id)
         elsif (parent[:inlist] && OBJS.none? { |a| parent[a] }) ||
             (is_ancestor && !up_ok)
           # bnode the element
-          return RDF::Node('id-%16x' % node.pointer)
+          return RDF::Node('id-%016x' % node.pointer_id)
+        # elsif node[:id]
         else
           subject = subject_for parent, is_ancestor: true
         end
 
-        rdf 
+        rdf ? RDF::URI(subject.to_s) : URI(subject.to_s)
 
       end
 
