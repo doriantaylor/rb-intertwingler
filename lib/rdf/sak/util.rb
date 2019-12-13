@@ -459,6 +459,12 @@ module RDF::SAK::Util
   # @return [nil, String, URI, RDF::URI] the context's base URI
   def get_base elem, default: nil, coerce: nil
     assert_uri_coercion coerce
+
+    if elem.document?
+      elem = elem.root
+      return unless elem
+    end
+
     # get the xpath
     xpath = (elem.namespace && elem.namespace.href == XHTMLNS or
       elem.at_xpath('/html')) ? :htmlbase : :xmlbase
@@ -484,11 +490,24 @@ module RDF::SAK::Util
   # declarations are superseded by the +@prefix+ attribute. Returns
   # any +@vocab+ declaration found as the +nil+ key.
   #
+  # @note The +descend: true+ parameter assumes we are trying to
+  #  collect all the namespaces in use in the entire subtree, rather
+  #  than resolve any particular CURIE. As such, the _first_ prefix
+  #  mapping in document order is preserved over subsequent/descendant
+  #  ones.
+  #
   # @param elem [Nokogiri::XML::Node] The context element
   # @param traverse [true, false] whether or not to traverse the tree
+  # @param coerce [nil, :rdf, :uri] a type coercion for the URIs, if any
+  # @param descend [false, true] go _down_ the tree instead of up
   # @return [Hash] Depending on +:traverse+, either all prefixes
   #  merged, or just the ones asserted in the element.
-  def get_prefixes elem, traverse: true
+  def get_prefixes elem, traverse: true, coerce: nil, descend: false
+    coerce = assert_uri_coercion coerce
+
+    # deal with a common phenomenon
+    elem = elem.root if elem.is_a? Nokogiri::XML::Document
+
     # get namespace definitions first
     prefix = elem.namespaces.reject do |k, _| k == 'xmlns'
     end.transform_keys { |k| k.split(?:)[1].to_sym }
@@ -509,11 +528,21 @@ module RDF::SAK::Util
       prefix[nil] = vocab.empty? ? nil : vocab
     end
 
-    # don't recurse if `traverse` is false
+    # don't forget we can coerce
+    prefix.transform_values! { |v| COERCIONS[coerce].call v } if coerce
+
+    # don't proceed if `traverse` is false
     return prefix unless traverse
 
-    parent = elem.parent
-    (parent && parent.element? ? get_prefixes(parent) : {}).merge prefix
+    # save us having to recurse in ruby by using xpath implemented in c
+    xpath = '%s::*[namespace::*|@prefix|@vocab]' %
+      descend ? :descendant : :ancestor
+    elem.xpath(xpath).each do |e|
+      # this will always merge our prefix on top irrespective of direction
+      prefix = get_prefix(e, traverse: false, coerce: coerce).merge prefix
+    end
+
+    prefix
   end
 
   # Given an X(HT)ML element, return the nearest RDFa _subject_.
@@ -572,7 +601,7 @@ module RDF::SAK::Util
 
   # (maybe add +code+/+kbd+/+samp+/+var+/+time+ one day too)
 
-  def rehydrate doc, &block
+  def rehydrate doc, graph, &block
     doc.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
       lang = e.xpath(XPATH[:lang]).to_s.strip
       # dt   = e['datatype'] # XXX no datatype rn
@@ -585,11 +614,11 @@ module RDF::SAK::Util
       # candidates
       cand = {}
       lit.map do |t|
-        @graph.query(object: t).to_a
+        graph.query(object: t).to_a
       end.flatten.each do |x|
         y = cand[x.subject] ||= {}
         (y[:stmts] ||= []) << x
-        y[:types]  ||= @graph.query([x.subject, RDF.type, nil]).objects.sort
+        y[:types]  ||= graph.query([x.subject, RDF.type, nil]).objects.sort
       end
 
       # if there's only one candidate, this is basically a noop
@@ -600,7 +629,7 @@ module RDF::SAK::Util
         # the block is expected to return one of the candidates or
         # nil. we call the block with the graph so that the block can
         # manipulate its contents.
-        chosen = block.call cand, @graph
+        chosen = block.call cand, graph
         raise ArgumentError, 'block must return nil or a term' unless
           chosen.nil? or chosen.is_a? RDF::Term
       end
@@ -610,8 +639,8 @@ module RDF::SAK::Util
         cc = cand[chosen]
         unless cc
           cc = cand[chosen] = {}
-          cc[:stmts] = @graph.query([chosen, nil, lit[0]]).to_a.sort
-          cc[:types] = @graph.query([chosen, RDF.type, nil]).objects.sort
+          cc[:stmts] = graph.query([chosen, nil, lit[0]]).to_a.sort
+          cc[:types] = graph.query([chosen, RDF.type, nil]).objects.sort
           # if either of these are empty then the graph was not
           # appropriately populated
           raise 'Missing a statement relating #{chosen} to #{text}' if
