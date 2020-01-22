@@ -48,8 +48,9 @@ module RDF::SAK::Util
   URI_COERCIONS = {
     nil   => -> t { t.to_s },
     false => -> t { t.to_s },
-    uri:     -> t { URI.parse t },
+    uri:     -> t { URI.parse t.to_s },
     rdf:     -> t {
+      t = t.to_s
       t.start_with?('_:') ? RDF::Node.new(t.drop_prefix '_:') : RDF::URI(t) },
   }
 
@@ -273,7 +274,7 @@ module RDF::SAK::Util
 
     arg = arg.to_s.strip
 
-    if t.start_with '_:' and as
+    if arg.start_with? '_:' and as
       # override the coercion if this is a blank node
       as = :rdf
     elsif base
@@ -536,7 +537,7 @@ module RDF::SAK::Util
 
     # save us having to recurse in ruby by using xpath implemented in c
     xpath = '%s::*[namespace::*|@prefix|@vocab]' %
-      descend ? :descendant : :ancestor
+      (descend ? :descendant : :ancestor)
     elem.xpath(xpath).each do |e|
       # this will always merge our prefix on top irrespective of direction
       prefix = get_prefix(e, traverse: false, coerce: coerce).merge prefix
