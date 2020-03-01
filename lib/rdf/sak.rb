@@ -25,6 +25,7 @@ require 'rdf/sak/ci'
 require 'rdf/sak/ibis'
 # others not included in rdf.rb
 require 'rdf/sak/pav'
+require 'rdf/sak/qb'
 
 module RDF::SAK
 
@@ -331,6 +332,20 @@ module RDF::SAK
           rescue
             RDF::URI(p)
           end
+        end
+      end
+
+      if dups = config[:duplicate]
+        pfx  = config[:prefixes] || {}
+        base = URI(uri_pp config[:base])
+        if dups.is_a? Hash
+          config[:duplicate] = dups.map do |ruri, preds|
+            preds = [preds] unless preds.is_a? Array
+            preds.map! do |p|
+              resolve_curie p, prefixes: pfx, scalar: true, coerce: :rdf
+            end
+            [RDF::URI((base + ruri.to_s).to_s), Set.new(preds)]
+          end.to_h
         end
       end
 
@@ -730,7 +745,7 @@ module RDF::SAK
     # @param fragment [true, false] flag to include fragment URIs
     #
     # @return [RDF::URI, URI, Array]
-
+    #
     def canonical_uri subject,
         unique: true, rdf: true, slugs: false, fragment: false
       subject = coerce_resource subject
@@ -774,13 +789,12 @@ module RDF::SAK
     end
 
     # Find the terminal replacements for the given subject, if any exist.
-    # 
-    #
     #
     # @param subject
     # @param published indicate the context is published
     #
     # @return [Set]
+    #
     def replacements_for subject, published: true
       subject = coerce_resource subject
 
@@ -2025,6 +2039,17 @@ module RDF::SAK
         xmlns: 'http://www.sitemaps.org/schemas/sitemap/0.9' }).document
     end
 
+    def write_sitemap published: true
+      sitemap = generate_sitemap published: published
+      file    = @config[:sitemap] || '.well-known/sitemap.xml'
+      target  = @config[published ? :target : :private]
+      target.mkpath unless target.directory?
+
+      fh = (target + file).open(?w)
+      sitemap.write_to fh
+      fh.close
+    end
+
     # generate atom feed
 
     #
@@ -2435,6 +2460,121 @@ module RDF::SAK
       end
     end
 
+    DSD_SEQ = %i[characters words blocks sections
+      min low-quartile median high-quartile max mean sd].freeze
+    TH_SEQ = %w[Document Abstract Created Modified Characters Words Blocks 
+      Sections Min Q1 Median Q3 Max Mean SD].map { |t| { [t] => :th } }
+
+    def generate_stats published: true
+      out = {}
+      all_of_type(QB.DataSet).map do |s|
+        base  = canonical_uri s, rdf: false
+        types = abbreviate asserted_types(s)
+        title = if t = label_for(s)
+                  [t[1].to_s, abbreviate(t[0])]
+                end
+        cache = {}
+        subjects_for(QB.dataSet, s, only: :resource).each do |o|
+          if d = objects_for(o, CI.document, only: :resource).first
+            if !published or published?(d)
+              # include a "sort" time that defaults to epoch zero
+              c = cache[o] ||= {
+                doc: d, stime: Time.at(0).getgm, struct: struct_for(o) }
+
+              if t = label_for(d)
+                c[:title] = t
+              end
+              if a = label_for(d, desc: true)
+                c[:abstract] = a
+              end
+              if ct = objects_for(d,
+                RDF::Vocab::DC.created, datatype: RDF::XSD.dateTime).first
+                c[:stime] = c[:ctime] = ct.object.to_time.getgm
+              end
+              if mt = objects_for(d,
+                RDF::Vocab::DC.modified, datatype:RDF::XSD.dateTime)
+                c[:mtime] = mt.map { |m| m.object.to_time.getgm }.sort
+                c[:stime] = c[:mtime].last unless mt.empty?
+              end
+            end
+          end
+        end
+
+        # sort lambda closure
+        sl = -> a, b do
+          x = cache[b][:stime] <=> cache[a][:stime]
+          return x unless x == 0
+          x = cache[b][:ctime] <=> cache[a][:ctime]
+          return x unless x == 0
+          ta = cache[a][:title] || Array.new(2, cache[a][:uri])
+          tb = cache[b][:title] || Array.new(2, cache[b][:uri])
+          ta[1].to_s <=> tb[1].to_s
+        end
+
+        rows = []
+        cache.keys.sort(&sl).each do |k|
+          c = cache[k]
+          href = base.route_to canonical_uri(c[:doc], rdf: false)
+          dt = abbreviate asserted_types(c[:doc])
+          uu = URI(k.to_s).uuid
+          nc = UUID::NCName.to_ncname uu, version: 1
+          tp, tt = c[:title] || []
+          ab = if c[:abstract]
+                 { [c[:abstract][1].to_s] => :th, about: href,
+                  property: abbreviate(c[:abstract].first) }
+               else
+                 { [] => :th }
+               end
+          
+          td = [{ { { [tt.to_s] => :span, property: abbreviate(tp) } => :a,
+            rel: 'ci:document', href: href } => :th },
+            ab,
+            { [c[:ctime].iso8601] => :th, property: 'dct:created',
+             datatype: 'xsd:dateTime', about: href, typeof: dt },
+            { c[:mtime].reverse.map { |m| { [m.iso8601] => :span,
+               property: 'dct:modified', datatype: 'xsd:dateTime' } } => :th,
+              about: href
+            },
+          ] + DSD_SEQ.map do |f|
+            h = []
+            x = { h => :td }
+            p = CI[f]
+            if y = c[:struct][p] and !y.empty?
+              h << y = y.first
+              x[:property] = abbreviate p
+              x[:datatype] = abbreviate y.datatype if y.datatype?
+            end
+            x
+          end
+          rows << { td => :tr, id: nc, about: "##{nc}",
+            typeof: 'qb:Observation' }
+        end
+
+        out[s] = xhtml_stub(base: base, title: title,
+          transform: config[:transform], attr: { about: '', typeof: types },
+          prefix: prefixes, content: {
+            [{ [{ [{ ['About'] => :th, colspan: 4 },
+                { ['Counts'] => :th, colspan: 4 },
+                { ['Words per Block'] => :th, colspan: 7 }] => :tr },
+              { TH_SEQ => :tr } ] => :thead },
+             { rows => :tbody, rev: 'qb:dataSet' }] => :table }).document
+      end
+
+      out
+    end
+
+    def write_stats published: true
+      target = @config[published ? :target : :private]
+      target.mkpath unless target.directory?
+      generate_stats(published: published).each do |uu, doc|
+        bn = URI(uu.to_s).uuid + '.xml'
+        fh = (target + bn).open ?w
+        doc.write_to fh
+        fh.flush
+        fh.close
+      end
+    end
+      
     # - io stuff -
 
     # Locate the file in the source directory associated with the given URI.
@@ -3062,7 +3202,6 @@ module RDF::SAK
             ln[:type] = 'text/css'
           elsif ln[:type] =~ /(java|ecma)script/i or
               v.include?(RDF::Vocab::DC.requires)
-#              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
             ln[nil]  = :script
             ln[:src] = ln.delete :href
             ln[:type] ||= 'text/javascript'
@@ -3079,6 +3218,45 @@ module RDF::SAK
             break if s != 0
           end
           s
+        end
+
+        # we want to duplicate links from particular subjects (eg the root)
+        (@context.config[:duplicate] || {}).sort do |a, b|
+          a.first <=> b.first
+        end.each do |s, preds|
+
+          o = {}
+          u = ufwd[s] ||= @context.canonical_uuid s
+          s = urev[u] ||= @context.canonical_uri u if u
+          f = {}
+
+          # do not include this subject as these links are already included!
+          next if u == @uuid
+
+          # gather up the objects, then gather up the predicates
+
+          @context.objects_for u || s, preds, only: :resource do |obj, rel|
+            # XXX do not know why += |= etc does not work
+            x = @context.canonical_uuid(obj) || obj
+            urev[x] ||= @context.canonical_uri x
+            y = o[x] ||= Set.new
+            o[x] = y | rel
+            f[x] = @context.formats_for x
+          end
+
+          srel = @uri.route_to((u ? urev[u] || s : s).to_s)
+
+          # now collect all the other predicates
+          o.keys.each do |obj|
+            hrel = @uri.route_to((urev[obj] || obj).to_s)
+            o[obj] |= @context.graph.query([u || s, nil, obj]).predicates.to_set
+            rels = @context.abbreviate o[obj].to_a, vocab: XHV
+            ln = { nil => :link, about: srel, rel: rels, href: hrel }
+            ln[:type] = f[obj].first if f[obj]
+
+            # add to links
+            links << ln
+          end
         end
 
         meta = []

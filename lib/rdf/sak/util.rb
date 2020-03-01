@@ -229,6 +229,7 @@ module RDF::SAK::Util
   # @param uri [URI,#to_s] The URI to extract parameters from
   # @param only [false, true] whether to only return the parameters
   # @return [Array] (See description)
+  #
   def split_qp uri, only: false
     uri = URI(uri_pp uri.to_s) unless uri.is_a? URI
     qp  = URI::decode_www_form(uri.query)
@@ -243,8 +244,9 @@ module RDF::SAK::Util
   # @param uri [URI,#to_s] The URI to extract parameters from
   # @param only [false, true] whether to only return the parameters
   # @return [Array] (See description)
+  #
   def split_pp uri, only: false
-    u = (uri.is_a?(URI) ? URI(uri_pp uri.to_s) : uri).normalize
+    u = (uri.is_a?(URI) ? uri : URI(uri_pp uri.to_s)).normalize
     return only ? [] : [uri] unless u.path
     uri = u
 
@@ -376,10 +378,11 @@ module RDF::SAK::Util
 
     out = curie.map do |c|
       prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
+      prefix = prefix.to_sym if prefix
       tmp = if prefixes[prefix]
               prefixes[prefix] + slug
             else
-              noop ? attr : nil
+              noop ? c : nil
             end
       tmp && coerce ? URI_COERCIONS[coerce].call(tmp) : tmp
     end
