@@ -13,3 +13,4 @@ syntax: glob
 /tmp/
 sample.conf
 .byebug_history
+*.gem
