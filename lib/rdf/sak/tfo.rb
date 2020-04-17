@@ -16,7 +16,7 @@ module RDF::SAK
       "dc:created": "2014-06-05T03:06:58Z".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
       "dc:description": "This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages.".freeze,
-      "dc:modified": "2020-01-20T06:05:13Z".freeze,
+      "dc:modified": ["2020-01-20T06:05:13Z".freeze, "2020-04-11T02:51:52Z".freeze],
       "dc:references": ["https://www.iana.org/assignments/media-types/media-types.xhtml".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/rdf-schema/".freeze, "https://www.w3.org/TR/xmlschema-2/".freeze],
       "dc:subject": "tfo:".freeze,
       "dc:title": "Transformation Functions Ontology".freeze,
@@ -30,13 +30,13 @@ module RDF::SAK
     term :Application,
       comment: %(This class represents an application of a transformation function, connecting a specific input and scalar parameters with its output.).freeze,
       label: "Application".freeze,
-      subClassOf: "prov:Activity".freeze,
+      subClassOf: "tfo:Partial".freeze,
       type: "owl:Class".freeze
     term :Parameter,
       comment: %(This class provides a specification for a parameter in a given function.).freeze,
       label: "Parameter".freeze,
       subClassOf: ["rdf:Property".freeze, term(
-          allValuesFrom: "tfo:Application".freeze,
+          allValuesFrom: "tfo:Partial".freeze,
           onProperty: "rdfs:domain".freeze
         )],
       type: "owl:Class".freeze
@@ -50,6 +50,11 @@ module RDF::SAK
           allValuesFrom: "tfo:ParameterList".freeze,
           onProperty: "rdf:rest".freeze
         )],
+      type: "owl:Class".freeze
+    term :Partial,
+      comment: %(This class represents a partial application of a transformation function, affording the encapsulation and re-use of existing parameters.).freeze,
+      label: "Partial".freeze,
+      subClassOf: "prov:Activity".freeze,
       type: "owl:Class".freeze
     term :Transform,
       comment: %(This class provides a specification for a transformation function.).freeze,
@@ -67,6 +72,13 @@ module RDF::SAK
           unionOf: list("tfo:content-type".freeze, "rdf:List".freeze)
         ),
       type: "owl:ObjectProperty".freeze
+    property :completes,
+      comment: %(Identifies a tfo:Partial function that this tfo:Application completes.).freeze,
+      domain: "tfo:Application".freeze,
+      isDefinedBy: "tfo:".freeze,
+      label: "completes".freeze,
+      range: "tfo:Partial".freeze,
+      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
     property :implementation,
       comment: %(URI to the implementation of the function.).freeze,
       domain: "tfo:Transform".freeze,
@@ -115,7 +127,7 @@ module RDF::SAK
       type: "owl:ObjectProperty".freeze
     property :transform,
       comment: %(Specifies the transform associated with this particular application).freeze,
-      domain: "tfo:Application".freeze,
+      domain: "tfo:Partial".freeze,
       isDefinedBy: "tfo:".freeze,
       label: "transform".freeze,
       range: "tfo:Transform".freeze,

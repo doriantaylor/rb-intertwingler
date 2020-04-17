@@ -7,12 +7,17 @@ require 'rdf'
 require 'set'
 require 'uuid-ncname'
 
+require 'rdf/sak/tfo'
+
 module RDF::SAK::Util
+  
   private
 
   R3986   = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
-  QF      = /^([^?#]*)(?:\?([^#]*))?(?:#(.*?))?$/
-  SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/
+  SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/n
+  RFC3986 =
+    /^(?:([^:\/?#]+):)?(?:\/\/([^\/?#]*))?([^?#]+)?(?:\?([^#]*))?(?:#(.*))?$/
+  SEPS = [['', ?:], ['//', ''], ['', ''], [??, ''], [?#, '']].freeze
 
   XPATH = {
     htmlbase: proc {
@@ -198,6 +203,84 @@ module RDF::SAK::Util
 
   public
 
+  # isolate an element into a new document
+  def subtree doc, xpath = '/*', reindent: true, prefixes: {}
+    # at this time we shouldn't try to do anything cute with the xpath
+    # even though it is attractive to want to prune out prefixes
+
+    # how about we start with a noop
+    return doc.root.dup if xpath == '/*'
+
+    begin
+      nodes = doc.xpath xpath, prefixes
+      return unless nodes
+      out = Nokogiri::XML::Document.new
+      out << nodes.first.dup
+      reindent out if reindent
+      out
+    rescue Nokogiri::SyntaxError
+      return
+    end
+  end
+
+  # reindent text nodes
+  def reindent node, depth = 0, indent = '  '
+    kids = node.children
+    if kids and child = kids.first
+      loop do
+        if child.element?
+          # recurse into the element
+          reindent child, depth + 1, indent
+        elsif child.text?
+          text = child.content || ''
+
+          # optional horizontal whitespace followed by at least
+          # one newline (we don't care what kind), followed by
+          # optional horizontal or vertical whitespace
+          preamble = !!text.gsub!(/\A[ \t]*[\r\n]+\s*/, '')
+
+          # then we don't care what's in the middle, but hey let's get
+          # rid of dos newlines because we can always put them back
+          # later if we absolutely have to
+          text.gsub!(/\r+/, '')
+
+          # then optionally any whitespace followed by at least
+          # another newline again, followed by optional horizontal
+          # whitespace and then the end of the string
+          epilogue = !!text.gsub!(/\s*[\r\n]+[ \t]*\z/, '')
+
+          # if we prune these off we'll have a text node that is
+          # either the empty string or it isn't (note we will only
+          # register an epilogue if the text has some non-whitespace
+          # in it, because otherwise the first regex would have
+          # snagged everything, so it's probably redundant)
+
+          # if it's *not* empty then we *prepend* indented whitespace
+          if preamble and !text.empty?
+            d = depth + (child.previous ? 1 : 0)
+            text = "\n" + (indent * d) + text
+          end
+ 
+          # then we unconditionally *append*, (modulo there being a
+          # newline in the original at all), but we have to check by
+          # how much: if this is *not* the last node then depth + 1,
+          # otherwise depth
+          if preamble or epilogue
+            d = depth + (child.next ? 1 : 0)
+            text << "\n" + (indent * d)
+          end
+
+          child.content = text
+        end
+
+        break unless child = child.next
+      end
+    end
+
+    node
+  end
+
+
   XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
   XPATHNS = { html: XHTMLNS }.freeze
   XHV     = 'http://www.w3.org/1999/xhtml/vocab#'.freeze
@@ -209,16 +292,23 @@ module RDF::SAK::Util
   #
   # @param uri [#to_s] The URI string in question
   # @return [String] The sanitized (appropriately escaped) URI string
+
+  # really gotta stop carting this thing around
   def uri_pp uri
-    m = QF.match uri.to_s
-    out = m[1]
-    [[2, ??], [3, ?#]].each do |i, c|
-      next if m[i].nil?
-      clean = m[i].gsub(SF) { |s| sprintf('%X', s.ord) }
-      out += c + clean
+    # take care of malformed escapes
+    uri = uri.to_s.gsub(/%(?![0-9A-Fa-f]{2})/, '%25')
+    # we want the minimal amount of escaping so we split out the separators
+    out = ''
+    parts = RFC3986.match(uri).captures
+    parts.each_index do |i|
+      next if parts[i].nil?
+      out << SEPS[i].first
+      out << parts[i].b.gsub(SF) { |s| sprintf('%X', s.ord) }
+      out << SEPS[i].last
     end
 
-    out
+    # make sure escaped hex is upper case like the rfc says
+    out.gsub(/(%[0-9A-Fa-f]{2})/, $1.upcase)
   end
 
   # Given a URI as input, split any query parameters into an array of

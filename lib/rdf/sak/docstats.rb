@@ -11,8 +11,23 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
   BLOCKS = Set.new(%i[body p h1 h2 h3 h4 h5 h6 ul ol pre dl main header footer
     article section aside figure nav div noscript blockquote form hr
     table fieldset address] + MAYBE).freeze
-  SECTIONS = Set.new(%i[body article section])
-
+  SECTIONS = Set.new(%i[body article section]).freeze
+  IMAGES   = Set.new(%i[img picture]).freeze
+  VIDEOS   = Set.new(%i[video]).freeze
+  EMBEDS   = Set.new(%i[embed object iframe])
+  COUNTS = {
+    sections: %i[body article section header footer nav aside],
+    images:   %i[img picture],
+    videos:   %i[video],
+    embeds:   %i[embed object iframe],
+    tables:   %i[table],
+    lists:    %i[ul ol dl],
+    forms:    %i[form],
+    scripts:  %i[script],
+    sheets:   %i[style],
+  }.transform_values { |v| Set.new v }.freeze
+  
+  
   NODEXP = '/html:html/html:body[not(*)]|/html:html/html:body//*[not(*)]'.freeze
   XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
   XPATHNS = { html: XHTMLNS }.freeze
@@ -53,7 +68,6 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
       prefix, uri = if ns = node.namespace
                       [ns.prefix, ns.href]
                     end
-
       ns    = node.namespace_scopes.map { |n| [ns.prefix, ns.href] }
       attrs = node.attribute_nodes.map do |a|
         an = a.name
@@ -63,7 +77,7 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
       end
       start_element_namespace node.name, attrs, prefix, uri, ns
       node.children.each { |c| pretend_sax c }
-      end_element_namespace
+      end_element_namespace node.name, prefix, uri
     when Nokogiri::XML::Node::TEXT_NODE
       characters node.content
     when Nokogiri::XML::Node::CDATA_SECTION_NODE
@@ -77,13 +91,13 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
       t = w.join ' '
 
       unless w.empty?
-        words    = w.length
-        @chars  += t.length
-        @words  += words
-        @blocks += 1
-        @wpb    << words
-        @stack  << t
-        @text   = ''
+        words = w.length
+        @counts[:chars]  += t.length
+        @counts[:words]  += words
+        @counts[:blocks] += 1
+        @wpb   << words
+        @stack << t
+        @text  = ''
       end
     end
   end
@@ -97,7 +111,6 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
   attr_reader :chars, :words, :blocks
 
   def start_element_namespace name, attrs = [], prefix = nil, uri = nil, ns = []
-    warn name.to_sym
     unless uri != XHTMLNS or SKIP.include? name.to_sym
       @on = true 
       do_block name
@@ -107,6 +120,10 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
   def end_element_namespace name, prefix = nil, uri = nil
     if uri == XHTMLNS
       SKIP.include?(name.to_sym) ? clear_text : do_block(name)
+      COUNTS.each do |type, set|
+        @counts[type] += 1 if set.include? name.to_sym
+      end
+      @counts[:sections] -= 1 if name == 'body'
       @on = false if name == 'body'
     end
   end
@@ -119,31 +136,32 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
     characters string
   end
 
+  # @return [Float] mean of words per block
   def mean
     @wpb.mean
   end
 
+  # @return [Float] standard deviation of words per block
   def sd
     @wpb.standard_deviation
   end
 
+  # @return 
   def quartiles
     [0, 25, 50, 75, 100].map { |pct| @wpb.percentile(pct) }
   end
 
   def counts
-    [@chars, @words, @blocks]
+    @counts.dup.freeze
   end
 
   def initialize
-    @text      = ''
-    @stack     = [] # XXX i don't think we use this one
-    @wpb       = []
-    @sections  = 0
-    @blocks    = 0
-    @words     = 0
-    @chars     = 0
-    @on        = false
+    @on     = false
+    @text   = ''
+    @stack  = [] # XXX i don't think we use this one
+    @wpb    = []
+    @counts = %i[chars words blocks sections images videos embeds
+      tables lists forms scripts sheets].map { |k| [k, 0] }.to_h
   end
 
   def scan doc
@@ -159,5 +177,12 @@ class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
 
   def self.scan doc
     new.scan doc
+  end
+
+  def to_h
+    { mean: mean, sd: sd, quartiles: quartiles }.merge counts
+  end
+
+  def to_rdf uri: nil, subject: nil
   end
 end
