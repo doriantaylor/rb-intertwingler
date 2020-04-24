@@ -166,8 +166,11 @@ class RDF::SAK::Transform
           pattern [:s, RDF::SAK::TFO.transform, transform.subject]
 
           # add any remaining parameters
-          (transform.keys - params.keys.sort).each { |r| pattern [:s, r, nil] }
+          # XXX this actually messes up; we don't want this
+          # (transform.keys - params.keys.sort).each { |r| pattern [:s, r, nil] }
         end.execute(repo).map { |sol| [sol[:s], {}] }.to_h
+
+        # warn "yo #{transform.subject} #{params} #{candidates}"
 
         # this is ruby being cheeky
         candidates.filter! do |s, ps|
@@ -373,7 +376,14 @@ class RDF::SAK::Transform
       @completes ? @completes.params : @params.dup
     end
 
+    def transform
+      @completes ? @completes.transform : @transform
+    end
 
+    def matches? params
+      return @completes.matches? params if @completes
+      super params
+    end
 
     def ===(other)
       return false unless other.is_a? Application

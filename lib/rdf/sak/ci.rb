@@ -15,15 +15,15 @@ module RDF::SAK
       comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.).freeze,
       "dc:created": "2012-01-23T11:52:00-08:00".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze],
-      "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DataStructureDefinition".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DimensionProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_MeasureProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_Observation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze],
+      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze],
+      "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DataStructureDefinition".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DimensionProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_MeasureProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_Observation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze, "https://www.w3.org/TR/prov-o/".freeze, "skos:".freeze],
       "dc:subject": "ci:".freeze,
       "dc:title": "A Content Inventory Vocabulary".freeze,
       "foaf:primaryTopic": "ci:".freeze,
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci".freeze,
       isDefinedBy: "ci:".freeze,
       "owl:imports": ["bibo:".freeze, "dc:".freeze, "foaf:".freeze, "http://purl.org/NET/c4dm/event.owl#".freeze, "http://purl.org/linked-data/cube#".freeze],
-      "owl:versionInfo": "0.10".freeze,
+      "owl:versionInfo": "0.13".freeze,
       type: ["bibo:Webpage".freeze, "owl:Ontology".freeze],
       "xhv:license": "http://creativecommons.org/licenses/by/2.5/ca/".freeze
 
@@ -32,12 +32,14 @@ module RDF::SAK
       comment: %(An action, as its name implies, is meant to represent something a person or other agent ought to do to a document.).freeze,
       isDefinedBy: "ci:".freeze,
       label: "Action".freeze,
+      "skos:usageNote": "Being a subclass of an event, a ci:Action can have agents, factors, products, places and times ascribed to it.".freeze,
       subClassOf: "http://purl.org/NET/c4dm/event.owl#Event".freeze,
       type: "owl:Class".freeze
     term :Advertisement,
-      comment: %(This is intended to be a decorator class to indicate that the subject is an advertisement. It can therefore be combined with other classes such as foaf:Image.).freeze,
+      comment: %(In general there is no programmatic way to tell whether a resource is an advertisement, since advertisements on the Web look \(to a machine\) like any other resource. This is intended to be a decorator class to indicate that the subject is an advertisement. It can therefore be combined with other classes such as foaf:Image, or bibo:AudioVisualDocument.).freeze,
       isDefinedBy: "ci:".freeze,
       label: "Advertisement".freeze,
+      "skos:example": "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\n  dct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\n  dct:hasPart <https://adtech.biz/assets/punch-the-monkey> .\n\n<https://adtech.biz/assets/punch-the-monkey> a foaf:Image, ci:Advertisement ;\n  dct:title \"Punch The Monkey And WIN!\#@$!%%^!\"@en .\n          ".freeze,
       subClassOf: "foaf:Document".freeze,
       type: "owl:Class".freeze
     term :Audience,
@@ -56,7 +58,7 @@ module RDF::SAK
 
     # Property definitions
     property :action,
-      comment: %(use this to signal an action to take with the document in question.).freeze,
+      comment: %(Relates a document to an action to take.).freeze,
       domain: "foaf:Document".freeze,
       isDefinedBy: "ci:".freeze,
       label: "action".freeze,
@@ -64,9 +66,19 @@ module RDF::SAK
       subPropertyOf: "http://purl.org/NET/c4dm/event.owl#factor_of".freeze,
       type: "owl:ObjectProperty".freeze
     property :alias,
-      comment: %(This is an alternate URI for the subject resource. It is simply meant to annotate a resource with another address. It differs from owl:sameAs in that it does not imply that <a> = <b> as well as <b> = <a>.).freeze,
+      comment: %(Denotes an alternate URI for the subject resource. It extends owl:sameAs insofar as asserting that the object is somehow less canonical than the subject.).freeze,
+      inverseOf: "ci:alias-for".freeze,
       isDefinedBy: "ci:".freeze,
       label: "alias".freeze,
+      subPropertyOf: "owl:sameAs".freeze,
+      type: "owl:ObjectProperty".freeze
+    property :"alias-for",
+      comment: %(Denotes that the subject is the alias URI, and the object is more canonical \(though not necessarily the most canonical\).).freeze,
+      inverseOf: "ci:alias".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "alias-for".freeze,
+      "rdfs:seeAlso": "ci:canonical".freeze,
+      subPropertyOf: "owl:sameAs".freeze,
       type: "owl:ObjectProperty".freeze
     property :assumes,
       comment: %(The document assumes the audience is familiar with this concept, and may not mention it explicitly.).freeze,
@@ -79,7 +91,7 @@ module RDF::SAK
       type: "owl:ObjectProperty".freeze
     property :"aware-of",
       comment: %(This property relates an Audience to a SKOS concept that is likely to be in the orbit of the audience's members: they are aware that the concept exists, although they may not necessarily understand it.).freeze,
-      domain: "ci:audience".freeze,
+      domain: "ci:Audience".freeze,
       isDefinedBy: "ci:".freeze,
       label: "aware-of".freeze,
       range: "skos:Concept".freeze,
@@ -93,10 +105,10 @@ module RDF::SAK
       range: "xsd:nonNegativeInteger".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :canonical,
-      comment: %(This is the canonical URI of the subject resource, i.e., the one you always want to publish in content or redirect Web requests to.).freeze,
+      comment: %(Asserts the canonical URI of the subject resource, i.e., the one you always want to publish in content or redirect Web requests to.).freeze,
       isDefinedBy: "ci:".freeze,
       label: "canonical".freeze,
-      subPropertyOf: ["ci:alias".freeze, "owl:sameAs".freeze],
+      subPropertyOf: "ci:alias-for".freeze,
       type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
     property :"canonical-slug",
       comment: %(This is the canonical slug associated with the resource, and should be populated with the slug which is actually in use.).freeze,
@@ -113,11 +125,21 @@ module RDF::SAK
       range: "xsd:nonNegativeInteger".freeze,
       "rdfs:seeAlso": "http://www.w3.org/TR/xpath/#function-normalize-space".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :depicts,
+      comment: %(The document explicitly depicts this concept \(or other entity\).).freeze,
+      domain: "foaf:Document".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "depicts".freeze,
+      note: %(This term is identical in meaning to foaf:depicts except that the latter constrains its domain to images only, whereas this can relate any kind of document. The range of this property is also left open, to accommodate any kind of resource being depicted.).freeze,
+      "rdfs:seeAlso": "foaf:depicts".freeze,
+      subPropertyOf: "dc:references".freeze,
+      type: "owl:ObjectProperty".freeze
     property :"desired-outcome",
       comment: %(This property is intended to indicate what the document is supposed to do—what material effect it is supposed to produce. It is intentionally open-ended, and as such can point to something like a skos:Concept, another document, or a literal string of text describing the outcome.).freeze,
       domain: "foaf:Document".freeze,
       isDefinedBy: "ci:".freeze,
       label: "desired-outcome".freeze,
+      "skos:example": "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .\n@prefix eg:   <https://backoffice.example.club/concepts/> .\n\n# we can extend our article metadata the following way:\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\n  dct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\n  ci:desired-outcome eg:maximize-clicks .\n\n# and create a corresponding resource to unambiguously identify the goal:\n\neg:maximize-clicks a skos:Concept ;\n  skos:prefLabel \"Maximize Clicks\"@en ;\n  skos:description \"Moar clicks means moar monies.\"@en .\n            ".freeze,
       subPropertyOf: "dc:type".freeze,
       type: "owl:ObjectProperty".freeze
     property :document,
@@ -128,7 +150,7 @@ module RDF::SAK
       range: "foaf:Document".freeze,
       type: "http://purl.org/linked-data/cube#DimensionProperty".freeze
     property :embed,
-      comment: %(This property specifies an embedded resource which is visible in the subject's user interface.).freeze,
+      comment: %(This property specifies an embedded resource, such as an image, which is visible on the document's canvas.).freeze,
       domain: "foaf:Document".freeze,
       isDefinedBy: "ci:".freeze,
       label: "embed".freeze,
@@ -136,12 +158,27 @@ module RDF::SAK
       type: "owl:ObjectProperty".freeze
     property :eschews,
       comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values.).freeze,
-      domain: "ci:audience".freeze,
+      domain: "ci:Audience".freeze,
       isDefinedBy: "ci:".freeze,
       label: "eschews".freeze,
       range: "skos:Concept".freeze,
       "rdfs:seeAlso": "ci:values".freeze,
       subPropertyOf: "skos:related".freeze,
+      type: "owl:ObjectProperty".freeze
+    property :evokes,
+      comment: %(The document evokes the given concept without mentioning it explicitly.).freeze,
+      domain: "foaf:Document".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "evokes".freeze,
+      range: "skos:Concept".freeze,
+      subPropertyOf: "ci:assumes".freeze,
+      type: "owl:ObjectProperty".freeze
+    property :form,
+      comment: %(This property specifies form target, which may or may not be visible to the user.).freeze,
+      domain: "foaf:Document".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "form".freeze,
+      subPropertyOf: "ci:link".freeze,
       type: "owl:ObjectProperty".freeze
     property :"high-quartile",
       comment: %(Third Quartile).freeze,
@@ -151,6 +188,13 @@ module RDF::SAK
       range: "xsd:number".freeze,
       "rdfs:seeAlso": "http://en.wikipedia.org/wiki/Quartile".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :include,
+      comment: %(This property specifies a related resource which is not directly visible to the user.).freeze,
+      domain: "foaf:Document".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "include".freeze,
+      subPropertyOf: "dc:requires".freeze,
+      type: "owl:ObjectProperty".freeze
     property :indegree,
       comment: %(The number of links pointing at the specified resource.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -174,7 +218,7 @@ module RDF::SAK
       subPropertyOf: "ci:mentions".freeze,
       type: "owl:ObjectProperty".freeze
     property :link,
-      comment: %(This property specifies a linked resource which is visible in the subject's user interface.).freeze,
+      comment: %(This property specifies an ordinary hyperlink, which is visible on the document's canvas.).freeze,
       domain: "foaf:Document".freeze,
       isDefinedBy: "ci:".freeze,
       label: "link".freeze,
@@ -244,6 +288,12 @@ module RDF::SAK
       range: "xsd:number".freeze,
       "rdfs:seeAlso": "http://en.wikipedia.org/wiki/Directed_graph#Indegree_and_outdegree".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :representation,
+      comment: %(Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.).freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "representation".freeze,
+      subPropertyOf: "dc:hasFormat".freeze,
+      type: "owl:ObjectProperty".freeze
     property :sd,
       comment: %(Standard Deviation).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -274,7 +324,7 @@ module RDF::SAK
       type: "owl:ObjectProperty".freeze
     property :understands,
       comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to comprehend, and thereby do not need any additional explanation.).freeze,
-      domain: "ci:audience".freeze,
+      domain: "ci:Audience".freeze,
       isDefinedBy: "ci:".freeze,
       label: "understands".freeze,
       range: "skos:Concept".freeze,
@@ -283,7 +333,7 @@ module RDF::SAK
       type: "owl:ObjectProperty".freeze
     property :values,
       comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to value, that is, to find meaningful in an axiological sense.).freeze,
-      domain: "ci:audience".freeze,
+      domain: "ci:Audience".freeze,
       isDefinedBy: "ci:".freeze,
       label: "values".freeze,
       range: "skos:Concept".freeze,

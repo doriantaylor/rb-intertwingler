@@ -213,10 +213,10 @@ module RDF::SAK::Util
 
     begin
       nodes = doc.xpath xpath, prefixes
-      return unless nodes
+      return unless nodes and !nodes.empty?
       out = Nokogiri::XML::Document.new
       out << nodes.first.dup
-      reindent out if reindent
+      reindent out.root if reindent
       out
     rescue Nokogiri::SyntaxError
       return
@@ -290,25 +290,29 @@ module RDF::SAK::Util
   # Preprocess a URI string so that it can be handed to +URI.parse+
   # without crashing.
   #
-  # @param uri [#to_s] The URI string in question
+  # @param uri   [#to_s] The URI string in question
+  # @param extra [#to_s] Character class of any extra characters to escape
   # @return [String] The sanitized (appropriately escaped) URI string
 
   # really gotta stop carting this thing around
-  def uri_pp uri
+  def uri_pp uri, extra = ''
     # take care of malformed escapes
     uri = uri.to_s.gsub(/%(?![0-9A-Fa-f]{2})/, '%25')
+    uri.gsub!(/([#{Regexp.quote extra}])/) do |s|
+      sprintf('%%%02X', s.ord)
+    end unless extra.empty?
     # we want the minimal amount of escaping so we split out the separators
     out = ''
     parts = RFC3986.match(uri).captures
     parts.each_index do |i|
       next if parts[i].nil?
       out << SEPS[i].first
-      out << parts[i].b.gsub(SF) { |s| sprintf('%X', s.ord) }
+      out << parts[i].b.gsub(SF) { |s| sprintf('%%%02X', s.ord) }
       out << SEPS[i].last
     end
 
     # make sure escaped hex is upper case like the rfc says
-    out.gsub(/(%[0-9A-Fa-f]{2})/, $1.upcase)
+    out.gsub(/(%[0-9A-Fa-f]{2})/) { |x| x.upcase }
   end
 
   # Given a URI as input, split any query parameters into an array of
