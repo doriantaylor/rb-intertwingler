@@ -15,8 +15,8 @@ module RDF::SAK
       comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.).freeze,
       "dc:created": "2012-01-23T11:52:00-08:00".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze],
-      "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DataStructureDefinition".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_DimensionProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_MeasureProperty".freeze, "http://publishing-statistical-data.googlecode.com/svn/trunk/specs/src/main/html/cube.html#ref_qb_Observation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze, "https://www.w3.org/TR/prov-o/".freeze, "skos:".freeze],
+      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze, "2020-04-30T01:05:51Z".freeze],
+      "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation".freeze, "skos:".freeze],
       "dc:subject": "ci:".freeze,
       "dc:title": "A Content Inventory Vocabulary".freeze,
       "foaf:primaryTopic": "ci:".freeze,
@@ -156,6 +156,13 @@ module RDF::SAK
       label: "embed".freeze,
       subPropertyOf: "dc:hasPart".freeze,
       type: "owl:ObjectProperty".freeze
+    property :embeds,
+      comment: %(The number of embeds in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "embeds".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :eschews,
       comment: %(This property relates an Audience to a SKOS concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values.).freeze,
       domain: "ci:Audience".freeze,
@@ -180,6 +187,13 @@ module RDF::SAK
       label: "form".freeze,
       subPropertyOf: "ci:link".freeze,
       type: "owl:ObjectProperty".freeze
+    property :forms,
+      comment: %(The number of forms in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "forms".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :"high-quartile",
       comment: %(Third Quartile).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -187,6 +201,13 @@ module RDF::SAK
       label: "high-quartile".freeze,
       range: "xsd:number".freeze,
       "rdfs:seeAlso": "http://en.wikipedia.org/wiki/Quartile".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :images,
+      comment: %(This indicates the number of images in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "images".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :include,
       comment: %(This property specifies a related resource which is not directly visible to the user.).freeze,
@@ -224,6 +245,13 @@ module RDF::SAK
       label: "link".freeze,
       subPropertyOf: "dc:references".freeze,
       type: "owl:ObjectProperty".freeze
+    property :lists,
+      comment: %(The number of lists in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "lists".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :"low-quartile",
       comment: %(Equivalent to the bottom quarter, or 25th percentile, of the observed data.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -294,6 +322,13 @@ module RDF::SAK
       label: "representation".freeze,
       subPropertyOf: "dc:hasFormat".freeze,
       type: "owl:ObjectProperty".freeze
+    property :scripts,
+      comment: %(The number of scripts in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "scripts".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :sd,
       comment: %(Standard Deviation).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -315,6 +350,20 @@ module RDF::SAK
       label: "slug".freeze,
       range: "xsd:string".freeze,
       type: "owl:DatatypeProperty".freeze
+    property :stylesheets,
+      comment: %(The number of stylesheets in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "stylesheets".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :tables,
+      comment: %(The number of tables in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "tables".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :target,
       comment: %(Specify the URI of the target resource into which this document should be merged.).freeze,
       domain: "ci:Merge".freeze,
@@ -340,6 +389,13 @@ module RDF::SAK
       "rdfs:seeAlso": "ci:eschews".freeze,
       subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
+    property :videos,
+      comment: %(The number of videos in the document.).freeze,
+      domain: "http://purl.org/linked-data/cube#Observation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "videos".freeze,
+      range: "xsd:nonNegativeInteger".freeze,
+      type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
     property :words,
       comment: %(This indicates the number of words in a document, similar to the familiar function in a word processor. The exact method of counting words may vary by document type, language etc., and is thus out of scope from this document.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -451,7 +507,16 @@ module RDF::SAK
           "http://purl.org/linked-data/cube#measure": "ci:characters".freeze,
           type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
         ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:embeds".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:forms".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
           "http://purl.org/linked-data/cube#measure": "ci:high-quartile".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:images".freeze,
           type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
         ), term(
           "http://purl.org/linked-data/cube#measure": "ci:low-quartile".freeze,
@@ -469,10 +534,22 @@ module RDF::SAK
           "http://purl.org/linked-data/cube#measure": "ci:min".freeze,
           type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
         ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:scripts".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
           "http://purl.org/linked-data/cube#measure": "ci:sd".freeze,
           type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
         ), term(
           "http://purl.org/linked-data/cube#measure": "ci:sections".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:stylesheets".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:tables".freeze,
+          type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "ci:videos".freeze,
           type: "http://purl.org/linked-data/cube#ComponentSpecification".freeze
         ), term(
           "http://purl.org/linked-data/cube#measure": "ci:words".freeze,

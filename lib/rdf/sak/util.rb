@@ -297,7 +297,7 @@ module RDF::SAK::Util
   # really gotta stop carting this thing around
   def uri_pp uri, extra = ''
     # take care of malformed escapes
-    uri = uri.to_s.gsub(/%(?![0-9A-Fa-f]{2})/, '%25')
+    uri = uri.to_s.b.gsub(/%(?![0-9A-Fa-f]{2})/n, '%25')
     uri.gsub!(/([#{Regexp.quote extra}])/) do |s|
       sprintf('%%%02X', s.ord)
     end unless extra.empty?
