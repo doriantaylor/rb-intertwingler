@@ -3,18 +3,58 @@ require 'rdf/sak/version'
 
 require 'uri'
 require 'uri/urn'
-require 'rdf'
 require 'set'
 require 'uuid-ncname'
 
+require 'rdf'
+require 'rdf/reasoner'
+require 'rdf/vocab/skos'
+require 'rdf/vocab/foaf'
+require 'rdf/vocab/bibo'
+require 'rdf/vocab/dc'
+require 'rdf/vocab/dc11'
+
+require 'rdf/sak/mimemagic'
+require 'rdf/sak/ci'
 require 'rdf/sak/tfo'
+require 'rdf/sak/ibis'
+require 'rdf/sak/pav'
+require 'rdf/sak/qb'
+
+unless RDF::List.respond_to? :from
+  class RDF::List
+    private
+
+    def self.get_list repo, subject, seen = []
+      out = []
+      return out if seen.include? subject
+      seen << subject
+      first = repo.query([subject, RDF.first, nil]).objects.first or return out
+      out << first
+      rest  = repo.query([subject, RDF.rest,  nil]).objects.filter do |x|
+        !x.literal?
+      end.first or return out
+
+      out + (rest != RDF.nil ? get_list(repo, rest, seen) : [])
+    end
+
+    public
+
+    # Inflate a list from a graph but don't change the graph
+    def self.from graph, subject
+      self.new graph: graph, values: get_list(graph, subject)
+    end
+  end
+end
 
 module RDF::SAK::Util
   
   private
 
+  RDF::Reasoner.apply(:rdfs, :owl)
+
   R3986   = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
-  SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,;=._~-]/n
+  SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,:;=._~-]/n
   RFC3986 =
     /^(?:([^:\/?#]+):)?(?:\/\/([^\/?#]*))?([^?#]+)?(?:\?([^#]*))?(?:#(.*))?$/
   SEPS = [['', ?:], ['//', ''], ['', ''], [??, ''], [?#, '']].freeze
@@ -58,6 +98,142 @@ module RDF::SAK::Util
       t = t.to_s
       t.start_with?('_:') ? RDF::Node.new(t.drop_prefix '_:') : RDF::URI(t) },
   }
+
+  UUID_RE = /^(?:urn:uuid:)?([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})$/i
+
+  # okay labels: what do we want to do about them? poor man's fresnel!
+
+  # basic structure is an asserted base class corresponding to a
+  # ranked list of asserted predicates. to the subject we first
+  # match the closest class, then the closest property.
+
+  # if the instance data doesn't have an exact property mentioned in
+  # the spec, it may have an equivalent property or subproperty we
+  # may be able to use. we could imagine a scoring system analogous
+  # to the one used by CSS selectors, albeit using the topological
+  # distance of classes/predicates in the spec versus those in the
+  # instance data.
+
+  # think about dcterms:title is a subproperty of dc11:title even
+  # though they are actually more like equivalent properties;
+  # owl:equivalentProperty is not as big a conundrum as
+  # rdfs:subPropertyOf. 
+
+  # if Q rdfs:subPropertyOf P then S Q O implies S P O. this is
+  # great but property Q may not be desirable to display.
+
+  # it may be desirable to be able to express properties to never
+  # use as a label, such as skos:hiddenLabel
+
+  # consider ranked alternates, sequences, sequences of alternates.
+  # (this is what fresnel does fyi)
+
+  STRINGS = {
+    RDF::RDFS.Resource => {
+      label: [
+        # main
+        [RDF::Vocab::SKOS.prefLabel, RDF::RDFS.label,
+          RDF::Vocab::DC.title, RDF::Vocab::DC11.title, RDF::RDFV.value],
+        # alt
+        [RDF::Vocab::SKOS.altLabel, RDF::Vocab::DC.alternative],
+      ],
+      desc: [
+        # main will be cloned into alt
+        [RDF::Vocab::DC.abstract, RDF::Vocab::DC.description,
+          RDF::Vocab::DC11.description, RDF::RDFS.comment,
+          RDF::Vocab::SKOS.note],
+      ],
+    },
+    RDF::Vocab::FOAF.Document => {
+      label: [
+        # main
+        [RDF::Vocab::DC.title, RDF::Vocab::DC11.title],
+        # alt
+        [RDF::Vocab::BIBO.shortTitle, RDF::Vocab::DC.alternative],
+      ],
+      desc: [
+        # main
+        [RDF::Vocab::BIBO.abstract, RDF::Vocab::DC.abstract,
+          RDF::Vocab::DC.description, RDF::Vocab::DC11.description],
+        # alt
+        [RDF::Vocab::BIBO.shortDescription],
+      ],
+    },
+    RDF::Vocab::FOAF.Agent => {
+      label: [
+        # main (will get cloned into alt)
+        [RDF::Vocab::FOAF.name],
+      ],
+      desc: [
+        # main cloned into alt
+        [RDF::Vocab::FOAF.status],
+      ],
+    },
+  }
+  STRINGS[RDF::OWL.Thing] = STRINGS[RDF::RDFS.Resource]
+
+  # note this is to_a because "can't modify a hash during iteration"
+  # which i guess is sensible, so we generate a set of pairs first
+  STRINGS.to_a.each do |type, struct|
+    struct.values.each do |lst|
+      # assert a whole bunch of stuff
+      raise 'STRINGS content must be an array of arrays' unless
+        lst.is_a? Array
+      raise 'Spec must contain 1 or 2 Array elements' if lst.empty?
+      raise 'Spec must be array of arrays of terms' unless
+        lst.all? { |x| x.is_a? Array and x.all? { |y|
+          RDF::Vocabulary.find_term(y) } }
+
+      # prune this to two elements (not that there should be more than)
+      lst.slice!(2, lst.length) if lst.length > 2
+
+      # pre-fill equivalent properties
+      lst.each do |preds|
+        # for each predicate, find its equivalent properties
+
+        # splice them in after the current predicate only if they
+        # are not already explicitly in the list
+        i = 0
+        loop do
+          equiv = preds[i].entail(:equivalentProperty) - preds
+          preds.insert(i + 1, *equiv) unless equiv.empty?
+
+          i += equiv.length + 1
+          break if i >= preds.length
+        end
+
+        # this just causes too many problems otherwise
+        # preds.map! { |p| p.to_s }
+      end
+
+      # duplicate main predicates to alternatives
+      lst[1] ||= lst[0]
+    end
+
+    # may as well seed equivalent classes so we don't have to look them up
+    type.entail(:equivalentClass).each do |equiv|
+      STRINGS[equiv] ||= struct
+    end
+
+    # tempting to do subclasses too but it seems pretty costly in
+    # this framework; save it for the clojure version
+  end
+
+  AUTHOR  = [RDF::SAK::PAV.authoredBy, RDF::Vocab::DC.creator,
+    RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
+  CONTRIB = [RDF::SAK::PAV.contributedBy, RDF::Vocab::DC.contributor,
+    RDF::Vocab::DC11.contributor]
+  [AUTHOR, CONTRIB].each do |preds|
+    i = 0
+    loop do
+      equiv = preds[i].entail(:equivalentProperty) - preds
+      preds.insert(i + 1, *equiv) unless equiv.empty?
+      i += equiv.length + 1
+      break if i >= preds.length
+    end
+
+    preds.freeze
+  end
 
   def sanitize_prefixes prefixes, nonnil = false
     raise ArgumentError, 'prefixes must be a hash' unless
@@ -201,7 +377,873 @@ module RDF::SAK::Util
     },
   }
 
+  # rdf term type tests
+  NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
+  NMAP   = ({ iri: :uri, bnode: :blank }.merge(
+    [:uri, :blank, :literal].map { |x| [x, x] }.to_h)).freeze
+
   public
+
+  def coerce_node_spec spec, rev: false
+    spec = [spec] unless spec.respond_to? :to_a
+    spec = spec - [:resource] + [:uri, :blank] if spec.include? :resource
+    raise 'Subjects are never literals' if rev and spec.include? :literal
+
+    spec = NMAP.values_at(*spec).reject(&:nil?).uniq
+    spec = NTESTS.keys if spec.empty?
+    spec.delete :literal if rev
+    spec.uniq
+  end
+
+  def node_matches? node, spec
+    spec.any? { |k| node.send NTESTS[k] }
+  end
+
+  # Obtain all and only the rdf:types directly asserted on the subject.
+  # 
+  # @param repo [RDF::Queryable]
+  # @param subject [RDF::Resource]
+  # @param type [RDF::Term, :to_a]
+  #
+  # @return [Array]
+  def self.asserted_types repo, subject, type = nil
+    asserted = nil
+
+    if type
+      type = type.respond_to?(:to_a) ? type.to_a : [type]
+      asserted = type.select { |t| t.is_a? RDF::Value }.map do |t|
+        RDF::Vocabulary.find_term t
+      end
+    end
+
+    asserted ||= repo.query([subject, RDF.type, nil]).objects.map do |o|
+      RDF::Vocabulary.find_term o
+    end.compact
+
+    asserted.select { |t| t && t.uri? }.uniq
+  end
+
+  # Obtain a stack of types for an asserted initial type or set
+  # thereof. Returns an array of arrays, where the first is the
+  # asserted types and their inferred equivalents, and subsequent
+  # elements are immediate superclasses and their equivalents. A
+  # given URI will only appear once in the entire structure.
+  #
+  # @param rdftype [RDF::Term, :to_a]
+  #
+  # @return [Array]
+  #
+  def type_strata rdftype
+    # first we coerce this to an array
+    if rdftype.respond_to? :to_a
+      rdftype = rdftype.to_a
+    else
+      rdftype = [rdftype]
+    end
+      
+    # now squash and coerce
+    rdftype = rdftype.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
+
+    # bail out early
+    return [] if rdftype.empty?
+
+    # essentially what we want to do is construct a layer of
+    # asserted classes and their inferred equivalents, then probe
+    # the classes in the first layer for subClassOf assertions,
+    # which will form the second layer, and so on.
+
+    queue  = [rdftype]
+    strata = []
+    seen   = Set.new
+
+    while qin = queue.shift
+      qwork = []
+
+      qin.each do |q|
+        qwork << q # entail doesn't include q
+        qwork += q.entail(:equivalentClass) if q.uri?
+      end
+
+      # grep and flatten
+      qwork = qwork.map do |t|
+        next t if t.is_a? RDF::Vocabulary::Term
+        RDF::Vocabulary.find_term t
+      end.compact.uniq - seen.to_a
+      seen |= qwork
+
+      # warn "qwork == #{qwork.inspect}"
+
+      # push current layer out
+      strata.push qwork.dup unless qwork.empty?
+     
+      # now deal with subClassOf
+      qsuper = []
+      qwork.each { |q| qsuper += q.subClassOf }
+
+      # grep and flatten this too
+      qsuper = qsuper.map do |t|
+        next t if t.is_a? RDF::Vocabulary::Term
+        RDF::Vocabulary.find_term t
+      end.compact.uniq - seen.to_a
+      # do not append qsuper to seen!
+
+      # warn "qsuper == #{qsuper.inspect}"
+
+      # same deal, conditionally push the input queue
+      queue.push qsuper.dup unless qsuper.empty?
+    end
+
+    # voila
+    strata
+  end
+
+  # Obtain the objects for a given subject-predicate pair.
+  #
+  # @param subject [RDF::Resource]
+  # @param predicate [RDF::URI]
+  # @param entail [false, true]
+  # @param only [:uri, :iri, :resource, :blank, :bnode, :literal]
+  # @param datatype [RDF::Term]
+  #
+  # @return [Array]
+  #
+  def predicate_set predicates, seen: Set.new
+    predicates = Set[predicates] if predicates.is_a? RDF::URI
+    unless predicates.is_a? Set
+      raise "predicates must be a set" unless predicates.respond_to? :to_set
+      predicates = predicates.to_set
+      end
+
+    # shortcut
+    return predicates if predicates.empty?
+
+    raise 'predicates must all be RDF::URI' unless predicates.all? do |p|
+      p.is_a? RDF::URI
+    end
+
+    # first we generate the set of equivalent properties for the given
+    # properties
+    predicates += predicates.map do |p|
+      p.entail :equivalentProperty
+    end.flatten.to_set
+
+    # then we take the resulting set of properties and
+    # compute their subproperties
+    subp = Set.new
+    (predicates - seen).each do |p|
+      subp += p.subProperty.flatten.to_set
+    end
+
+    # uhh this whole "seen" business might not be necessary
+    predicates + predicate_set(subp - predicates - seen, seen: predicates)
+  end
+
+  # Returns subjects from the graph with entailment.
+  #
+  # @param repo
+  # @param predicate
+  # @param object
+  # @param entail
+  # @param only
+  #
+  # @return [RDF::Resource]
+  #
+  def self.subjects_for repo, predicate, object, entail: true, only: []
+    raise 'Object must be a Term' unless object.is_a? RDF::Term
+    predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
+    raise 'Predicate must be some kind of term' unless
+      predicate.all? { |p| p.is_a? RDF::URI }
+
+    only = coerce_node_spec only, rev: true
+
+    predicate = predicate.map { |x| RDF::Vocabulary.find_term x }.compact
+    predicate = predicate_set predicate if entail
+
+    out  = {}
+    revp = Set.new
+    predicate.each do |p|
+      repo.query([nil, p, object]).subjects.each do |s|
+        next unless node_matches? s, only
+
+        entry = out[s] ||= [Set.new, Set.new]
+        entry[0] << p
+      end
+
+      # do this here while we're at it
+      unless object.literal?
+        revp += p.inverseOf.to_set
+        revp << p if p.type.include? RDF::OWL.SymmetricProperty
+      end
+    end
+
+    unless object.literal?
+      revp = predicate_set revp if entail
+
+      revp.each do |p|
+        repo.query([object, p, nil]).objects.each do |o|
+          next unless node_matches? o, only
+
+          entry = out[o] ||= [Set.new, Set.new]
+          entry[1] << p
+        end
+      end
+    end
+
+    # run this through a block to get access to the predicates
+    return out.map { |p, v| yield p, *v } if block_given?
+
+    out.keys
+  end
+
+  # Returns objects from the graph with entailment.
+  #
+  # @param repo
+  # @param subject
+  # @param predicate
+  # @param entail
+  # @param only
+  # @param datatype
+  #
+  # @return [RDF::Term]
+  #
+  def objects_for repo, subject, predicate,
+      entail: true, only: [], datatype: nil
+    raise 'Subject must be a resource' unless subject.is_a? RDF::Resource
+    predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
+    raise "Predicate must be a term, not #{predicate.first.class}" unless
+      predicate.all? { |p| p.is_a? RDF::URI }
+
+    predicate = predicate.map { |x| RDF::Vocabulary.find_term x }.compact
+
+    only = coerce_node_spec only
+
+    datatype = (
+      datatype.respond_to?(:to_a) ? datatype.to_a : [datatype]).compact
+    raise 'Datatype must be some kind of term' unless
+      datatype.all? { |p| p.is_a? RDF::URI }
+
+    # fluff this out 
+    predicate = predicate_set predicate if entail
+
+    out = {}
+    predicate.each do |p|
+      repo.query([subject, p, nil]).objects.each do |o|
+
+        # make sure it's in the spec
+        next unless node_matches? o, only
+
+        # constrain output
+        next if o.literal? and
+          !(datatype.empty? or datatype.include?(o.datatype))
+
+        entry = out[o] ||= [Set.new, Set.new]
+        entry[0] << p
+      end
+    end
+
+    # now we do the reverse
+    unless only == [:literal]
+      # generate reverse predicates
+      revp = Set.new
+      predicate.each do |p|
+        revp += p.inverseOf.to_set
+        revp << p if p.type.include? RDF::OWL.SymmetricProperty
+      end
+      revp = predicate_set revp if entail
+
+      # now scan 'em
+      revp.each do |p|
+        repo.query([nil, p, subject]).subjects.each do |s|
+          next unless node_matches? s, only
+          # no need to check datatype; subject is never a literal
+
+          entry = out[s] ||= [Set.new, Set.new]
+          entry[1] << p
+        end
+      end
+    end
+
+    # run this through a block to get access to the predicates
+    return out.map { |p, v| yield p, *v } if block_given?
+
+    out.keys
+  end
+
+  # Obtain the canonical UUID for the given URI
+  #
+  # @param repo [RDF::Queryable]
+  # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
+  # @param unique [true, false] return a single resource/nil or an array
+  # @param published [true, false] whether to restrict to published docs
+  # 
+  # @return [RDF::URI, Array]
+  #
+  def self.canonical_uuid repo, uri, unique: true, published: false,
+      scache: {}, ucache: {}, base: nil
+    # make sure this is actually a uri
+    orig = uri = coerce_resource uri, base
+    tu = URI(uri_pp(uri).to_s).normalize
+
+    if tu.path && !tu.fragment && UUID_RE.match?(uu = tu.path.delete_prefix(?/))
+      tu = URI('urn:uuid:' + uu.downcase)
+    end
+
+    # unconditionally overwrite uri
+    uri = RDF::URI(tu.to_s)
+
+    # now check if it's a uuid
+    if tu.respond_to? :uuid
+      # warn "lol uuid #{orig}"
+      # if it's a uuid, check that we have it as a subject
+      # if we have it as a subject, return it
+      return uri if scache[uri] ||= repo.has_subject?(uri)
+      # note i don't want to screw around right now dealing with the
+      # case that a UUID might not itself be canonical
+    end
+
+    # spit up the cache if present
+    if out = ucache[orig]
+      # warn "lol cached #{orig}"
+      return unique ? out.first : out
+    end
+
+    # otherwise we proceed:
+
+    # goal: return the most "appropriate" UUID for the given URI
+
+    # it is so lame i have to do this
+    bits = { nil => 0, false => 0, true => 1 }
+
+    # rank (0 is higher):
+    # * (00) exact & canonical == 0,
+    # * (01) exact == 1,
+    # * (10) inexact & canonical == 2,
+    # * (11) inexact == 3. 
+
+    # warn "WTF URI #{uri}"
+
+    # handle path parameters by generating a bunch of candidates
+    uris = if uri.respond_to? :path and uri.path.start_with? ?/
+             # split any path parameters off
+             uu, *pp = split_pp uri
+             if pp.empty?
+               [uri] # no path parameters
+             else
+               uu = RDF::URI(uu.to_s)
+               bp = uu.path # base path
+               (0..pp.length).to_a.reverse.map do |i|
+                 u = uu.dup
+                 u.path = ([bp] + pp.take(i)).join(';')
+                 u
+               end
+             end
+           else
+             [uri] # not a pathful URI
+           end
+
+    # collect the candidates by URI
+    sa = predicate_set [RDF::SAK::CI.canonical, RDF::OWL.sameAs]
+    candidates = nil
+    uris.each do |u|
+      candidates = subjects_for(repo, sa, u, entail: false) do |s, f|
+        # there is no #to_i for booleans and also we xor this number
+        [s, { rank: bits[f.include?(RDF::SAK::CI.canonical)] ^ 1,
+          published: published?(repo, s),
+          mtime: dates_for(repo, s).last || DateTime.new }]
+      end.compact.to_h
+      break unless candidates.empty?
+    end
+
+    # now collect by slug
+    if (slug = terminal_slug uri, base: base) != ''
+      exact = uri == coerce_resource(slug, base) # slug represents exact match
+      sl = [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug]
+      [RDF::XSD.string, RDF::XSD.token].each do |t|
+        subjects_for(repo, sl, RDF::Literal(slug, datatype: t)) do |s, f|
+          # default to lowest rank if this candidate is new
+          entry = candidates[s] ||= {
+            published: published?(repo, s, base: base),
+            rank: 0b11, mtime: dates_for(repo, s).last || DateTime.new }
+          # true is 1 and false is zero so we xor this too
+          rank  = (BITS[exact] << 1 | BITS[f.include?(sl[0])]) ^ 0b11
+          # now amend the rank if we have found a better one
+          entry[:rank] = rank if rank < entry[:rank]
+        end
+      end
+    end
+
+    candidates.delete_if { |s, _| !/^urn:uuid:/.match?(s.to_s)  }
+
+    # scan all the candidates for replacements and remove any
+    # candidates that have been replaced
+    candidates.to_a.each do |k, v|
+      # note that 
+      reps = replacements_for(repo, k, published: published) - [k]
+      unless reps.empty?
+        v[:replaced] = true
+        reps.each do |r|
+          c = candidates[r] ||= { rank: v[:rank],
+            published: published?(repo, r),
+            mtime: dates_for(repo, r).last || v[:mtime] || DateTime.new }
+          # we give the replacement the rank and mtime of the
+          # resource being replaced if it scores better
+          c[:rank]  = v[:rank]  if v[:rank]  < c[:rank]
+          c[:mtime] = v[:mtime] if v[:mtime] > c[:mtime]
+        end
+      end
+    end
+
+    # now we can remove all unpublished candidates if the context is
+    # published
+    candidates.select! do |_, v|
+      !v[:replaced] && (published ? v[:published] : true)
+    end
+
+    # now we sort by rank and date; the highest-ranking newest
+    # candidate is the one
+
+    out = candidates.sort do |a, b|
+      _, va = a
+      _, vb = b
+      cb = published ? BITS[vb[:published]] <=> BITS[va[:published]] : 0
+      cr = va[:rank] <=> vb[:rank]
+      cb == 0 ? cr == 0 ? vb[:mtime] <=> va[:mtime] : cr : cb
+    end.map { |x| x.first }.compact
+
+    # set cache
+    ucache[orig] = out
+
+    #warn "lol not cached #{orig}"
+
+    unique ? out.first : out
+
+    # an exact match is better than an inexact one
+
+    # a canonical match is better than non-canonical
+
+    # note this is four bits: exact, canon(exact), inexact, canon(inexact)
+    # !canon(exact) should rank higher than canon(inexact)
+
+    # unreplaced is better than replaced
+
+    # newer is better than older (though no reason an older item
+    # can't replace a newer one)
+
+    # published is better than not, unless the context is
+    # unpublished and an unpublished document replaces a published one
+  end
+
+  SCHEME_RANK = { https: 0, http: 1 }
+
+  def cmp_resource a, b, www: nil
+    raise 'Comparands must be instances of RDF::Value' unless
+      [a, b].all? { |x| x.is_a? RDF::Value }
+
+    # URI beats non-URI
+    if a.uri?
+      if b.uri?
+        # https beats http beats other
+        as = a.scheme.downcase.to_sym
+        bs = b.scheme.downcase.to_sym
+        cmp = SCHEME_RANK.fetch(as, 2) <=> SCHEME_RANK.fetch(bs, 2)
+
+        # bail out early
+        return cmp unless cmp == 0
+
+        # this would have returned if the schemes were different, as
+        # such we only need to test one of them
+        if [:http, :https].any?(as) and not www.nil?
+          # if www is non-nil, prefer www or no-www depending on
+          # truthiness of `www` parameter
+          pref = [false, true].zip(www ? [1, 0] : [0, 1]).to_h
+          re = /^(?:(www)\.)?(.*?)$/
+
+          ah = re.match(a.host.to_s.downcase)[1,2]
+          bh = re.match(b.host.to_s.downcase)[1,2]
+
+          # compare hosts sans www
+          cmp = ah[1] <=> bh[1]
+          return cmp unless cmp == 0
+
+          # now compare presence of www
+          cmp = pref[ah[0] == 'www'] <=> pref[bh[0] == 'www']
+          return cmp unless cmp == 0
+
+          # if we're still here, compare the path/query/fragment
+          re = /^.*?\/\/.*?(\/.*)$/
+          al = re.match(a.to_s)[1].to_s
+          bl = re.match(b.to_s)[1].to_s
+
+          return al <=> bl
+        end
+
+        return a <=> b
+      else
+        return -1
+      end
+    elsif b.uri?
+      return 1
+    else
+      return a <=> b
+    end
+  end
+
+  def self.cmp_label repo, a, b, labels: nil, supplant: true, reverse: false
+    labels ||= {}
+
+    # try supplied label or fall back
+    pair = [a, b].map do |x|
+      if labels[x]
+        labels[x][1]
+      elsif supplant and y = label_for(repo, x)
+        labels[x] = y
+        y[1]
+      else
+        x
+      end
+    end
+
+    pair.reverse! if reverse
+    # warn "#{pair[0]} <=> #{pair[1]}"
+    pair[0].to_s <=> pair[1].to_s
+  end
+    
+  # Obtain the "best" dereferenceable URI for the subject.
+  # Optionally returns all candidates.
+  # 
+  # @param repo     [RDF::Queryable]
+  # @param subject  [RDF::Resource]
+  # @param unique   [true, false] flag for unique return value
+  # @param rdf      [true, false] flag to specify RDF::URI vs URI 
+  # @param slugs    [true, false] flag to include slugs
+  # @param fragment [true, false] flag to include fragment URIs
+  #
+  # @return [RDF::URI, URI, Array]
+  #
+  def self.canonical_uri repo, subject, base: nil,
+      unique: true, rdf: true, slugs: false, fragment: false
+    subject = coerce_resource subject, base
+    out = []
+
+    # try to find it first
+    [RDF::SAK::CI.canonical, RDF::OWL.sameAs].each do |p|
+      o = repo.query([subject, p, nil]).objects
+      out += o.sort { |a, b| cmp_resource(a, b) }
+    end
+
+    # try to generate in lieu
+    if subject.uri? and (out.empty? or slugs)
+
+      out += objects_for(repo, subject,
+        [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug],
+        only: :literal).map do |o|
+        base + o.value
+      end if slugs
+
+      uri = URI(uri_pp(subject.to_s))
+      if base and uri.respond_to? :uuid
+        b = base.clone
+        b.query = b.fragment = nil
+        b.path = '/' + uri.uuid
+        out << RDF::URI.new(b.to_s)
+      else
+        out << subject
+      end
+    end
+
+    # remove all URIs with fragments unless specified
+    unless fragment
+      tmp = out.reject(&:fragment)
+      out = tmp unless tmp.empty?
+    end
+
+    # coerce to URI objects if specified
+    out.map! { |u| URI(uri_pp u.to_s) } unless rdf
+
+    unique ? out.first : out.uniq
+  end
+
+  # Determine whether the URI represents a published document.
+  # 
+  # @param repo
+  # @param uri
+  # 
+  # @return [true, false]
+  def self.published? repo, uri, circulated: false, base: nil
+    uri = coerce_resource uri, base
+    candidates = objects_for(
+      repo, uri, RDF::Vocab::BIBO.status, only: :resource).to_set
+
+    test = Set[RDF::Vocab::BIBO['status/published']]
+    test << RDF::SAK::CI.circulated if circulated
+
+    # warn candidates, test, candidates & test
+
+    !(candidates & test).empty?
+  end
+
+  # Obtain a key-value structure for the given subject, optionally
+  # constraining the result by node type (:resource, :uri/:iri,
+  # :blank/:bnode, :literal)
+  #
+  # @param repo 
+  # @param subject of the inquiry
+  # @param rev map in reverse
+  # @param only one or more node types
+  # @param uuids coerce resources to if possible
+  #
+  # @return [Hash]
+  #
+  def self.struct_for repo, subject, base: nil,
+      rev: false, only: [], uuids: false, canon: false
+    only = coerce_node_spec only
+
+    ucache = {}
+
+    # coerce the subject
+    subject = (ucache[subject] = canonical_uuid(repo, subject, base: base)) ||
+      subject if uuids 
+
+    rsrc = {}
+    pattern = rev ? [nil, nil, subject] : [subject, nil, nil]
+    repo.query(pattern) do |stmt|
+      # this will skip over any term not matching the type
+      node = rev ? stmt.subject : stmt.object
+      next unless node_matches? node, only
+
+      # coerce the node to uuid if told to
+      if node.resource?
+        if uuids
+          uu = (ucache[node] = canonical_uuid(repo, node)) unless
+            ucache.key? node
+          node = uu || (canon ? canonical_uri(repo, node) : node)
+        elsif canon
+          node = canonical_uri(repo, node)
+        end
+      end
+
+      p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
+      o = rsrc[p] ||= []
+      o.push node if node # may be nil
+    end
+
+    # XXX in here we can do fun stuff like filter/sort by language/datatype
+    rsrc.values.each { |v| v.sort!.uniq! }
+
+    rsrc
+  end
+
+  # Obtain the most appropriate label(s) for the subject's type(s).
+  # Returns one or more (depending on the `unique` flag)
+  # predicate-object pairs in order of preference.
+  #
+  # @param repo    [RDF::Queryable]
+  # @param subject [RDF::Resource]
+  # @param unique [true, false] only return the first pair
+  # @param type [RDF::Term, Array] supply asserted types if already retrieved
+  # @param lang [nil] not currently implemented (will be conneg)
+  # @param desc [false, true] retrieve description instead of label
+  # @param alt  [false, true] retrieve alternate instead of main
+  #
+  # @return [Array] either a predicate-object pair or an array of pairs.
+  #
+  def self.label_for repo, subject, candidates: nil, unique: true, type: nil,
+      lang: nil, desc: false, alt: false, base: nil
+    raise ArgumentError, 'no repo!' unless repo.is_a? RDF::Queryable
+    return unless subject.is_a? RDF::Value and subject.resource?
+    
+    asserted = asserted_types repo, subject, type
+
+    # get all the inferred types by layer; add default class if needed
+    strata = type_strata asserted
+    strata.push [RDF::RDFS.Resource] if
+      strata.empty? or not strata[-1].include?(RDF::RDFS.Resource)
+
+    # get the key-value pairs for the subject
+    candidates ||= struct_for repo, subject, only: :literal
+
+    seen  = {}
+    accum = []
+    strata.each do |lst|
+      lst.each do |cls|
+        next unless STRINGS[cls] and
+          preds = STRINGS[cls][desc ? :desc : :label][alt ? 1 : 0]
+        # warn cls
+        preds.each do |p|
+          # warn p.inspect
+          next unless vals = candidates[p]
+          vals.each do |v|
+            pair = [p, v]
+            accum.push(pair) unless seen[pair]
+            seen[pair] = true
+          end
+        end
+      end
+    end
+
+    # try that for now
+    unique ? accum[0] : accum.uniq
+    
+    # what we want to do is match the predicates from the subject to
+    # the predicates in the label designation
+    
+    # get label predicate stack(s) for RDF type(s)
+    
+    # get all predicates in order (use alt stack if doubly specified)
+    
+    # filter out desired language(s)
+    
+    # XXX note we will probably want to return the predicate as well
+  end
+
+  # Assuming the subject is a thing that has authors, return the
+  # list of authors. Try bibo:authorList first for an explicit
+  # ordering, then continue to the various other predicates.
+  #
+  # @param repo    [RDF::Queryable]
+  # @param subject [RDF::Resource]
+  # @param unique  [false, true] only return the first author
+  # @param contrib [false, true] return contributors instead of authors
+  #
+  # @return [RDF::Value, Array]
+  #
+  def authors_for repo, subject, unique: false, contrib: false, base: nil
+    authors = []
+
+    # try the author list
+    lp = [RDF::Vocab::BIBO[contrib ? :contributorList : :authorList]]
+    lp += lp.first.entail(:equivalentProperty) # XXX cache this
+    lp.each do |pred|
+      o = repo.first_object([subject, pred, nil])
+      next unless o
+      # note this use of RDF::List is not particularly well-documented
+      authors += RDF::List.from(repo, o).to_a
+    end
+
+    # now try various permutations of the author/contributor predicate
+    unsorted = []
+    preds = contrib ? CONTRIB : AUTHOR
+    preds.each do |pred|
+      unsorted += repo.query([subject, pred, nil]).objects
+    end
+
+    # prefetch the author names
+    labels = authors.map { |a| [a, label_for(repo, a)] }.to_h
+
+    authors += unsorted.uniq.sort { |a, b| labels[a] <=> labels[b] }
+
+    unique ? authors.first : authors.uniq
+  end
+
+  # Find the terminal replacements for the given subject, if any exist.
+  #
+  # @param repo
+  # @param subject
+  # @param published indicate the context is published
+  #
+  # @return [Set]
+  #
+  def self.replacements_for repo, subject, published: true, base: nil
+    subject = coerce_resource subject, base
+
+    # `seen` is a hash mapping resources to publication status and
+    # subsequent replacements. it collects all the resources in the
+    # replacement chain in :fwd (replaces) and :rev (replaced-by)
+    # members, along with a boolean :pub. `seen` also performs a
+    # duty as cycle-breaking sentinel.
+
+    seen  = {}
+    queue = [subject]
+    while (test = queue.shift)
+      # fwd is "replaces", rev is "replaced by"
+      entry = seen[test] ||= {
+        pub: published?(repo, test), fwd: Set.new, rev: Set.new }
+      queue += (
+        subjects_for(repo, RDF::Vocab::DC.replaces, subject) +
+          objects_for(repo, subject, RDF::Vocab::DC.isReplacedBy,
+          only: :resource)
+      ).uniq.map do |r| # r = replacement
+        next if seen.include? r
+        seen[r] ||= { pub: published?(repo, r), fwd: Set.new, rev: Set.new }
+        seen[r][:fwd] << test
+        entry[:rev] << r
+        r
+      end.compact.uniq
+    end
+
+    # if we're calling from a published context, we return the
+    # (topologically) last published resource(s), even if they are
+    # replaced ultimately by unpublished resources.
+      
+    out = seen.map { |k, v| v[:rev].empty? ? k : nil }.compact - [subject]
+
+    # now we modify `out` based on the publication status of the context
+    if published
+      pubout = out.select { |o| seen[o][:pub] }
+      # if there is anything left after this, return it
+      return pubout unless pubout.empty?
+      # now we want to find the penultimate elements of `seen` that
+      # are farthest along the replacement chain but whose status is
+      # published
+
+      # start with `out`, take the union of their :fwd members, then
+      # take the subset of those which are published. if the result
+      # is empty, repeat. (this is walking backwards through the
+      # graph we just walked forwards through to construct `seen`)
+      loop do
+        # XXX THIS NEEDS A TEST CASE
+        out = seen.values_at(*out).map { |v| v[:fwd] }.reduce(:+).to_a
+        break if out.empty?
+        pubout = out.select { |o| seen[o][:pub] }
+        return pubout unless pubout.empty?
+      end
+    end
+
+    out
+  end
+
+  # Obtain dates for the subject as instances of Date(Time). This is
+  # just shorthand for a common application of `objects_for`.
+  #
+  # @param repo
+  # @param subject
+  # @param predicate
+  # @param datatype
+  #
+  # @return [Array] of dates
+  #
+  def self.dates_for repo, subject, predicate: RDF::Vocab::DC.date,
+      datatype: [RDF::XSD.date, RDF::XSD.dateTime]
+    objects_for(
+      repo, subject, predicate, only: :literal, datatype: datatype) do |o|
+      o.object
+    end.sort.uniq
+  end
+
+  # Obtain any specified MIME types for the subject. Just shorthand
+  # for a common application of `objects_for`.
+  #
+  # @param repo
+  # @param subject
+  # @param predicate
+  # @param datatype
+  #
+  # @return [Array] of internet media types
+  #
+  def formats_for repo, subject, predicate: RDF::Vocab::DC.format,
+      datatype: [RDF::XSD.token]
+    objects_for(
+      repo, subject, predicate, only: :literal, datatype: datatype) do |o|
+      t = o.object
+      t =~ /\// ? RDF::SAK::MimeMagic.new(t.to_s.downcase) : nil
+    end.compact.sort.uniq
+  end
+
+  # 
+  #
+  
+
+  # XXX OTHER STUFF
 
   # isolate an element into a new document
   def subtree doc, xpath = '/*', reindent: true, prefixes: {}
@@ -279,7 +1321,6 @@ module RDF::SAK::Util
 
     node
   end
-
 
   XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
   XPATHNS = { html: XHTMLNS }.freeze
@@ -386,7 +1427,7 @@ module RDF::SAK::Util
   end
 
   # Coerce a stringlike argument into a UUID URN. Will
-  def coerce_uuid_urn arg
+  def coerce_uuid_urn arg, base = nil
     # if this is an ncname then change it
     if ([URI, RDF::URI] & arg.class.ancestors).empty? &&
         arg.respond_to?(:to_s)
@@ -405,7 +1446,24 @@ module RDF::SAK::Util
     raise ArgumentError, 'not a UUID' unless
       arg.to_s =~ /^urn:uuid:[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
 
-    arg = coerce_resource arg
+    arg = coerce_resource arg, base
+  end
+
+  # Get the last non-empty path segment of the URI
+  #
+  # @param uri
+  #
+  # @return [String]
+  def terminal_slug uri, base: nil
+    uri = coerce_resource uri, base
+    if p = uri.path
+      if p = /^\/+(.*?)\/*$/.match(p)
+        if p = p[1].split(/\/+/)[-1]
+          return p.split(/;+/)[0] || ''
+        end
+      end        
+    end
+    ''
   end
 
   # Resolve a string or array or attribute node containing one or more
