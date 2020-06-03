@@ -31,7 +31,7 @@ unless RDF::List.respond_to? :from
       seen << subject
       first = repo.query([subject, RDF.first, nil]).objects.first or return out
       out << first
-      rest  = repo.query([subject, RDF.rest,  nil]).objects.filter do |x|
+      rest  = repo.query([subject, RDF.rest,  nil]).objects.select do |x|
         !x.literal?
       end.first or return out
 
@@ -96,7 +96,7 @@ module RDF::SAK::Util
     uri:     -> t { URI.parse t.to_s },
     rdf:     -> t {
       t = t.to_s
-      t.start_with?('_:') ? RDF::Node.new(t.drop_prefix '_:') : RDF::URI(t) },
+      t.start_with?('_:') ? RDF::Node.new(t.delete_prefix '_:') : RDF::URI(t) },
   }
 
   UUID_RE = /^(?:urn:uuid:)?([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})$/i
@@ -608,7 +608,8 @@ module RDF::SAK::Util
   #
   def objects_for repo, subject, predicate,
       entail: true, only: [], datatype: nil
-    raise 'Subject must be a resource' unless subject.is_a? RDF::Resource
+    raise "Subject must be a resource, not #{subject.inspect}" unless
+      subject.is_a? RDF::Resource
     predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
     raise "Predicate must be a term, not #{predicate.first.class}" unless
       predicate.all? { |p| p.is_a? RDF::URI }
@@ -682,23 +683,26 @@ module RDF::SAK::Util
       scache: {}, ucache: {}, base: nil
     # make sure this is actually a uri
     orig = uri = coerce_resource uri, base
-    tu = URI(uri_pp(uri).to_s).normalize
+    unless uri.is_a? RDF::Node
+      tu = URI(uri_pp(uri).to_s).normalize
 
-    if tu.path && !tu.fragment && UUID_RE.match?(uu = tu.path.delete_prefix(?/))
-      tu = URI('urn:uuid:' + uu.downcase)
-    end
+      if tu.path && !tu.fragment &&
+          UUID_RE.match?(uu = tu.path.delete_prefix(?/))
+        tu = URI('urn:uuid:' + uu.downcase)
+      end
 
-    # unconditionally overwrite uri
-    uri = RDF::URI(tu.to_s)
+      # unconditionally overwrite uri
+      uri = RDF::URI(tu.to_s)
 
-    # now check if it's a uuid
-    if tu.respond_to? :uuid
-      # warn "lol uuid #{orig}"
-      # if it's a uuid, check that we have it as a subject
-      # if we have it as a subject, return it
-      return uri if scache[uri] ||= repo.has_subject?(uri)
-      # note i don't want to screw around right now dealing with the
-      # case that a UUID might not itself be canonical
+      # now check if it's a uuid
+      if tu.respond_to? :uuid
+        # warn "lol uuid #{orig}"
+        # if it's a uuid, check that we have it as a subject
+        # if we have it as a subject, return it
+        return uri if scache[uri] ||= repo.has_subject?(uri)
+        # note i don't want to screw around right now dealing with the
+        # case that a UUID might not itself be canonical
+      end
     end
 
     # spit up the cache if present
@@ -755,7 +759,8 @@ module RDF::SAK::Util
     end
 
     # now collect by slug
-    if (slug = terminal_slug uri, base: base) != ''
+    slug = terminal_slug uri, base: base
+    if slug and !slug.empty?
       exact = uri == coerce_resource(slug, base) # slug represents exact match
       sl = [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug]
       [RDF::XSD.string, RDF::XSD.token].each do |t|
@@ -1389,7 +1394,14 @@ module RDF::SAK::Util
     pp = ps.pop.split ';', -1
     bp = (ps + [pp.shift]).join '/'
     uri = uri.dup
-    uri.path = bp
+
+    begin
+      uri.path = bp
+    rescue URI::InvalidURIError => e
+      m = e.message
+      raise URI::InvalidURIError, "#{m} (#{uri.to_s}, #{bp}"
+    end
+
     return pp if only
     [uri] + pp
   end
@@ -1456,10 +1468,12 @@ module RDF::SAK::Util
   # @return [String]
   def terminal_slug uri, base: nil
     uri = coerce_resource uri, base
+    return unless uri.respond_to? :path
     if p = uri.path
       if p = /^\/+(.*?)\/*$/.match(p)
-        if p = p[1].split(/\/+/)[-1]
-          return p.split(/;+/)[0] || ''
+        if p = p[1].split(/\/+/).last
+          # we need to escape colons or it will think it's absolute
+          return uri_pp(p.split(/;+/).first || '', ':')
         end
       end        
     end

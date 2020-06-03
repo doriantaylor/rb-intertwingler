@@ -32,20 +32,29 @@ class RDF::SAK::Document
 
   attr_reader :repo, :subject, :doc, :base, :prefixes
 
-  def initialize repo, subject, doc,
-      base: nil, prefixes: {}, transform: nil, scache: {}, ucache: {}
-    doc = Nokogiri.XML doc unless doc.is_a? Nokogiri::XML::Document
+  # Initialize a document context. 
+  def initialize repo, subject, doc, base: nil, alias: nil,
+      prefixes: {}, transform: nil, scache: {}, ucache: {}
+    # coerce the document
+    doc = case doc
+          when Nokogiri::XML::Document then doc
+          when Nokogiri::XML::Node then Nokogiri::XML::Document.new << doc.dup
+          when String, IO, File, Pathname then Nokogiri.XML doc
+          else
+            raise ArgumentError, "Not sure what to do with #{doc.class}"
+          end
+
     base ||= RDF::SAK::Util.canonical_uri repo, subject, rdf: false
 
-    @repo     = repo
-    @subject  = subject
-    @doc      = doc
-    @base     = URI(base.to_s)
-    @prefixes = prefixes
-    @scache   = scache
-    @ucache   = ucache
+    @repo      = repo
+    @subject   = subject
+    @doc       = doc
+    @base      = URI(base.to_s)
+    @prefixes  = prefixes
+    @transform = transform
+    @scache    = scache
+    @ucache    = ucache
   end
-
 
   def canonical_uuid uri, unique: true, published: false
     RDF::SAK::Util.canonical_uuid @repo, uri, base: @base,
@@ -113,7 +122,7 @@ class RDF::SAK::Document
         '(/html:html/html:head/html:base[@href])[1]/@href', XPATHNS
       ).to_s.strip
       base = b if URI(b).absolute?
-    elsif b = doc.at_xpath('ancestor-or-self::*[@xml:base][1]/@xml:base')
+    elsif b = doc.root.at_xpath('ancestor-or-self::*[@xml:base][1]/@xml:base')
       b = b.to_s.strip
       base = b if URI(b).absolute?
     end
@@ -124,13 +133,15 @@ class RDF::SAK::Document
   def rewrite_links node = @doc, uuids: {}, uris: {}, &block
     base  = base_for node
     count = 0
-    cache = {}
     node.xpath(LINK_XPATH, XPATHNS).each do |elem|
       LINK_ATTR.each do |attr|
         attr = attr.to_s
         next unless elem.has_attribute? attr
 
         abs = base.merge uri_pp(elem[attr].strip)
+
+        # bail out if this isn't http(s)
+        next if abs.scheme and !%w[http https].include? abs.scheme.downcase
 
         # fix e.g. http->https
         if abs.host == @base.host and abs.scheme != @base.scheme
@@ -146,11 +157,13 @@ class RDF::SAK::Document
 
         abs = RDF::URI(abs.to_s)
 
+        # warn abs
+
         # round-trip to uuid and back if we can
         if uuid = uuids[abs] ||= canonical_uuid(abs)
-          abs = cache[abs] ||= canonical_uri(uuid)
+          abs = uris[abs] ||= canonical_uri(uuid)
         else
-          abs = cache[abs] ||= canonical_uri(abs)
+          abs = uris[abs] ||= canonical_uri(abs)
         end
 
         # reinstate the path parameters
@@ -344,6 +357,8 @@ class RDF::SAK::Document
   def generate_twitter_meta
     # get author
     author = authors_for(subject, unique: true) or return
+
+    return unless author.is_a? RDF::Resource
 
     # get author's twitter account
     twitter = objects_for(author, RDF::Vocab::FOAF.account,
