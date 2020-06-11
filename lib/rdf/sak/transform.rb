@@ -11,8 +11,11 @@ class RDF::SAK::Transform
     # noop
     return subject if subject.is_a? self
 
-    return unless repo.has_statement?(
-      RDF::Statement(subject, RDF.type, RDF::SAK::TFO.Transform))
+    asserted = RDF::SAK::Util.objects_for repo, subject,
+      RDF.type, only: :resource
+
+    return if
+      (asserted & RDF::SAK::Util.all_related(RDF::SAK::TFO.Transform)).empty?
 
     # note we won't screw around with cardinality or whatever here
     params = {}

@@ -606,7 +606,7 @@ module RDF::SAK::Util
   #
   # @return [RDF::Term]
   #
-  def objects_for repo, subject, predicate,
+  def self.objects_for repo, subject, predicate,
       entail: true, only: [], datatype: nil
     raise "Subject must be a resource, not #{subject.inspect}" unless
       subject.is_a? RDF::Resource
@@ -746,7 +746,8 @@ module RDF::SAK::Util
            end
 
     # collect the candidates by URI
-    sa = predicate_set [RDF::SAK::CI.canonical, RDF::OWL.sameAs]
+    sa = predicate_set [RDF::SAK::CI.canonical,
+      RDF::SAK::CI.alias, RDF::OWL.sameAs]
     candidates = nil
     uris.each do |u|
       candidates = subjects_for(repo, sa, u, entail: false) do |s, f|
@@ -1000,14 +1001,12 @@ module RDF::SAK::Util
   # @return [Hash]
   #
   def self.struct_for repo, subject, base: nil,
-      rev: false, only: [], uuids: false, canon: false
+      rev: false, only: [], uuids: false, canon: false, ucache: {}, scache: {}
     only = coerce_node_spec only
 
-    ucache = {}
-
     # coerce the subject
-    subject = (ucache[subject] = canonical_uuid(repo, subject, base: base)) ||
-      subject if uuids 
+    subject = canonical_uuid(repo, subject,
+      base: base, scache: scache, ucache: ucache) || subject if uuids 
 
     rsrc = {}
     pattern = rev ? [nil, nil, subject] : [subject, nil, nil]
@@ -1019,7 +1018,7 @@ module RDF::SAK::Util
       # coerce the node to uuid if told to
       if node.resource?
         if uuids
-          uu = (ucache[node] = canonical_uuid(repo, node)) unless
+          uu = canonical_uuid(repo, node, scache: scache, ucache: ucache) unless
             ucache.key? node
           node = uu || (canon ? canonical_uri(repo, node) : node)
         elsif canon
@@ -1386,7 +1385,14 @@ module RDF::SAK::Util
   # @return [Array] (See description)
   #
   def split_pp uri, only: false
-    u = (uri.is_a?(URI) ? uri : URI(uri_pp uri.to_s)).normalize
+    begin
+      u = (uri.is_a?(URI) ? uri : URI(uri_pp uri.to_s)).normalize
+
+    rescue URI::InvalidURIError => e
+      # these stock error messages don't even tell you what the uri is
+      raise URI::InvalidURIError, "#{e.message} (#{uri.to_s})"
+    end
+
     return only ? [] : [uri] unless u.path
     uri = u
 
@@ -1398,12 +1404,24 @@ module RDF::SAK::Util
     begin
       uri.path = bp
     rescue URI::InvalidURIError => e
+      # these stock error messages don't even tell you what the uri is
       m = e.message
-      raise URI::InvalidURIError, "#{m} (#{uri.to_s}, #{bp}"
+      raise URI::InvalidURIError, "#{m} (#{uri.to_s}, #{bp})"
     end
 
     return pp if only
     [uri] + pp
+  end
+
+  def split_pp2 path, only: false
+    # ugh apparently we need a special case for ''.split
+    return only ? [] : [''] if !path or path.empty?
+
+    ps = path.to_s.split ?/, -1    # path segments
+    pp = ps.pop.to_s.split ?;, -1  # path parameters
+    bp = (ps + [pp.shift]).join ?/ # base path
+
+    only ? pp : [bp] + pp
   end
 
   # Coerce a stringlike argument into a URI. Raises an exception if

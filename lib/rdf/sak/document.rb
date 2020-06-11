@@ -33,7 +33,7 @@ class RDF::SAK::Document
   attr_reader :repo, :subject, :doc, :base, :prefixes
 
   # Initialize a document context. 
-  def initialize repo, subject, doc, base: nil, alias: nil,
+  def initialize repo, doc, subject: nil, base: nil, resolve: nil,
       prefixes: {}, transform: nil, scache: {}, ucache: {}
     # coerce the document
     doc = case doc
@@ -44,12 +44,14 @@ class RDF::SAK::Document
             raise ArgumentError, "Not sure what to do with #{doc.class}"
           end
 
-    base ||= RDF::SAK::Util.canonical_uri repo, subject, rdf: false
+    # we only try this if there is a subject defined, obvs
+    base ||= RDF::SAK::Util.canonical_uri repo, subject, rdf: false if subject
 
     @repo      = repo
     @subject   = subject
     @doc       = doc
-    @base      = URI(base.to_s)
+    @base      = URI(base.to_s) if base # note this is a vanilla URI
+    @resolve   = RDF::URI(resolve.to_s) if resolve # note this is an RDF::URI
     @prefixes  = prefixes
     @transform = transform
     @scache    = scache
@@ -58,7 +60,7 @@ class RDF::SAK::Document
 
   def canonical_uuid uri, unique: true, published: false
     RDF::SAK::Util.canonical_uuid @repo, uri, base: @base,
-      unique: unique, published: published
+      unique: unique, published: published, scache: @scache, ucache: @ucache
   end
 
   def canonical_uri subject,
@@ -83,7 +85,8 @@ class RDF::SAK::Document
 
   def struct_for subject, rev: false, only: [], uuids: false, canon: false
     RDF::SAK::Util.struct_for @repo, subject,
-      rev: rev, only: only, uuids: uuids, canon: canon
+      rev: rev, only: only, uuids: uuids, canon: canon,
+      ucache: @ucache, scache: @scache
   end
 
   def label_for subject, candidates: nil, unique: true, type: nil,
@@ -152,15 +155,26 @@ class RDF::SAK::Document
           abs          = tmp
         end
 
-        # harvest query string
+        # harvest path parameters
         pp = split_pp abs, only: true
 
+        # coerce to rdf
         abs = RDF::URI(abs.to_s)
 
-        # warn abs
+        # make an aliased copy we use to look up the uuid
+        aliased = if @resolve
+                    tmp = abs.dup
+                    tmp.scheme    = @resolve.scheme
+                    tmp.authority = @resolve.authority if @resolve.authority
+                    tmp
+                  else
+                    abs
+                  end
+
+        # warn "aliased #{abs} to #{aliased}" if @resolve
 
         # round-trip to uuid and back if we can
-        if uuid = uuids[abs] ||= canonical_uuid(abs)
+        if uuid = uuids[abs] ||= canonical_uuid(aliased)
           abs = uris[abs] ||= canonical_uri(uuid)
         else
           abs = uris[abs] ||= canonical_uri(abs)
@@ -416,6 +430,8 @@ class RDF::SAK::Document
     title     = label_for @subject, candidates: struct
     desc      = label_for @subject, candidates: struct, desc: true
 
+    warn struct
+
     # rewrite content
     title = title[1] if title
     desc  = desc[1]  if desc
@@ -437,7 +453,7 @@ class RDF::SAK::Document
           # normalize URIs
           if o.to_s.start_with? 'urn:uuid:'
             ufwd[o] ||= canonical_uri o
-          elsif cu = canonical_uuid(o)
+          elsif cu = urev[o] || canonical_uuid(o)
             o = urev[o] ||= cu
           end
 
