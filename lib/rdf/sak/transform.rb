@@ -1,6 +1,6 @@
 require 'rdf'
-require 'rdf/sak/util'
 require 'rdf/sak/tfo'
+require 'rdf/sak/util'
 require 'set'
 
 class RDF::SAK::Transform

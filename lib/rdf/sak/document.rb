@@ -119,22 +119,43 @@ class RDF::SAK::Document
   def base_for node = nil
     node ||= @doc
     doc  = node.document
-    base = @base.to_s
+    base = URI(@base.to_s)
     if doc.root.name.to_sym == :html
       b = doc.at_xpath(
         '(/html:html/html:head/html:base[@href])[1]/@href', XPATHNS
       ).to_s.strip
-      base = b if URI(b).absolute?
+      b = URI(b)
+      
+      base = b if b.absolute?
     elsif b = doc.root.at_xpath('ancestor-or-self::*[@xml:base][1]/@xml:base')
-      b = b.to_s.strip
-      base = b if URI(b).absolute?
+      b = URI(b.to_s.strip)
+      base = b if b.absolute?
     end
 
-    URI(base)
+    resolve = URI(@resolve.to_s) if @resolve
+
+    warn({ orig_base: @base, resolve: resolve, base: base}.inspect)
+
+    warn %i[scheme host port].map { |s| [s, base.send(s) == resolve.send(s)] }.to_h.inspect
+
+    # rewrite if aliased
+    if resolve and
+        %i[scheme host port].all? { |s| base.send(s) == resolve.send(s) }
+      tmp        = base.dup
+      tmp.scheme = @base.scheme
+      tmp.host   = @base.host
+      tmp.port   = @base.port
+      base       = tmp.normalize
+    end
+
+    base
   end
 
   def rewrite_links node = @doc, uuids: {}, uris: {}, &block
     base  = base_for node
+    if be = node.at_xpath('(/html:html/html:head/html:base[@href])[1]', XPATHNS)
+      be[:href] = base.to_s if base.to_s != be[:href]
+    end
     count = 0
     node.xpath(LINK_XPATH, XPATHNS).each do |elem|
       LINK_ATTR.each do |attr|

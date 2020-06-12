@@ -7,6 +7,7 @@ require 'set'
 require 'uuid-ncname'
 
 require 'rdf'
+require 'rdf/vocab'
 require 'rdf/reasoner'
 require 'rdf/vocab/skos'
 require 'rdf/vocab/foaf'
