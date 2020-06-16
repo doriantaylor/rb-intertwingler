@@ -284,5 +284,8 @@ module RDF::SAK
       label: "xpath".freeze,
       "owl:onDatatype": "xsd:string".freeze,
       type: "rdfs:Datatype".freeze
+
+    RDF::Vocabulary.register :tfo, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

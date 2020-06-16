@@ -472,5 +472,8 @@ This property is normally used in a functional way, although PAV does not formal
       range: "xsd:string".freeze,
       "rdfs:seeAlso": "pav:previousVersion".freeze,
       type: "owl:DatatypeProperty".freeze
+
+    RDF::Vocabulary.register :pav, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

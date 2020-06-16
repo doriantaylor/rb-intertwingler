@@ -241,5 +241,8 @@ module RDF::SAK
       label: "supports".freeze,
       range: "ibis:Position".freeze,
       type: "owl:ObjectProperty".freeze
+
+    RDF::Vocabulary.register :ibis, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

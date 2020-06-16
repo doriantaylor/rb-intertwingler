@@ -273,5 +273,8 @@ module RDF::SAK
       label: "structure".freeze,
       range: "qb:DataStructureDefinition".freeze,
       type: ["owl:ObjectProperty".freeze, "rdf:Property".freeze]
+
+    RDF::Vocabulary.register :qb, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

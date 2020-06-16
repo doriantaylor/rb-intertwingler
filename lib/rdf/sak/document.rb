@@ -132,14 +132,13 @@ class RDF::SAK::Document
       base = b if b.absolute?
     end
 
-    resolve = URI(@resolve.to_s) if @resolve
 
-    warn({ orig_base: @base, resolve: resolve, base: base}.inspect)
+    # warn({ orig_base: @base, resolve: resolve, base: base}.inspect)
 
-    warn %i[scheme host port].map { |s| [s, base.send(s) == resolve.send(s)] }.to_h.inspect
+    # warn %i[scheme host port].map { |s| [s, base.send(s) == resolve.send(s)] }.to_h.inspect
 
     # rewrite if aliased
-    if resolve and
+    if @resolve and resolve = URI(@resolve.to_s) and
         %i[scheme host port].all? { |s| base.send(s) == resolve.send(s) }
       tmp        = base.dup
       tmp.scheme = @base.scheme
