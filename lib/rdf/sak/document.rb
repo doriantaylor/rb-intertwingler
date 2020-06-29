@@ -69,6 +69,11 @@ class RDF::SAK::Document
       unique: unique, rdf: rdf, slugs: slugs, fragment: fragment
   end
 
+  def cmp_label a, b, labels: nil, supplant: true, reverse: false
+    RDF::SAK::Util.cmp_label @repo, a, b,
+      labels: labels, supplant: supplant, reverse: reverse
+  end
+
   def asserted_types subject, type = nil
     RDF::SAK::Util.asserted_types @repo, subject, type
   end
@@ -193,11 +198,13 @@ class RDF::SAK::Document
 
         # warn "aliased #{abs} to #{aliased}" if @resolve
 
+
         # round-trip to uuid and back if we can
-        if uuid = uuids[abs] ||= canonical_uuid(aliased)
-          abs = uris[abs] ||= canonical_uri(uuid)
-        else
-          abs = uris[abs] ||= canonical_uri(abs)
+        if uuid = uris[abs] ||= canonical_uuid(aliased)
+          abs = uuids[uuid] ||= canonical_uri(uuid)
+        elsif cu = canonical_uri(abs)
+          # otherwise just find the canonical uri
+          abs = cu
         end
 
         # reinstate the path parameters
@@ -349,42 +356,83 @@ class RDF::SAK::Document
   end
 
   # backlink structure
-  def generate_backlinks published: true, ignore: nil
+  def generate_backlinks published: true, struct: nil,
+      ignore: nil, pattern: nil, terse: false
     uri    = canonical_uri(subject, rdf: false) || URI(uri_pp subject)
-    ignore ||= Set.new
-    raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
-    ignore = ignore.to_set
+    ignore = case ignore
+             when nil then Set.new
+             when Proc then ignore
+             when -> x { x.respond_to? :to_set } then ignore = ignore.to_set
+             else 
+               raise 'ignore must be either a proc or amenable to a set' 
+             end
     nodes  = {}
     labels = {}
     types  = {}
 
-    @repo.query([nil, nil, subject]).each do |stmt|
-      next if ignore.include?(sj = stmt.subject)
-      preds = nodes[sj] ||= Set.new
-      preds << (pr = stmt.predicate)
-      types[sj]  ||= asserted_types sj
-      labels[sj] ||= label_for sj
-      labels[pr] ||= label_for pr
+    if struct
+      struct.each do |p, subjects|
+        subjects.each do |s|
+          case ignore
+          when Proc then next if ignore.call s, p
+          when Set  then next if ignore.include? s
+          end
+          preds = nodes[s] ||= Set.new
+          preds << p
+          types[s]  ||= asserted_types s
+          labels[s] ||= label_for s
+          labels[p] ||= label_for p unless terse
+        end
+      end
+    else
+      @repo.query([nil, nil, subject]).each do |stmt|
+        s = stmt.subject
+        case ignore
+        when Proc then next if ignore.call stmt
+        when Set  then next if ignore.include? s
+        end
+        preds = nodes[s] ||= Set.new
+        preds << (p = stmt.predicate)
+        types[s]  ||= asserted_types s
+        labels[s] ||= label_for s
+        labels[p] ||= label_for p unless terse
+      end
     end
 
-    # prune out 
+    # prune out nonmatching
+    nodes.select! { |k, _| pattern.match? k.to_s } if
+      pattern and pattern.is_a? Regexp
+
+    # prune out unpublished
     nodes.select! { |k, _| published? k } if published
       
     return if nodes.empty?
 
-    li = nodes.sort do |a, b|
-      cmp_label a[0], b[0], labels: labels
-    end.map do |rsrc, preds|
-      cu  = canonical_uri(rsrc, rdf: false) or next
-      lab = labels[rsrc] || [nil, rsrc]
-      lp  = abbreviate(lab[0]) if lab[0]
-      ty  = abbreviate(types[rsrc]) if types[rsrc]
+    if terse
+      nodes.map do |rsrc, preds|
+        cu   = canonical_uri(rsrc, rdf: false) or next
+        lab  = labels[rsrc] || [nil, rsrc]
+        link = { nil => :link, rel: '', href: uri.route_to(cu),
+          rev: abbreviate(preds)  }
+        link[:typeof] = abbreviate(types[rsrc]) if types[rsrc]
+        link[:title]  = lab.last if lab.last
+        link
+      end.compact
+    else
+      li = nodes.sort do |a, b|
+        cmp_label a.first, b.first, labels: labels
+      end.map do |rsrc, preds|
+        cu  = canonical_uri(rsrc, rdf: false) or next
+        lab = labels[rsrc] || [nil, rsrc]
+        lp  = abbreviate(lab.first) if lab.first
+        ty  = abbreviate(types[rsrc]) if types[rsrc]
         
-      { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
-        href: uri.route_to(cu), typeof: ty, rev: abbreviate(preds) }] => :li }
-    end.compact
+        { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a, typeof: ty,
+          href: uri.route_to(cu), rev: abbreviate(preds) }] => :li }
+      end.compact
 
-    { [{ li => :ul }] => :nav }
+      { [{ li => :ul }] => :nav }
+    end
   end
 
   # goofy twitter-specific metadata
@@ -428,7 +476,7 @@ class RDF::SAK::Document
     out
   end
 
-  def transform_xhtml published: true
+  def transform_xhtml published: true, titles: false
     # before we do any more work make sure this is html
     doc  = @doc.dup 1
     body = doc.at_xpath('//html:body[1]', XPATHNS) || doc.root
@@ -440,17 +488,18 @@ class RDF::SAK::Document
 
     # initial stuff
     struct    = struct_for @subject, uuids: true, canon: true
+    rstruct   = struct_for @subject, uuids: true, canon: true, rev: true
     resources = {}
     literals  = {}
-    ufwd      = {} # uuid -> uri
-    urev      = {} # uri  -> uuid
+    ufwd      = {} # uuid => uri
+    urev      = {} # uri  => uuid
     datatypes = Set.new
     types     = Set.new
     authors   = authors_for @subject
     title     = label_for @subject, candidates: struct
     desc      = label_for @subject, candidates: struct, desc: true
 
-    warn struct
+    # warn struct
 
     # rewrite content
     title = title[1] if title
@@ -482,7 +531,7 @@ class RDF::SAK::Document
           resources[o].add p
 
           # add to type
-          types.add o if p == RDF::RDFV.type
+          types.add o if p == RDF::RDFV.type 
         end
       end
     end
@@ -524,7 +573,8 @@ class RDF::SAK::Document
         end
 
         label = labels[urev[ru] || ru]
-        if label and (!elem.key?('title') or elem['title'].strip == '')
+        if titles and label and
+            (!elem.key?('title') or elem['title'].strip == '')
           elem['title'] = label[1].to_s
         end
       end
@@ -664,13 +714,17 @@ class RDF::SAK::Document
     body[:typeof] = abbreviate(types.to_a, vocab: XHV) unless
       types.empty?
 
+    
+
     # prepare only the prefixes we need to resolve the data we need
     rsc = abbreviate(
-      (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
-      noop: false).map do |x|
+      (struct.keys + resources.keys + datatypes.to_a +
+        types.to_a + rstruct.to_a.flatten).uniq, noop: false).map do |x|
       next if x.nil?
       x.split(?:)[0].to_sym
-    end.select { |x| not x.nil? }.to_set
+    end.reject(&:nil?).to_set
+
+    warn rsc
 
     pfx = prefixes.select do |k, _|
       rsc.include? k
@@ -678,10 +732,16 @@ class RDF::SAK::Document
 
     # XXX deal with the qb:Observation separately (just nuke it for now)
     extra = generate_twitter_meta || []
-    if bl = generate_backlinks(published: published,
-      ignore: @repo.query(
-        [nil, RDF::SAK::CI.document, @subject]).subjects.to_set)
-      extra << { [bl] => :object }
+    bl_op = begin
+              bads = @repo.query(
+                [nil, RDF::SAK::CI.document, @subject]).subjects.to_set
+              nope = %w[top contents index].map { |x| RDF::Vocab::XHV[x] }
+              lambda { |s, p| bads.include? s or nope.include? p }
+            end
+    if bl = generate_backlinks(
+      published: published, pattern: /^urn:uuid:/, terse: true,
+      struct: rstruct, ignore: bl_op)
+      extra << bl #{ [bl] => :object }
     end
 
     # and now for the document

@@ -88,8 +88,29 @@ module RDF::SAK::Util
     dehydrate: '//html:a[count(*)=1][html:dfn|html:abbr|html:span]',
     rehydrate: %w[//html:dfn
       //html:abbr[not(parent::html:dfn)] //html:span].join(?|) +
-      '[not(parent::html:a)]'
+      '[not(parent::html:a)]',
+    htmllinks: (%w[*[not(self::html:base)][@href]/@href
+      *[@src]/@src object[@data]/@data *[@srcset]/@srcset
+      form[@action]/@action].map { |e|
+        '//html:%s' % e} + %w[//*[@xlink:href]/@xlink:href]).join(?|).freeze,
+    atomlinks: %w[uri content/@src category/@scheme generator/@uri icon id
+      link/@href logo].map { |e| '//atom:%s' % e }.join(?|).freeze,
+    rsslinks: %w[image/text()[1] docs/text()[1] source/@url enclosure/@url
+               guid/text()[1] comments/text()[1]].map { |e|
+      '//%s' % e }.join(?|).freeze,
+    xlinks: '//*[@xlink:href]/@xlink:href'.freeze,
+    rdflinks: %w[about resource datatype].map { |e|
+      '//*[@rdf:%s]/@rdf:%s' % [e, e] }.join(?|).freeze,
   }
+
+  LINK_MAP = {
+    'text/html'             => :htmllinks,
+    'application/xhtml+xml' => :htmllinks,
+    'application/atom+xml'  => :atomlinks,
+    'application/x-rss+xml' => :rsslinks,
+    'application/rdf+xml'   => :rdflinks,
+    'image/svg+xml'         => :xlinks,
+  }.transform_values { |v| XPATH[v] }.freeze
 
   URI_COERCIONS = {
     nil   => -> t { t.to_s },
@@ -639,7 +660,7 @@ module RDF::SAK::Util
           !(datatype.empty? or datatype.include?(o.datatype))
 
         entry = out[o] ||= [Set.new, Set.new]
-        entry[0] << p
+        entry.first << p
       end
     end
 
@@ -660,7 +681,7 @@ module RDF::SAK::Util
           # no need to check datatype; subject is never a literal
 
           entry = out[s] ||= [Set.new, Set.new]
-          entry[1] << p
+          entry.last << p
         end
       end
     end
@@ -933,10 +954,11 @@ module RDF::SAK::Util
     out = []
 
     # try to find it first
-    [RDF::SAK::CI.canonical, RDF::OWL.sameAs].each do |p|
-      o = repo.query([subject, p, nil]).objects
-      out += o.sort { |a, b| cmp_resource(a, b) }
-    end
+    out = objects_for(repo, subject, [RDF::SAK::CI.canonical, RDF::OWL.sameAs],
+      entail: false, only: :resource).select do |o|
+      # only consider the subjects
+      repo.has_subject? o
+    end.sort { |a, b| cmp_resource a, b }
 
     # try to generate in lieu
     if subject.uri? and (out.empty? or slugs)
@@ -1244,6 +1266,30 @@ module RDF::SAK::Util
     end.compact.sort.uniq
   end
 
+  def self.base_for xmlnode, base
+    base = URI(base.to_s) unless base.is_a? URI
+    out  = base
+
+    if xmlnode.at_xpath('self::html:*|/html', XPATHNS)
+      b = URI(xmlnode.at_xpath(XPATH[:htmlbase], XPATHNS).to_s.strip)
+      
+      out = b if b.absolute?
+    elsif b = xmlnode.root.at_xpath(XPATH[:xmlbase])
+      b = URI(b.to_s.strip)
+      out = b if b.absolute?
+    end
+
+    out
+  end
+
+  # Traverse links based on content type.
+  def self.traverse_links node, type: 'application/xhtml+xml', &block
+    enum_for :traverse_links, node, type: type unless block
+    type  = type.strip.downcase.gsub(/\s*;.*/, '')
+    xpath = LINK_MAP.fetch type, XPATH[:xlinks]
+    node.xpath(xpath, XPATHNS).each { |node| block.call node }
+  end
+
   # 
   #
   
@@ -1328,8 +1374,13 @@ module RDF::SAK::Util
   end
 
   XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
-  XPATHNS = { html: XHTMLNS }.freeze
   XHV     = 'http://www.w3.org/1999/xhtml/vocab#'.freeze
+  XPATHNS = {
+    html:  XHTMLNS,
+    svg:   'http://www.w3.org/2000/svg',
+    atom:  'http://www.w3.org/2005/Atom',
+    xlink: 'http://www.w3.org/1999/xlink',
+  }.freeze
 
   ######## URI STUFF ########
 
@@ -2024,6 +2075,8 @@ module RDF::SAK::Util
     # smush the result 
     c.keys
   end
+
+  
 
   # duplicate instance methods as module methods
   extend self

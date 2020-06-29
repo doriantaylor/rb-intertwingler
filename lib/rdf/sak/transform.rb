@@ -7,7 +7,77 @@ class RDF::SAK::Transform
   # mkay basically this transformation function stuff got too hairy to
   # just do ad-hoc so i guess i'm doing this now
 
-  def self.resolve repo, subject
+  private
+
+  def self.numeric_objects repo, subject, predicate, entail: false
+    RDF::SAK::Util.objects_for(repo, subject, predicate, entail: entail,
+      only: :literal).map(&:object).select { |c| c.is_a? Numeric }.sort
+  end
+
+  def self.gather_params repo, subject
+    params = {}
+    RDF::SAK::Util.objects_for(repo, subject, RDF::SAK::TFO.parameter,
+                               entail: false, only: :resource).each do |ps|
+      param = params[ps] ||= {}
+
+      # slug/identifier
+      if id = RDF::SAK::Util.objects_for(
+        repo, ps, RDF::Vocab::DC.identifier, only: :literal).sort.first
+        param[:id] = id.value.to_sym
+      end
+
+      # rdfs:range
+      range = RDF::SAK::Util.objects_for(
+        repo, ps, RDF::RDFS.range, only: :resource)
+      param[:range] = range.to_set unless range.empty?
+
+      # cardinalities
+      minc = 0
+      maxc = nil
+      if cardi = numeric_objects(repo, ps, RDF::OWL.cardinality).first
+        minc = maxc = cardi
+      end
+      if c1 = numeric_objects(repo, ps, RDF::OWL.minCardinality).first
+        minc = c1
+      end
+      if c2 = numeric_objects(repo, ps, RDF::OWL.maxCardinality).first
+        maxc = c2
+      end
+      param[:minc] = minc
+      param[:maxc] = maxc if maxc
+    end
+
+    params
+  end
+
+  def self.gather_accepts_returns repo, subject, raw: false, returns: false
+    literals = []
+    lists    = []
+    pred     = RDF::SAK::TFO[returns ? 'returns' : 'accepts']
+    repo.query([subject, pred, nil]).objects.each do |o|
+      if o.literal?
+        literals << o
+      else
+        lists << RDF::List.from(repo, o).to_a
+      end
+    end
+    # this is mainly to give us consistent results
+    out = (lists.sort.flatten + literals.sort).uniq
+    # raw as in raw literals
+    raw ? out : out.map(&:value)
+  end
+
+  public
+
+  # Resolve a transform out of the repository. Optionally supply a
+  # block to resolve any implementation associated with the transform.
+  #
+  # @param repo [RDF::Queryable]
+  # @param subject [RDF::Resource]
+  # @yieldparam implementation [RDF::Resource] the implementation
+  #  identifier for the resolver
+  # @yieldreturn [Proc] the implementation
+  def self.resolve repo, subject, &block
     # noop
     return subject if subject.is_a? self
 
@@ -17,16 +87,23 @@ class RDF::SAK::Transform
     return if
       (asserted & RDF::SAK::Util.all_related(RDF::SAK::TFO.Transform)).empty?
 
-    # note we won't screw around with cardinality or whatever here
-    params = {}
-    repo.query([subject, RDF::SAK::TFO.parameter, nil]) do |stmt|
-      p = stmt.object
-      next unless p.uri?
-      params[p] = repo.query(
-        [p, RDF::RDFS.range, nil]).objects.filter(&:uri?).sort.first
-    end
+    params = gather_params repo, subject
 
-    new subject, params
+    plist = if pl = RDF::SAK::Util.objects_for(repo, subject,
+              RDF::SAK::TFO['parameter-list'], only: :resource).sort.first
+              RDF::List.from(repo, pl).to_a
+            else
+              params.keys.sort
+            end
+
+    accepts = gather_accepts_returns repo, subject
+    returns = gather_accepts_returns repo, subject, returns: true
+
+    impl = repo.query(
+      [subject, RDF::SAK::TFO.implementation, nil]).objects.sort.first
+
+    new subject, params: params, param_list: plist,
+      accepts: accepts, returns: returns, implementation: impl
   end
 
   def self.coerce_params params
@@ -38,20 +115,42 @@ class RDF::SAK::Transform
 
   attr_reader :subject
 
-  def initialize subject, params = {}
-    @subject = subject
-    @params  = params
+  # Start with
+  # @param subject [RDF::Resource]
+  # @param params [Hash]
+  # @param param_list [Array]
+  # @param accepts [Array]
+  # @param returns [Array]
+  def initialize subject, params: {}, param_list: [],
+      accepts: %w[*/*], returns: %w[*/*], implementation: nil, &block
+    @subject = subject.dup.freeze
+    @params  = params.freeze
+    @plist   = (param_list.empty? ? params.keys.sort : param_list.dup).freeze
+    @pcache  = params.map { |k, v| [v[:id], k] }.to_h.freeze
+    @accepts = (accepts.respond_to?(:to_a) ? accepts.to_a : [accepts]).freeze
+    @returns = (returns.respond_to?(:to_a) ? returns.to_a : [returns]).freeze
+    @impl    = implementation.freeze
+    @code    = block
   end
 
+  # 
   def keys
-    @params.keys.sort
+    @plist
   end
 
+  # 
   def [](key)
-    @params[key]
+    case key
+    when RDF::Resource then @params[key]
+    when Symbol then @params[@pcache[key]]
+    when String then @params[@pcache[key.to_sym]] || @params[RDF::URI(key)]
+    end
   end
 
+  # 
   def lint params
+    raise ArgumentError, "params must be a hash, not #{params.class}" unless
+      params.is_a? Hash
     params.keys.sort == keys
   end
 
@@ -146,8 +245,16 @@ class RDF::SAK::Transform
         subject or transform
 
       # coerce the transform if it isn't already
-      if transform and !transform.is_a?(RDF::SAK::Transform)
-        transform = RDF::SAK::Transform.resolve(transform) or return
+      if transform
+        transform = RDF::SAK::Transform.resolve(repo, transform) or
+          return unless transform.is_a?(RDF::SAK::Transform)
+      elsif subject.is_a? RDF::URI
+        # locate the transform if given the subject
+        transform = RDF::SAK::Util.objects_for(repo, subject,
+          RDF::SAK::TFO.transform, only: :resource).first or return
+        transform = RDF::SAK::Transform.resolve(repo, transform) or
+          return
+        warn transform
       end
 
       # obtain the subject for the given parameters
@@ -176,7 +283,7 @@ class RDF::SAK::Transform
         # warn "yo #{transform.subject} #{params} #{candidates}"
 
         # this is ruby being cheeky
-        candidates.filter! do |s, ps|
+        candidates.select! do |s, ps|
           transform.keys.each do |p|
             o = Set.new(repo.query([s, p, nil]).objects)
             ps[p] = o unless o.empty?
@@ -233,8 +340,8 @@ class RDF::SAK::Transform
     end
   end
 
+  # note this is an application of a transform, not an "app"
   class Application < Partial
-    # note this is an application of a transform, not an "app"
 
     def self.resolve repo, subject: nil, transform: nil,
         input: nil, output: nil, params: {}, partials: nil
@@ -249,14 +356,14 @@ class RDF::SAK::Transform
 
         # okay partial
         partial = repo.query([subject, RDF::SAK::TFO.completes,
-          nil]).objects.filter(&:uri?).sort.first
+          nil]).objects.select(&:uri?).sort.first
         if partial
           partial = partials.resolve(repo, subject: partial) or
             raise "Could not find partial #{partial}"
           transform = partial.transform
         else
           transform = repo.query([subject, RDF::SAK::TFO.transform,
-            nil]).objects.filter(&:uri?).sort.first or
+            nil]).objects.select(&:uri?).sort.first or
             raise "Could not find a transform for #{subject}"
 
           t = RDF::SAK::Transform.resolve(repo, transform) or
@@ -273,9 +380,9 @@ class RDF::SAK::Transform
 
         # get inputs and outputs
         input  = repo.query([subject, RDF::SAK::TFO.input,
-          nil]).objects.filter(&:uri?).sort.first
+          nil]).objects.select(&:uri?).sort.first
         output = repo.query([subject, RDF::SAK::TFO.output,
-          nil]).objects.filter(&:uri?).sort.first
+          nil]).objects.select(&:uri?).sort.first
 
         raise 'Data must have both input and output' unless input and output
 
@@ -297,7 +404,7 @@ class RDF::SAK::Transform
           # these in the order of least to most cardinality
           pattern [:t, RDF::SAK::TFO.output, output] if output
           pattern [:t, RDF::SAK::TFO.input,  input]
-        end.execute(repo).map { |sol| sol[:t] }.compact.uniq.filter do |s|
+        end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
           partial && repo.has_statement?(
             RDF::Statement(s, RDF::SAK::TFO.completes, partial.subject)) or
             repo.has_statement?(
@@ -308,7 +415,7 @@ class RDF::SAK::Transform
         unless partial
           # XXX uh i dunno if we need to keep candidate params around
           cp = {}
-          candidates.filter! do |s|
+          candidates.select! do |s|
             ap = cp[s] ||= {}
             transform.keys.each do |p|
               o = Set.new(repo.query([s, p, nil]).objects)
@@ -328,7 +435,7 @@ class RDF::SAK::Transform
           # start date, then lexically
           subject = candidates.map do |s|
             st, et = %i[startedAtTime endedAtTime].map do |p|
-              repo.query([s, RDF::Vocab::PROV[p], nil]) do |stmt|
+              repo.query([s, RDF::Vocab::PROV[p], nil]).map do |stmt|
                 dt = stmt.object.object
                 dt if dt.is_a? DateTime
               end.compact.sort.last
@@ -349,7 +456,7 @@ class RDF::SAK::Transform
       # don't forget the output
       output ||= repo.query(
         [subject, RDF::SAK::TFO.output, nil]
-      ).objects.filter(&:uri?).sort.first
+      ).objects.select(&:uri?).sort.first
 
       new subject, transform, input, output, partial || params
 
@@ -436,7 +543,7 @@ class RDF::SAK::Transform
 
     # first we check the cache of partials to see if there is one that
     # matches our parameters. we want to use trasns
-    partial = partials.values.filter do |p|
+    partial = partials.values.select do |p|
       p.transform == transform and p.matches? params
     end.sort.first
 
@@ -453,7 +560,7 @@ class RDF::SAK::Transform
       # these in the order of least to most cardinality
       pattern [:t, RDF::SAK::TFO.output, output]
       pattern [:t, RDF::SAK::TFO.input,  input]
-    end.execute(repo).map { |sol| sol[:t] }.compact.uniq.filter do |s|
+    end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
       repo.has_statement?(
         RDF::Statement(s, RDF::SAK::TFO.transform, transform)) or
         partial && repo.has_statement?(

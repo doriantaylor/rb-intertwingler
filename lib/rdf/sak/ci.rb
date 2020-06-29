@@ -5,9 +5,254 @@ require 'rdf'
 module RDF::SAK
   # @!parse
   #   # Vocabulary for <https://privatealpha.com/ontology/content-inventory/1#>
+  #   #
+  #   # A Content Inventory Vocabulary
+  #   #
+  #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
+  #   # @version 0.13
   #   class CI < RDF::StrictVocabulary
+  #     # An action, as its name implies, is meant to represent something a person or other agent ought to do to a document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Action
+  #
+  #     # In general there is no programmatic way to tell whether a resource is an advertisement, since advertisements on the Web look (to a machine) like any other resource. This is intended to be a decorator class to indicate that the subject is an advertisement. It can therefore be combined with other classes such as foaf:Image, or bibo:AudioVisualDocument.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Advertisement
+  #
+  #     # An audience represents the set of people who are the intended recipients of the resource. This class is at once an agent class as well as a conceptual entity, capable of being mixed into a SKOS concept scheme.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Audience
+  #
+  #     # In order to merge a document, we must define the target to which it ought to be merged. This class is identical to an Action, save for such a property.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Merge
+  #
+  #     # Relates a document to an action to take.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :action
+  #
+  #     # Denotes an alternate URI for the subject resource. It extends owl:sameAs insofar as asserting that the object is somehow less canonical than the subject.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :alias
+  #
+  #     # The document assumes the audience is familiar with this concept, and may not mention it explicitly.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :assumes
+  #
+  #     # A block count is conceptually similar to a word or section count, though it counts the total of elements in the document considered to be text blocks, such as paragraphs, tables, lists and figures. It is suited for document types that have no concept of (semantic) sections, such as HTML. The purpose of this measurement is to provide a sort of ratio to the word count, to glean how well-proportioned the document is.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :blocks
+  #
+  #     # Asserts the canonical URI of the subject resource, i.e., the one you always want to publish in content or redirect Web requests to.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :canonical
+  #
+  #     # This indicates the number of characters in a document, with punctuation and the XPath normalize-space function applied. Note this is characters, not bytes.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :characters
+  #
+  #     # The document explicitly depicts this concept (or other entity).
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :depicts
+  #
+  #     # Document Reference
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :document
+  #
+  #     # This property specifies an embedded resource, such as an image, which is visible on the document's canvas.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :embed
+  #
+  #     # The number of embeds in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :embeds
+  #
+  #     # This property relates an Audience to a SKOS concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :eschews
+  #
+  #     # The document evokes the given concept without mentioning it explicitly.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :evokes
+  #
+  #     # This property specifies form target, which may or may not be visible to the user.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :form
+  #
+  #     # The number of forms in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :forms
+  #
+  #     # This indicates the number of images in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :images
+  #
+  #     # This property specifies a related resource which is not directly visible to the user.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :include
+  #
+  #     # The number of links pointing at the specified resource.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :indegree
+  #
+  #     # This is a boolean value to indicate whether or not a resource ought to be indexed. It does not necessarily ascribe a policy: an absence of an explicit true value does not necessarily imply the resource ought not be indexed, but the presence of a false value probably should.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :indexed
+  #
+  #     # The document defines, describes, or otherwise introduces the audience to this concept.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :introduces
+  #
+  #     # This property specifies an ordinary hyperlink, which is visible on the document's canvas.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :link
+  #
+  #     # The number of lists in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :lists
+  #
+  #     # Maximum
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :max
+  #
+  #     # Mean
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :mean
+  #
+  #     # The median of a population 
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :median
+  #
+  #     # The document explicitly mentions this concept.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :mentions
+  #
+  #     # The smallest observation in the sample.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :min
+  #
+  #     # The number of links emanating from the specified resource.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :outdegree
+  #
+  #     # Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :representation
+  #
+  #     # The number of scripts in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :scripts
+  #
+  #     # Standard Deviation
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :sd
+  #
+  #     # For document types that have a concrete representation of sections, this property may be used to capture their sum.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :sections
+  #
+  #     # The slug is a text token which represents either the full path or terminal path segment of an HTTP(S) URL by which a resource can be located. This property is mainly for the purpose of archiving old or alternative URL paths in a content inventory, for such tasks as generating URL rewriting maps.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :slug
+  #
+  #     # The number of stylesheets in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :stylesheets
+  #
+  #     # The number of tables in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :tables
+  #
+  #     # Specify the URI of the target resource into which this document should be merged.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :target
+  #
+  #     # This property relates an Audience to a SKOS concept that members of the audience are known to comprehend, and thereby do not need any additional explanation.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :understands
+  #
+  #     # This property relates an Audience to a SKOS concept that members of the audience are known to value, that is, to find meaningful in an axiological sense.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :values
+  #
+  #     # Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :variant
+  #
+  #     # The number of videos in the document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :videos
+  #
+  #     # This indicates the number of words in a document, similar to the familiar function in a word processor. The exact method of counting words may vary by document type, language etc., and is thus out of scope from this document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :words
+  #
+  #     # The document is available for select people to see, but not published in the strict literal sense.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :circulated
+  #
+  #     # The document is confidential and not for publication.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :confidential
+  #
+  #     # The document contains no content.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :empty
+  #
+  #     # The document has been started, but is clearly not finished.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :incomplete
+  #
+  #     # The content of this document is factually wrong.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :incorrect
+  #
+  #     # Keep this document to which this is associated; make no changes to it at this time.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :keep
+  #
+  #     # The resource is a landing page from some other medium (e.g. e-mail, television, billboard). This status is a hint to automated systems which would otherwise orphan or retire a landing page with no inbound links.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :landing
+  #
+  #     # The content of this document was correct and relevant at one point, but external circumstances have caused it to lapse in relevance or factual accuracy.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :obsolete
+  #
+  #     # The resource is not explicitly pending or removed from publication, however it has managed to be disconnected from the rest of the site: There is no path to it from a landing page, and it is not a landing page on its own. That is to say that the resource either has no inbound links, or if it does, those links are from other resources that are in the same situation. Documents which are only linked from retired documents are also considered orphans.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :orphan
+  #
+  #     # Proofread this document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :proofread
+  #
+  #     # Remove all references to this document and consign it to the archive.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :retire
+  #
+  #     # The document has been explicitly retired by an editor or curator, but still exists in the archive.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :retired
+  #
+  #     # Revise or restructure this document.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :revise
+  #
+  #     # Rewrite this document from scratch.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :rewrite
+  #
+  #     # Split this document into multiple pieces.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :split
+  #
+  #     # The resource at the subject address is unavailable for reasons other than explicit retirement, e.g. HTTP 404 or 403, or going out of print.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :unavailable
+  #
   #   end
-  class CI < RDF::StrictVocabulary("https://privatealpha.com/ontology/content-inventory/1#")
+  CI = Class.new(RDF::StrictVocabulary("https://privatealpha.com/ontology/content-inventory/1#")) do
 
     # Ontology definition
     ontology :"https://privatealpha.com/ontology/content-inventory/1#",
@@ -15,14 +260,14 @@ module RDF::SAK
       comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.).freeze,
       "dc:created": "2012-01-23T11:52:00-08:00".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze, "2020-04-30T01:05:51Z".freeze],
-      "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation".freeze, "skos:".freeze],
+      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze, "2020-04-30T01:05:51Z".freeze, "2020-06-29T02:24:58Z".freeze],
+      "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation".freeze],
       "dc:subject": "ci:".freeze,
       "dc:title": "A Content Inventory Vocabulary".freeze,
       "foaf:primaryTopic": "ci:".freeze,
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci".freeze,
       isDefinedBy: "ci:".freeze,
-      "owl:imports": ["bibo:".freeze, "dc:".freeze, "foaf:".freeze, "http://purl.org/NET/c4dm/event.owl#".freeze, "http://purl.org/linked-data/cube#".freeze],
+      "owl:imports": ["bibo:".freeze, "dc:".freeze, "foaf:".freeze, "http://purl.org/NET/c4dm/event.owl#".freeze, "http://purl.org/linked-data/cube#".freeze, "owl:".freeze, "skos:".freeze, "xsd:".freeze],
       "owl:versionInfo": "0.13".freeze,
       type: ["bibo:Webpage".freeze, "owl:Ontology".freeze],
       "xhv:license": "http://creativecommons.org/licenses/by/2.5/ca/".freeze
@@ -39,7 +284,7 @@ module RDF::SAK
       comment: %(In general there is no programmatic way to tell whether a resource is an advertisement, since advertisements on the Web look \(to a machine\) like any other resource. This is intended to be a decorator class to indicate that the subject is an advertisement. It can therefore be combined with other classes such as foaf:Image, or bibo:AudioVisualDocument.).freeze,
       isDefinedBy: "ci:".freeze,
       label: "Advertisement".freeze,
-      "skos:example": "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\n  dct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\n  dct:hasPart <https://adtech.biz/assets/punch-the-monkey> .\n\n<https://adtech.biz/assets/punch-the-monkey> a foaf:Image, ci:Advertisement ;\n  dct:title \"Punch The Monkey And WIN!\#@$!%%^!\"@en .\n          ".freeze,
+      "skos:example": "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\n  dct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\n  dct:hasPart <https://adtech.biz/assets/punch-the-monkey> .\n\n<https://adtech.biz/assets/punch-the-monkey> a foaf:Image, ci:Advertisement ;\n  dct:title \"Punch The Monkey And WIN!\#@$!%%^!\"@en .\n            ".freeze,
       subClassOf: "foaf:Document".freeze,
       type: "owl:Class".freeze
     term :Audience,
@@ -97,6 +342,12 @@ module RDF::SAK
       range: "skos:Concept".freeze,
       subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
+    property :"best-variant",
+      comment: %(Denotes the best of a set of concrete variants.).freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "best-variant".freeze,
+      subPropertyOf: "ci:variant".freeze,
+      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
     property :blocks,
       comment: %(A block count is conceptually similar to a word or section count, though it counts the total of elements in the document considered to be text blocks, such as paragraphs, tables, lists and figures. It is suited for document types that have no concept of \(semantic\) sections, such as HTML. The purpose of this measurement is to provide a sort of ratio to the word count, to glean how well-proportioned the document is.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -389,6 +640,13 @@ module RDF::SAK
       "rdfs:seeAlso": "ci:eschews".freeze,
       subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
+    property :variant,
+      comment: %(Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.).freeze,
+      equivalentProperty: "ci:representation".freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "variant".freeze,
+      subPropertyOf: "dc:hasFormat".freeze,
+      type: "owl:ObjectProperty".freeze
     property :videos,
       comment: %(The number of videos in the document.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -484,7 +742,7 @@ module RDF::SAK
       comment: %(Merge this document into some other document, though unspecified at this time as to which.).freeze,
       isDefinedBy: "ci:".freeze,
       label: "tentative-merge".freeze,
-      type: "ci:Merge".freeze
+      type: ["ci:Action".freeze, "ci:Merge".freeze]
     term :unavailable,
       comment: %(The resource at the subject address is unavailable for reasons other than explicit retirement, e.g. HTTP 404 or 403, or going out of print.).freeze,
       isDefinedBy: "ci:".freeze,
