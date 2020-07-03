@@ -2,7 +2,12 @@ require 'rdf'
 require 'rdf/sak/tfo'
 require 'rdf/sak/util'
 require 'set'
+require 'mimemagic'
 
+# This class encapsulates a specification for an individual
+# transformation function, including its parameter spec, accepted and
+# returned types, identity, and implementation.
+#
 class RDF::SAK::Transform
   # mkay basically this transformation function stuff got too hairy to
   # just do ad-hoc so i guess i'm doing this now
@@ -31,20 +36,24 @@ class RDF::SAK::Transform
         repo, ps, RDF::RDFS.range, only: :resource)
       param[:range] = range.to_set unless range.empty?
 
+      # default = RDF::SAK::Util
+      param[:default] = RDF::SAK::Util.objects_for(
+        repo, ps, RDF::SAK::TFO.default)
+
       # cardinalities
-      minc = 0
-      maxc = nil
-      if cardi = numeric_objects(repo, ps, RDF::OWL.cardinality).first
-        minc = maxc = cardi
+      param[:minc] = 0
+      param[:maxc] = Float::INFINITY
+
+      if c0 = numeric_objects(repo, ps, RDF::OWL.cardinality).first
+        param[:minc] = param[:maxc] = c0
+      else
+        if c1 = numeric_objects(repo, ps, RDF::OWL.minCardinality).first
+          param[:minc] = c1
+        end
+        if c2 = numeric_objects(repo, ps, RDF::OWL.maxCardinality).first
+          param[:maxc] = c2
+        end
       end
-      if c1 = numeric_objects(repo, ps, RDF::OWL.minCardinality).first
-        minc = c1
-      end
-      if c2 = numeric_objects(repo, ps, RDF::OWL.maxCardinality).first
-        maxc = c2
-      end
-      param[:minc] = minc
-      param[:maxc] = maxc if maxc
     end
 
     params
@@ -67,6 +76,12 @@ class RDF::SAK::Transform
     raw ? out : out.map(&:value)
   end
 
+  protected
+
+  # This does nothing in the base class.
+  def init_implementation repo, root
+  end
+
   public
 
   # Resolve a transform out of the repository. Optionally supply a
@@ -74,12 +89,15 @@ class RDF::SAK::Transform
   #
   # @param repo [RDF::Queryable]
   # @param subject [RDF::Resource]
+  # @param root
   # @yieldparam implementation [RDF::Resource] the implementation
   #  identifier for the resolver
   # @yieldreturn [Proc] the implementation
-  def self.resolve repo, subject, &block
+  def self.resolve repo, subject, root: nil, &block
     # noop
     return subject if subject.is_a? self
+
+    root ||= Pathname(Dir.getwd)
 
     asserted = RDF::SAK::Util.objects_for repo, subject,
       RDF.type, only: :resource
@@ -99,11 +117,30 @@ class RDF::SAK::Transform
     accepts = gather_accepts_returns repo, subject
     returns = gather_accepts_returns repo, subject, returns: true
 
-    impl = repo.query(
-      [subject, RDF::SAK::TFO.implementation, nil]).objects.sort.first
+    tclass = self
 
-    new subject, params: params, param_list: plist,
-      accepts: accepts, returns: returns, implementation: impl
+    if impl = RDF::SAK::Util.objects_for(repo, subject,
+      RDF::SAK::TFO.implementation, only: :uri).sort.first
+      case impl.to_s
+      when /^file:/i then
+        # XXX redo this later
+        if /xsl/i.match? MimeMagic.by_path(impl.path.to_s).to_s
+          tclass = RDF::SAK::Transform::XSLT
+        end
+      when /^urn:x-ruby:(.*)$/i then
+        cn = $1
+        begin
+          cs = Object.const_get cn
+          tclass = cs
+        rescue NameError, e
+          raise NotImplementedError,
+            "Could not locate implementation for #{impl}!"
+        end
+      end
+    end
+
+    tclass.new subject, params: params, param_list: plist, accepts: accepts,
+      returns: returns, implementation: impl, repo: repo, root: root
   end
 
   def self.coerce_params params
@@ -115,14 +152,18 @@ class RDF::SAK::Transform
 
   attr_reader :subject
 
-  # Start with
+  # Initialize a transform from data.
   # @param subject [RDF::Resource]
   # @param params [Hash]
   # @param param_list [Array]
   # @param accepts [Array]
   # @param returns [Array]
+  # @param implementation [RDF::Resource]
+  # @yield code to execute when called
+  #
   def initialize subject, params: {}, param_list: [],
-      accepts: %w[*/*], returns: %w[*/*], implementation: nil, &block
+      accepts: %w[*/*], returns: %w[*/*], implementation: nil,
+      repo: nil, root: nil
     @subject = subject.dup.freeze
     @params  = params.freeze
     @plist   = (param_list.empty? ? params.keys.sort : param_list.dup).freeze
@@ -130,30 +171,149 @@ class RDF::SAK::Transform
     @accepts = (accepts.respond_to?(:to_a) ? accepts.to_a : [accepts]).freeze
     @returns = (returns.respond_to?(:to_a) ? returns.to_a : [returns]).freeze
     @impl    = implementation.freeze
-    @code    = block
+
+    # initialize the implementation
+    init_implementation repo, root
+    
+    # @code    = block
   end
 
-  # 
+  # Return the identifier of the implementation.
+  #
+  # @return [RDF::URI]
+  #
+  def implementation
+    @impl
+  end
+
+  # True if this transform is *actually* implemented.
+  #
+  # @return [false, true]
+  #
+  def implemented?
+    false
+  end
+  
+  # Return the parameter list, or a sorted list of parameter keys in lieu
+  #
+  # @return [Array]
+  #
   def keys
     @plist
   end
 
-  # 
+  # Retrieve a parameter spec, either by its fully-qualified URI or
+  # its `dct:identifier`.
+  #
+  # @param key [RDF::Resource,Symbol,String] the parameter URI or its identifier
+  # @return [Hash] the parameter spec
+  #
   def [](key)
-    case key
-    when RDF::Resource then @params[key]
-    when Symbol then @params[@pcache[key]]
-    when String then @params[@pcache[key.to_sym]] || @params[RDF::URI(key)]
-    end
+    out = case key
+          when RDF::Resource then @params[key]
+          when Symbol then @params[@pcache[key]]
+          when String
+            @params[@pcache[key.to_sym]] || @params[RDF::URI(key)]
+          end
+    # add the key to the group
+    out.merge({ uri: key }) if out
   end
 
-  # 
+  # XXX kill this
   def lint params
     raise ArgumentError, "params must be a hash, not #{params.class}" unless
       params.is_a? Hash
     params.keys.sort == keys
   end
 
+  # Return the validated parameters or raise an exception.
+  #
+  # @param params [Hash] the hash of parameters
+  # @return [Hash] the validated parameters
+  #
+  def validate params, symbols: true
+    # duplicate so we can delete from it
+    params = params.dup
+    out = {}
+
+    # note the instance variable vs the argumenet
+    @params.each do |k, spec|
+      v = params.delete(k) || params.delete(spec[:id]) || []
+      v = (v.respond_to?(:to_a) ? v.to_a : [v]).map do |v|
+        case v
+        when RDF::Term then v
+        when URI then RDF::URI(v.to_s)
+        when nil then RDF::nil
+        else
+          RDF::Literal(v)
+        end
+      end
+
+      # XXX one day we should check types but not today
+
+      # give us the default(s) then
+      v = spec[:default].dup if v.empty? and spec[:default]
+
+      # but we *will* check the cardinality
+      minc = spec.fetch :minc, 0
+      maxc = spec.fetch :maxc, Float::INFINITY
+
+      raise ArgumentError, "Parameter #{k} must have at least"\
+        " #{minc} value#{minc == 1 ? '' : ?s }" if v.size < minc
+      raise ArgumentError, "Parameter #{k} must have at most"\
+        " #{maxc} value#{maxc == 1 ? '' : ?s }" if v.size > maxc
+      # XXX if cardinality == 1 should we set v to v.first? dunno
+
+      # now overwrite k
+      k = spec[:id] || k.to_s if symbols
+
+      out[k] = v
+    end
+
+    # if params are not empty then this is an error
+    raise ArgumentError,
+      "Unrecognized parameters #{params.keys.join ', '}" unless params.empty?
+
+    out
+  end
+
+  # Check the parameters and apply the function, then check the
+  # output. Parameters are checked with {#validate} for key
+  # resolution, cardinality, range, and type.
+  #
+  # @param input [String,IO,#to_s,#read] Something bytelike
+  # @param params [Hash,RDF::SAK::Transform::Partial] the instance parameters
+  # @param parsed [Object] the already-parsed object, if applicable
+  # @param type [String] the content-type of the input
+  # @param accept [String] a string in the form of an Accept header
+  # @yieldparam output [String,IO] the output
+  # @yieldparam parseout [Object] the parsed output, if applicable
+  # @return
+  #
+  def apply input, params = {}, parsed: nil,
+      type: 'application/octet-stream', accept: '*/*', &block
+    raise NotImplementedError, "Transform #{@id} is not implemented!" unless
+      implemented?
+
+    # this will succeed or explode
+    params = validate params
+
+    # XXX validate accept or explode
+
+    # run the transform
+    out, parseout = execute input, parsed, params
+
+    # bail out if nothing was returned
+    return unless out
+
+    # now run the block if present
+    block.call out, parseout if block
+
+    # return it to the caller
+    [out, parseout]
+  end
+
+  # Cache for partial transform function applications, 
   class PartialCache
     # this is a cache for partial function applications so we don't
     # have to keep going back to the rdf graph
@@ -239,7 +399,69 @@ class RDF::SAK::Transform
     end
   end
 
+  # This class is a harness for holding all the transforms and
+  # operating over them.
+  class Harness
+    # Create a new harness instance.
+    #
+    # @param repo [RDF::Repository] the repository to find RDF data
+    # @param root [String,Pathname] the root directory for implementations
+    def initialize repo, root, partials: nil
+      raise ArgumentError,
+        "repo is #{repo.class}, not an RDF::Repository" unless
+        repo.is_a? RDF::Repository
+      @repo = repo
+      @root = Pathname(root).expand_path
+      raise ArgumentError, "Root #{@root} does not exist" unless
+        @root.directory? and @root.readable?
+      @cache    = {}
+      @partials = partials.is_a?(RDF::SAK::Transform::PartialCache) ? partials :
+        RDF::SAK::Transform::PartialCache.new
+    end
+
+    # Bootstrap all the transforms.
+    #
+    # @param repo [RDF::Repository] the repository to find RDF data
+    # @param root [String,Pathname] the root directory for implementations
+    # @return [RDF::SAK::Transform::Harness] the harness instance
+    def self.load repo, root
+      self.new(repo, root).load
+    end
+
+    # Load transforms into an existing instance
+    # @return [Array] the transforms
+    def load
+      RDF::SAK::Util.subjects_for(@repo, RDF.type,
+        RDF::SAK::TFO.Transform, only: :resource).each do |id|
+        # do what the algorithm says
+        resolve id
+      end
+
+      # return self so we can daisy-chain
+      self
+    end
+
+    def transforms
+      @cache.keys
+    end
+
+    # Resolve a transform based on its ID
+    def resolve id
+      return @cache[id] if @cache[id]
+      # XXX raise???
+      transform  = RDF::SAK::Transform.resolve(@repo, id, root: @root) or
+        return nil
+      @cache[id] = transform
+    end
+  end
+
   class Partial
+    # Resolve a partial function application with the given parameters.
+    #
+    # @param repo [RDF::Repository] the repository to draw from
+    # @param subject [RDF::Resource] the identity of the partial
+    # @param transform [RDF::Resource] the identity of the transform
+    # @param params [Hash] key-value pairs 
     def self.resolve repo, subject: nil, transform: nil, params: {}
       raise ArgumentError, 'Must supply either a subject or a transform' unless
         subject or transform
@@ -340,9 +562,11 @@ class RDF::SAK::Transform
     end
   end
 
-  # note this is an application of a transform, not an "app"
+  # A record of a transformation function application.
+  # @note "Application" as in to "apply" a function, not an "app".
   class Application < Partial
-
+    # Resolve a particular function application from the repository
+    # 
     def self.resolve repo, subject: nil, transform: nil,
         input: nil, output: nil, params: {}, partials: nil
       # either a subject or transform + input + output? + params?
@@ -464,6 +688,14 @@ class RDF::SAK::Transform
 
     attr_reader :input, :output, :completes
 
+    # Create a new function application from whole cloth.
+    #
+    # @param subject [RDF::Resource]
+    # @param transform [RDF::Resource] the identifier for the transform
+    # @param input  [RDF::Resource] the identifier for the input
+    # @param output [RDF::Resource] the identifier for the output
+    # @param params [Hash, RDF::SAK::Transform::Partial] the parameters
+    #   or partial application that is completed
     def initialize subject, transform, input, output, params = {}
       # params may be a partial
       super subject, transform, params
@@ -626,4 +858,76 @@ class RDF::SAK::Transform
     nil
   end
 
+  class XPath < RDF::SAK::Transform
+    protected
+
+    def execute input, parsed = nil, params
+      xpath  = params.fetch(:xpath, []).first or raise
+      prefix = params.fetch(:prefix, []).map do |x|
+        x.value.split(/\s*:\s*/, 2)
+      end.to_h.transform_keys(&:to_sym)
+      reindent = (params.fetch(:reindent).first || RDF::Literal(true)).object
+
+      begin
+        parsed ||= Nokogiri.XML input
+      rescue Nokogiri::SyntaxError
+        # XXX i dunno, raise?
+        return
+      end
+
+      doc = RDF::SAK::Util.subtree parsed,
+        xpath.value, prefixes: prefix, reindent: reindent
+
+      return unless doc
+
+      [doc.to_xml, doc]
+    end
+
+    public
+
+    def implemented?
+      true
+    end
+  end
+
+  class XSLT < RDF::SAK::Transform
+    protected
+
+    def init_implementation _, root
+      raise ArgumentError,
+        "Need a root to initialize the implementation" unless root
+      root = Pathname(root).expand_path unless root.is_a? Pathname
+      raise ArgumentError, "#{root} is not a readable directory" unless
+        root.directory? and root.readable?
+
+      # XXX this assumes this is a file URI but so far that is the
+      # only way we get here
+      filename = root + implementation.path
+      raise ArgumentError, "#{filename} is not a readable file" unless 
+        filename.file? and filename.readable?
+      @sheet = Nokogiri::XSLT(filename.read)
+    end
+
+    def execute input, parsed = nil, params
+      begin
+        parsed ||= Nokogiri.XML input
+      rescue Nokogiri::SyntaxError
+        # XXX i dunno, raise?
+        return
+      end
+
+      # XXX do we wanna allow params?
+      out = @sheet.transform parsed
+
+      # now return string and still-parsed
+      [@sheet.serialize(out), out]
+    end
+
+    public
+
+    def implemented?
+      true
+    end
+
+  end
 end

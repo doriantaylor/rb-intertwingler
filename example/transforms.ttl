@@ -1,0 +1,46 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .
+@prefix tfo:  <https://privatealpha.com/ontology/transformation/1#> .
+@prefix xf:   <tag:makethingsmakesense.com,2020:transform/> .
+
+xf:prefix a tfo:Parameter ;
+  skos:prefLabel "Prefix"@en ;
+  rdfs:comment "A compact prefix declaration of the form prefix:url"@en ;
+  dct:identifier "prefix"^^xsd:token ;
+  rdfs:range xsd:token .
+
+xf:xpath a tfo:Parameter ;
+  skos:prefLabel "XPath"@en ;
+  rdfs:comment "An XPath expression"@en ;
+  dct:identifier "xpath"^^xsd:token ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:string .
+
+xf:reindent a tfo:Parameter ;
+  skos:prefLabel "Reindent"@en ;
+  rdfs:comment "Reindent the XML tree"@en ;
+  dct:identifier "reindent"^^xsd:token ;
+  tfo:default true ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:boolean .
+
+xf:subtree a tfo:Transform ;
+  skos:prefLabel "Subtree"@en ;
+  rdfs:comment "Isolate an X(HT)ML node using XPath."@en ;
+  tfo:implementation <urn:x-ruby:RDF::SAK::Transform::XPath> ;
+  tfo:accepts "application/xml"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type ;
+  tfo:parameter xf:xpath, xf:prefix, xf:reindent ;
+  tfo:parameter-list ( xf:xpath xf:prefix xf:reindent ) .
+
+xf:cleanup a tfo:Transform ;
+  skos:prefLabel "Cleanup"@en ;
+  rdfs:comment "Apply cleanup.xsl to the input."@en ;
+  tfo:implementation <file:example/cleanup.xsl> ;
+  tfo:accepts "application/xml"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type .

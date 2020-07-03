@@ -1290,9 +1290,6 @@ module RDF::SAK::Util
     node.xpath(xpath, XPATHNS).each { |node| block.call node }
   end
 
-  # 
-  #
-  
 
   # XXX OTHER STUFF
 
@@ -1306,7 +1303,8 @@ module RDF::SAK::Util
 
     begin
       nodes = doc.xpath xpath, prefixes
-      return unless nodes and !nodes.empty?
+      return unless
+        nodes and nodes.is_a?(Nokogiri::XML::NodeSet) and !nodes.empty?
       out = Nokogiri::XML::Document.new
       out << nodes.first.dup
       reindent out.root if reindent

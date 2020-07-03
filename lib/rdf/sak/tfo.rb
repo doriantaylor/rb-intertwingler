@@ -44,6 +44,10 @@ module RDF::SAK
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :completes
   #
+  #     # Specifies one or more default values for a parameter.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :default
+  #
   #     # URI to the implementation of the function.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :implementation
@@ -94,7 +98,7 @@ module RDF::SAK
       "dc:created": "2014-06-05T03:06:58Z".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
       "dc:description": "This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages.".freeze,
-      "dc:modified": ["2020-01-20T06:05:13Z".freeze, "2020-04-11T02:51:52Z".freeze, "2020-06-10T18:27:35Z".freeze],
+      "dc:modified": ["2020-01-20T06:05:13Z".freeze, "2020-04-11T02:51:52Z".freeze, "2020-06-10T18:27:35Z".freeze, "2020-07-03T04:49:40Z".freeze],
       "dc:references": ["https://www.iana.org/assignments/media-types/media-types.xhtml".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/rdf-schema/".freeze, "https://www.w3.org/TR/xmlschema-2/".freeze],
       "dc:subject": "tfo:".freeze,
       "dc:title": "Transformation Functions Ontology".freeze,
@@ -176,6 +180,12 @@ module RDF::SAK
       label: "completes".freeze,
       range: "tfo:Partial".freeze,
       type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+    property :default,
+      comment: %(Specifies one or more default values for a parameter.).freeze,
+      domain: "tfo:Parameter".freeze,
+      isDefinedBy: "tfo:".freeze,
+      label: "default".freeze,
+      type: "owl:ObjectProperty".freeze
     property :implementation,
       comment: %(URI to the implementation of the function.).freeze,
       domain: "tfo:Transform".freeze,
