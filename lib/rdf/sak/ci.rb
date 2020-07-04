@@ -135,6 +135,10 @@ module RDF::SAK
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :outdegree
   #
+  #     # Denotes the primary variant that concretely represents the resource.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :primary
+  #
   #     # Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :representation
@@ -260,7 +264,7 @@ module RDF::SAK
       comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.).freeze,
       "dc:created": "2012-01-23T11:52:00-08:00".freeze,
       "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze, "2020-04-30T01:05:51Z".freeze, "2020-06-29T02:24:58Z".freeze],
+      "dc:modified": ["2012-12-11T22:22:00-08:00".freeze, "2014-02-06T14:10:00-08:00".freeze, "2015-02-03T14:39:00-08:00".freeze, "2017-04-06T15:24:00-07:00".freeze, "2018-10-06T16:23:52Z".freeze, "2019-03-05T23:38:59Z".freeze, "2019-04-07T16:36:10Z".freeze, "2019-04-18T01:01:09Z".freeze, "2019-07-07T22:10:55Z".freeze, "2019-07-10T22:28:06Z".freeze, "2019-07-21T23:05:32Z".freeze, "2019-09-04T20:27:32Z".freeze, "2020-01-26T05:02:30Z".freeze, "2020-04-24T23:16:20Z".freeze, "2020-04-30T01:05:51Z".freeze, "2020-06-29T02:24:58Z".freeze, "2020-07-04T01:24:22Z".freeze],
       "dc:references": ["http://en.wikipedia.org/wiki/Content_strategy".freeze, "http://en.wikipedia.org/wiki/Five-number_summary".freeze, "http://en.wikipedia.org/wiki/Mean".freeze, "http://en.wikipedia.org/wiki/Standard_deviation".freeze, "http://vocab.org/frbr/core".freeze, "http://vocab.org/frbr/extended".freeze, "http://www.w3.org/TR/vocab-data-cube/".freeze, "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty".freeze, "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation".freeze],
       "dc:subject": "ci:".freeze,
       "dc:title": "A Content Inventory Vocabulary".freeze,
@@ -342,12 +346,6 @@ module RDF::SAK
       range: "skos:Concept".freeze,
       subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
-    property :"best-variant",
-      comment: %(Denotes the best of a set of concrete variants.).freeze,
-      isDefinedBy: "ci:".freeze,
-      label: "best-variant".freeze,
-      subPropertyOf: "ci:variant".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
     property :blocks,
       comment: %(A block count is conceptually similar to a word or section count, though it counts the total of elements in the document considered to be text blocks, such as paragraphs, tables, lists and figures. It is suited for document types that have no concept of \(semantic\) sections, such as HTML. The purpose of this measurement is to provide a sort of ratio to the word count, to glean how well-proportioned the document is.).freeze,
       domain: "http://purl.org/linked-data/cube#Observation".freeze,
@@ -567,6 +565,12 @@ module RDF::SAK
       range: "xsd:number".freeze,
       "rdfs:seeAlso": "http://en.wikipedia.org/wiki/Directed_graph#Indegree_and_outdegree".freeze,
       type: "http://purl.org/linked-data/cube#MeasureProperty".freeze
+    property :primary,
+      comment: %(Denotes the primary variant that concretely represents the resource.).freeze,
+      isDefinedBy: "ci:".freeze,
+      label: "primary".freeze,
+      subPropertyOf: "ci:variant".freeze,
+      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
     property :representation,
       comment: %(Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.).freeze,
       isDefinedBy: "ci:".freeze,
