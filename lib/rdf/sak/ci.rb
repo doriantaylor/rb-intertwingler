@@ -9,7 +9,7 @@ module RDF::SAK
   #   # A Content Inventory Vocabulary
   #   #
   #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
-  #   # @version 0.13
+  #   # @version 0.14
   #   class CI < RDF::StrictVocabulary
   #     # An action, as its name implies, is meant to represent something a person or other agent ought to do to a document.
   #     # @return [RDF::Vocabulary::Term]
@@ -179,7 +179,7 @@ module RDF::SAK
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :values
   #
-  #     # Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.
+  #     # Denotes a resource that is a variant of a concrete representation of the subject, which assumed to be more abstract.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :variant
   #
@@ -272,7 +272,7 @@ module RDF::SAK
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci".freeze,
       isDefinedBy: "ci:".freeze,
       "owl:imports": ["bibo:".freeze, "dc:".freeze, "foaf:".freeze, "http://purl.org/NET/c4dm/event.owl#".freeze, "http://purl.org/linked-data/cube#".freeze, "owl:".freeze, "skos:".freeze, "xsd:".freeze],
-      "owl:versionInfo": "0.13".freeze,
+      "owl:versionInfo": "0.14".freeze,
       type: ["bibo:Webpage".freeze, "owl:Ontology".freeze],
       "xhv:license": "http://creativecommons.org/licenses/by/2.5/ca/".freeze
 
@@ -575,6 +575,7 @@ module RDF::SAK
       comment: %(Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.).freeze,
       isDefinedBy: "ci:".freeze,
       label: "representation".freeze,
+      "owl:deprecated": "true".freeze,
       subPropertyOf: "dc:hasFormat".freeze,
       type: "owl:ObjectProperty".freeze
     property :scripts,
@@ -645,7 +646,7 @@ module RDF::SAK
       subPropertyOf: "skos:related".freeze,
       type: "owl:ObjectProperty".freeze
     property :variant,
-      comment: %(Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.).freeze,
+      comment: %(Denotes a resource that is a variant of a concrete representation of the subject, which assumed to be more abstract.).freeze,
       equivalentProperty: "ci:representation".freeze,
       isDefinedBy: "ci:".freeze,
       label: "variant".freeze,
