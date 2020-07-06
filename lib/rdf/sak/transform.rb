@@ -78,8 +78,12 @@ class RDF::SAK::Transform
 
   protected
 
-  # This does nothing in the base class.
-  def init_implementation repo, root
+  # Initialize the implementation. Does nothing in the base
+  # class. Return value is ignored.
+  # 
+  # @param harness [RDF::SAK::Transform::Harness] the harness
+  #
+  def init_implementation harness
   end
 
   public
@@ -87,17 +91,13 @@ class RDF::SAK::Transform
   # Resolve a transform out of the repository. Optionally supply a
   # block to resolve any implementation associated with the transform.
   #
-  # @param repo [RDF::Queryable]
+  # @param harness [RDF::SAK::Transform::Harness] the harness
   # @param subject [RDF::Resource]
-  # @param root
-  # @yieldparam implementation [RDF::Resource] the implementation
-  #  identifier for the resolver
-  # @yieldreturn [Proc] the implementation
-  def self.resolve repo, subject, root: nil, &block
+  def self.resolve harness, subject
     # noop
     return subject if subject.is_a? self
 
-    root ||= Pathname(Dir.getwd)
+    repo = harness.repo
 
     asserted = RDF::SAK::Util.objects_for repo, subject,
       RDF.type, only: :resource
@@ -118,6 +118,8 @@ class RDF::SAK::Transform
     returns = gather_accepts_returns repo, subject, returns: true
 
     tclass = self
+
+    # XXX this is all dumb but it has to be this way for now
 
     if impl = RDF::SAK::Util.objects_for(repo, subject,
       RDF::SAK::TFO.implementation, only: :uri).sort.first
@@ -140,7 +142,7 @@ class RDF::SAK::Transform
     end
 
     tclass.new subject, params: params, param_list: plist, accepts: accepts,
-      returns: returns, implementation: impl, repo: repo, root: root
+      returns: returns, implementation: impl, harness: harness
   end
 
   def self.coerce_params params
@@ -154,16 +156,15 @@ class RDF::SAK::Transform
 
   # Initialize a transform from data.
   # @param subject [RDF::Resource]
+  # @param harness [RDF::SAK::Transform::Harness]
   # @param params [Hash]
   # @param param_list [Array]
   # @param accepts [Array]
   # @param returns [Array]
   # @param implementation [RDF::Resource]
-  # @yield code to execute when called
   #
-  def initialize subject, params: {}, param_list: [],
-      accepts: %w[*/*], returns: %w[*/*], implementation: nil,
-      repo: nil, root: nil
+  def initialize subject, harness: nil, params: {}, param_list: [],
+      accepts: %w[*/*], returns: %w[*/*], implementation: nil
     @subject = subject.dup.freeze
     @params  = params.freeze
     @plist   = (param_list.empty? ? params.keys.sort : param_list.dup).freeze
@@ -173,9 +174,7 @@ class RDF::SAK::Transform
     @impl    = implementation.freeze
 
     # initialize the implementation
-    init_implementation repo, root
-    
-    # @code    = block
+    init_implementation harness
   end
 
   # Return the identifier of the implementation.
@@ -229,14 +228,17 @@ class RDF::SAK::Transform
   # Return the validated parameters or raise an exception.
   #
   # @param params [Hash] the hash of parameters
+  # @param symbols [false, true] whether the keys should be symbols or URIs
+  # @param defaults [true, false] whether to supplant the defaults
+  # @param silent [false, true] return nil rather than raise if true
   # @return [Hash] the validated parameters
   #
-  def validate params, symbols: true
+  def validate params, symbols: false, defaults: true, silent: false
     # duplicate so we can delete from it
     params = params.dup
     out = {}
 
-    # note the instance variable vs the argumenet
+    # note the instance variable vs the argument
     @params.each do |k, spec|
       v = params.delete(k) || params.delete(spec[:id]) || []
       v = (v.respond_to?(:to_a) ? v.to_a : [v]).map do |v|
@@ -245,10 +247,17 @@ class RDF::SAK::Transform
         when URI then RDF::URI(v.to_s)
         when nil then RDF::nil
         else
-          RDF::Literal(v)
+          if range = spec[:range].select(&:datatype?) and !range.empty?
+            range = range.to_a.sort
+            "multiple ranges; arbitrarily picking #{range.first}" if
+              range.size > 1
+            RDF::Literal(v, datatype: range.first)
+          else
+            RDF::Literal(v)
+          end
         end
       end
-
+      
       # XXX one day we should check types but not today
 
       # give us the default(s) then
@@ -267,12 +276,15 @@ class RDF::SAK::Transform
       # now overwrite k
       k = spec[:id] || k.to_s if symbols
 
-      out[k] = v
+      out[k] = v unless !defaults and v == spec[:default]
     end
 
     # if params are not empty then this is an error
-    raise ArgumentError,
-      "Unrecognized parameters #{params.keys.join ', '}" unless params.empty?
+    unless params.empty?
+      return if silent
+      raise ArgumentError,
+        "Unrecognized parameters #{params.keys.join ', '}"
+    end
 
     out
   end
@@ -288,7 +300,7 @@ class RDF::SAK::Transform
   # @param accept [String] a string in the form of an Accept header
   # @yieldparam output [String,IO] the output
   # @yieldparam parseout [Object] the parsed output, if applicable
-  # @return
+  # @return [#to_s, Object] the serialized output (and parsed if applicable)
   #
   def apply input, params = {}, parsed: nil,
       type: 'application/octet-stream', accept: '*/*', &block
@@ -296,7 +308,7 @@ class RDF::SAK::Transform
       implemented?
 
     # this will succeed or explode
-    params = validate params
+    params = validate params, symbols: true
 
     # XXX validate accept or explode
 
@@ -313,10 +325,10 @@ class RDF::SAK::Transform
     [out, parseout]
   end
 
-  # Cache for partial transform function applications, 
+  # This class implements a cache for partial transformation function
+  # applications, which bundle transforms with a set of instance
+  # parameters under a reusable identity.
   class PartialCache
-    # this is a cache for partial function applications so we don't
-    # have to keep going back to the rdf graph
     private
 
     def coerce_params params
@@ -325,88 +337,131 @@ class RDF::SAK::Transform
 
     public
 
-    def initialize
+    # Initialize the cache with all partials pre-loaded.
+    #
+    # @param harness [RDF::SAK::Transform::Harness] the transform harness
+    # @return [RDF::SAK::Transform::PartialCache] the instance
+    #
+    def self.load harness
+      new(harness).load
+    end
+
+    attr_reader :harness
+
+    # Initialize an empty cache.
+    # @param harness [RDF::SAK::Transform::Harness] the parent harness.
+    #
+    def initialize harness
+      @harness    = harness
       @cache      = {}
       @mapping    = {}
       @transforms = {}
+    end
+
+    # Load an initialized partial cache.
+    #
+    # @return [self] daisy-chainable self-reference
+    #
+    def load
+      RDF::SAK::Util.subjects_for(RDF.type, RDF::SAK::TFO.Partial).each do |s|
+        resolve repo
+      end
+
+      # return self to daisy-chain
+      self
+    end
+
+    def repo
+      @harness.repo
     end
 
     def transforms
       @transforms.dup
     end
 
-    # "transform" may also be the subject
+    # Retrieve a Partial from the cache based on its 
     def get transform, params
-      transform = transform.subject if transform.is_a? RDF::SAK::Transform
+      ts = case transform
+           when RDF::SAK::Transform then transform.subject
+           when RDF::URI
+             # XXX transforms resolved here may not get implemented
+             transform = RDF::SAK::Transform.resolve @repo, transform
+             transform.subject
+           else
+             raise ArgumentError, "Don't know what to do with #{transform}"
+           end
 
       # return direct cache entry if transform is really the subject
-      return @cache[transform] if @cache.key? transform
+      return @cache[ts] if @cache.key? 
 
       # otherwise return the mapping
       @mapping[transform][coerce_params params]
     end
 
-    # the second argument 
-    def resolve repo, subject: nil, transform: nil, params: {}
+    # Resolves a partial either by subject or by transform + parameter
+    # set.
+    #
+    # @param subject [RDF::URI] The subject URI of the partial
+    # @param transform [RDF::URI,RDF::SAK::Transform] the transform
+    # @param params [Hash] an instance of parameters
+    # @return [RDF::SAK::Transform::Partial]
+    #
+    def resolve subject: nil, transform: nil, params: {}
       if subject
         if subject.is_a? RDF::SAK::Transform::Partial
           # snag the transform
-          transform = @transforms[subject.transform] ||=
-            RDF::SAK::Transform.resolve(repo, subject.transform) or
+          transform = @harness.resolve(subject.transform) or 
             raise 'Could not resolve the transform associated with ' + 
-            subject.subject      
+            subject.subject
 
           # mkay now add this to the cache
-          t = @mapping[subject.transform] ||= {}
+          t = @mapping[transform.subject] ||= {} # lol got all that?
           @cache[subject.subject] ||= t[subject.params] ||= subject
         else
           # resolve the partial
-          par = @cache[subject] ||
-            RDF::SAK::Transform::Partial.resolve(repo, subject: subject) or
-            return
-
-          # register the transform
-          @transforms[par.transform] ||=
-            RDF::SAK::Transform.resolve(repo, par.transform)
+          partial = @cache[subject] || RDF::SAK::Transform::Partial.resolve(
+            @harness, subject: subject) or return
 
           # initialize the mapping if not present
-          t = @mapping[par.transform] ||= {}
+          t = @mapping[partial.transform.subject] ||= {}
 
           # off we go
-          @cache[subject] ||= t[par.params] ||= par
+          @cache[subject] ||= t[partial.params] ||= partial
         end
       elsif transform
-        params = coerce_params params
+        transform = @harness.resolve transform unless
+          transform.is_a? RDF::SAK::Transform
 
-        unless transform.is_a? RDF::SAK::Transform
-          if @transforms[transform]
-            transform = @transforms[transform]
-          else
-            transform = RDF::SAK::Transform.resolve(repo, transform) or return
-            @transforms[transform.subject] = transform
-          end
-        end
+        params = transform.validate params, defaults: false
 
         # note the *presence* of the key means the cache item has been
         # checked already; its *value* may be nil
         t = @mapping[transform.subject] ||= {}
         return t[params] if t.key? params
-        
-        par = t[params] = RDF::SAK::Transform::Partial.resolve(repo,
+
+        # try to resolve the partial
+        partial = RDF::SAK::Transform::Partial.resolve(@harness,
           transform: transform, params: params) or return
-        @cache[par.subject] = par
+
+        # update the caches
+        @cache[partial.subject] = t[params] = partial
       end
     end
   end
 
-  # This class is a harness for holding all the transforms and
-  # operating over them.
+  # This class is the main harness for holding all the transforms and
+  # operating over them. This is the primary interface through which
+  # we manipulate transforms.
   class Harness
+
+    attr_reader :partials, :repo, :root
+
     # Create a new harness instance.
     #
     # @param repo [RDF::Repository] the repository to find RDF data
     # @param root [String,Pathname] the root directory for implementations
-    def initialize repo, root, partials: nil
+    #
+    def initialize repo, root
       raise ArgumentError,
         "repo is #{repo.class}, not an RDF::Repository" unless
         repo.is_a? RDF::Repository
@@ -415,8 +470,7 @@ class RDF::SAK::Transform
       raise ArgumentError, "Root #{@root} does not exist" unless
         @root.directory? and @root.readable?
       @cache    = {}
-      @partials = partials.is_a?(RDF::SAK::Transform::PartialCache) ? partials :
-        RDF::SAK::Transform::PartialCache.new
+      @partials = RDF::SAK::Transform::PartialCache.new self
     end
 
     # Bootstrap all the transforms.
@@ -432,50 +486,86 @@ class RDF::SAK::Transform
     # @return [Array] the transforms
     def load
       RDF::SAK::Util.subjects_for(@repo, RDF.type,
-        RDF::SAK::TFO.Transform, only: :resource).each do |id|
-        # do what the algorithm says
-        resolve id
+        RDF::SAK::TFO.Transform, only: :resource).each do |subject|
+        resolve subject
       end
 
       # return self so we can daisy-chain
       self
     end
 
+    # Return all cached Transform identities.
+    #
+    # @return [Array] the URIs of known Transforms
+    #
     def transforms
-      @cache.keys
+      @cache.keys.sort
     end
 
-    # Resolve a transform based on its ID
-    def resolve id
-      return @cache[id] if @cache[id]
+    # Resolve a Transform based on its URI.
+    #
+    # @param subject [RDF::Resource] the identifier for the transform.
+    # @return [RDF::SAK::Transform] the Transform, if present.
+    #
+    def resolve subject
+      return @cache[subject] if @cache[subject]
       # XXX raise???
-      transform  = RDF::SAK::Transform.resolve(@repo, id, root: @root) or
-        return nil
-      @cache[id] = transform
+      transform =
+        RDF::SAK::Transform.resolve(self, subject) or return
+      @cache[subject] = transform
+    end
+
+    # Resolve a Partial based on either its subject URI or the
+    # transform-params pair.
+    #
+    # @param subject [RDF::Resource] the Partial's subject
+    # @param transform [RDF::Resource,RDF::SAK::Transform] the transform
+    # @param params [Hash] an instance of parameters
+    # @return [RDF::SAK::Transform::Partial] the Partial, if present
+    #
+    def resolve_partial subject: nil, transform: nil, params: nil
+      partials.resolve subject: subject, transform: transform, params: params
+    end
+
+    # Resolve a total function application record based on either its
+    # subject URI, a transform-params pair, or a Partial.
+    #
+    # @param subject [RDF::Resource] the Application's subject
+    # @param transform [RDF::Resource,RDF::SAK::Transform] the Transform
+    # @param params [Hash] an instance of parameters
+    # @param partial [RDF::Resource,RDF::SAK::Transform::Partial] a Partial
+    # @return [RDF::SAK::Transform::Application] the Application, if present
+    # 
+    def resolve_application subject: nil, transform: nil, params: {},
+        partial: nil, input: nil, output: nil
+      RDF::SAK::Transform::Application.resolve self, subject: subject,
+        transform: transform, params: params, partial: partial,
+        input: input, output: output
     end
   end
 
   class Partial
     # Resolve a partial function application with the given parameters.
     #
-    # @param repo [RDF::Repository] the repository to draw from
+    # @param harness [RDF::SAK::Transform::Harness] the harness
     # @param subject [RDF::Resource] the identity of the partial
-    # @param transform [RDF::Resource] the identity of the transform
+    # @param transform [RDF::Resource] the identity of the transform 
     # @param params [Hash] key-value pairs 
-    def self.resolve repo, subject: nil, transform: nil, params: {}
+    def self.resolve harness, subject: nil, transform: nil, params: {}
       raise ArgumentError, 'Must supply either a subject or a transform' unless
         subject or transform
 
-      # coerce the transform if it isn't already
+      repo = harness.repo
+
+      # coerce the transform to a Transform object if it isn't already
       if transform
-        transform = RDF::SAK::Transform.resolve(repo, transform) or
+        transform = harness.resolve(transform) or
           return unless transform.is_a?(RDF::SAK::Transform)
       elsif subject.is_a? RDF::URI
         # locate the transform if given the subject
         transform = RDF::SAK::Util.objects_for(repo, subject,
           RDF::SAK::TFO.transform, only: :resource).first or return
-        transform = RDF::SAK::Transform.resolve(repo, transform) or
-          return
+        transform = harness.resolve(transform) or return
         warn transform
       end
 
@@ -483,11 +573,11 @@ class RDF::SAK::Transform
       if subject
         params = {}
         transform.keys.each do |p|
-          o = Set.new(repo.query([subject, p, nil]).objects)
+          o = repo.query([subject, p, nil]).objects.uniq.sort
           params[p] = o unless o.empty?
         end
       else
-        params = RDF::SAK::Transform.coerce_params params
+        params = transform.validate params, symbols: false, defaults: false
 
         candidates = RDF::Query.new do
           # XXX we should sort parameters by longest value since
@@ -507,7 +597,7 @@ class RDF::SAK::Transform
         # this is ruby being cheeky
         candidates.select! do |s, ps|
           transform.keys.each do |p|
-            o = Set.new(repo.query([s, p, nil]).objects)
+            o = repo.query([s, p, nil]).objects.uniq.sort
             ps[p] = o unless o.empty?
           end
           ps == params
@@ -520,16 +610,18 @@ class RDF::SAK::Transform
         params  = candidates[subject]
       end
 
-      self.new subject, transform.subject, params
+      self.new subject, transform, params
     end
 
     attr_reader :subject, :transform
 
     def initialize subject, transform, params = {}
+      raise ArgumentError, 'transform must be a Transform' unless
+        transform.is_a? RDF::SAK::Transform
       @subject   = subject
-      @transform = transform.is_a?(RDF::SAK::Transform) ?
-        transform.subject : transform
-      @params    = params.dup unless params.is_a? RDF::SAK::Transform::Partial
+      @transform = transform
+      @params    = transform.validate params unless
+        params.is_a? RDF::SAK::Transform::Partial
     end
 
     def [](key)
@@ -545,11 +637,7 @@ class RDF::SAK::Transform
     end
 
     def matches? params
-      params = params.transform_values do |v|
-        Set.new(v.respond_to?(:to_a) ? v.to_a : [v])
-      end
-
-      @params == params
+      @params == @transform.validate(params)
     end
 
     def ===(other)
@@ -565,62 +653,82 @@ class RDF::SAK::Transform
   # A record of a transformation function application.
   # @note "Application" as in to "apply" a function, not an "app".
   class Application < Partial
-    # Resolve a particular function application from the repository
+    # Resolve a particular function Application from the repository.
+    # Either resolve by subject, or resolve by a transform + parameter
+    # + input set. Applications that complete Partials will be
+    # automatically resolved.
+    #
+    # @param harness [RDF::SAK::Transform::Harness] the harness
+    # @param subject [RDF::Resource] the subject
+    # @param transform [RDF::Resource,RDF::SAK::Transform] the transform
+    # @param params [Hash] an instance of parameters
+    # @param input [RDF::Resource] the Application's input
+    # @param output [RDF::Resource] the Application's output
+    # @return [RDF::SAK::Transform::Application] the Application, if present
     # 
-    def self.resolve repo, subject: nil, transform: nil,
-        input: nil, output: nil, params: {}, partials: nil
+    def self.resolve harness, subject: nil, transform: nil, params: {},
+        partial: nil, input: nil, output: nil
       # either a subject or transform + input + output? + params?
 
-      partials ||= RDF::SAK::Transform::PartialCache.new
-      partial = nil
+      repo     = harness.repo
+      partials = harness.partials
 
       if subject
         # noop
         return subject if subject.is_a? self
 
         # okay partial
-        partial = repo.query([subject, RDF::SAK::TFO.completes,
-          nil]).objects.select(&:uri?).sort.first
+        partial = RDF::SAK::Util.objects_for(
+          subject, RDF::SAK::TFO.completes, only: :resource).sort.first
+
         if partial
-          partial = partials.resolve(repo, subject: partial) or
+          tmp = partials.resolve(subject: partial) or
             raise "Could not find partial #{partial}"
+          partial   = tmp
           transform = partial.transform
         else
-          transform = repo.query([subject, RDF::SAK::TFO.transform,
-            nil]).objects.select(&:uri?).sort.first or
+          transform = RDF::SAK::Util.objects_for(
+            subject, RDF::SAK::TFO.transform, only: :resource).sort.first or
             raise "Could not find a transform for #{subject}"
-
-          t = RDF::SAK::Transform.resolve(repo, transform) or
+          tmp = harness.resolve(transform) or
             raise "Could not find transform #{transform}"
-          transform = t
+          transform = tmp
+
+          params = transform.validate 
 
           # get params
           params = {}
           transform.keys.each do |p|
-            o = Set.new(repo.query([subject, p, nil]).objects) 
+            o = repo.query([subject, p, nil]).objects.uniq.sort
             params[p] = o unless o.empty?
           end
         end
 
         # get inputs and outputs
-        input  = repo.query([subject, RDF::SAK::TFO.input,
-          nil]).objects.select(&:uri?).sort.first
-        output = repo.query([subject, RDF::SAK::TFO.output,
-          nil]).objects.select(&:uri?).sort.first
+        input  = RDF::SAK::Util.objects_for(
+          subject, RDF::SAK::TFO.input,  only: :resource).sort.first
+        output = RDF::SAK::Util.objects_for(
+          subject, RDF::SAK::TFO.output, only: :resource).sort.first
 
         raise 'Data must have both input and output' unless input and output
+      elsif input and ((transform and params) or partial)
 
-      elsif transform and input and params
-        # do params
-        params = RDF::SAK::Transform.coerce_params params
+        # XXX dispatch on partial only? smart? dumb?
+        if partial
+          transform = partial.transform
+          params    = partial.params
+        else
+          # do transform
+          t = harness.resolve(transform) or
+            raise "Could not resolve transform #{transform}"
+          transform = t
 
-        # do transform
-        t = RDF::SAK::Transform.resolve(repo, transform) or
-          raise "Could not resolve transform #{transform}"
-        transform = t
+          # coerce/validate params
+          params = transform.validate params, defaults: false
 
-        # do partial
-        partial = partials.resolve(repo, transform: transform, params: params)
+          # do partial
+          partial = partials.resolve transform: transform, params: params
+        end
 
         # collect function application receipts
         candidates = RDF::Query.new do
@@ -629,25 +737,22 @@ class RDF::SAK::Transform
           pattern [:t, RDF::SAK::TFO.output, output] if output
           pattern [:t, RDF::SAK::TFO.input,  input]
         end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
-          partial && repo.has_statement?(
-            RDF::Statement(s, RDF::SAK::TFO.completes, partial.subject)) or
-            repo.has_statement?(
+          # this should say, try matching the partial if there is one
+          # to match, otherwise attempt to directly match the transform
+          if partial and repo.has_statement?(
+            RDF::Statement(s, RDF::SAK::TFO.completes, partial.subject))
+            true
+          elsif repo.has_statement?(
             RDF::Statement(s, RDF::SAK::TFO.transform, transform.subject))
-        end.compact.uniq.sort
+            testp = transform.keys.map do |p|
+              o = repo.query([s, p, nil]).objects.uniq.sort
+              o.empty? ? nil : [p, o]
+            end.compact.to_h
 
-        # we only check the params if we don't have a partial
-        unless partial
-          # XXX uh i dunno if we need to keep candidate params around
-          cp = {}
-          candidates.select! do |s|
-            ap = cp[s] ||= {}
-            transform.keys.each do |p|
-              o = Set.new(repo.query([s, p, nil]).objects)
-              ap[p] = o unless o.empty?
-            end
-            ap == params
+            testp = transform.validate testp, defaults: false, silent: true
+            testp == params
           end
-        end
+        end.compact.uniq.sort
 
         return if candidates.empty?
 
@@ -674,7 +779,7 @@ class RDF::SAK::Transform
         end
       else
         raise ArgumentError,
-          'must have either a subject or transform+input+params'
+          'must have either a subject or transform + params + input'
       end
 
       # don't forget the output
@@ -893,7 +998,8 @@ class RDF::SAK::Transform
   class XSLT < RDF::SAK::Transform
     protected
 
-    def init_implementation _, root
+    def init_implementation harness
+      root = harness.root
       raise ArgumentError,
         "Need a root to initialize the implementation" unless root
       root = Pathname(root).expand_path unless root.is_a? Pathname

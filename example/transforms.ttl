@@ -44,3 +44,15 @@ xf:cleanup a tfo:Transform ;
   tfo:implementation <file:example/cleanup.xsl> ;
   tfo:accepts "application/xml"^^tfo:content-type ;
   tfo:returns "application/xml"^^tfo:content-type .
+
+<urn:uuid:78e6d8ce-a88a-4be0-8bfa-079136945816> a tfo:Partial ;
+  tfo:transform xf:subtree ;
+  xf:xpath "//html:main[1]"^^xsd:string ;
+  xf:prefix "html:http://www.w3.org/1999/xhtml"^^xsd:token .
+
+<urn:uuid:4498eef5-1ca6-4034-937a-d50033dd6693> a tfo:Application ;
+  tfo:input <ni:///sha-256;0GHHmDtxh9CRZttXdr-cX78u72auS2P-O6tDXxvz2kU> ;
+  tfo:output <ni:///sha-256;_BbLbNSZl0TcQcjz-v3qF5fa5VL11rdha7c24K44pTc> ;
+  tfo:transform xf:subtree ;
+  xf:xpath "//html:main[1]"^^xsd:string ;
+  xf:prefix "html:http://www.w3.org/1999/xhtml"^^xsd:token .
