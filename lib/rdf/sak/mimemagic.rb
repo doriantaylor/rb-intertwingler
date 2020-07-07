@@ -54,6 +54,16 @@ class RDF::SAK::MimeMagic < ::MimeMagic
     out.empty? ? [default_type(io)] : out
   end
 
+  # fetches immediate parent types
+  def parents
+    ::MimeMagic::TYPES.fetch(@type, [nil, []])[1].map { |x| self.class.new x }
+  end
+
+  # fetches all supertypes
+  def lineage
+    [self] + parents.map { |t| t.lineage }.flatten.uniq
+  end
+
   private
 
   def method_missing id

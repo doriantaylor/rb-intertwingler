@@ -42,6 +42,7 @@ RSpec.describe RDF::SAK::Transform do
       expect(transform.keys.sort).to eql PARAMS
       impl = RDF::URI('urn:x-ruby:RDF::SAK::Transform::XPath')
       expect(transform.implementation).to eql impl
+      expect(transform.accepts? 'application/xhtml+xml').to be true
     end
 
     it 'resolves an XSLT implementation' do

@@ -3,6 +3,7 @@ require 'rdf/sak/tfo'
 require 'rdf/sak/util'
 require 'set'
 require 'mimemagic'
+require 'http/negotiate'
 
 # This class encapsulates a specification for an individual
 # transformation function, including its parameter spec, accepted and
@@ -192,6 +193,33 @@ class RDF::SAK::Transform
   def implemented?
     false
   end
+
+  # True if the transform accepts the given Content-Type.
+  #
+  # @param type [String] the content type to test
+  # @return [false, true] wh
+  #
+  def accepts? type
+    # construct the variants: this gives us a stack of all the types
+    # all the way up to the top, then turns it into a hash of faux
+    # variants. this will ensure the negotiate algorithm will return a
+    # value if the transform function can handle the type, even if it
+    # does not explicitly mention it (e.g. if the transform specifies
+    # it accepts application/xml and you hand it application/xhtml+xml)
+    variants = RDF::SAK::MimeMagic.new(type).lineage.map do |t|
+      # the key can be anything as long as it's unique since it ends
+      # up as a hash
+      [t.to_s, [1, t.to_s]]
+    end.to_h
+
+    # construct the pseudo-header
+    accept = @accepts.dup
+    accept << '*/*;q=0' unless accept.include? '*/*'    
+    accept = { Accept: accept.join(', ') }
+
+    # we only care *if* this returns something, not *what*
+    !!HTTP::Negotiate.negotiate(accept, variants)
+  end
   
   # Return the parameter list, or a sorted list of parameter keys in lieu
   #
@@ -247,11 +275,18 @@ class RDF::SAK::Transform
         when URI then RDF::URI(v.to_s)
         when nil then RDF::nil
         else
-          if range = spec[:range].select(&:datatype?) and !range.empty?
-            range = range.to_a.sort
-            "multiple ranges; arbitrarily picking #{range.first}" if
-              range.size > 1
-            RDF::Literal(v, datatype: range.first)
+          range = spec[:range] || []
+          if r = range.select(&:datatype?) and !r.empty?
+            r = r.to_a.sort
+            "multiple ranges; arbitrarily picking #{r.first}" if
+              r.size > 1
+            RDF::Literal(v, datatype: r.first)
+          elsif v.is_a? String and r = range.reject(&:datatype?) and !r.empty?
+            if m = /^_:(.+)$/.match(v)
+              RDF::Node(m[1])
+            else
+              RDF::URI(v)
+            end
           else
             RDF::Literal(v)
           end
@@ -542,6 +577,57 @@ class RDF::SAK::Transform
         transform: transform, params: params, partial: partial,
         input: input, output: output
     end
+
+    # Returns true if the Application with the given subject URI
+    # matches either the transform-params pair, or a partial.
+    #
+    # @param subject [RDF::Resource,RDF::SAK::Transform::Application]
+    #   the application
+    # @param transform [RDF::Resource,RDF::SAK::Transform] the transform
+    # @param params [Hash] an instance of parameters
+    # @param partial [RDF::Resource,RDF::SAK::Transform::Partial] a partial
+    # @return [true, false] whether or not the application matches
+    #
+    def application_matches? subject, transform: nil, params: {}, partial: nil
+
+      # unbundle the params; partial overrides transform+params
+      if partial
+        partial   = resolve_partial partial unless
+          partial.is_a? RDF::SAK::Transform::Partial
+        transform = partial.transform
+        params    = partial.params
+      else
+        transform = resolve transform unless
+          transform.is_a? RDF::SAK::Transform
+        params = transform.validate params
+      end
+
+      if subject.is_a? RDF::SAK::Transform::Application
+        return true if partial and subject.completes? partial
+        return true if
+          subject.transform == transform and subject.matches? params
+      else
+        # this should say, try matching the partial if there is one
+        # to match, otherwise attempt to directly match the transform
+        return true if partial and repo.has_statement?(
+          RDF::Statement(subject, RDF::SAK::TFO.completes, partial.subject))
+
+        if repo.has_statement?(
+          RDF::Statement(subject, RDF::SAK::TFO.transform, transform.subject))
+          testp = transform.keys.map do |p|
+            o = repo.query([subject, p, nil]).objects.uniq.sort
+            o.empty? ? nil : [p, o]
+          end.compact.to_h
+
+          # this will clear any explicit declarations of defaults
+          testp = transform.validate testp, defaults: false, silent: true
+          # true means it matches
+          return testp == params
+        end
+      end
+
+      false
+    end
   end
 
   class Partial
@@ -825,6 +911,10 @@ class RDF::SAK::Transform
 
     def transform
       @completes ? @completes.transform : @transform
+    end
+
+    def completes? partial
+      @completes and partial and @completes == partial
     end
 
     def matches? params

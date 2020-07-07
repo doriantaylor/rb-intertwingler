@@ -52,8 +52,9 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'descriptive_statistics', '>= 2.5.1'
 
   # stuff i wrote
-  spec.add_runtime_dependency 'xml-mixup',   '>= 0.1.10'
-  spec.add_runtime_dependency 'uuid-ncname', '>= 0.2.2'
-  spec.add_runtime_dependency 'md-noko',     '>= 0.1.0'
+  spec.add_runtime_dependency 'xml-mixup',      '>= 0.1.10'
+  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.2.2'
+  spec.add_runtime_dependency 'md-noko',        '>= 0.1.0'
+  spec.add_runtime_dependency 'http-negotiate', '>= 0.1.0'
 
 end
