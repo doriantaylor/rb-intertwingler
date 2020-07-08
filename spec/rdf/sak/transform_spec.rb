@@ -99,6 +99,10 @@ RSpec.describe RDF::SAK::Transform do
       output, parseout = transform.apply input, params
       expect(parseout).to be_a Nokogiri::XML::Document
       expect(parseout.root.name).to eql 'main'
+
+      nothing = transform.apply input, params,
+        accept: 'application/x-foo, */*;q=0'
+      expect(nothing).to be_nil
     end
 
     it 'applies a transform against a partial' do

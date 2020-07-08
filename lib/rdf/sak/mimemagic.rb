@@ -61,7 +61,7 @@ class RDF::SAK::MimeMagic < ::MimeMagic
 
   # fetches all supertypes
   def lineage
-    [self] + parents.map { |t| t.lineage }.flatten.uniq
+    ([self] + parents.map { |t| t.lineage }.flatten).uniq
   end
 
   private

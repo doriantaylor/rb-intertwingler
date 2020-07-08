@@ -342,10 +342,12 @@ class RDF::SAK::Transform
     raise NotImplementedError, "Transform #{@id} is not implemented!" unless
       implemented?
 
+    # XXX validate accept or explode
+    mimetypes = HTTP::Negotiate.negotiate({ Accept: accept },
+      @returns.map { |t| [t, [1, t]] }.to_h, all: true) or return
+
     # this will succeed or explode
     params = validate params, symbols: true
-
-    # XXX validate accept or explode
 
     # run the transform
     out, parseout = execute input, parsed, params
