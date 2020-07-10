@@ -125,6 +125,9 @@ class RDF::SAK::Document
     node ||= @doc
     doc  = node.document
     base = URI(@base.to_s)
+
+    return base unless doc.root
+
     if doc.root.name.to_sym == :html
       b = doc.at_xpath(
         '(/html:html/html:head/html:base[@href])[1]/@href', XPATHNS
@@ -166,7 +169,8 @@ class RDF::SAK::Document
         attr = attr.to_s
         next unless elem.has_attribute? attr
 
-        abs = base.merge uri_pp(elem[attr].strip)
+        abs = base.merge uri_pp(elem[attr].strip) rescue nil
+        next unless abs
 
         # bail out if this isn't http(s)
         next if abs.scheme and !%w[http https].include? abs.scheme.downcase
@@ -564,18 +568,22 @@ class RDF::SAK::Document
       vocab = uri_pp(vocab.to_s) if vocab
 
       if elem.key?('href') or elem.key?('src')
-        vu = uri_pp(elem['href'] || elem['src'])
-        ru = RDF::URI(@base.merge(vu))
-        bodylinks[urev[ru] || ru] = true
+        begin
+          vu = uri_pp(elem['href'] || elem['src'])
+          ru = RDF::URI(@base.merge(vu))
+          bodylinks[urev[ru] || ru] = true
 
-        if rel = resources[urev[ru] || ru]
-          elem['rel'] = (abbreviate rel, vocab: vocab).join ' '
-        end
+          if rel = resources[urev[ru] || ru]
+            elem['rel'] = (abbreviate rel, vocab: vocab).join ' '
+          end
 
-        label = labels[urev[ru] || ru]
-        if titles and label and
-            (!elem.key?('title') or elem['title'].strip == '')
-          elem['title'] = label[1].to_s
+          label = labels[urev[ru] || ru]
+          if titles and label and
+              (!elem.key?('title') or elem['title'].strip == '')
+            elem['title'] = label[1].to_s
+          end
+        rescue URI::InvalidComponentError => e
+          warn "#{e}: #{vu} in #{@subject}"
         end
       end
     end
@@ -724,7 +732,7 @@ class RDF::SAK::Document
       x.split(?:)[0].to_sym
     end.reject(&:nil?).to_set
 
-    warn rsc
+    # warn rsc
 
     pfx = prefixes.select do |k, _|
       rsc.include? k

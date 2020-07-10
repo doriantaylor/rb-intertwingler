@@ -70,12 +70,31 @@ RSpec.describe RDF::SAK::Transform do
   context 'resolving applications' do
     input =
       RDF::URI('ni:///sha-256;0GHHmDtxh9CRZttXdr-cX78u72auS2P-O6tDXxvz2kU')
+    output =
+      RDF::URI('ni:///sha-256;RqgCb4_A3x2ZmjRs65bfXBzsV-4CejRteaxmlPNyWpc')
+    params = { xpath: '//html:main[1]',
+      prefix: 'html:http://www.w3.org/1999/xhtml' }
+
     it 'resolves an application' do
       application = harness.resolve_application transform: VOCAB.subtree,
-        input: input, params: { xpath: '//html:main[1]',
-                               prefix: 'html:http://www.w3.org/1999/xhtml' }
+        input: input, params: params
       expect(application).to be_a RDF::SAK::Transform::Application
       expect(application.transform).to be_a RDF::SAK::Transform
+    end
+
+    it 'creates a new application from scratch' do
+      start = Time.now.getgm
+      stop  = start + 1
+      repo2  = RDF::Repository.new
+
+      transform = harness.resolve VOCAB.subtree
+      me  = RDF::URI('urn:x-dummy:function-application')
+      app = RDF::SAK::Transform::Application.new me,
+        transform, input, output, params, start: start, stop: stop
+      app.to_triples.each { |stmt| repo2 << stmt }
+      # warn repo2.dump :ntriples
+
+      # ehh we'll test this later i can't think of any good tests right now
     end
   end
 

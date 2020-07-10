@@ -43,7 +43,7 @@ unless RDF::List.respond_to? :from
 
     # Inflate a list from a graph but don't change the graph
     def self.from graph, subject
-      self.new graph: graph, values: get_list(graph, subject)
+      self.new graph: graph, subject: subject, values: get_list(graph, subject)
     end
   end
 end

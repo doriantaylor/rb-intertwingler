@@ -1,9 +1,11 @@
 require 'rdf'
+require 'rdf/vocab'
 require 'rdf/sak/tfo'
 require 'rdf/sak/util'
 require 'set'
 require 'mimemagic'
 require 'http/negotiate'
+require 'time'
 
 # This class encapsulates a specification for an individual
 # transformation function, including its parameter spec, accepted and
@@ -226,7 +228,9 @@ class RDF::SAK::Transform
   # @return [Array]
   #
   def keys
-    @plist
+    # XXX this should be unique to begin with. what is going on here?
+    # tests mysteriously started failing and the output was duplicated
+    @plist.uniq
   end
 
   # Retrieve a parameter spec, either by its fully-qualified URI or
@@ -400,12 +404,17 @@ class RDF::SAK::Transform
     # @return [self] daisy-chainable self-reference
     #
     def load
-      RDF::SAK::Util.subjects_for(RDF.type, RDF::SAK::TFO.Partial).each do |s|
-        resolve repo
+      RDF::SAK::Util.subjects_for(repo, RDF.type,
+                                  RDF::SAK::TFO.Partial).each do |s|
+        resolve subject: s
       end
 
       # return self to daisy-chain
       self
+    end
+
+    def partials
+      @cache.keys.select { |x| x.is_a? RDF::Resource }
     end
 
     def repo
@@ -889,13 +898,45 @@ class RDF::SAK::Transform
     # @param output [RDF::Resource] the identifier for the output
     # @param params [Hash, RDF::SAK::Transform::Partial] the parameters
     #   or partial application that is completed
-    def initialize subject, transform, input, output, params = {}
+    def initialize subject, transform, input, output, params = {},
+        start: nil, stop: nil
       # params may be a partial
       super subject, transform, params
 
       @input     = input
       @output    = output
-      @completes = params if params.is_a? Partial
+      @completes = params if params.is_a? RDF::SAK::Transform::Partial
+      @start     = start
+      @stop      = stop
+    end
+
+    # Returns the function application as an array of triples.
+    def to_triples
+      out = [] # .extend RDF::Enumerable
+      s = @subject
+      out << [s, RDF.type, RDF::SAK::TFO.Application]
+
+      if @start
+        start = @start.is_a?(RDF::Literal) ? @start : RDF::Literal(@start) 
+        out << [s, RDF::Vocab::PROV.startedAtTime, start]
+      end
+
+      if @stop
+        stop = @stop.is_a?(RDF::Literal) ? @stop : RDF::Literal(@stop)
+        out << [s, RDF::Vocab::PROV.endedAtTime, stop]
+      end
+
+      if @completes
+        out << [s, RDF::SAK::TFO.completes, @completes.subject]
+      else
+        out << [s, RDF::SAK::TFO.transform, transform.subject]
+        pdup = transform.validate params, defaults: false, silent: true
+        pdup.each do |k, vals|
+          vals.each { |v| out << [s, k, v] }
+        end
+      end
+
+      out.map { |triples| RDF::Statement(*triples) }
     end
 
     def [](key)
