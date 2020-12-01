@@ -86,8 +86,8 @@ module RDF::SAK::Util
         end
       end.flatten).join(?|),
     dehydrate: '//html:a[count(*)=1][html:dfn|html:abbr|html:span]',
-    rehydrate: %w[//html:dfn
-      //html:abbr[not(parent::html:dfn)] //html:span].join(?|) +
+    rehydrate: %w[.//html:dfn
+      .//html:abbr[not(parent::html:dfn)] .//html:span].join(?|) +
       '[not(parent::html:a)]',
     htmllinks: (%w[*[not(self::html:base)][@href]/@href
       *[@src]/@src object[@data]/@data *[@srcset]/@srcset
@@ -296,7 +296,7 @@ module RDF::SAK::Util
     subject = nil
     parent  = node.parent
     ns_href = node.namespace.href if node.namespace
-    up_ok   = %i[rel rev].none? { |a| node.key? a }
+    up_ok   = %w[rel rev].none? { |a| node.key? a }
     is_root = !parent or parent.document?
     special = /^(?:[^:]+:)?(?:head|body)$/i === node.name and
       (ns_href == 'http://www.w3.org/1999/xhtml' or
@@ -311,7 +311,7 @@ module RDF::SAK::Util
           prefixes: prefixes, base: base, scalar: true
       else
         # then check @href and @src
-        %i[href src].each do |attr|
+        %w[href src].each do |attr|
           if node.key? attr
             # merge with the root and return it
             subject = base + node[attr]
@@ -340,7 +340,7 @@ module RDF::SAK::Util
     elsif is_root
       subject = base
     elsif special
-      subject = subject_for_internal parent
+      subject = internal_subject_for parent
     elsif node[:resource]
       # XXX resolve @about against potential curie
       subject = resolve_curie node[:resource], prefixes: prefixes, base: base
@@ -362,7 +362,7 @@ module RDF::SAK::Util
       return RDF::Node('id-%016x' % node.pointer_id)
       # elsif node[:id]
     else
-      subject = subject_for_internal parent, is_ancestor: true
+      subject = internal_subject_for parent, is_ancestor: true
     end
 
     coerce_resource subject, as: coerce if subject
@@ -403,6 +403,9 @@ module RDF::SAK::Util
   NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
   NMAP   = ({ iri: :uri, bnode: :blank }.merge(
     [:uri, :blank, :literal].map { |x| [x, x] }.to_h)).freeze
+
+  # it is so lame i have to do this
+  BITS = { nil => 0, false => 0, true => 1 }
 
   public
 
@@ -737,15 +740,6 @@ module RDF::SAK::Util
 
     # goal: return the most "appropriate" UUID for the given URI
 
-    # it is so lame i have to do this
-    bits = { nil => 0, false => 0, true => 1 }
-
-    # rank (0 is higher):
-    # * (00) exact & canonical == 0,
-    # * (01) exact == 1,
-    # * (10) inexact & canonical == 2,
-    # * (11) inexact == 3. 
-
     # warn "WTF URI #{uri}"
 
     # handle path parameters by generating a bunch of candidates
@@ -767,6 +761,12 @@ module RDF::SAK::Util
              [uri] # not a pathful URI
            end
 
+    # rank (0 is higher):
+    # * (00) exact & canonical == 0,
+    # * (01) exact == 1,
+    # * (10) inexact & canonical == 2,
+    # * (11) inexact == 3.
+
     # collect the candidates by URI
     sa = predicate_set [RDF::SAK::CI.canonical,
       RDF::SAK::CI.alias, RDF::OWL.sameAs]
@@ -774,12 +774,14 @@ module RDF::SAK::Util
     uris.each do |u|
       candidates = subjects_for(repo, sa, u, entail: false) do |s, f|
         # there is no #to_i for booleans and also we xor this number
-        [s, { rank: bits[f.include?(RDF::SAK::CI.canonical)] ^ 1,
+        [s, { rank: BITS[f.include?(RDF::SAK::CI.canonical)] ^ 1,
           published: published?(repo, s),
           mtime: dates_for(repo, s).last || DateTime.new }]
       end.compact.to_h
       break unless candidates.empty?
     end
+
+    # warn candidates.inspect
 
     # now collect by slug
     slug = terminal_slug uri, base: base
@@ -939,46 +941,61 @@ module RDF::SAK::Util
   # Obtain the "best" dereferenceable URI for the subject.
   # Optionally returns all candidates.
   # 
-  # @param repo     [RDF::Queryable]
-  # @param subject  [RDF::Resource]
-  # @param unique   [true, false] flag for unique return value
-  # @param rdf      [true, false] flag to specify RDF::URI vs URI 
-  # @param slugs    [true, false] flag to include slugs
-  # @param fragment [true, false] flag to include fragment URIs
+  # @param repo      [RDF::Queryable]
+  # @param subject   [RDF::Resource]
+  # @param unique    [true, false] flag for unique return value
+  # @param rdf       [true, false] flag to specify RDF::URI vs URI 
+  # @param slugs     [true, false] flag to include slugs
+  # @param fragment  [true, false] flag to include fragment URIs
+  # @param subs_only [true, false] flag to constrain candidates to subjects
   #
   # @return [RDF::URI, URI, Array]
   #
   def self.canonical_uri repo, subject, base: nil,
-      unique: true, rdf: true, slugs: false, fragment: false
+      unique: true, rdf: true, slugs: false, fragment: false, subs_only: false
     subject = coerce_resource subject, base
-    out = []
 
-    # try to find it first
-    out = objects_for(repo, subject, [RDF::SAK::CI.canonical, RDF::OWL.sameAs],
-      entail: false, only: :resource).select do |o|
-      # only consider the subjects
-      repo.has_subject? o
-    end.sort { |a, b| cmp_resource a, b }
+    # this was rewritten to correctly pick the canonical uri and i
+    # have no idea why it wasn't like this before
 
-    # try to generate in lieu
-    if subject.uri? and (out.empty? or slugs)
+    # note that canonical/canonical-slug should be functional so
+    # should not have multiple entries; in this case we pick the
+    # "lowest" lexically purely in the interest of being consistent
+    primary = objects_for(repo, subject, RDF::SAK::CI.canonical,
+                          only: :resource).sort { |a, b| cmp_resource a, b }
+    if subject.uri? and slugs and (primary.empty? or not unique)
+      primary += objects_for(repo, subject,
+        RDF::SAK::CI['canonical-slug'], only: :literal).map do |o|
+        base + o.value 
+      end.sort { |a, b| cmp_resource a, b }
+    end
 
-      out += objects_for(repo, subject,
-        [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug],
-        only: :literal).map do |o|
-        base + o.value
-      end if slugs
+    # in the case of the secondary 
+    secondary = []
+    if primary.empty? or not unique
+      secondary = objects_for(repo, subject, RDF::OWL.sameAs,
+        entail: false, only: :resource).sort { |a, b| cmp_resource a, b }
+
+      if subject.uri? and slugs
+        secondary += objects_for(repo, subject, RDF::SAK::CI.slug,
+          entail: false, only: :literal).map do |o|
+          base + o.value
+        end.sort { |a, b|cmp_resource a, b }
+      end
 
       uri = URI(uri_pp(subject.to_s))
       if base and uri.respond_to? :uuid
         b = base.clone
         b.query = b.fragment = nil
         b.path = '/' + uri.uuid
-        out << RDF::URI.new(b.to_s)
+        secondary << RDF::URI.new(b.to_s)
       else
-        out << subject
+        secondary << subject
       end
     end
+
+    # now we merge the two lists together
+    out = primary + secondary
 
     # remove all URIs with fragments unless specified
     unless fragment
@@ -1239,7 +1256,9 @@ module RDF::SAK::Util
   #
   # @return [Array] of dates
   #
-  def self.dates_for repo, subject, predicate: RDF::Vocab::DC.date,
+  def self.dates_for repo, subject,
+      predicate: [RDF::Vocab::DC.created, RDF::Vocab::DC.modified,
+                  RDF::Vocab::DC.issued, RDF::Vocab::DC.date],
       datatype: [RDF::XSD.date, RDF::XSD.dateTime]
     objects_for(
       repo, subject, predicate, only: :literal, datatype: datatype) do |o|
@@ -1777,7 +1796,7 @@ module RDF::SAK::Util
       (descend ? :descendant : :ancestor)
     elem.xpath(xpath).each do |e|
       # this will always merge our prefix on top irrespective of direction
-      prefix = get_prefix(e, traverse: false, coerce: coerce).merge prefix
+      prefix = get_prefixes(e, traverse: false, coerce: coerce).merge prefix
     end
 
     prefix
@@ -1806,11 +1825,29 @@ module RDF::SAK::Util
     internal_subject_for node, prefixes: prefixes, base: base, coerce: coerce
   end
 
+  # 
   def modernize doc
     doc.xpath(XPATH[:modernize], XPATHNS).each do |e|
       # gotta instance_exec because `markup` is otherwise unbound
       instance_exec e, &MODERNIZE[e.name.to_sym]
     end
+  end
+
+  # Scan definition 
+  def scan_terms node, prefixes: nil, base: nil, coerce: :rdf, &block
+    node.xpath(XPATH[:rehydrate], XPATHNS).map do |e|
+      # extract some useful bits from the thing
+      subject = subject_for e, prefixes: prefixes, base: base, coerce: coerce
+      text    = (e.content || '').strip
+      title   = e[:title].strip if e.key? 'title' and !e[:title].empty?
+
+      next unless !text.empty? or title
+
+      # run the block if there is one
+      block.call subject, e, text, title if block
+
+      [subject, e, text, title]
+    end.compact
   end
 
   # Strip all the links surrounding and RDFa attributes off

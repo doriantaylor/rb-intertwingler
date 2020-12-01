@@ -39,7 +39,8 @@ class RDF::SAK::Document
     doc = case doc
           when Nokogiri::XML::Document then doc
           when Nokogiri::XML::Node then Nokogiri::XML::Document.new << doc.dup
-          when String, IO, File, Pathname then Nokogiri.XML doc
+          when Pathname then Nokogiri.XML doc.expand_path.open
+          when String, IO, File then Nokogiri.XML doc
           else
             raise ArgumentError, "Not sure what to do with #{doc.class}"
           end
@@ -234,7 +235,7 @@ class RDF::SAK::Document
   def vocab_for node
     if node[:vocab]
       vocab = node[:vocab].strip
-      return nil if vocab == ''
+      return if vocab.empty?
       return vocab
     end
     parent = node.parent
@@ -269,94 +270,10 @@ class RDF::SAK::Document
   end
 
   # give us the rdf subject of the node itself
-  def subject_for node = nil, rdf: false, is_ancestor: false
+  def subject_for node = nil, prefixes: nil, base: nil, coerce: :rdf
     node ||= @doc.root
-    raise 'Node must be an element' unless
-      node.is_a? Nokogiri::XML::Element
-
-    # first we check for an ancestor element with @property and no
-    # @content; if we find one then we reevaluate with that
-    # element as the starting point
-    if n = node.at_xpath(LITXP)
-      return subject_for n
-    end
-
-    # answer a bunch of helpful questions about this element
-    subject = nil
-    base    = base_for node
-    parent  = node.parent
-    ns_href = node.namespace.href if node.namespace
-    up_ok   = %i{rel rev}.none? { |a| node[a] }
-    is_root = !parent or parent.document?
-    special = /^(?:[^:]+:)?(?:head|body)$/i === node.name and
-      (ns_href == XHTMLNS or /^(?:[^:]+:)?html$/xi === parent.name)
-
-    # if the node is being inspected as an ancestor to the
-    # original node, we have to check it backwards.
-    if is_ancestor
-      # ah right @resource gets special treatment
-      if subject = node[:resource]
-        subject.strip!
-        if m = /^\[(.*?)\]$/.match(subject)
-        end
-      else
-        OBJS.each do |attr|
-          if node[attr]
-            # merge with the root and return it
-            subject = base + node[attr]
-            break
-          end
-        end
-      end
-
-      return rdf ? RDF::URI(subject.to_s) : subject
-
-      # note if we are being called with is_ancestor, that means
-      # the original node (or indeed any of the nodes previously
-      # tested) have anything resembling a resource in them. this
-      # means @rel/@rev should be ignored, and we should keep
-      # looking for a subject.
-    end
-
-    if node[:about]
-          
-      if m = /^_:(.*)$/.match(node[:about])
-        return RDF::Node(m[1])
-      end
-
-      # XXX resolve @about against potential curie
-      subject = base + node[:about]
-
-    elsif is_root
-      subject = base
-    elsif special
-      subject = subject_for parent
-    elsif node[:resource]
-      # XXX resolve @about against potential curie
-      subject = base + node[:resource]
-    elsif node[:href]
-      subject = base + node[:href]
-    elsif node[:src]
-      subject = base + node[:src]
-    elsif node[:typeof]
-      # bnode the typeof attr
-
-      # note we return bnodes irrespective of the rdf flag
-      return RDF::Node('id-%016x' % node.attributes['typeof'].pointer_id)
-    elsif node[:inlist]
-      # bnode the inlist attr
-      return RDF::Node('id-%016x' % node.attributes['inlist'].pointer_id)
-    elsif (parent[:inlist] && OBJS.none? { |a| parent[a] }) ||
-        (is_ancestor && !up_ok)
-      # bnode the element
-      return RDF::Node('id-%016x' % node.pointer_id)
-      # elsif node[:id]
-    else
-      subject = subject_for parent, is_ancestor: true
-    end
-
-    rdf ? RDF::URI(subject.to_s) : URI(subject.to_s)
-
+    RDF::SAK::Util.subject_for node,
+      prefixes: prefixes, base: base, coerce: coerce
   end
 
   # backlink structure

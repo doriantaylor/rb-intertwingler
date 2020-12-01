@@ -407,7 +407,7 @@ module RDF::SAK
     #
     def formats_for subject, predicate: RDF::Vocab::DC.format,
         datatype: [RDF::XSD.token]
-      Util.objects_for @graph, subject, predicate: predicate, datatype: datatype
+      Util.objects_for @graph, subject, predicate, datatype: datatype
     end
 
     # Assuming the subject is a thing that has authors, return the
@@ -1285,7 +1285,11 @@ module RDF::SAK
             n = label_for a
             x = authors[a] = { '#author' => [{ '#name' => n[1].to_s }] }
 
-            hp = @graph.first_object [a, RDF::Vocab::FOAF.homepage, nil]
+            if hp = objects_for(a, RDF::Vocab::FOAF.homepage,
+                                only: :resource).sort.first
+              hp = canonical_uri hp
+            end
+
             hp ||= canonical_uri a
             
             x['#author'].push({ '#uri' => hp.to_s }) if hp
