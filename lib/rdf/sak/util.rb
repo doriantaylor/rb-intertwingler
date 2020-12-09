@@ -343,7 +343,8 @@ module RDF::SAK::Util
       subject = internal_subject_for parent
     elsif node[:resource]
       # XXX resolve @about against potential curie
-      subject = resolve_curie node[:resource], prefixes: prefixes, base: base
+      subject = resolve_curie node[:resource],
+        prefixes: prefixes, base: base, scalar: true
     elsif node[:href]
       subject = base + node[:href]
     elsif node[:src]
@@ -1256,9 +1257,7 @@ module RDF::SAK::Util
   #
   # @return [Array] of dates
   #
-  def self.dates_for repo, subject,
-      predicate: [RDF::Vocab::DC.created, RDF::Vocab::DC.modified,
-                  RDF::Vocab::DC.issued, RDF::Vocab::DC.date],
+  def self.dates_for repo, subject, predicate: RDF::Vocab::DC.date,
       datatype: [RDF::XSD.date, RDF::XSD.dateTime]
     objects_for(
       repo, subject, predicate, only: :literal, datatype: datatype) do |o|
