@@ -268,6 +268,7 @@ module RDF::SAK::Util
     prefixes
   end
 
+
   def assert_uri_coercion coerce
     if coerce
       coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
@@ -425,16 +426,20 @@ module RDF::SAK::Util
     spec.any? { |k| node.send NTESTS[k] }
   end
 
-  # Obtain all and only the rdf:types directly asserted on the subject.
+  # Obtain all and only the `rdf:type`s directly asserted on the subject.
   # 
   # @param repo [RDF::Queryable]
   # @param subject [RDF::Resource]
-  # @param type [RDF::Term, :to_a]
+  # @param type [RDF::Term, :to_a] override searching for type(s) and
+  #  just return what is passed in (XXX why did i do this?)
+  # @param struct [Hash] pull from an attribute-value hash rather than
+  #  the graph
   #
   # @return [Array]
-  def self.asserted_types repo, subject, type = nil
+  def self.asserted_types repo, subject, type = nil, struct: nil
     asserted = nil
 
+    # XXX i don't understand why this condition exists; TODO track it down
     if type
       type = type.respond_to?(:to_a) ? type.to_a : [type]
       asserted = type.select { |t| t.is_a? RDF::Value }.map do |t|
@@ -442,7 +447,8 @@ module RDF::SAK::Util
       end
     end
 
-    asserted ||= repo.query([subject, RDF.type, nil]).objects.map do |o|
+    asserted ||= struct ? struct[RDF.type].dup : repo.query(
+      [subject, RDF.type, nil]).objects.map do |o|
       RDF::Vocabulary.find_term o
     end.compact
 
@@ -523,6 +529,27 @@ module RDF::SAK::Util
     strata
   end
 
+  # XXX this should really go in RDF::Reasoner
+  def symmetric? property
+    property = RDF::Vocabulary.find_term property rescue return false
+    type = type_strata(property.type).flatten
+    type.include? RDF::OWL.SymmetricProperty
+  end
+
+  # Determine whether a subject is a given `rdf:type`.
+  #
+  # @param repo [RDF::Queryable] the repository
+  # @param subject [RDF::Resource] the resource to test
+  # @param type [RDF::Term] the type to test the subject against
+  # @param struct [Hash] an optional predicate-object set
+  # @return [true, false]
+  #
+  def rdf_type? repo, subject, type, struct: nil
+    asserted = asserted_types repo, subject, struct: struct
+
+    !type_strata(type).flatten.uniq.intersection(asserted).empty?
+  end
+
   # Obtain the objects for a given subject-predicate pair.
   #
   # @param subject [RDF::Resource]
@@ -592,7 +619,7 @@ module RDF::SAK::Util
         next unless node_matches? s, only
 
         entry = out[s] ||= [Set.new, Set.new]
-        entry[0] << p
+        entry.first << p
       end
 
       # do this here while we're at it
@@ -610,7 +637,7 @@ module RDF::SAK::Util
           next unless node_matches? o, only
 
           entry = out[o] ||= [Set.new, Set.new]
-          entry[1] << p
+          entry.last << p
         end
       end
     end
@@ -1016,10 +1043,19 @@ module RDF::SAK::Util
   # @param uri
   # 
   # @return [true, false]
-  def self.published? repo, uri, circulated: false, base: nil
+  def self.published? repo, uri,
+      circulated: false, retired: false, indexed: false, base: nil
     uri = coerce_resource uri, base
+
+    if indexed
+      ix = objects_for(repo, uri, RDF::SAK::CI.indexed, only: :literal).first
+      return false if ix and ix.object == false
+    end
+
     candidates = objects_for(
       repo, uri, RDF::Vocab::BIBO.status, only: :resource).to_set
+
+    return false if !retired and candidates.include? RDF::SAK::CI.retired
 
     test = Set[RDF::Vocab::BIBO['status/published']]
     test << RDF::SAK::CI.circulated if circulated
@@ -1041,8 +1077,8 @@ module RDF::SAK::Util
   #
   # @return [Hash]
   #
-  def self.struct_for repo, subject, base: nil,
-      rev: false, only: [], uuids: false, canon: false, ucache: {}, scache: {}
+  def self.struct_for repo, subject, base: nil, rev: false, only: [],
+      inverses: false, uuids: false, canon: false, ucache: {}, scache: {}
     only = coerce_node_spec only
 
     # coerce the subject
@@ -1067,9 +1103,41 @@ module RDF::SAK::Util
         end
       end
 
-      p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
-      o = rsrc[p] ||= []
-      o.push node if node # may be nil
+      if node # may have been set to nil by the previous operation
+        p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
+        o = rsrc[p] ||= []
+        o << node
+      end
+    end
+
+    # add inverseOf and symmetric proprties
+    if inverses and only != [:literal]
+      pattern = rev ? [subject, nil, nil] : [nil, nil, subject]
+      repo.query(pattern) do |stmt|
+        node = rev ? stmt.object : stmt.subject
+        next unless node_matches? node, only
+
+        # XXX maybe pick a better way to sort this out
+        inverse = stmt.predicate.inverseOf.sort.first
+        inverse ||= stmt.predicate if symmetric? stmt.predicate
+        next unless inverse
+
+        # coerce the node to uuid if told to
+        if node.resource?
+          if uuids
+            uu = canonical_uuid(repo, node,
+              scache: scache, ucache: ucache) unless ucache.key? node
+            node = uu || (canon ? canonical_uri(repo, node) : node)
+          elsif canon
+            node = canonical_uri(repo, node)
+          end
+        end
+
+        if node # again, may be nil
+          v = rsrc[inverse] ||= []
+          v << node
+        end
+      end
     end
 
     # XXX in here we can do fun stuff like filter/sort by language/datatype
@@ -1102,7 +1170,7 @@ module RDF::SAK::Util
     # get all the inferred types by layer; add default class if needed
     strata = type_strata asserted
     strata.push [RDF::RDFS.Resource] if
-      strata.empty? or not strata[-1].include?(RDF::RDFS.Resource)
+      strata.empty? or not strata.last.include?(RDF::RDFS.Resource)
 
     # get the key-value pairs for the subject
     candidates ||= struct_for repo, subject, only: :literal
@@ -2001,7 +2069,7 @@ module RDF::SAK::Util
 
     # sniff out all the URIs and datatypes
     resources = Set.new
-    nodes.each do |n|
+    nodes.to_a.flatten.uniq.each do |n|
       next unless n.is_a? RDF::Term
       if n.literal? && n.datatype?
         resources << n.datatype

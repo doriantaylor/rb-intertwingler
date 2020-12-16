@@ -273,9 +273,11 @@ module RDF::SAK
     #
     # @return [Hash]
     #
-    def struct_for subject, rev: false, only: [], uuids: false, canon: false
+    def struct_for subject, rev: false, only: [], inverses: false,
+        uuids: false, canon: false, ucache: {}, scache: {}
       Util.struct_for @graph, subject,
-        rev: rev, only: only, uuids: uuids, canon: canon
+        rev: rev, only: only, inverses: inverses, uuids: uuids, canon: canon,
+        ucache: ucache, scache: scache
     end
 
     # Obtain everything in the graph that is an `rdf:type` of something.
@@ -312,6 +314,18 @@ module RDF::SAK
     #
     def asserted_types subject, type = nil
       Util.asserted_types @graph, subject, type
+    end
+
+    # Determine whether a subject is a given `rdf:type`.
+    #
+    # @param repo [RDF::Queryable] the repository
+    # @param subject [RDF::Resource] the resource to test
+    # @param type [RDF::Term] the type to test the subject against
+    # @param struct [Hash] an optional predicate-object set
+    # @return [true, false]
+    #
+    def rdf_type? subject, type, struct: nil
+      Util.rdf_type? @graph, subject, type, struct: struct
     end
 
     # Obtain the canonical UUID for the given URI
@@ -1694,6 +1708,160 @@ module RDF::SAK
         fh.flush
         fh.close
       end
+    end
+
+
+    # This will generate an (X)HTML+RDFa page containing either a
+    # SKOS concept scheme or a collection, ordered or otherwise.
+    # 
+    # XXX later on we should consider conneg for languages
+    #
+    #
+    def generate_concept_scheme subject, published: true, fragment: false
+      base  = canonical_uri subject, rdf: false
+      # determine if subject is a concept scheme or if it is a collection
+
+      # if it's an ordered collection get the list
+      # otherwise if it's a regular collection get the members
+      # otherwise if it's a concept scheme get everything from inScheme
+
+      # get the labels for all the concepts (TODO skosxl)
+
+      ucache = {}
+      scache = {}
+      struct = struct_for subject, uuids: true, ucache: ucache, scache: scache
+
+      concepts = subjects_for(RDF::Vocab::SKOS.inScheme, subject).map do |s|
+        [s, struct_for(s, uuids: true, inverses: true,
+          ucache: ucache, scache: scache)]
+      end.sort do |a, b|
+        as = (label_for(a.first, candidates: a.last) || [a]).last.value.downcase
+        bs = (label_for(b.first, candidates: b.last) || [b]).last.value.downcase
+
+        as <=> bs
+      end.to_h
+
+
+      # begin collecting the nodes so we can properly do
+      allnodes = (struct.to_a +
+        concepts.map { |k, v| [k, v.to_a] }).flatten.to_set
+
+      # get the definition
+      # get example(s)
+      # get broader, narrower, related
+      # get referents
+      spec = concepts.map do |k, v|
+        allnodes |= (types = asserted_types k, struct: v)
+        types = abbreviate(types)
+
+        labp, labo = (label_for(k, candidates: v) || [nil, k])
+
+        allnodes << labp if labp
+        allnodes << labo
+
+        h2 = { [labo.value] => :h2 }
+        h2[:property] = abbreviate labp if labp
+
+        if labo.literal?
+          h2["xml:lang"] = labo.language if labo.language?
+          h2[:datatype]  = abbreviate(labo.datatype) if labo.datatype?
+        end
+
+        # collect the adjacents so we don't snag em by accident
+        seen = Set[subject]
+
+        dl = []
+
+        [[:broader, "Has Broader"],
+          [:narrower, "Has Narrower"],
+          [:related, "Has Related"]].each do |pred, dt|
+          pred = RDF::Vocab::SKOS[pred]
+          next unless x = v[pred]
+          pred = abbreviate(pred)
+          dl << { [dt] => :dt }
+          x.map { |o| [o] + (label_for(o) || [nil, o]) }.sort do |a, b|
+            a.last.value.downcase <=> b.last.value.downcase
+          end.each do |s, p, o|
+            seen << s
+            tu = URI(uri_pp(s).to_s).normalize
+            u = tu.respond_to?(:uuid) ?
+              "##{UUID::NCName.to_ncname_64(tu.uuid, version: 1)}" :
+              canonical_uri(s)
+            a = if p
+                  lp = abbreviate(p)
+                  span = { [o.value] => :span, property: lp }
+                  { span => :a }
+                else
+                  { [o.value] => :a }
+                end
+            a[:href] = u.to_s
+            a[:rel]  = pred
+
+            if o.literal?
+              a['xml:lang'] = o.language if o.language?
+              a[:datatype]  = o.datatype if o.datatype?
+            end
+            dl << { a => :dd }
+          end
+        end
+
+        # now we grab all the inbounds
+        op = {}
+        graph.query([nil, nil, k]).to_a.reject do |stmt|
+          s = stmt.subject
+          !s.uri? or seen === s or (published and !published?(s))
+        end.each do |stmt|
+          s, p, _ = stmt.to_triple
+
+          allnodes << p
+          allnodes |= (t = asserted_types(s))
+          allnodes |= (l = label_for(s) || [])
+
+          x = op[s] ||= [[], t, l || [nil, s]]
+          x.first << p
+        end
+
+        unless op.empty?
+          dl << { ["Referenced By"] => :dt }
+          op.sort do |a, b|
+            # last(1) is v of kv, last(2) is label, last(3) is value
+            a.last.last.last.value.downcase <=> b.last.last.last.value.downcase
+          end.each do |k, v|
+            ps, ts, lab = *v
+            u = canonical_uri k
+            a = { { [lab.last.to_s] => :span,
+              property: abbreviate(lab.first) } => :a,
+              href: u.to_s, rev: abbreviate(ps), typeof: abbreviate(ts) }
+            dl << { a => :dd }
+          end
+        end
+
+        dl = { dl => :dl } unless dl.empty?
+
+        id = UUID::NCName.to_ncname_64(k.value.dup, version: 1)
+
+        para = nil
+
+        { [h2, para, dl] => :section, rev: 'skos:inScheme',
+         resource: "##{id}", typeof: types, id: id }
+      end
+
+      abs   = label_for(subject, candidates: struct, desc: true)
+      mn    = {}
+      mn[abs.last] = :description if abs
+      meta  = head_meta(subject, struct: struct, meta_names: mn, vocab: XHV) +
+        generate_twitter_meta(subject)
+      links = head_links subject, struct: struct, vocab: XHV
+      pfx   = prefix_subset prefixes, allnodes
+      types = abbreviate asserted_types(subject)
+      title = if t = label_for(subject)
+                [t[1].to_s, abbreviate(t[0])]
+              end
+
+      xhtml_stub(base: base, title: title, transform: @config[:transform],
+        prefix: pfx, vocab: XHV, link: links, meta: meta,
+        attr: { about: '', typeof: types }, content: spec
+      ).document
     end
       
     # - io stuff -

@@ -84,15 +84,17 @@ require 'rdf/sak/version' # for the symbols
 module RDF::SAK::NLP
   # Recurse into an XML document, harvesting a given set of tags for a
   # given namespace. Returns an array of arrays of the form `[:name,
-  # "text", "alt"]`, which can be manipulated by a block.
+  # "text", "alt"]`, which can be manipulated by a block. Note the
+  # block gets the element itself prepended to the array for further
+  # processing.
   #
   # @param node [Nokogiri::XML::Node] the origin node
   # @param mapping [Hash] A mapping of namespaces to arrays of tags
-  # @yieldparam node [Nokogiri::XML::Element] the current element
-  # @yieldparam name [Symbol] the element's local name
   # @yieldparam text [String] the element's (flattened) text
   # @yieldparam alt  [String, nil] the element's alternate text
   #   (currently hard-coded as the `title` attribute)
+  # @yieldparam name [Symbol] the element's local name
+  # @yieldparam node [Nokogiri::XML::Element] the current element
   # @yieldreturn [Array] a potentially modified array of inputs
   # @return [Array] an array of arrays
   #
@@ -105,18 +107,21 @@ module RDF::SAK::NLP
       ns   = node.namespace.respond_to?(:href) ? node.namespace.href : nil
       name = node.name.to_sym
       if mapping[ns] and mapping[ns].include?(name)
-        main = node.text.strip
-        alt  = node[:title] # XXX maybe parametrize this?
-        grp  = [name, main.empty? ? nil : main, alt] 
-        grp  = block.call(node, *grp) if block
-        out << grp
+        text = node.text.strip
+        text = text.empty? ? nil : text # make this nil if empty
+        alt  = node[:title]             # XXX maybe parametrize this?
+
+        # only run the block/append if there is something there
+        if text or alt
+          out << (block ? block.call(text, alt, name, node) : [text, alt, name])
+        end
       end
     end
 
     # recurse lol
     out + node.children.map do |c|
       harvest_tags c, mapping: mapping, &block
-    end.flatten(1)
+    end.flatten(1) # shuck off the first layer of array
   end
 
   def scan_terms doc
@@ -131,5 +136,6 @@ module RDF::SAK::NLP
   def lemmatize 
   end
 
+  # make these instance methods available to the module
   extend self
 end
