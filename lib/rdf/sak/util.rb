@@ -447,7 +447,7 @@ module RDF::SAK::Util
       end
     end
 
-    asserted ||= struct ? struct[RDF.type].dup : repo.query(
+    asserted ||= struct ? (struct[RDF.type].dup || []) : repo.query(
       [subject, RDF.type, nil]).objects.map do |o|
       RDF::Vocabulary.find_term o
     end.compact
@@ -458,14 +458,16 @@ module RDF::SAK::Util
   # Obtain a stack of types for an asserted initial type or set
   # thereof. Returns an array of arrays, where the first is the
   # asserted types and their inferred equivalents, and subsequent
-  # elements are immediate superclasses and their equivalents. A
-  # given URI will only appear once in the entire structure.
+  # elements are immediate superclasses and their equivalents. A given
+  # URI will only appear once in the entire structure. When `descend`
+  # is set, the resulting array will be flat.
   #
   # @param rdftype [RDF::Term, :to_a]
+  # @param descend [true,false] descend instead of ascend
   #
   # @return [Array]
   #
-  def type_strata rdftype
+  def type_strata rdftype, descend: false
     # first we coerce this to an array
     if rdftype.respond_to? :to_a
       rdftype = rdftype.to_a
@@ -487,6 +489,7 @@ module RDF::SAK::Util
     queue  = [rdftype]
     strata = []
     seen   = Set.new
+    qmeth  = descend ? :subClass : :subClassOf 
 
     while qin = queue.shift
       qwork = []
@@ -509,11 +512,11 @@ module RDF::SAK::Util
       strata.push qwork.dup unless qwork.empty?
      
       # now deal with subClassOf
-      qsuper = []
-      qwork.each { |q| qsuper += q.subClassOf }
+      qnext = []
+      qwork.each { |q| qnext += q.send(qmeth) }
 
       # grep and flatten this too
-      qsuper = qsuper.map do |t|
+      qnext = qnext.map do |t|
         next t if t.is_a? RDF::Vocabulary::Term
         RDF::Vocabulary.find_term t
       end.compact.uniq - seen.to_a
@@ -522,11 +525,11 @@ module RDF::SAK::Util
       # warn "qsuper == #{qsuper.inspect}"
 
       # same deal, conditionally push the input queue
-      queue.push qsuper.dup unless qsuper.empty?
+      queue.push qnext.dup unless qnext.empty?
     end
 
     # voila
-    strata
+    descend ? strata.flatten : strata
   end
 
   # XXX this should really go in RDF::Reasoner
@@ -547,16 +550,12 @@ module RDF::SAK::Util
   def rdf_type? repo, subject, type, struct: nil
     asserted = asserted_types repo, subject, struct: struct
 
-    !type_strata(type).flatten.uniq.intersection(asserted).empty?
+    type_strata(asserted).flatten.include? type
   end
 
-  # Obtain the objects for a given subject-predicate pair.
+  # Obtain all the predicates that are equivalent to the given predicate(s).
   #
-  # @param subject [RDF::Resource]
-  # @param predicate [RDF::URI]
-  # @param entail [false, true]
-  # @param only [:uri, :iri, :resource, :blank, :bnode, :literal]
-  # @param datatype [RDF::Term]
+  # @param predicates [RDF::URI,Array]
   #
   # @return [Array]
   #
@@ -601,7 +600,7 @@ module RDF::SAK::Util
   #
   # @return [RDF::Resource]
   #
-  def self.subjects_for repo, predicate, object, entail: true, only: []
+  def self.subjects_for repo, predicate, object, entail: true, only: [], &block
     raise 'Object must be a Term' unless object.is_a? RDF::Term
     predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
     raise 'Predicate must be some kind of term' unless
@@ -643,7 +642,7 @@ module RDF::SAK::Util
     end
 
     # run this through a block to get access to the predicates
-    return out.map { |p, v| yield p, *v } if block_given?
+    return out.map { |node, preds| block.call node, *preds } if block
 
     out.keys
   end
@@ -660,7 +659,7 @@ module RDF::SAK::Util
   # @return [RDF::Term]
   #
   def self.objects_for repo, subject, predicate,
-      entail: true, only: [], datatype: nil
+      entail: true, only: [], datatype: nil, &block
     raise "Subject must be a resource, not #{subject.inspect}" unless
       subject.is_a? RDF::Resource
     predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
@@ -718,7 +717,7 @@ module RDF::SAK::Util
     end
 
     # run this through a block to get access to the predicates
-    return out.map { |p, v| yield p, *v } if block_given?
+    return out.map { |node, preds| block.call node, *preds } if block
 
     out.keys
   end
@@ -729,6 +728,8 @@ module RDF::SAK::Util
   # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
   # @param unique [true, false] return a single resource/nil or an array
   # @param published [true, false] whether to restrict to published docs
+  # @param scache [Hash] subject cache `{ subject => true }`
+  # @param ucache [Hash] UUID-to-URI cache `{ uuid => [URIs] }`
   # 
   # @return [RDF::URI, Array]
   #
@@ -823,7 +824,7 @@ module RDF::SAK::Util
             published: published?(repo, s, base: base),
             rank: 0b11, mtime: dates_for(repo, s).last || DateTime.new }
           # true is 1 and false is zero so we xor this too
-          rank  = (BITS[exact] << 1 | BITS[f.include?(sl[0])]) ^ 0b11
+          rank  = (BITS[exact] << 1 | BITS[f.include?(sl.first)]) ^ 0b11
           # now amend the rank if we have found a better one
           entry[:rank] = rank if rank < entry[:rank]
         end
@@ -924,7 +925,7 @@ module RDF::SAK::Util
           return cmp unless cmp == 0
 
           # now compare presence of www
-          cmp = pref[ah[0] == 'www'] <=> pref[bh[0] == 'www']
+          cmp = pref[ah.first == 'www'] <=> pref[bh.first == 'www']
           return cmp unless cmp == 0
 
           # if we're still here, compare the path/query/fragment
@@ -979,9 +980,21 @@ module RDF::SAK::Util
   #
   # @return [RDF::URI, URI, Array]
   #
-  def self.canonical_uri repo, subject, base: nil,
-      unique: true, rdf: true, slugs: false, fragment: false, subs_only: false
+  def self.canonical_uri repo, subject, base: nil, unique: true, rdf: true,
+      slugs: false, fragment: false, subs_only: false, container: nil
     subject = coerce_resource subject, base
+
+    # dealing with non-documents (hash vs slash)
+    #
+    # * if the subject has a ci:canonical that is an HTTP(S) URL, then
+    #   use that
+    #
+    # * if the subject has a type that is equivalent or subclass of
+    #   foaf:Document, then it gets a slash url
+    #
+    # * if the subject however is /not/ a foaf:Document and the
+    #   `container` parameter is set then return a fragment identifer
+    #   off the container
 
     # this was rewritten to correctly pick the canonical uri and i
     # have no idea why it wasn't like this before
@@ -989,8 +1002,11 @@ module RDF::SAK::Util
     # note that canonical/canonical-slug should be functional so
     # should not have multiple entries; in this case we pick the
     # "lowest" lexically purely in the interest of being consistent
+
+    # first thing: get ci:canonical
     primary = objects_for(repo, subject, RDF::SAK::CI.canonical,
                           only: :resource).sort { |a, b| cmp_resource a, b }
+    # if that's empty then try ci:canonical-slug
     if subject.uri? and slugs and (primary.empty? or not unique)
       primary += objects_for(repo, subject,
         RDF::SAK::CI['canonical-slug'], only: :literal).map do |o|
@@ -998,7 +1014,8 @@ module RDF::SAK::Util
       end.sort { |a, b| cmp_resource a, b }
     end
 
-    # in the case of the secondary 
+    # if the candidates are *still* empty, do the same thing but for
+    # owl:sameAs (ci:alias) etc
     secondary = []
     if primary.empty? or not unique
       secondary = objects_for(repo, subject, RDF::OWL.sameAs,
@@ -1008,7 +1025,7 @@ module RDF::SAK::Util
         secondary += objects_for(repo, subject, RDF::SAK::CI.slug,
           entail: false, only: :literal).map do |o|
           base + o.value
-        end.sort { |a, b|cmp_resource a, b }
+        end.sort { |a, b| cmp_resource a, b }
       end
 
       uri = URI(uri_pp(subject.to_s))
@@ -1117,25 +1134,24 @@ module RDF::SAK::Util
         node = rev ? stmt.object : stmt.subject
         next unless node_matches? node, only
 
-        # XXX maybe pick a better way to sort this out
-        inverse = stmt.predicate.inverseOf.sort.first
-        inverse ||= stmt.predicate if symmetric? stmt.predicate
-        next unless inverse
-
-        # coerce the node to uuid if told to
-        if node.resource?
-          if uuids
-            uu = canonical_uuid(repo, node,
-              scache: scache, ucache: ucache) unless ucache.key? node
-            node = uu || (canon ? canonical_uri(repo, node) : node)
-          elsif canon
-            node = canonical_uri(repo, node)
+        # i mean it's unlikely that there is more than one inverse
+        # predicate but not impossible
+        invs = (stmt.predicate.inverseOf || []).dup
+        invs << stmt.predicate if symmetric? stmt.predicate
+        invs.each do |inverse|
+          # coerce the node to uuid if told to
+          if node.resource?
+            if uuids
+              uu = canonical_uuid(repo, node,
+                scache: scache, ucache: ucache) unless ucache.key? node
+              node = uu || (canon ? canonical_uri(repo, node) : node)
+            elsif canon
+              node = canonical_uri(repo, node)
+            end
           end
-        end
 
-        if node # again, may be nil
-          v = rsrc[inverse] ||= []
-          v << node
+          # node may be nil from the resolution attempt above
+          (rsrc[inverse] ||= []) << node if node
         end
       end
     end
@@ -1195,7 +1211,7 @@ module RDF::SAK::Util
     end
 
     # try that for now
-    unique ? accum[0] : accum.uniq
+    unique ? accum.first : accum.uniq
     
     # what we want to do is match the predicates from the subject to
     # the predicates in the label designation
@@ -1456,6 +1472,22 @@ module RDF::SAK::Util
 
     node
   end
+
+  # ehh idea was to rip through the spec and rewrite urls but there
+  # are too many wildcards
+  # def rewrite_spec spec, base, prefixes, vocab = nil, inline: false
+  #   case spec
+  #   when Hash
+  #     # 
+  #   when Nokogiri::XML::Node
+  #     if inline
+  #     end
+  #   when -> x { x.is_a?(Array) or x.respond_to? :to_a }
+  #     spec.to_a.map { |x| rewrite_spec x, base, prefixes, vocab }
+  #   end
+  #
+  #   spec
+  # end
 
   XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
   XHV     = 'http://www.w3.org/1999/xhtml/vocab#'.freeze
@@ -1771,6 +1803,16 @@ module RDF::SAK::Util
     scalar ? term.first : term
   end
 
+  # find a subset of a struct for a given set of predicates
+  def find_in_struct struct, preds, invert: false
+    raise ArgumentError, 'preds must not be nil' if preds.nil?
+    preds = preds.respond_to?(:to_a) ? preds.to_a : [preds]
+
+    struct = struct.select { |p, _| preds.include? p }
+
+    invert ? invert_struct(struct) : struct
+  end
+
   ######## RDFA/XML STUFF ########
 
   # Returns the base URI from the perspective of the given element.
@@ -1840,7 +1882,7 @@ module RDF::SAK::Util
     if elem.key? 'prefix'
       # XXX note this assumes largely that the input is clean
       elem['prefix'].strip.split.each_slice(2) do |k, v|
-        pfx = k.split(?:)[0] or next # otherwise error
+        pfx = k.split(?:).first or next # otherwise error
         prefix[pfx.to_sym] = v
       end
     end
@@ -1981,7 +2023,7 @@ module RDF::SAK::Util
         cc = cand[chosen]
         unless cc
           cc = cand[chosen] = {}
-          cc[:stmts] = graph.query([chosen, nil, lit[0]]).to_a.sort
+          cc[:stmts] = graph.query([chosen, nil, lit.first]).to_a.sort
           cc[:types] = graph.query([chosen, RDF.type, nil]).objects.sort
           # if either of these are empty then the graph was not
           # appropriately populated
@@ -2068,15 +2110,7 @@ module RDF::SAK::Util
     raise 'nodes must be arrayable' unless nodes.respond_to? :to_a
 
     # sniff out all the URIs and datatypes
-    resources = Set.new
-    nodes.to_a.flatten.uniq.each do |n|
-      next unless n.is_a? RDF::Term
-      if n.literal? && n.datatype?
-        resources << n.datatype
-      elsif n.uri?
-        resources << n
-      end
-    end
+    resources = smush_struct nodes, uris: true
 
     # now we abbreviate all the resources
     pfx = abbreviate(resources.to_a,
@@ -2089,13 +2123,23 @@ module RDF::SAK::Util
   end
 
   # turns any data structure into a set of nodes
-  def smush_struct struct
+  def smush_struct struct, uris: false
     out = Set.new
 
     if struct.is_a? RDF::Term
-      out << struct
+      if uris
+        case
+        when struct.literal?
+          out << struct.datatype if struct.datatype?
+        when struct.uri? then out << struct
+        end
+      else
+        out << struct
+      end
     elsif struct.respond_to? :to_a
-      out |= struct.to_a.map { |s| smush_struct(s).to_a }.flatten.to_set
+      out |= struct.to_a.map do |s|
+        smush_struct(s, uris: uris).to_a
+      end.flatten.to_set
     end
 
     out
@@ -2137,6 +2181,7 @@ module RDF::SAK::Util
 
     tag
   end
+
 
   ######## MISC STUFF ########
 

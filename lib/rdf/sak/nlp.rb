@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-require 'rdf/sak/version' # for the symbols
+require 'rdf/sak/version' # initialize the symbols
 
 # This is the *extremely* lightweight NLP functionality. Goals:
 #
@@ -81,12 +81,36 @@ require 'rdf/sak/version' # for the symbols
 # Oh also I suppose we can generate TF-IDF scores or whatever with
 # that data too.
 #
+# OK so other stuff: say we have a set of extracted terms and we want
+# to compare it with a concept scheme w want to 
+#
 module RDF::SAK::NLP
-  # Recurse into an XML document, harvesting a given set of tags for a
-  # given namespace. Returns an array of arrays of the form `[:name,
-  # "text", "alt"]`, which can be manipulated by a block. Note the
-  # block gets the element itself prepended to the array for further
-  # processing.
+  # This class encapsulates a cache of SKOS concepts (either a concept
+  # scheme, a collection, an ordered collection, or just a bundle of
+  # concepts) and organizes them by label
+  class ConceptCache
+    # initialize from a scheme or collection
+    def self.from_scheme repo, subject
+    end
+
+    # Concepts can be either a hash of the form `{ subject => struct }`
+    # or just an array of subjects with a repo
+    def initialize concepts, repo: nil
+    end
+
+    # Match a label (or labels) to one or more items in the cache.
+    def match label, fuzzy: false
+      # step zero: coerce label to array of nfkc strings
+      # step 1: sort labels from longest to shortest
+      # now we go: exact match, lemmatized, normalized and lemmatized
+    end
+  end
+
+  # Recurse into an X(HT?)ML document, harvesting a given set of tags
+  # for a given namespace. Returns an array of arrays of the form
+  # `[:name, "text", "alt"]`, which can be manipulated by a
+  # block. Note the block gets the element itself prepended to the
+  # array for further processing.
   #
   # @param node [Nokogiri::XML::Node] the origin node
   # @param mapping [Hash] A mapping of namespaces to arrays of tags
