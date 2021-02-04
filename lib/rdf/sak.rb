@@ -1609,18 +1609,20 @@ module RDF::SAK
           next if seen[n]
           # make a dummy so as not to incur calling published? multiple times
           seen[n] = {}
+          # now we set the real struct and get the label
+          st = seen[n] = struct_for n, uuids: true, inverses: true,
+            ucache: ucache, scache: scache
 
           # now check if it's published
-          next if published and not published?(n)
+          next if published and
+            rdf_type?(n, RDF::Vocab::FOAF.Document, struct: st) and
+            not published?(n)
 
           # now the relations to the subject
           rel.map { |r| r[n] ||= Set.new }
           rel.first[n] |= pfwd
           rel.last[n]  |= prev
 
-          # now we set the real struct and get the label
-          st = seen[n] = struct_for n,
-            uuids: true, ucache: ucache, scache: scache
           lab = (label_for(n, candidates: st) || [nil, n]).last.value.strip
 
           lab.gsub!(/\A[[:punct:][:space:]]*(?:An?|The)[[:space:]]+/i, '')
@@ -1641,8 +1643,8 @@ module RDF::SAK
       end
 
       # up until now we didn't need this; also add it to seen
-      struct = seen[subject] ||=
-        struct_for subject, ucache: ucache, scache: scache
+      struct = seen[subject] ||= struct_for subject,
+        uuids: true, inverses: true, ucache: ucache, scache: scache
 
       # obtain the base and prefixes and generate the node spec
       base = canonical_uri subject, rdf: false
@@ -1656,6 +1658,7 @@ module RDF::SAK
           # now we call the block
           fr = frels[s].to_a if frels[s] and !frels[s].empty?
           rr = rrels[s].to_a if rrels[s] and !rrels[s].empty?
+          # XXX it may be smart to just pass all the structs in
           block.call s, fr, rr, st, base, seen
         end.compact
 
@@ -1666,7 +1669,7 @@ module RDF::SAK
       # now we get the page metadata
       pfx   = prefix_subset prefixes, seen
       abs   = label_for(subject, candidates: struct, desc: true)
-      mn    = abs ? { [abs.last.to_s] => :description } : {}
+      mn    = abs ? { abs.last => :description } : {} # not an element!
       meta  = head_meta(subject, struct: struct, meta_names: mn,
                         vocab: XHV) + generate_twitter_meta(subject)
       links = head_links subject, struct: struct, vocab: XHV, ignore: seen.keys
@@ -1896,11 +1899,13 @@ module RDF::SAK
     def write_reading_lists published: true
       reading_lists(published: published).each do |rl|
         tu  = URI(rl.to_s)
-        doc = generate_reading_list rl, published: published
-        dir = @config[published ? :target : :private]
-        fh  = (dir + "#{tu.uuid}.xml").open('w')
-        doc.write_to fh
-        fh.close
+        states = [true]
+        states << false unless published
+        states.each do | state|
+          doc = generate_reading_list rl, published: state
+          dir = @config[state ? :target : :private]
+          (dir + "#{tu.uuid}.xml").open('wb') { |fh| doc.write_to fh }
+        end
       end
     end
 
@@ -2194,6 +2199,153 @@ module RDF::SAK
         prefix: pfx, vocab: XHV, link: links, meta: meta,
         attr: { about: '', typeof: types }, content: spec
       ).document
+    end
+
+    def generate_concept_scheme_2 subject, published: true, fragment: false
+      # stick some logic here to sort out what kind of thing it is
+      # (concept scheme, collection, ordered collection)
+
+      # run this once
+      rels = {
+        broader: 'Has Broader',
+        narrower: 'Has Narrower',
+        related: 'Has Related' }.map do |k, v|
+        [predicate_set(RDF::Vocab::SKOS[k]), v]
+      end
+
+      ucache = {}
+      scache = {}
+      struct = struct_for subject, uuids: true, ucache: ucache, scache: scache
+
+      # duh idiot ordered collection isn't gonna be alphabetized, it's
+      # gonna be whatever order it's in
+      if rdf_type?(subject, RDF::Vocab::SKOS.OrderedCollection, struct: struct)
+        # do the special behaviour for ordered collections; not an
+        # alphabetized list by definition
+        raise NotImplementedError, 'lol'
+      else
+        fwd, rev = nil
+
+        if rdf_type?(subject, RDF::Vocab::SKOS.Collection, struct: struct)
+          fwd = RDF::Vocab::SKOS.member
+        elsif rdf_type?(subject, RDF::Vocab::SKOS.ConceptScheme, struct: struct)
+          rev = RDF::Vocab::SKOS.inScheme
+        else
+          raise ArgumentError,
+            "Subject #{subject} must be some kind of SKOS entity"
+        end
+
+        # note i'm not sure about this whole 'seen' business
+        neighbours = { subject => struct }
+
+        warn [fwd, rev].inspect
+
+        alphabetized_list subject, fwd: fwd, rev: rev, published: published,
+          ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
+
+          # may as well bag this while we're at it
+          neighbours[s] ||= struct
+
+          # sequence of elements beginning with the heading
+          el = begin
+                 lp, lo = label_for(s, candidates: struct)
+                 [literal_tag(lo, name: :h3, property: lp, prefixes: prefixes)]
+               end
+
+          # do relations
+          dl = rels.map do |pred, dt|
+            # this will give us a map of neighbours to the predicates
+            # actually used to relate them
+            objs = find_in_struct struct, pred, invert: true
+            # plump up the structs
+            objs.keys.each do |k|
+              neighbours[k] ||= struct_for(k,
+                uuids: true, inverses: true, ucache: ucache, scache: scache)
+            end
+
+            unless objs.empty?
+              [{ [dt] => :dt }] + objs.sort do |a, b|
+                # XXX there is a cmp_label but it is dumb
+                al = (label_for(a.first, candidates: neighbours[a.first]) ||
+                  [nil, a.first]).last
+                bl = (label_for(b.first, candidates: neighbours[b.first]) ||
+                  [nil, b.first]).last
+                al.value <=> bl.value
+              end.map do |o, ps|
+                # XXX this is where i would like canonical_uri to just
+                # "know" to do this (also this will fail if this is not a uuid)
+                id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
+                olp, olo = label_for(o, candidates: neighbours[o])
+                href = base.dup
+                href.fragment = id
+                { link_tag(href, rel: ps, base: base,
+                  typeof: asserted_types(o, struct: struct),
+                  property: olp, label: olo, prefixes: prefixes ) => :dd }
+              end
+            end
+          end.compact
+
+          # do backreferences
+
+          op = graph.query(object: s).to_a.select do |stmt|
+            sj = stmt.subject
+            sj.uri? and !neighbours[sj] and (!published or published?(sj))
+          end.reduce({}) do |hash, stmt|
+            sj = stmt.subject
+            neighbours[sj] ||= struct_for(sj,
+              uuids: true, inverses: true, ucache: ucache, scache: scache)
+            (hash[sj] ||= []) << stmt.predicate
+            hash
+          end
+
+          unless op.empty?
+            dl << { ['Referenced By'] => :dt }
+            op.sort do |a, b|
+              al = (label_for(a.first,
+                candidates: neighbours[a.first]) || [a.first]).last
+              bl = (label_for(b.first,
+                candidates: neighbours[b.first]) || [b.first]).last
+              al.value.upcase <=> bl.value.upcase
+            end.each do |sj, ps|
+              st   = neighbours[sj]
+              href = canonical_uri sj
+              olp, olo = label_for(sj, candidates: st)
+
+              dl << { link_tag(href, rev: ps, base: base,
+                typeof: asserted_types(sj, struct: st),
+                property: olp, label: olo, prefixes: prefixes) => :dd }
+            end
+          end
+
+          # add to set
+          el << { dl => :dl } unless dl.empty?
+
+          id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
+          sec = { el => :section, id: id, resource: "##{id}" }
+          if typ = asserted_types(s, struct: struct)
+            sec[:typeof] = abbreviate(typ)
+          end
+          sec[:rel] = abbreviate(fp) if rp
+          sec[:rev] = abbreviate(rp) if rp
+          sec
+        end
+      end
+    end
+
+    def write_concept_schemes published: true
+      # XXX i should really standardize these `write_whatever` thingies
+      all_of_type(RDF::Vocab::SKOS.ConceptScheme).each do |list|
+        next if published and !published?(list)
+        list = canonical_uuid(list) or next
+        uuid = URI(list.to_s)
+        states = [true]
+        states << false unless published
+        states.each do |state|
+          doc = generate_concept_scheme_2 list, published: state
+          dir = @config[state ? :target : :private]
+          (dir + "#{uuid.uuid}.xml").open('wb') { |fh| doc.write_to fh }
+        end
+      end
     end
       
     # - io stuff -

@@ -1803,10 +1803,21 @@ module RDF::SAK::Util
     scalar ? term.first : term
   end
 
-  # find a subset of a struct for a given set of predicates
-  def find_in_struct struct, preds, invert: false
+  # Find a subset of a struct for a given set of predicates,
+  # optionally inverting to give the objects as keys and predicates as
+  # values.
+  #
+  # @param struct [Hash]
+  # @param preds  [RDF::URI, #to_a]
+  # @param entail [true, false] whether to entail the predicate(s)
+  # @param invert [true, false] whether to invert the resulting hash
+  #
+  # @return [Hash] the selectd subset (which could be empty)
+  #
+  def find_in_struct struct, preds, entail: false, invert: false
     raise ArgumentError, 'preds must not be nil' if preds.nil?
     preds = preds.respond_to?(:to_a) ? preds.to_a : [preds]
+    preds = predicate_set preds if entail
 
     struct = struct.select { |p, _| preds.include? p }
 
@@ -2182,6 +2193,87 @@ module RDF::SAK::Util
     tag
   end
 
+  # Generate a tag in the XML::Mixup spec format that contains a
+  # single literal. Defaults to `:span`.
+  #
+  # @param value [RDF::Term] the term to be represented
+  # @param name  [Symbol, String] the element name
+  # @param property [RDF::URI, Array] the value of the `property=` attribute
+  # @param text [String] literal text (puts value in `content=`)
+  # @param prefixes [Hash] prefixes we should know about for making CURIEs
+  #
+  # @return [Hash] the element spec
+  #
+  def literal_tag value, name: :span, property: nil, text: nil,
+      prefixes: {}, vocab: nil
+    # literal text content if different from the value
+    content = if value.literal? and text and text != value.value
+                value.value
+              end
+
+    out = { [text || value.value] => name }
+    out[:content]  = content if content
+    out[:property] =
+      abbreviate(property, prefixes: prefixes, vocab: vocab) if property
+
+    # almost certain this is true, but not completely
+    if value.literal?
+      out['xml:lang'] = value.language if value.language?
+      out[:datatype]  =
+        abbreviate(value.datatype, prefixes: prefixes, vocab: vocab) if
+        value.datatype?
+    end
+
+    # note you can do surgery to this otherwise
+    out
+  end
+
+  # Generate a tag in the XML::Mixup spec format that contains a
+  # single text link. Defaults to `:a`. Provides the means to include
+  # a label relation.
+  #
+  # @param target [RDF::URI]
+  #
+  # @return [Hash] the element spec
+  #
+  def link_tag target, rel: nil, rev: nil, href: nil, about: nil, typeof: nil,
+      label: nil, property: nil, name: :a, placeholder: nil, base: nil,
+      prefixes: nil, vocab: nil
+
+    # * target is href= by default
+    # * if we supply an href=, target becomes resource=
+    if href
+      resource = target
+    else
+      href = target
+    end
+
+    # make a relative uri but only if we have a base, otherwise don't bother
+    if base
+      href = href.is_a?(URI) ? href : URI(uri_pp href.to_s)
+      base = base.is_a?(URI) ? base : URI(uri_pp base.to_s)
+      href = base.route_to(href)
+    end
+
+    # construct the label tag/relation
+    ltag = if property and label.is_a? RDF::Literal
+             literal_tag label, property: property,
+               prefixes: prefixes, vocab: vocab
+            else
+              [label.to_s]
+            end
+
+    # make the element with the bits we know for sure
+    out = { ltag => name, href: href }
+
+    # make the attributes
+    { rel: rel, rev: rev, about: about,
+     typeof: typeof, resource: resource }.each do |attr, term|
+      out[attr] = abbreviate term, prefixes: prefixes, vocab: vocab if term
+    end
+
+    out
+  end
 
   ######## MISC STUFF ########
 
