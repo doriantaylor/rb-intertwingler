@@ -5,21 +5,49 @@ require 'rdf'
 module RDF::SAK
   # @!parse
   #   # Vocabulary for <http://purl.org/NET/scovo#>
+  #   #
   #   class SCOVO < RDF::StrictVocabulary
+  #     # a statistical dataset
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Dataset
+  #
+  #     # a dimension of a statistical data item
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Dimension
+  #
+  #     # a statistical data item
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Item
+  #
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :dataset
+  #
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :datasetOf
+  #
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :dimension
+  #
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :max
+  #
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :min
+  #
   #   end
-  class SCOVO < RDF::StrictVocabulary("http://purl.org/NET/scovo#")
+  SCOVO = Class.new(RDF::StrictVocabulary("http://purl.org/NET/scovo#")) do
 
     # Class definitions
     term :Dataset,
-      comment: %(a statistical dataset).freeze,
+      comment: "a statistical dataset".freeze,
       label: "Dataset".freeze,
       type: ["owl:Class".freeze, "rdfs:Class".freeze]
     term :Dimension,
-      comment: %(a dimension of a statistical data item).freeze,
+      comment: "a dimension of a statistical data item".freeze,
       label: "Dimension".freeze,
       type: ["owl:Class".freeze, "rdfs:Class".freeze]
     term :Item,
-      comment: %(a statistical data item).freeze,
+      comment: "a statistical data item".freeze,
       label: "Item".freeze,
       type: ["owl:Class".freeze, "rdfs:Class".freeze]
 
@@ -47,5 +75,8 @@ module RDF::SAK
       domain: "scovo:Dimension".freeze,
       label: "has a minimum range value".freeze,
       type: "rdf:Property".freeze
+
+    RDF::Vocabulary.register :qb, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

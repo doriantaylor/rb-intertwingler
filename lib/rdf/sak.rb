@@ -26,6 +26,7 @@ require 'rdf/sak/ci'
 require 'rdf/sak/ibis'
 # others not included in rdf.rb
 require 'rdf/sak/pav'
+require 'rdf/sak/scovo'
 require 'rdf/sak/qb'
 
 module RDF::SAK
@@ -758,9 +759,9 @@ module RDF::SAK
       # get image (foaf:depiction)
       img = objects_for(subject, RDF::Vocab::FOAF.depiction, only: :resource)
       unless img.empty?
-        img = img[0].to_s
+        img = canonical_uri img.first
         out.push({ nil => :meta, name: 'twitter:image', content: img })
-        out[0][:content] = :summary_large_image
+        out.first[:content] = :summary_large_image
       end
 
       # return the appropriate xml-mixup structure
