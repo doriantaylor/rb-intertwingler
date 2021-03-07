@@ -76,7 +76,7 @@ module RDF::SAK
       label: "has a minimum range value".freeze,
       type: "rdf:Property".freeze
 
-    RDF::Vocabulary.register :qb, self if
+    RDF::Vocabulary.register :scovo, self if
       RDF::Vocabulary.respond_to? :register
   end
 end

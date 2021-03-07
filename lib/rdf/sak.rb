@@ -535,7 +535,7 @@ module RDF::SAK
         out += sub_concepts o
       end
 
-      out
+      out.uniq
     end
 
     # Get all "reachable" UUID-identified entities (subjects which are
@@ -1206,6 +1206,16 @@ module RDF::SAK
       docs
     end
 
+    def indexed? subject
+      subject = coerce_resource subject
+      indexed = objects_for subject, RDF::SAK::CI.indexed,
+        only: :literal, datatype: RDF::XSD.boolean
+      # assume the subject is indexed but we are looking for explicit
+      # presence of `false` (ie explicit `false` overrides explicit
+      # `true`). values like ci:indexed -> "potato" are ignored.
+      indexed.empty? or indexed.none? { |f| f.object == false }
+    end
+
     def generate_atom_feed id, published: true, related: []
       raise 'ID must be a resource' unless id.is_a? RDF::Resource
 
@@ -1213,11 +1223,13 @@ module RDF::SAK
       raise 'related must be an array' unless related.is_a? Array
       related -= [id]
 
-      # feed = struct_for id
-
+      # feed audiences
       faudy = audiences_for id
       faudn = audiences_for id, invert: true
       faudy -= faudn
+
+      warn 'feed %s has audiences %s and non-audiences %s' %
+        [id, faudy.inspect, faudn.inspect]
 
       docs = all_internal_docs published: published
 
@@ -1231,39 +1243,37 @@ module RDF::SAK
         # basically make a jsonld-like structure
         #rsrc = struct_for uu
 
-        indexed = objects_for uu, RDF::SAK::CI.indexed, only: :literal
-        next if !indexed.empty? and indexed.any? { |f| f == false }
-
-        # get id (got it already duh)
+        # skip unless the entry is indexed
+        next unless indexed? uu
         
         # get audiences
         audy = audiences_for uu, proximate: true
         audn = audiences_for uu, proximate: true, invert: true
+        audy -= audn
 
-        #warn "#{faudy.to_s} & #{faud"
+        warn 'doc %s has audiences %s and non-audiences %s' %
+          [uu, audy.inspect, audn.inspect]
 
-        skip = false
+        # we begin by assuming the document is *not* included in the
+        # feed, and then we try to prove otherwise
+        skip = true
         if audy.empty?
-          # an unspecified audience implies "everybody", but if the
-          # feed's audience *is* specified, then it's not for everybody
-          skip = true unless faudy.empty?
+          # if both the feed and the document audiences are
+          # unspecified, then include it, as both are for "everybody"
+          skip = false if faudy.empty?
+        elsif faudy.empty?
+          # if the feed is for everybody but the document is for
+          # somebody in particular, only include it if its audience is
+          # in the list of the feed's non-audiences
+          skip = false unless (audy - faudn).empty?
         else
-          # if document audience matches feed non-audience, disqualify
-          skip = true unless (faudn & audy).empty?
+          # now we deal with the case where both the feed and the
+          # document have explicit audiences
 
-          # absence of an explicit feed audience implies "everybody"
-          if faudy.empty?
-            # if document audience minus feed non-audience has
-            # members, re-qualify
-            skip = false unless (audy - faudn).empty?
-          else
-            # if document audience matches feed audience, re-qualify
-            skip = false unless (faudy & audy).empty?
-          end
+          # if the document hasn't been explicitly excluded by the
+          # feed, then include it if it has explicitly been included
+          skip = false if !(audy - faudn).empty? && !(faudy & audy).empty?
         end
-
-        # if document non-audience matches feed audience, re-disqualify
-        skip = true if !(audn.empty? || faudy.empty?) && !(faudy & audn).empty?
 
         next if skip
 
