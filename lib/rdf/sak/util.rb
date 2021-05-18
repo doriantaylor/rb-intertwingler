@@ -468,12 +468,8 @@ module RDF::SAK::Util
   # @return [Array]
   #
   def type_strata rdftype, descend: false
-    # first we coerce this to an array
-    if rdftype.respond_to? :to_a
-      rdftype = rdftype.to_a
-    else
-      rdftype = [rdftype]
-    end
+    # first we coerce this to an array if it isn't already
+    rdftype = rdftype.respond_to?(:to_a) ? rdftype.to_a : [rdftype]
       
     # now squash and coerce
     rdftype = rdftype.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
@@ -539,18 +535,68 @@ module RDF::SAK::Util
     type.include? RDF::OWL.SymmetricProperty
   end
 
+  # Determine whether one or more `rdf:Class` entities is transitively
+  # an `rdfs:subClassOf` or `owl:equivalentClass` of one or more
+  # reference types. Returns the subclass "distance" of the "nearest"
+  # reference type from the given type(s), or nil if none match.
+  #
+  # @param type [RDF::Resource, #to_a] the type(s) we are interested in
+  # @param reftype [RDF::Resource, #to_a] the reference type(s) to
+  #   check against
+  #
+  # @return [nil, Integer]
+  #
+  def type_is? type, reftype
+    # generate types, including optionally base classes if they aren't
+    # already present in the strata (this will be automatically 
+    types = type_strata(type)
+    bases = [RDF::RDFS.Resource, RDF::OWL.Thing,
+             RDF::Vocab::SCHEMA.Thing] - types.flatten
+    # put the base classes in last if there are any left after subtracting
+    types << bases unless bases.empty?
+
+    # coerce reftype to an array if it isn't already
+    reftype = reftype.respond_to?(:to_a) ? reftype.to_a : [reftype]
+
+    # this will return the "distance" of the matching type from what
+    # was asserted, starting at 0 (which in ruby is true!) or false
+    types.find_index { |ts| !(ts & reftype).empty? }
+  end
+
   # Determine whether a subject is a given `rdf:type`.
   #
   # @param repo [RDF::Queryable] the repository
   # @param subject [RDF::Resource] the resource to test
-  # @param type [RDF::Term] the type to test the subject against
+  # @param type [RDF::Term, #to_a] the type(s) to test the subject against
   # @param struct [Hash] an optional predicate-object set
+  #
   # @return [true, false]
   #
   def rdf_type? repo, subject, type, struct: nil
     asserted = asserted_types repo, subject, struct: struct
 
-    type_strata(asserted).flatten.include? type
+    # this is handy
+    !!type_is?(asserted, type)
+  end
+
+  # Obtain the head of a list for a given list subject.
+  #
+  # @param repo [RDF::Queryable] the repository
+  # @param subject [RDF::Node] a node in the list
+  #
+  # @return [RDF::Node, nil] the head node or nothing
+  #
+  def self.list_head repo, subject
+    nodes = [subject]
+
+    # note we don't 
+    while tmp = repo.query(
+      [nil, RDF.rest, node]).subjects.select(&:node?).sort.first
+      nodes << tmp
+    end
+
+    # the last one is the head of the list
+    nodes.last
   end
 
   # Obtain all the predicates that are equivalent to the given predicate(s).
@@ -601,7 +647,8 @@ module RDF::SAK::Util
   # @return [RDF::Resource]
   #
   def self.subjects_for repo, predicate, object, entail: true, only: [], &block
-    raise 'Object must be a Term' unless object.is_a? RDF::Term
+    raise "Object must be a Term, not a #{object.class.inspect}" unless
+      object.is_a? RDF::Term
     predicate = predicate.respond_to?(:to_a) ? predicate.to_a : [predicate]
     raise 'Predicate must be some kind of term' unless
       predicate.all? { |p| p.is_a? RDF::URI }
@@ -967,21 +1014,32 @@ module RDF::SAK::Util
     pair[0].to_s <=> pair[1].to_s
   end
     
-  # Obtain the "best" dereferenceable URI for the subject.
-  # Optionally returns all candidates.
+  # Obtain the "best" dereferenceable URI for the subject. Optionally
+  # returns all candidates. Pass in a fragment map of the following
+  # form:
+  #
+  # `{ RDFClass => [p1, [p2, true]] }`
+  #
+  # in order to map subjects to URI fragments. Classes are tested in
+  # the order of their "distance" from the asserted type(s). The `[p2,
+  # true]` pair indicates the predicate should be evaluated in
+  # reverse. Ordinary inverse and symmetric properties, as well as
+  # predicates that map to lists, are handled automatically.
   # 
   # @param repo      [RDF::Queryable]
   # @param subject   [RDF::Resource]
   # @param unique    [true, false] flag for unique return value
   # @param rdf       [true, false] flag to specify RDF::URI vs URI 
   # @param slugs     [true, false] flag to include slugs
+  # @param subj_only [true, false] flag to constrain candidates to subjects
   # @param fragment  [true, false] flag to include fragment URIs
-  # @param subs_only [true, false] flag to constrain candidates to subjects
+  # @param frag_map  [Hash] mapping of classes to sequences of
+  #   properties forward from the subject
   #
   # @return [RDF::URI, URI, Array]
   #
   def self.canonical_uri repo, subject, base: nil, unique: true, rdf: true,
-      slugs: false, fragment: false, subs_only: false, container: nil
+      slugs: false, subj_only: false, fragment: true, frag_map: {}
     subject = coerce_resource subject, base
 
     # dealing with non-documents (hash vs slash)
@@ -996,6 +1054,53 @@ module RDF::SAK::Util
     #   `container` parameter is set then return a fragment identifer
     #   off the container
 
+    # 2021-05-17, the real fragment identifier resolution
+    #
+    # step 0: check if the subject is ci:fragment-of something. if it
+    # is, that's it.
+    #
+    # step 1: if ci:canonical-uri is a fragment, we need to resolve
+    # the document that it is a fragment of. if it exists, great,
+    # we're done.
+    #
+    # step 2: find all the incident neighbours (subjects with this as
+    # their object), including objects of the subject with invertible
+    # properties
+    #
+    # step 3: eliminate all resources that are not some kind of
+    # foaf:Document
+    #
+    # step 4: attempt to eliminate all resources that are not
+    # bibo:status bs:published; back out if there are none left
+    #
+    # step 5: if there are still multiple candidates for parent
+    # document, pick the ...oldest one i guess? if neither has a
+    # dc:date or subproperty thereof associated i guess tiebreak with
+    # their canonical URIs?
+    #
+    # IDEAS FOR HOW TO DO THIS WITH LOUPE
+    #
+    # Loupe is an extension of SHACL, intended to be the spiritual
+    # successor of Fresnel, and also totally not done yet.
+    #
+    # Loupe lenses can be applied to classes or individual subjects
+    # (just like Fresnel but using SHACL mechanisms). The purpose of
+    # Loupe, again just like Fresnel, is to provide instructions for
+    # serializing arbitrary RDF, including as composite documents
+    # containing multiple nested subjects, indeed with nesting that
+    # can go arbitrarily deep.
+    #
+    # This capability is already expressable in SHACL, though Loupe
+    # will also need some way to direct the disposition of a
+    # subresource to a serializer, i.e. whether to render it as a
+    # link, or embed it. Loupe will also have its own tiebreaking
+    # mechanism, so determining the fragment-ness of a canonical URI
+    # on a given subject will be much easier than the home-spun
+    # heuristic currently planned. The solution would involve creating
+    # an index of resources that are fragments
+    #
+    # ###
+
     # this was rewritten to correctly pick the canonical uri and i
     # have no idea why it wasn't like this before
 
@@ -1003,14 +1108,70 @@ module RDF::SAK::Util
     # should not have multiple entries; in this case we pick the
     # "lowest" lexically purely in the interest of being consistent
 
+    # determine if there is a host document
+    host = objects_for(repo, subject, RDF::SAK::CI['fragment-of'],
+      only: :resource).sort { |a, b| cmp_resource a, b }.first
+
+    # just get the asserted types since we'll use em more than once
+    types = asserted_types(repo, subject)
+
+    # here is where we determine the host document if it hasn't
+    # already been identified. note that we assume foaf:Document
+    # entities are never fragments (even bibo:DocumentFragment!)
+    unless host or type_is?(types, RDF::Vocab::FOAF.Document)
+      # try to find a list head
+      head = subjects_for(repo, RDF.first, subject, only: :blank).sort.first
+      head = list_head(repo, head) if head
+      preds = frag_map.map do |k, v| 
+        score = type_is?(types, k) or next
+        # wrap v in an array and wrap it again if necessary
+        v = v.respond_to?(:to_a) ? v.to_a : [v]
+        v = [v] if v.size == 2 and v.first.is_a?(RDF::Value) and
+          !v.last.is_a?(RDF::Value) and !v.last.respond_to?(:to_a)
+        # now we coerce to pairs
+        v.map! { |pair| pair.respond_to?(:to_a) ? pair.to_a : [pair, false] }
+        [score, v]
+      end.compact.sort { |a, b|
+        a.first <=> b.first }.map(&:last).flatten(1).uniq
+
+      # accumulate candidate hosts
+      hosts = []
+      preds.each do |pair|
+        pred, rev = pair
+        if rev
+          hosts += subjects_for(repo, pred, subject, only: :resource)
+          hosts += subjects_for(repo, pred, head, only: :resource) if head
+        else
+          hosts += objects_for(repo, subject, pred, only: :resource)
+        end
+      end
+
+      # now we filter them
+      hosts = hosts.uniq.select do |h|
+        rdf_type?(repo, h, RDF::Vocab::FOAF.Document) and published?(repo, h)
+      end
+
+      # the first one will be our baby
+      host = hosts.first
+    end
+
+    # Get the canonical uri for the host!
+    hosturi = canonical_uri(repo, host, base: base) if host 
+
     # first thing: get ci:canonical
     primary = objects_for(repo, subject, RDF::SAK::CI.canonical,
                           only: :resource).sort { |a, b| cmp_resource a, b }
     # if that's empty then try ci:canonical-slug
-    if subject.uri? and slugs and (primary.empty? or not unique)
+    if subject.uri? and (host or slugs) and (primary.empty? or not unique)
       primary += objects_for(repo, subject,
         RDF::SAK::CI['canonical-slug'], only: :literal).map do |o|
-        base + o.value 
+        if hosturi
+          h = hosturi.dup
+          h.fragment = o.value
+          h
+        else
+          base + o.value 
+        end
       end.sort { |a, b| cmp_resource a, b }
     end
 
@@ -1021,19 +1182,32 @@ module RDF::SAK::Util
       secondary = objects_for(repo, subject, RDF::OWL.sameAs,
         entail: false, only: :resource).sort { |a, b| cmp_resource a, b }
 
-      if subject.uri? and slugs
+      if subject.uri? and (slugs or host)
         secondary += objects_for(repo, subject, RDF::SAK::CI.slug,
           entail: false, only: :literal).map do |o|
-          base + o.value
+          if hosturi
+            h = hosturi.dup
+            h.fragment = o.value
+            h
+          else
+            base + o.value 
+          end
         end.sort { |a, b| cmp_resource a, b }
       end
 
-      uri = URI(uri_pp(subject.to_s))
+      # in the final case, append the UUID to the base
+      uri = URI(uri_pp subject.to_s)
       if base and uri.respond_to? :uuid
-        b = base.clone
-        b.query = b.fragment = nil
-        b.path = '/' + uri.uuid
-        secondary << RDF::URI.new(b.to_s)
+        if hosturi
+          h = hosturi.dup
+          h.fragment = UUID::NCName.to_ncname(uri.uuid, version: 1)
+          secondary << h
+        else
+          b = base.clone
+          b.query = b.fragment = nil
+          b.path = '/' + uri.uuid
+          secondary << RDF::URI.new(b.to_s)
+        end
       else
         secondary << subject
       end

@@ -158,8 +158,9 @@ module RDF::SAK
         end
       end
 
+      # deal with duplicate map
+      pfx = config[:prefixes] || {}
       if dups = config[:duplicate]
-        pfx  = config[:prefixes] || {}
         base = URI(uri_pp config[:base])
         if dups.is_a? Hash
           config[:duplicate] = dups.map do |ruri, preds|
@@ -177,6 +178,19 @@ module RDF::SAK
       %w(rewrite redirect gone).each do |type|
         config[:maps][type.to_sym] ||= ".#{type}.map"
       end
+
+      # fragment maps
+      config[:fragment] = {} unless config[:fragment].is_a? Hash
+      config[:fragment] = config[:fragment].map do |k, v|
+        k = resolve_curie k.to_s, prefixes: pfx, scalar: true, coerce: :rdf
+        v = v.respond_to?(:to_a) ? v.to_a : [v]
+        v.map! do |x|
+          x = x.to_s.split(/^\^+/).reverse
+          [resolve_curie(x.first, prefixes: pfx,
+            scalar: true, coerce: :rdf), !!x[1]]
+        end
+        [k, v]
+      end.to_h
 
       config
     end
@@ -355,9 +369,10 @@ module RDF::SAK
     # @return [RDF::URI, URI, Array]
     #
     def canonical_uri subject,
-        unique: true, rdf: true, slugs: false, fragment: false
+        unique: true, rdf: true, slugs: false, fragment: true
       Util.canonical_uri @graph, subject, base: @base,
-        unique: unique, rdf: rdf, slugs: slugs, fragment: fragment
+        unique: unique, rdf: rdf, slugs: slugs,
+        fragment: fragment, frag_map: @config[:fragment] || {}
     end
 
     # Returns subjects from the graph with entailment.
@@ -2010,8 +2025,11 @@ module RDF::SAK
             typeof: 'qb:Observation' }
         end
 
+        # XXX add something to the vocab so this can be controlled in the data
+        xf = config.dig(:stats, :transform) || config[:transform]
+
         out[s] = xhtml_stub(base: base, title: title,
-          transform: config[:transform], attr: { about: '', typeof: types },
+          transform: xf, attr: { about: '', typeof: types },
           prefix: prefixes, content: {
             [{ [{ [{ ['About'] => :th, colspan: 4 },
                 { ['Counts'] => :th, colspan: 4 },
