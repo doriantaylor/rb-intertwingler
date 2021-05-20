@@ -1035,11 +1035,14 @@ module RDF::SAK::Util
   # @param fragment  [true, false] flag to include fragment URIs
   # @param frag_map  [Hash] mapping of classes to sequences of
   #   properties forward from the subject
+  # @param documents [#to_a] Which classes are considered entire
+  #   "documents"
   #
   # @return [RDF::URI, URI, Array]
   #
   def self.canonical_uri repo, subject, base: nil, unique: true, rdf: true,
-      slugs: false, subj_only: false, fragment: true, frag_map: {}
+      slugs: false, subj_only: false, fragment: true, frag_map: {},
+      documents: [RDF::Vocab::FOAF.Document]
     subject = coerce_resource subject, base
 
     # dealing with non-documents (hash vs slash)
@@ -1118,7 +1121,7 @@ module RDF::SAK::Util
     # here is where we determine the host document if it hasn't
     # already been identified. note that we assume foaf:Document
     # entities are never fragments (even bibo:DocumentFragment!)
-    unless host or type_is?(types, RDF::Vocab::FOAF.Document)
+    unless host or type_is?(types, documents)
       # try to find a list head
       head = subjects_for(repo, RDF.first, subject, only: :blank).sort.first
       head = list_head(repo, head) if head
@@ -1148,7 +1151,7 @@ module RDF::SAK::Util
 
       # now we filter them
       hosts = hosts.uniq.select do |h|
-        rdf_type?(repo, h, RDF::Vocab::FOAF.Document) and published?(repo, h)
+        rdf_type?(repo, h, documents) and published?(repo, h)
       end
 
       # the first one will be our baby
@@ -2488,8 +2491,6 @@ module RDF::SAK::Util
     # smush the result 
     c.keys
   end
-
-  
 
   # duplicate instance methods as module methods
   extend self

@@ -179,6 +179,14 @@ module RDF::SAK
         config[:maps][type.to_sym] ||= ".#{type}.map"
       end
 
+      # "document" maps, ie things that are never fragments
+      config[:documents] = [] unless config[:documents].is_a? Array
+      config[:documents].map! do |d|
+        resolve_curie d.to_s, prefixes: pfx, scalar: true, coerce: :rdf
+      end.compact
+      config[:documents] << RDF::Vocab::FOAF.Document if
+        config[:documents].empty?
+
       # fragment maps
       config[:fragment] = {} unless config[:fragment].is_a? Hash
       config[:fragment] = config[:fragment].map do |k, v|
@@ -306,16 +314,23 @@ module RDF::SAK
 
     # Obtain every subject that is rdf:type the given type or its subtypes.
     #
-    # @param rdftype [RDF::Term]
+    # @param rdftype [RDF::Term, #to_a]
     #
     # @return [Array]
     #
     def all_of_type rdftype, exclude: []
+      rdftype = rdftype.respond_to?(:to_a) ? rdftype.to_a : [rdftype]
       exclude = term_list exclude
-      t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
+
+      t = rdftype.map do |t|
+        RDF::Vocabulary.find_term(t) rescue nil
+      end.compact.map { |t| all_related(t) }.flatten.uniq
+
+      raise "Could not find types in #{rdftype}" if t.empty?
+
       out = []
-      (all_types & all_related(t) - exclude).each do |type|
-        out += @graph.query([nil, RDF.type, type]).subjects
+      (all_types & t - exclude).each do |type|
+        out += subjects_for(RDF.type, type)
       end
       
       out.uniq
@@ -371,8 +386,8 @@ module RDF::SAK
     def canonical_uri subject,
         unique: true, rdf: true, slugs: false, fragment: true
       Util.canonical_uri @graph, subject, base: @base,
-        unique: unique, rdf: rdf, slugs: slugs,
-        fragment: fragment, frag_map: @config[:fragment] || {}
+        unique: unique, rdf: rdf, slugs: slugs, fragment: fragment,
+        frag_map: @config[:fragment] || {}, documents: @config[:documents]
     end
 
     # Returns subjects from the graph with entailment.
@@ -598,13 +613,22 @@ module RDF::SAK
     # generate indexes of books, not-books, and other external links
 
     def head_links subject, struct: nil, nodes: nil, prefixes: {},
-        ignore: [], uris: {}, labels: {}, vocab: nil
+        ignore: [], uris: {}, labels: {}, vocab: nil, rev: []
 
       raise 'ignore must be Array or Set' unless
         [Array, Set].any? { |c| ignore.is_a? c }
 
+      rev = rev.respond_to?(:to_a) ? rev.to_a : [rev]
+
       struct ||= struct_for subject
       nodes  ||= invert_struct struct
+
+      # XXX is this smart?
+      revs = {}
+      subjects_for(rev, subject, only: :resource) do |s, ps|
+          revs[s] ||= Set.new
+          revs[s] |= ps
+      end
 
       # make sure these are actually URI objects not RDF::URI
       uris = uris.transform_values { |v| URI(uri_pp v.to_s) }
@@ -615,41 +639,43 @@ module RDF::SAK
       # output
       links = []
 
-      nodes.reject { |n, _| ignore.include?(n) || !n.uri? }.each do |k, v|
-        # first nuke rdf:type, that's never in there
-        v = v.dup.delete RDF::RDFV.type
-        next if v.empty?
+      { false => nodes, true => revs }.each do |reversed, obj|
+        obj.reject { |n, _| ignore.include?(n) || !n.uri? }.each do |k, v|
+          # first nuke rdf:type, that's never in there
+          v = v.dup.delete RDF::RDFV.type if reversed
+          next if v.empty?
 
-        unless uris[k]
-          cu = canonical_uri k
-          uris[k] = cu || uri_pp(k.to_s)
-        end
-
-        # munge the url and make the tag
-        rel = abbreviate v.to_a, vocab: vocab
-        ru  = uri.route_to(uris[k])
-        ln  = { nil => :link, rel: rel, href: ru.to_s }
-
-        # add the title
-        if lab = labels[k]
-          ln[:title] = lab[1].to_s
-        end
-
-        # add type attribute
-        unless (mts = formats_for k).empty?
-          ln[:type] = mts.first.to_s
-
-          if ln[:type] =~ /(java|ecma)script/i ||
-              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
-            ln[:src] = ln.delete :href
-            # make sure we pass in an empty string so there is a closing tag
-            ln.delete nil
-            ln[['']] = :script
+          unless uris[k]
+            cu = canonical_uri k
+            uris[k] = cu || uri_pp(k.to_s)
           end
-        end
 
-        # finally add the link
-        links.push ln
+          # munge the url and make the tag
+          ru  = uri.route_to(uris[k])
+          ln  = { nil => :link, href: ru.to_s }
+          ln[reversed ? :rev : :rel] = abbreviate v.to_a, vocab: vocab
+
+          # add the title
+          if lab = labels[k]
+            ln[:title] = lab[1].to_s
+          end
+
+          # add type attribute
+          unless (mts = formats_for k).empty?
+            ln[:type] = mts.first.to_s
+
+            if ln[:type] =~ /(java|ecma)script/i ||
+                !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
+              ln[:src] = ln.delete :href
+              # make sure we pass in an empty string so there is a closing tag
+              ln.delete nil
+              ln[['']] = :script
+            end
+          end
+
+          # finally add the link
+          links << ln
+        end
       end
 
       links.sort! do |a, b|
@@ -966,8 +992,8 @@ module RDF::SAK
         prefixes: prefixes, lang: 'en'
 
       # get links
-      link = head_links id,
-        struct: struct, ignore: bodynodes, labels: labels, vocab: XHV
+      link = head_links id, struct: struct, ignore: bodynodes,
+        labels: labels, vocab: XHV, rev: RDF::SAK::CI.document
 
       # get metas
       mn = {}
@@ -1698,7 +1724,8 @@ module RDF::SAK
       mn    = abs ? { abs.last => :description } : {} # not an element!
       meta  = head_meta(subject, struct: struct, meta_names: mn,
                         vocab: XHV) + generate_twitter_meta(subject)
-      links = head_links subject, struct: struct, vocab: XHV, ignore: seen.keys
+      links = head_links subject, struct: struct, vocab: XHV,
+        ignore: seen.keys, rev: RDF::SAK::CI.document
       types = abbreviate asserted_types(subject, struct: struct)
       title = if t = label_for(subject, candidates: struct)
                 [t[1].to_s, abbreviate(t[0])]
@@ -2061,176 +2088,6 @@ module RDF::SAK
     #
     #
     def generate_concept_scheme subject, published: true, fragment: false
-      base  = canonical_uri subject, rdf: false
-      # determine if subject is a concept scheme or if it is a collection
-
-      # if it's an ordered collection get the list
-      # otherwise if it's a regular collection get the members
-      # otherwise if it's a concept scheme get everything from inScheme
-
-      # get the labels for all the concepts (TODO skosxl)
-
-      ucache = {}
-      scache = {}
-      struct = struct_for subject, uuids: true, ucache: ucache, scache: scache
-
-      # LOL this is a huge mess
-      concepts = if rdf_type?(subject, RDF::Vocab::SKOS.OrderedCollection,
-                              struct: struct)
-                   # give me the memberList
-                   raise NotImplementedError, 'lol go back and look at the docs'
-                 else
-                   (rdf_type?(subject, RDF::Vocab::SKOS.Collection,
-                              struct: struct) ?
-                       objects_for(subject,
-                                   RDF::Vocab::SKOS.member, only: :resource) :
-                       subjects_for(RDF::Vocab::SKOS.inScheme, subject)
-                   ).map do |s|
-                     [s, struct_for(s, uuids: true, inverses: true,
-                       ucache: ucache, scache: scache)]
-                   end.sort do |a, b|
-                     as = (label_for(a.first, candidates: a.last) ||
-                       [a]).last.value.downcase
-                     bs = (label_for(b.first, candidates: b.last) ||
-                       [b]).last.value.downcase
-          
-                     as <=> bs
-                   end
-                 end.to_h
-
-      # begin collecting the nodes so we can properly do prefixes
-      allnodes = (struct.to_a +
-        concepts.map { |k, v| [k, v.to_a] }).flatten.to_set
-
-      # get the definition
-      # get example(s)
-      # get broader, narrower, related
-      # get referents
-      alpha = {}
-      concepts.each do |k, v|
-        allnodes |= (types = asserted_types k, struct: v)
-        types = abbreviate(types)
-
-        labp, labo = (label_for(k, candidates: v) || [nil, k])
-
-        allnodes << labp if labp
-        allnodes << labo
-
-        h = { [labo.value] => :h3 }
-        h[:property] = abbreviate labp if labp
-
-        if labo.literal?
-          h["xml:lang"] = labo.language if labo.language?
-          h[:datatype]  = abbreviate(labo.datatype) if labo.datatype?
-        end
-
-        # collect the adjacents so we don't snag em by accident
-        seen = Set[subject]
-
-        dl = []
-
-        # generate semantic relations
-        [[:broader, "Has Broader"],
-          [:narrower, "Has Narrower"],
-          [:related, "Has Related"]].each do |pred, dt|
-          pred = RDF::Vocab::SKOS[pred]
-          next unless x = v[pred]
-          pred = abbreviate(pred) # we don't need the full predicate anymore
-          dl << { [dt] => :dt }
-          x.map { |o| [o] + (label_for(o) || [nil, o]) }.sort do |a, b|
-            a.last.value.downcase <=> b.last.value.downcase
-          end.each do |s, p, o|
-            seen << s
-            tu = URI(uri_pp(s).to_s).normalize
-            u = tu.respond_to?(:uuid) ?
-              "##{UUID::NCName.to_ncname_64(tu.uuid, version: 1)}" :
-              canonical_uri(s)
-            a = if p
-                  lp = abbreviate(p)
-                  span = { [o.value] => :span, property: lp }
-                  { span => :a }
-                else
-                  { [o.value] => :a }
-                end
-            a[:href] = u.to_s
-            a[:rel]  = pred
-
-            if o.literal?
-              a['xml:lang'] = o.language if o.language?
-              a[:datatype]  = o.datatype if o.datatype?
-            end
-            dl << { a => :dd }
-          end
-        end
-
-        # now we grab all the inbounds
-        op = {}
-        graph.query([nil, nil, k]).to_a.reject do |stmt|
-          s = stmt.subject
-          !s.uri? or seen === s or (published and !published?(s))
-        end.each do |stmt|
-          s, p, _ = stmt.to_triple
-
-          allnodes << p
-          allnodes |= (t = asserted_types(s))
-          allnodes |= (l = label_for(s) || [])
-
-          x = op[s] ||= [[], t, l || [nil, s]]
-          x.first << p
-        end
-
-        unless op.empty?
-          dl << { ["Referenced By"] => :dt }
-          op.sort do |a, b|
-            # last(1) is v of kv, last(2) is label, last(3) is value
-            a.last.last.last.value.downcase <=> b.last.last.last.value.downcase
-          end.each do |k, v|
-            ps, ts, lab = *v
-            u = canonical_uri k
-            a = { { [lab.last.to_s] => :span,
-              property: abbreviate(lab.first) } => :a,
-              href: u.to_s, rev: abbreviate(ps), typeof: abbreviate(ts) }
-            dl << { a => :dd }
-          end
-        end
-
-        dl = { dl => :dl } unless dl.empty?
-
-        id = UUID::NCName.to_ncname_64(k.value.dup, version: 1)
-
-        # this is a placeholder you idiot
-        para = nil
-
-        # this is 
-        alphak = labo.object.is_a?(Numeric) ? ?# : labo.value.strip.upcase[0]
-
-        tmp = alpha[alphak] ||= []
-        tmp << { [h, para, dl] => :section, rev: 'skos:inScheme',
-         resource: "##{id}", typeof: types, id: id }
-      end
-
-      spec = alpha.map do |key, sections|
-        { ([{[key] => :h2 }] + sections) => :section }
-      end
-
-      abs   = label_for(subject, candidates: struct, desc: true)
-      mn    = abs ? { abs.last => :description } : {}
-      meta  = head_meta(subject, struct: struct, meta_names: mn,
-                        vocab: XHV) + generate_twitter_meta(subject)
-      links = head_links subject, struct: struct, vocab: XHV
-      pfx   = prefix_subset prefixes, seen
-      types = abbreviate asserted_types(subject)
-      title = if t = label_for(subject)
-                [t[1].to_s, abbreviate(t[0])]
-              end
-
-      xhtml_stub(base: base, title: title, transform: @config[:transform],
-        prefix: pfx, vocab: XHV, link: links, meta: meta,
-        attr: { about: '', typeof: types }, content: spec
-      ).document
-    end
-
-    def generate_concept_scheme_2 subject, published: true, fragment: false
       # stick some logic here to sort out what kind of thing it is
       # (concept scheme, collection, ordered collection)
 
@@ -2245,31 +2102,62 @@ module RDF::SAK
       ucache = {}
       scache = {}
       struct = struct_for subject, uuids: true, ucache: ucache, scache: scache
+      neighbours = { subject => struct }
 
-      # duh idiot ordered collection isn't gonna be alphabetized, it's
-      # gonna be whatever order it's in
-      if rdf_type?(subject, RDF::Vocab::SKOS.OrderedCollection, struct: struct)
-        # do the special behaviour for ordered collections; not an
-        # alphabetized list by definition
-        raise NotImplementedError, 'lol'
-      else
-        fwd, rev = nil
+      types = asserted_types(subject, struct: struct)
 
-        if rdf_type?(subject, RDF::Vocab::SKOS.Collection, struct: struct)
-          fwd = RDF::Vocab::SKOS.member
-        elsif rdf_type?(subject, RDF::Vocab::SKOS.ConceptScheme, struct: struct)
-          rev = RDF::Vocab::SKOS.inScheme
-        else
-          raise ArgumentError,
-            "Subject #{subject} must be some kind of SKOS entity"
+      if type_is?(types, RDF::Vocab::SKOS.OrderedCollection)
+        # sort 
+        list = if head = objects_for(subject, RDF::Vocab::SKOS.memberList,
+                                     only: :blank).sort.first
+                 RDF::List.new(subject: head, graph: @graph).to_a.map do |s|
+                   next if published and not published?(s)
+                   neighbours[s] ||= {}
+                   { [] => :script, type: 'application/xhtml+xml',
+                    src: canonical_uri(s) }
+                 end.compact
+               end
+
+        spec = [{ list => :article, inlist: '',
+                rel: abbreviate(RDF::Vocab::SKOS.memberList) }]
+
+        abs   = label_for(subject, candidates: struct, desc: true)
+        mn    = abs ? { abs.last => :description } : {} # not an element!
+        meta  = head_meta(subject, struct: struct, meta_names: mn,
+                          vocab: XHV) + generate_twitter_meta(subject)
+        links = head_links subject, struct: struct, vocab: XHV,
+          ignore: neighbours.keys
+        title = if t = label_for(subject, candidates: struct)
+                  [t[1].to_s, abbreviate(t[0])]
+                end
+        if abs
+          para = { [abs.last.to_s] => :p, property: abbreviate(abs.first) }
+          para['xml:lang'] = abs.last.language if abs.last.language?
+          para[:datatype]  = abs.last.datatype if abs.last.datatype?
+          spec.unshift para
         end
 
+        pfx = prefix_subset prefixes, neighbours
+
+        xhtml_stub(base: base, title: title, transform: @config[:transform],
+          prefix: pfx, vocab: XHV, link: links, meta: meta,
+          attr: { about: '', typeof: abbreviate(types) }, content: spec
+        ).document
+      elsif type_is?(types, RDF::Vocab::SKOS.Collection)
+        # make a flat list of just transclusions
+        alphabetized_list subject, fwd: RDF::Vocab::SKOS.member,
+          published: published,
+          ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
+            # just return the sections i guess lol
+            { [''] => :script, type: 'application/xhtml+xml',
+              src: canonical_uri(s), rel: abbreviate(fp) }
+        end
+      elsif type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
         # note i'm not sure about this whole 'seen' business
-        neighbours = { subject => struct }
 
-        warn [fwd, rev].inspect
-
-        alphabetized_list subject, fwd: fwd, rev: rev, published: published,
+        # WOOF lol
+        alphabetized_list subject, rev: RDF::Vocab::SKOS.inScheme,
+          published: published,
           ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
 
           # may as well bag this while we're at it
@@ -2296,13 +2184,14 @@ module RDF::SAK
               [{ [dt] => :dt }] + objs.sort do |a, b|
                 # XXX there is a cmp_label but it is dumb
                 al = (label_for(a.first, candidates: neighbours[a.first]) ||
-                  [nil, a.first]).last
+                      [nil, a.first]).last
                 bl = (label_for(b.first, candidates: neighbours[b.first]) ||
-                  [nil, b.first]).last
+                      [nil, b.first]).last
                 al.value <=> bl.value
               end.map do |o, ps|
-                # XXX this is where i would like canonical_uri to just
-                # "know" to do this (also this will fail if this is not a uuid)
+                # XXX this is where i would like canonical_uri to
+                # just "know" to do this (also this will fail if
+                # this is not a uuid)
                 id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
                 olp, olo = label_for(o, candidates: neighbours[o])
                 href = base.dup
@@ -2349,7 +2238,9 @@ module RDF::SAK
           # add to set
           el << { dl => :dl } unless dl.empty?
 
-          id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
+          # id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
+          id = canonical_uri(s)
+          id = id.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
           sec = { el => :section, id: id, resource: "##{id}" }
           if typ = asserted_types(s, struct: struct)
             sec[:typeof] = abbreviate(typ)
@@ -2358,20 +2249,25 @@ module RDF::SAK
           sec[:rev] = abbreviate(rp) if rp
           sec
         end
+      else
+        raise ArgumentError,
+          "Subject #{subject} must be some kind of SKOS entity"
       end
     end
 
     def write_concept_schemes published: true
       # XXX i should really standardize these `write_whatever` thingies
-      all_of_type(RDF::Vocab::SKOS.ConceptScheme).each do |list|
+      schemes = [RDF::Vocab::SKOS.ConceptScheme, RDF::Vocab::SKOS.Collection]
+      all_of_type(schemes).each do |list|
         next if published and !published?(list)
         list = canonical_uuid(list) or next
         uuid = URI(list.to_s)
         states = [true]
         states << false unless published
         states.each do |state|
-          doc = generate_concept_scheme_2 list, published: state
+          doc = generate_concept_scheme list, published: state
           dir = @config[state ? :target : :private]
+          dir.mkdir unless dir.exist?
           (dir + "#{uuid.uuid}.xml").open('wb') { |fh| doc.write_to fh }
         end
       end
@@ -2972,47 +2868,9 @@ module RDF::SAK
         end
 
         # and now we do the head
-        links = []
-        resources.reject { |k, _| bodylinks[k] }.each do |k, v|
-          v = v.dup.delete RDF::RDFV.type
-          next if v.empty?
-          mts = @context.formats_for k
-
-          # warn k, v.inspect
-
-          # warn k, mts.inspect
-
-          rel = @context.abbreviate v.to_a, vocab: XHV
-          ru  = @uri.route_to(uri_pp (ufwd[k] || k).to_s)
-          ln  = { nil => :link, rel: rel, href: ru.to_s }
-          if (label = labels[urev[k] || k])
-            ln[:title] = label[1].to_s
-          end
-
-          # add type=lol/wut
-          ln[:type] = mts.first.to_s unless mts.empty?
-
-          if !ln[:type] and v.include?(RDF::Vocab::XHV.stylesheet)
-            ln[:type] = 'text/css'
-          elsif ln[:type] =~ /(java|ecma)script/i or
-              v.include?(RDF::Vocab::DC.requires)
-            ln[nil]  = :script
-            ln[:src] = ln.delete :href
-            ln[:type] ||= 'text/javascript'
-          end
-          links.push ln
-        end
-
-        links.sort! do |a, b|
-          # sort by rel, then by href
-          # warn a.inspect, b.inspect
-          s = 0
-          [nil, :rel, :rev, :href, :title].each do |k|
-            s = a.fetch(k, '').to_s <=> b.fetch(k, '').to_s
-            break if s != 0
-          end
-          s
-        end
+        links = @context.head_links @uuid, struct: struct,
+          prefixes: @context.prefixes, ignore: bodylinks.keys, labels: labels,
+          vocab: XHV, rev: RDF::SAK::CI.document
 
         # we want to duplicate links from particular subjects (eg the root)
         (@context.config[:duplicate] || {}).sort do |a, b|
@@ -3119,9 +2977,9 @@ module RDF::SAK
 
         # XXX deal with the qb:Observation separately (just nuke it for now)
         extra = generate_twitter_meta || []
-        if bl = generate_backlinks(published: published,
-          ignore: @context.graph.query(
-            [nil, CI.document, @uuid]).subjects.to_set)
+        if bl = generate_backlinks(published: published)#,
+          # ignore: @context.graph.query(
+          # [nil, CI.document, @uuid]).subjects.to_set)
           extra << { [bl] => :object }
         end
 
