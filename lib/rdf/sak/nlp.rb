@@ -106,6 +106,10 @@ module RDF::SAK::NLP
     end
   end
 
+  HARVEST_DEFAULT = {
+    'http://www.w3.org/1999/xhtml' => %i[dfn abbr span].freeze
+  }.freeze
+
   # Recurse into an X(HT?)ML document, harvesting a given set of tags
   # for a given namespace. Returns an array of arrays of the form
   # `[:name, "text", "alt"]`, which can be manipulated by a
@@ -122,8 +126,7 @@ module RDF::SAK::NLP
   # @yieldreturn [Array] a potentially modified array of inputs
   # @return [Array] an array of arrays
   #
-  def harvest_tags node,
-      mapping: { 'http://www.w3.org/1999/xhtml' => %i[dfn abbr span] }, &block
+  def harvest_tags node, mapping: HARVEST_DEFAULT, &block
 
     out = []
 

@@ -994,6 +994,10 @@ module RDF::SAK::Util
     end
   end
 
+  # XXX MAKE THIS LOL
+  def self.cmp_literal a, b
+  end
+
   def self.cmp_label repo, a, b, labels: nil, supplant: true, reverse: false
     labels ||= {}
 
@@ -1013,7 +1017,7 @@ module RDF::SAK::Util
     # warn "#{pair[0]} <=> #{pair[1]}"
     pair[0].to_s <=> pair[1].to_s
   end
-    
+
   # Obtain the "best" dereferenceable URI for the subject. Optionally
   # returns all candidates. Pass in a fragment map of the following
   # form:
@@ -1569,7 +1573,6 @@ module RDF::SAK::Util
     node.xpath(xpath, XPATHNS).each { |node| block.call node }
   end
 
-
   # XXX OTHER STUFF
 
   # isolate an element into a new document
@@ -1989,7 +1992,7 @@ module RDF::SAK::Util
   # @param entail [true, false] whether to entail the predicate(s)
   # @param invert [true, false] whether to invert the resulting hash
   #
-  # @return [Hash] the selectd subset (which could be empty)
+  # @return [Hash] the selected subset (which could be empty)
   #
   def find_in_struct struct, preds, entail: false, invert: false
     raise ArgumentError, 'preds must not be nil' if preds.nil?

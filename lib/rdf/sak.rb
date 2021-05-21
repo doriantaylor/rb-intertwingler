@@ -2169,8 +2169,39 @@ module RDF::SAK
                  [literal_tag(lo, name: :h3, property: lp, prefixes: prefixes)]
                end
 
+          # now we do definitions
+          el += find_in_struct(struct, RDF::Vocab::SKOS.definition,
+                               entail: true, invert: true).sort do |a, b|
+              cmp_resource a.first, b.first
+          end.map do |o, ps|
+            rel = abbreviate(ps)
+            if o.uri?
+              { { [''] => :script, type: 'application/xhtml+xml',
+                 src: canonical_uri(o) } => :p, rel: rel }
+            else
+              para = { [o.value] => :p, property: rel }
+              para['xml:lang'] = para[:lang] = o.language if o.language?
+              para[:datatype] = o.datatype if o.datatype?
+              para
+            end.compact
+          end
+
+          # do alternate labels
+          dl = find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
+                              entail: true, invert: true).sort do |a, b|
+            a.first <=> b.first
+          end.map do |o, ps|
+            next unless o.literal?
+
+            dd = { [o.value] => :dd, property: abbreviate(ps) }
+            dd[:'xml:lang'] = dd[:lang] = o.language if o.language?
+            dd[:datatype] = o.datatype if o.datatype?
+            dd
+          end.compact
+          dl.unshift({ ['Also known as'] => :dt }) unless dl.empty?
+
           # do relations
-          dl = rels.map do |pred, dt|
+          dl += rels.map do |pred, dt|
             # this will give us a map of neighbours to the predicates
             # actually used to relate them
             objs = find_in_struct struct, pred, invert: true
@@ -2272,7 +2303,7 @@ module RDF::SAK
         end
       end
     end
-      
+
     # - io stuff -
 
     # Locate the file in the source directory associated with the given URI.
@@ -2280,7 +2311,7 @@ module RDF::SAK
     # @param [RDF::URI, URI, :to_s] the URI requested
     # 
     # @return [Pathname] of the corresponding file or nil if no file was found.
-
+    #
     def locate uri
       uri = coerce_resource uri
 
@@ -2316,7 +2347,7 @@ module RDF::SAK
       #warn files
 
       # XXX implement negotiation algorithm
-      return files[0]
+      return files.first
 
       # return the filename from the source
       # nil
@@ -2631,18 +2662,21 @@ module RDF::SAK
         if node[:vocab]
           vocab = node[:vocab].strip
           return nil if vocab == ''
-          return vocab
+          vocab = RDF::URI(vocab)
+          return RDF::Vocabulary.find_term(vocab) rescue vocab
         end
         parent = node.parent
         vocab_for parent if parent and parent.element?
       end
 
       def prefixes_for node, prefixes = {}
+        prefixes = prefixes.transform_keys(&:to_sym);
+
         # start with namespaces
         pfx = node.namespaces.select do |k, _|
           k.start_with? 'xmlns:'
         end.transform_keys do |k|
-          k.delete_prefix 'xmlns:'
+          k.delete_prefix('xmlns:').to_sym
         end
 
         # then add @prefix overtop of the namespaces
@@ -2651,110 +2685,22 @@ module RDF::SAK
           a = []
           b = []
           x.each_index { |i| (i % 2 == 0 ? a : b).push x[i] }
+          a.map!(&:to_sym)
           # if the size is uneven the values will be nil, so w drop em
           pfx.merge! a.zip(b).to_h.reject { |_, v| v.nil? }
         end
 
         # since we're ascending the tree, input takes precedence
-        prefixes = pfx.merge prefixes
+        prefixes = pfx.transform_values do |v|
+          v = RDF::URI(v)
+          RDF::Vocabulary.find_term(v) rescue v
+        end.merge prefixes
       
         if node.parent and node.parent.element?
-          prefixes_for(node.parent, prefixes)
+          prefixes_for node.parent, prefixes
         else
           prefixes
         end
-      end
-
-      # give us the rdf subject of the node itself
-      def subject_for node = nil, rdf: false, is_ancestor: false
-        node ||= @doc.root
-        raise 'Node must be an element' unless
-          node.is_a? Nokogiri::XML::Element
-
-        # first we check for an ancestor element with @property and no
-        # @content; if we find one then we reevaluate with that
-        # element as the starting point
-        if n = node.at_xpath(LITXP)
-          return subject_for n
-        end
-
-        # answer a bunch of helpful questions about this element
-        subject = nil
-        base    = base_for node
-        parent  = node.parent
-        ns_href = node.namespace.href if node.namespace
-        up_ok   = %i{rel rev}.none? { |a| node[a] }
-        is_root = !parent or parent.document?
-        special = /^(?:[^:]+:)?(?:head|body)$/i === node.name and
-          (ns_href == 'http://www.w3.org/1999/xhtml' or
-          /^(?:[^:]+:)?html$/xi === parent.name)
-
-        # if the node is being inspected as an ancestor to the
-        # original node, we have to check it backwards.
-        if is_ancestor
-          # ah right @resource gets special treatment
-          if subject = node[:resource]
-            subject.strip!
-            if m = /^\[(.*?)\]$/.match(subject)
-            end
-          else
-            OBJS.each do |attr|
-              if node[attr]
-                # merge with the root and return it
-                subject = base + node[attr]
-                break
-              end
-            end
-          end
-
-          return rdf ? RDF::URI(subject.to_s) : subject
-
-          # note if we are being called with is_ancestor, that means
-          # the original node (or indeed any of the nodes previously
-          # tested) have anything resembling a resource in them. this
-          # means @rel/@rev should be ignored, and we should keep
-          # looking for a subject.
-        end
-
-        if node[:about]
-          
-          if m = /^_:(.*)$/.match(node[:about])
-            return RDF::Node(m[1])
-          end
-
-          # XXX resolve @about against potential curie
-          subject = base + node[:about]
-          
-        elsif is_root
-          subject = base
-        elsif special
-          subject = subject_for parent
-        elsif node[:resource]
-          # XXX resolve @about against potential curie
-          subject = base + node[:resource]
-        elsif node[:href]
-          subject = base + node[:href]
-        elsif node[:src]
-          subject = base + node[:src]
-        elsif node[:typeof]
-          # bnode the typeof attr
-
-          # note we return bnodes irrespective of the rdf flag
-          return RDF::Node('id-%016x' % node.attributes['typeof'].pointer_id)
-        elsif node[:inlist]
-          # bnode the inlist attr
-          return RDF::Node('id-%016x' % node.attributes['inlist'].pointer_id)
-        elsif (parent[:inlist] && OBJS.none? { |a| parent[a] }) ||
-            (is_ancestor && !up_ok)
-          # bnode the element
-          return RDF::Node('id-%016x' % node.pointer_id)
-        # elsif node[:id]
-        else
-          subject = subject_for parent, is_ancestor: true
-        end
-
-        rdf ? RDF::URI(subject.to_s) : URI(subject.to_s)
-
       end
 
       # backlink structure
@@ -2868,7 +2814,7 @@ module RDF::SAK
         end
 
         # and now we do the head
-        links = @context.head_links @uuid, struct: struct,
+        links = @context.head_links @uuid, struct: struct, nodes: resources,
           prefixes: @context.prefixes, ignore: bodylinks.keys, labels: labels,
           vocab: XHV, rev: RDF::SAK::CI.document
 

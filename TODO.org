@@ -1,0 +1,75 @@
+#+STARTUP: showall hidestars
+* TODO major refactor
+  - [ ] methods that are strictly extensions of RDF::Repository
+    - [ ] actually make these an extension of RDF::Repository
+  - [ ] the context that encapsulates configuration data
+    - [ ] config parser, coercer, etc
+    - [ ] methods that *would* be strict extensions of RDF::Repository
+      if not for the fact that they require some of this configuration
+  - [ ] summary/collection generators
+    - [ ] atom feeds
+    - [ ] google sitemaps
+    - [ ] rdf collections of various kinds (temporary)
+      - [ ] SKOS concept schemes
+      - [ ] sioct:ReadingList
+  - [ ] opaque data source providers
+    - [ ] file system
+    - [ ] Store::Digest
+  - [ ] opaque *target* providers
+    - [ ] /also/ file system
+      - [ ] including rewrite maps
+    - [ ] /also/ Store::Digest
+    - [ ] something to clean out either one
+  - [-] document context
+    - [X] markdown to xhtml
+    - [-] social media metadata
+      - [X] twitter
+      - [ ] facebook
+      - [ ] google
+    - [ ] "modernize"/rewrite legacy tags (xslt? something less/more?)
+      - this is sorta done but not organized
+    - [ ] inject/repair RDFa
+    - [ ] segment compound documents
+      - [ ] fragment IDs
+    - [X] backlinks
+  - [ ] natural language processing (very light)
+    - [ ] n-gram extraction
+      - [ ] inline markup (dfn/abbr/span, also em/strong etc) treatment
+    - [ ] n-gram match (to skos concepts etc)
+    - [ ] inline markup generation
+* TODO loupe processor
+  - [ ] aw yiss
+  - [ ] predicate order
+  - [ ] predicate show/hide
+    - note "hide" can mean invisible but present vs completely omitted
+      from the representation
+  - [ ] value order
+  - [ ] value show/hide
+  - [ ] label determination
+  - [ ] value disposition
+    - [ ] resources
+      - [ ] link
+      - [ ] embed (image, video, audio, iframe, object, script)
+      - [ ] inline (fragment)
+    - [ ] literals
+      - [ ] block
+      - [ ] inline
+      - [ ] merged
+      - [ ] alternates
+  - [ ] element selection
+    - [ ] block (section, div, paragraph, figure, etc)
+    - [ ] list (ol, ul, dl)
+      - note rdf:List treatment as well
+  - [ ] serialize to (x)html+rdfa
+  - [ ] serialize to json-ld (?)
+* TODO server
+  - [ ] yeeeeahhh gonna need to think about that
+  - [ ] path parameter -> transformation function resolver
+    - [ ] actually applying the transformations
+    - [ ] caching/memoizing the results
+      - [ ] some kind of cache clearance and/or denial-of-resource protection
+        - only authorized clients get to mint the initial transform?
+* TODO command line
+  - [ ] depends on command completion, still unresolved
+* TODO scraper
+  - [ ] i dunno mainly cleanup and reporting i think?
