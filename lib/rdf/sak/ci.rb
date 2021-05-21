@@ -837,5 +837,8 @@ module RDF::SAK
         )],
       label: "words-and-blocks".freeze,
       type: "http://purl.org/linked-data/cube#DataStructureDefinition".freeze
+
+    RDF::Vocabulary.register :ci, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end
