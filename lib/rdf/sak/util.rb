@@ -5,6 +5,7 @@ require 'uri'
 require 'uri/urn'
 require 'set'
 require 'uuid-ncname'
+require 'xml-mixup'
 
 require 'rdf'
 require 'rdf/vocab'
@@ -49,6 +50,7 @@ unless RDF::List.respond_to? :from
 end
 
 module RDF::SAK::Util
+  include XML::Mixup
   
   private
 
@@ -59,6 +61,20 @@ module RDF::SAK::Util
   RFC3986 =
     /^(?:([^:\/?#]+):)?(?:\/\/([^\/?#]*))?([^?#]+)?(?:\?([^#]*))?(?:#(.*))?$/
   SEPS = [['', ?:], ['//', ''], ['', ''], [??, ''], [?#, '']].freeze
+
+  # this is a predicate "that does not have children that are not
+  # scripts"
+
+  # predicate says: "node has children other than scripts"
+  NON_SCRIPTS =
+    '[text()[normalize-space(.)]|*[not(self::html:script[@src])]]'.freeze
+
+  # all blocks minus: details dl fieldset form hr ol ul
+  BLOCKS = %w[
+    address article aside blockquote dialog dd div dt fieldset
+    figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup
+    li main nav p pre section table].freeze
+  INLINES = %w[a dfn abbr span var kbd samp code q cite data time mark].freeze
 
   XPATH = {
     htmlbase: proc {
@@ -85,22 +101,26 @@ module RDF::SAK::Util
             "normalize-space(@class), ' '), ' #{cl} ')]"
         end
       end.flatten).join(?|),
-    dehydrate: '//html:a[count(*)=1][html:dfn|html:abbr|html:span]',
-    rehydrate: %w[.//html:dfn
-      .//html:abbr[not(parent::html:dfn)] .//html:span].join(?|) +
-      '[not(parent::html:a)]',
+    dehydrate: './/html:a[count(*)=1][html:dfn|html:abbr|html:span]',
+    rehydrate: (
+      %w[abbr[not(ancestor::html:dfn)]] + (INLINES - ['abbr'])).map { |e|
+        ".//html:#{e}[not(parent::html:a)]" }.join(?|).freeze,
     htmllinks: (%w[*[not(self::html:base)][@href]/@href
       *[@src]/@src object[@data]/@data *[@srcset]/@srcset
       form[@action]/@action].map { |e|
-        '//html:%s' % e} + %w[//*[@xlink:href]/@xlink:href]).join(?|).freeze,
+        './/html:%s' % e} + %w[//*[@xlink:href]/@xlink:href]).join(?|).freeze,
     atomlinks: %w[uri content/@src category/@scheme generator/@uri icon id
-      link/@href logo].map { |e| '//atom:%s' % e }.join(?|).freeze,
+      link/@href logo].map { |e| './/atom:%s' % e }.join(?|).freeze,
     rsslinks: %w[image/text()[1] docs/text()[1] source/@url enclosure/@url
                guid/text()[1] comments/text()[1]].map { |e|
-      '//%s' % e }.join(?|).freeze,
-    xlinks: '//*[@xlink:href]/@xlink:href'.freeze,
+      './/%s' % e }.join(?|).freeze,
+    xlinks: './/*[@xlink:href]/@xlink:href'.freeze,
     rdflinks: %w[about resource datatype].map { |e|
-      '//*[@rdf:%s]/@rdf:%s' % [e, e] }.join(?|).freeze,
+      './/*[@rdf:%s]/@rdf:%s' % [e, e] }.join(?|).freeze,
+    blocks: BLOCKS.map do |b|
+      pred = BLOCKS.map { |e| "descendant::html:#{e}" }.join ?|
+      "descendant::html:#{b}#{NON_SCRIPTS}[not(#{pred})]"
+    end.freeze,
   }
 
   LINK_MAP = {
@@ -121,7 +141,11 @@ module RDF::SAK::Util
       t.start_with?('_:') ? RDF::Node.new(t.delete_prefix '_:') : RDF::URI(t) },
   }
 
-  UUID_RE = /^(?:urn:uuid:)?([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})$/i
+  UUID_ONLY = /\b([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})\b/i
+
+  UUID_RE   = /^(?:urn:uuid:)?#{UUID_ONLY}$/i
+
+  UUID_PATH = /^\/+#{UUID_ONLY}/
 
   # okay labels: what do we want to do about them? poor man's fresnel!
 
@@ -287,18 +311,24 @@ module RDF::SAK::Util
   def internal_subject_for node, prefixes: nil, base: nil, coerce: nil,
       is_ancestor: false
 
+    raise ArgumentError, 'Elements only' unless node.element?
+
     # note we assign these AFTER the literal check or it will be wrong
     prefixes ||= get_prefixes node
 
-    base ||= get_base node
-    base = coerce_resource base, as: :uri unless base
+    # document base is different from supplied base
+    base  = coerce_resource base, as: :uri if base
+    dbase = coerce_resource(get_base(node) || base, as: :uri)
+
+    # ???
+    base ||= dbase
 
     # answer a bunch of helpful questions about this element
     subject = nil
     parent  = node.parent
     ns_href = node.namespace.href if node.namespace
     up_ok   = %w[rel rev].none? { |a| node.key? a }
-    is_root = !parent or parent.document?
+    is_root = !(parent && parent.element?)
     special = /^(?:[^:]+:)?(?:head|body)$/i === node.name and
       (ns_href == 'http://www.w3.org/1999/xhtml' or
       /^(?:[^:]+:)?html$/xi === parent.name)
@@ -309,13 +339,13 @@ module RDF::SAK::Util
       # ah right @resource gets special treatment
       if subject = node[:resource]
         subject = resolve_curie subject,
-          prefixes: prefixes, base: base, scalar: true
+          prefixes: prefixes, base: dbase, scalar: true
       else
         # then check @href and @src
         %w[href src].each do |attr|
           if node.key? attr
             # merge with the root and return it
-            subject = base + node[attr]
+            subject = dbase + node[attr]
             break
           end
         end
@@ -333,23 +363,29 @@ module RDF::SAK::Util
     if node[:about]
 
       subject = resolve_curie node[:about],
-        prefixes: prefixes, base: base, scalar: true
+        prefixes: prefixes, base: dbase, scalar: true
 
       # ignore coercion
       return subject if subject.is_a? RDF::Node
 
     elsif is_root
+      # note this is parameter base not document base
       subject = base
     elsif special
-      subject = internal_subject_for parent
+      # same deal here
+      subject = internal_subject_for parent, base: base
     elsif node[:resource]
       # XXX resolve @about against potential curie
       subject = resolve_curie node[:resource],
-        prefixes: prefixes, base: base, scalar: true
+        prefixes: prefixes, base: dbase, scalar: true
     elsif node[:href]
-      subject = base + node[:href]
+      # XXX 2021-05-30 you can't just use this; you have to find a rel
+      # or rev that isn't itself disrupted by about/resource/href/src
+      # or typeof/inlist. you already figured this out for the xslt
+      # rdfa query engine so go look there.
+      subject = dbase + node[:href]
     elsif node[:src]
-      subject = base + node[:src]
+      subject = dbase + node[:src]
     elsif node[:typeof]
       # bnode the typeof attr
 
@@ -363,8 +399,11 @@ module RDF::SAK::Util
       # bnode the element
       return RDF::Node('id-%016x' % node.pointer_id)
       # elsif node[:id]
+    elsif parent.element?
+      subject = internal_subject_for parent,
+        base: base || dbase, is_ancestor: true
     else
-      subject = internal_subject_for parent, is_ancestor: true
+      raise "this should never get here"
     end
 
     coerce_resource subject, as: coerce if subject
@@ -547,6 +586,12 @@ module RDF::SAK::Util
   # @return [nil, Integer]
   #
   def type_is? type, reftype
+    # coerce reftype to an array if it isn't already
+    reftype = reftype.respond_to?(:to_a) ? reftype.to_a : [reftype]
+    return if reftype.empty?
+
+    reftype.map! { |t| RDF::Vocabulary.find_term t rescue t }
+
     # generate types, including optionally base classes if they aren't
     # already present in the strata (this will be automatically 
     types = type_strata(type)
@@ -555,8 +600,6 @@ module RDF::SAK::Util
     # put the base classes in last if there are any left after subtracting
     types << bases unless bases.empty?
 
-    # coerce reftype to an array if it isn't already
-    reftype = reftype.respond_to?(:to_a) ? reftype.to_a : [reftype]
 
     # this will return the "distance" of the matching type from what
     # was asserted, starting at 0 (which in ruby is true!) or false
@@ -803,12 +846,18 @@ module RDF::SAK::Util
         return uri if scache[uri] ||= repo.has_subject?(uri)
         # note i don't want to screw around right now dealing with the
         # case that a UUID might not itself be canonical
+
+      elsif tu.fragment and
+          (uu = UUID::NCName.from_ncname(tu.fragment, version: 1))
+        # this is the special case that the fragment is a compact uuid
+        uu = RDF::URI("urn:uuid:#{uu}")
+        return uu if scache[uu] ||= repo.has_subject?(uu)
       end
     end
 
-    # spit up the cache if present
+    # spit up the cache if present; don't run through this expensive stuff
     if out = ucache[orig]
-      # warn "lol cached #{orig}"
+      # warn "lol cached #{orig} #{ucache[orig].inspect}"
       return unique ? out.first : out
     end
 
@@ -829,13 +878,15 @@ module RDF::SAK::Util
                bp = uu.path # base path
                (0..pp.length).to_a.reverse.map do |i|
                  u = uu.dup
-                 u.path = ([bp] + pp.take(i)).join(';')
+                 u.path = ([bp] + pp.take(i)).join(?;)
                  u
                end
              end
            else
              [uri] # not a pathful URI
            end
+
+    # warn uris.inspect
 
     # rank (0 is higher):
     # * (00) exact & canonical == 0,
@@ -854,10 +905,24 @@ module RDF::SAK::Util
           published: published?(repo, s),
           mtime: dates_for(repo, s).last || DateTime.new }]
       end.compact.to_h
+      # we stop as soon as we've netted something
       break unless candidates.empty?
     end
 
     # warn candidates.inspect
+
+    # if we did not get an exact match with a fragment then we have to
+    # scan the non-fragment part. note we want *any* host document
+    hosts = if uri.fragment and not uri.fragment.empty?
+             tmp = uri.dup
+             tmp.fragment = nil
+             h = canonical_uuid repo, tmp, unique: false, published: published,
+               scache: scache, ucache: ucache, base: base
+             # if the non-fragment part of the uri doesn't resolve, we
+             # can preemptively return nil here
+             return nil if h.empty?
+             h
+           end
 
     # now collect by slug
     slug = terminal_slug uri, base: base
@@ -878,7 +943,33 @@ module RDF::SAK::Util
       end
     end
 
+    # eliminate the non-uuids
     candidates.delete_if { |s, _| !/^urn:uuid:/.match?(s.to_s)  }
+
+    # XXX y'know, solving whether /a/b/c#d is connected is the same
+    # problem as solving for /a/b/c, so maybe it would make sense to
+    # make a separate `assert_path` or something, where "path" also
+    # includes fragments (but not query or path parameters of course)
+
+    # XXX actually the fragment resolution semantics are slightly
+    # different, because a fragment can be a fragment of another
+    # fragment, whereas path segments have to be connected in the
+    # graph directly
+
+    # `hosts` will be non-nil if and only if there is a fragment, and
+    # we would have exited already if it was empty, because that would
+    # have meant the given URI is a fragment of something that we
+    # don't have a record of
+    if hosts
+      # there should be at least one candidate host document here; the
+      # job of this part is to connect the candidate host documents to
+      # the candidates identified by the fragment
+
+      # XXX IMPLEMENT THIS lol
+
+      # luckily this scenario only comes up with fragments that aren't
+      # compact uuids, which we currently (2021-11-25) aren't doing much of
+    end
 
     # scan all the candidates for replacements and remove any
     # candidates that have been replaced
@@ -916,8 +1007,10 @@ module RDF::SAK::Util
       cb == 0 ? cr == 0 ? vb[:mtime] <=> va[:mtime] : cr : cb
     end.map { |x| x.first }.compact
 
+    # warn out
+
     # set cache
-    ucache[orig] = out
+    ucache[orig] = out unless out.empty?
 
     #warn "lol not cached #{orig}"
 
@@ -1018,48 +1111,20 @@ module RDF::SAK::Util
     pair[0].to_s <=> pair[1].to_s
   end
 
-  # Obtain the "best" dereferenceable URI for the subject. Optionally
-  # returns all candidates. Pass in a fragment map of the following
-  # form:
+  # Obtain the "host" document for a fragment
   #
-  # `{ RDFClass => [p1, [p2, true]] }`
-  #
-  # in order to map subjects to URI fragments. Classes are tested in
-  # the order of their "distance" from the asserted type(s). The `[p2,
-  # true]` pair indicates the predicate should be evaluated in
-  # reverse. Ordinary inverse and symmetric properties, as well as
-  # predicates that map to lists, are handled automatically.
-  # 
   # @param repo      [RDF::Queryable]
   # @param subject   [RDF::Resource]
-  # @param unique    [true, false] flag for unique return value
-  # @param rdf       [true, false] flag to specify RDF::URI vs URI 
-  # @param slugs     [true, false] flag to include slugs
-  # @param subj_only [true, false] flag to constrain candidates to subjects
-  # @param fragment  [true, false] flag to include fragment URIs
+  # @param base      [RDF::URI, URI]
   # @param frag_map  [Hash] mapping of classes to sequences of
   #   properties forward from the subject
   # @param documents [#to_a] Which classes are considered entire
   #   "documents"
-  #
-  # @return [RDF::URI, URI, Array]
-  #
-  def self.canonical_uri repo, subject, base: nil, unique: true, rdf: true,
-      slugs: false, subj_only: false, fragment: true, frag_map: {},
-      documents: [RDF::Vocab::FOAF.Document]
+  # @param seen [Set] loop control for recursion
+  # 
+  def self.host_document repo, subject, base: nil, frag_map: {},
+      documents: [RDF::Vocab::FOAF.Document], seen: Set.new
     subject = coerce_resource subject, base
-
-    # dealing with non-documents (hash vs slash)
-    #
-    # * if the subject has a ci:canonical that is an HTTP(S) URL, then
-    #   use that
-    #
-    # * if the subject has a type that is equivalent or subclass of
-    #   foaf:Document, then it gets a slash url
-    #
-    # * if the subject however is /not/ a foaf:Document and the
-    #   `container` parameter is set then return a fragment identifer
-    #   off the container
 
     # 2021-05-17, the real fragment identifier resolution
     #
@@ -1108,24 +1173,21 @@ module RDF::SAK::Util
     #
     # ###
 
-    # this was rewritten to correctly pick the canonical uri and i
-    # have no idea why it wasn't like this before
-
-    # note that canonical/canonical-slug should be functional so
-    # should not have multiple entries; in this case we pick the
-    # "lowest" lexically purely in the interest of being consistent
-
-    # determine if there is a host document
+    # determine if there is an explicit host document
     host = objects_for(repo, subject, RDF::SAK::CI['fragment-of'],
       only: :resource).sort { |a, b| cmp_resource a, b }.first
 
     # just get the asserted types since we'll use em more than once
     types = asserted_types(repo, subject)
+    isdoc = type_is?(types, documents)
+    frags = type_is?(types, frag_map.keys)
+
+    # warn types, isdoc
 
     # here is where we determine the host document if it hasn't
     # already been identified. note that we assume foaf:Document
     # entities are never fragments (even bibo:DocumentFragment!)
-    unless host or type_is?(types, documents)
+    unless host or (isdoc and not frags)
       # try to find a list head
       head = subjects_for(repo, RDF.first, subject, only: :blank).sort.first
       head = list_head(repo, head) if head
@@ -1154,22 +1216,99 @@ module RDF::SAK::Util
       end
 
       # now we filter them
+      pab = {}
       hosts = hosts.uniq.select do |h|
-        rdf_type?(repo, h, documents) and published?(repo, h)
+        rdf_type?(repo, h, documents)
+      end.sort do |a, b|
+        # sort by publication status
+        pa = pab[a] ||= (published?(repo, a) ? -1 : 0)
+        pb = pab[b] ||= (published?(repo, b) ? -1 : 0)
+        c = pa <=> pb
+        # sort lexically if it's a tie
+        a <=> b if c == 0
       end
 
       # the first one will be our baby
-      host = hosts.first
+      if host = hosts.first and not seen.include? host
+        parent = host_document repo, host, base: base, frag_map: frag_map,
+          documents: documents, seen: seen | Set[host]
+        return parent if parent
+      end
     end
 
+    host
+  end
+
+  # Obtain the "best" dereferenceable URI for the subject. Optionally
+  # returns all candidates. Pass in a fragment map of the following
+  # form:
+  #
+  # `{ RDFClass => [p1, [p2, true]] }`
+  #
+  # in order to map subjects to URI fragments. Classes are tested in
+  # the order of their "distance" from the asserted type(s). The `[p2,
+  # true]` pair indicates the predicate should be evaluated in
+  # reverse. Ordinary inverse and symmetric properties, as well as
+  # predicates that map to lists, are handled automatically.
+  # 
+  # @param repo      [RDF::Queryable]
+  # @param subject   [RDF::Resource]
+  # @param base      [RDF::URI, URI]
+  # @param unique    [true, false] flag for unique return value
+  # @param rdf       [true, false] flag to specify RDF::URI vs URI 
+  # @param slugs     [true, false] flag to include slugs
+  # @param subj_only [true, false] flag to constrain candidates to subjects
+  # @param fragment  [true, false] flag to include fragment URIs
+  # @param frag_map  [Hash] mapping of classes to sequences of
+  #   properties forward from the subject
+  # @param documents [#to_a] Which classes are considered entire
+  #   "documents"
+  #
+  # @return [RDF::URI, URI, Array]
+  #
+  def self.canonical_uri repo, subject, base: nil, unique: true, rdf: true,
+      to_uuid: false, slugs: false, subj_only: false, fragment: true,
+      frag_map: {}, documents: [RDF::Vocab::FOAF.Document]
+    subject = coerce_resource subject, base
+
+    subject = canonical_uuid repo, subject if to_uuid
+
+    # warn subject
+
+    # dealing with non-documents (hash vs slash)
+    #
+    # * if the subject has a ci:canonical that is an HTTP(S) URL, then
+    #   use that
+    #
+    # * if the subject has a type that is equivalent or subclass of
+    #   foaf:Document, then it gets a slash url
+    #
+    # * if the subject however is /not/ a foaf:Document and the
+    #   `container` parameter is set then return a fragment identifer
+    #   off the container
+
+    # this was rewritten to correctly pick the canonical uri and i
+    # have no idea why it wasn't like this before
+
+    # note that canonical/canonical-slug should be functional so
+    # should not have multiple entries; in this case we pick the
+    # "lowest" lexically purely in the interest of being consistent
+
+    # attempt to find the host
+    host = host_document repo, subject, base: base,
+      frag_map: frag_map, documents: documents
+
     # Get the canonical uri for the host!
-    hosturi = canonical_uri(repo, host, base: base) if host 
+    hosturi = canonical_uri(repo, host, base: base, slugs: true) if host 
+
+    # warn hosturi
 
     # first thing: get ci:canonical
     primary = objects_for(repo, subject, RDF::SAK::CI.canonical,
                           only: :resource).sort { |a, b| cmp_resource a, b }
     # if that's empty then try ci:canonical-slug
     if subject.uri? and (host or slugs) and (primary.empty? or not unique)
+      # warn subject
       primary += objects_for(repo, subject,
         RDF::SAK::CI['canonical-slug'], only: :literal).map do |o|
         if hosturi
@@ -1181,6 +1320,8 @@ module RDF::SAK::Util
         end
       end.sort { |a, b| cmp_resource a, b }
     end
+
+    # warn primary.inspect
 
     # if the candidates are *still* empty, do the same thing but for
     # owl:sameAs (ci:alias) etc
@@ -1271,6 +1412,7 @@ module RDF::SAK::Util
   # @param subject of the inquiry
   # @param rev map in reverse
   # @param only one or more node types
+  # @param inverses 
   # @param uuids coerce resources to if possible
   #
   # @return [Hash]
@@ -1792,6 +1934,10 @@ module RDF::SAK::Util
     if arg.start_with? '_:' and as
       # override the coercion if this is a blank node
       as = :rdf
+    elsif arg.start_with?(?#) and
+        uuid = UUID::NCName.from_ncname(arg, version: 1)
+      uuid = "urn:uuid:#{uuid}"
+      return rdf ? RDF::URI(uuid) : URI(uuid)
     elsif base
       begin
         arg = (base.is_a?(URI) ? base : URI(uri_pp base.to_s.strip)).merge arg
@@ -1834,8 +1980,11 @@ module RDF::SAK::Util
   # @return [String]
   def terminal_slug uri, base: nil
     uri = coerce_resource uri, base
+    # 
     return unless uri.respond_to? :path
-    if p = uri.path
+    if f = uri.fragment and not f.empty?
+      return f
+    elsif p = uri.path
       if p = /^\/+(.*?)\/*$/.match(p)
         if p = p[1].split(/\/+/).last
           # we need to escape colons or it will think it's absolute
@@ -2125,6 +2274,21 @@ module RDF::SAK::Util
     internal_subject_for node, prefixes: prefixes, base: base, coerce: coerce
   end
 
+  # Return the language in scope for the current (X|HT)ML element.
+  #
+  # @param node [Nokogiri::XML::Element]
+  # @return [nil, String] the RFC3066 language tag
+  #
+  def lang_for node
+    lang = node.lang || node['lang']
+    if lang
+      return if lang.strip.empty?
+      return lang.strip.downcase.tr(?_, ?-)
+    end
+    lang_for node.parent if
+      node.element? and node.parent and node.parent.element?
+  end
+
   # 
   def modernize doc
     doc.xpath(XPATH[:modernize], XPATHNS).each do |e|
@@ -2133,21 +2297,52 @@ module RDF::SAK::Util
     end
   end
 
-  # Scan definition 
-  def scan_terms node, prefixes: nil, base: nil, coerce: :rdf, &block
+  # Recurse into an X(HT?)ML document, harvesting inline elements that
+  # may contain terminology. Returns an array of arrays of the form
+  # `[subject, text, lang, datatype, alts]`, which can be manipulated
+  # by a block. Note the block also gets the element as its last
+  # argument.
+  #
+  # @param node [Nokogiri::XML::Node] the origin node
+  # @param mapping [Hash] A mapping of namespaces to arrays of tags
+  # @yieldparam text [String] the element's (flattened) text
+  # @yieldparam alt  [String, nil] the element's alternate text
+  #   (currently hard-coded as the `title` attribute)
+  # @yieldparam name [Symbol] the element's local name
+  # @yieldparam node [Nokogiri::XML::Element] the current element
+  # @yieldreturn [Array] a potentially modified array of inputs
+  # @return [Array] an array of arrays
+  #
+  def scan_inlines node, prefixes: nil, base: nil, coerce: :rdf, &block
     node.xpath(XPATH[:rehydrate], XPATHNS).map do |e|
       # extract some useful bits from the thing
       subject = subject_for e, prefixes: prefixes, base: base, coerce: coerce
       text    = (e.content || '').strip
-      title   = e[:title].strip if e.key? 'title' and !e[:title].empty?
+      attrs   = %w[href title aria-label content datetime value].map do |a|
+        if e.key? a and !(v = e[a].strip).empty?
+          [a.to_sym, v]
+        end
+      end.compact.to_h
 
-      next unless !text.empty? or title
+      # nothing to see here, move along
+      next if text.empty? and attrs.empty?
+
+      # conditionally set the language
+      lang = lang_for e
+      warn e.lang.inspect
+      attrs[:lang] = lang if lang
+
+      # note we only add the datatype now so that test above works
+      attrs[:datatype] = e[:datatype] if e[:datatype]
 
       # run the block if there is one
-      block.call subject, e, text, title if block
-
-      [subject, e, text, title]
-    end.compact
+      if block
+        block.call subject, text, attrs, e
+      else
+        # otherwise 
+        [subject, text, attrs, e.name.to_sym]
+      end
+    end.compact.uniq
   end
 
   # Strip all the links surrounding and RDFa attributes off
@@ -2173,24 +2368,40 @@ module RDF::SAK::Util
   # as the basis of a link. if there are zero subjects, or more than
   # one, then the method executes a block which can be used to pick
   # (e.g., via user interface) a definite subject or otherwise add one.
-
+  #
   # (maybe add +code+/+kbd+/+samp+/+var+/+time+ one day too)
+  #
+  def rehydrate node, graph, cache: {}, &block
+    # collect all the literals
+    graph.each_object do |o|
+      (cache[o.value.strip.downcase] ||= Set.new) << o if o.literal?
+    end
 
-  def rehydrate doc, graph, &block
-    doc.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
-      lang = e.xpath(XPATH[:lang]).to_s.strip
+    node.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
+      lang = e.xpath(XPATH[:lang]).to_s.strip.downcase
       # dt   = e['datatype'] # XXX no datatype rn
       text = (e['content'] || e.xpath('.//text()').to_a.join).strip
 
-      # now we have the literal
-      lit = [RDF::Literal(text)]
-      lit.unshift RDF::Literal(text, language: lang) unless lang.empty?
+      # now we have the literals actually in the graph
+      lit = cache[text.downcase] or next
+      lit = lit.to_a.sort do |a, b|
+        c = 0
+        if lang
+          ac = a.language? && a.language.downcase == lang ? -1 : 0
+          bc = b.language? && b.language.downcase == lang ? -1 : 0
+          c = ac <=> bc
+        end
+        if c == 0
+          d = b.value.length <=> a.value.length # prefer longer strings
+          a <=> b if d == 0 # otherwise lexical sort
+        else
+          c
+        end
+      end
 
       # candidates
       cand = {}
-      lit.map do |t|
-        graph.query(object: t).to_a
-      end.flatten.each do |x|
+      lit.map { |t| graph.query([nil, nil, t]).to_a }.flatten.each do |x|
         y = cand[x.subject] ||= {}
         (y[:stmts] ||= []) << x
         y[:types]  ||= graph.query([x.subject, RDF.type, nil]).objects.sort
@@ -2204,7 +2415,7 @@ module RDF::SAK::Util
         # the block is expected to return one of the candidates or
         # nil. we call the block with the graph so that the block can
         # manipulate its contents.
-        chosen = block.call cand, graph
+        chosen = block.call cand
         raise ArgumentError, 'block must return nil or a term' unless
           chosen.nil? or chosen.is_a? RDF::Term
       end
@@ -2231,7 +2442,7 @@ module RDF::SAK::Util
         # and wherever we want to actually link to.
 
         inner = e.dup
-        spec  = { [inner] => :a, href: '' }
+        spec  = { [inner] => :a, href: chosen.to_s }
         # we should have types
         spec[:typeof] = abbreviate cc[:types], prefixes: pfx unless
           cc[:types].empty?
@@ -2240,6 +2451,35 @@ module RDF::SAK::Util
       end
     end
     # return maybe the elements that did/didn't get changed?
+  end
+
+  # XXX MOVE THIS
+
+  private
+
+  CURIE_ATTRS = %w[about typeof rel rev property resource datatype].freeze
+  CURIE_XPATH = ".//*[#{CURIE_ATTRS.map { |a| a.prepend ?@ }.join ?|}]".freeze
+
+  public
+
+  # Returns the set of RDFa terms that are found in the subtree from
+  # the given node on down. Does not 
+
+  def collect_rdfa_terms node, prefixes: {}, vocab: nil
+    out = Set.new
+
+    # curies only
+    node.xpath(CURIE_XPATH).each do |e|
+      # intersect the curie attributes and the ones on the node
+      (e.keys & CURIE_ATTRS).each do |a|
+        curies = e[a].trim.split
+        # okay so that was easy, now what
+
+        # rel rev typeof property 
+      end
+    end
+
+    out
   end
 
   ######## RENDERING STUFF ########
@@ -2453,6 +2693,258 @@ module RDF::SAK::Util
     end
 
     out
+  end
+
+  # Generate an (X)HTML+RDFa list from what is assumed to be a bnode
+  #
+  # @param repo  [RDF::Repository]
+  # @param list  [RDF::Term]
+  # @param base  [RDF::URI, URI]
+  # @param langs [#to_a, String] 
+  # @param rel   [RDF::Term, #to_a]
+  # @param rev   [RDF::Term, #to_a]
+  # @return [Hash]
+  #
+  def generate_list repo, list, base: nil, langs: [],
+      rel: nil, rev: nil, prefixes: {}, ordered: true
+    list = RDF::List.new(subject: list) unless list.is_a? RDF::List
+
+    ol = { inlist: '' }
+    if rel
+      # the presence of rel= or rev= mean the subject has to go in
+      # resource= instead of about=
+      ol[:rel]      = abbreviate rel, prefixes: prefixes
+      ol[:rev]      = abbreviate rev, prefixes: prefixes if rev
+      ol[:resource] = abbreviate list.subject, prefixes: prefixes
+    elsif rev
+      ol[:rev]      = abbreviate rev, prefixes: prefixes
+      ol[:resource] = abbreviate list.subject, prefixes: prefixes
+    else
+      ol[:about] = abbreviate list.subject, prefixes: prefixes
+    end
+
+    strings = []
+
+    li = list.to_a.map do |item|
+      case item
+      when RDF::Literal
+        strings << item.value.strip
+        literal_tag item, name: :li, prefixes: prefixes
+      when RDF::Resource
+        ts = struct_for repo, item
+        tt = asserted_types repo, item, struct: ts
+        labp, labo = label_for repo, item, candidates: ts, type: tt
+        # XXX labp might actually be more than one predicate, never
+        # thought of that
+
+        # append to strings
+        strings << (labo || item).value.strip
+
+        href = canonical_uri(repo, item, base: base) || item
+        tag = link_tag href, base: base, prefixes: prefixes,
+          property: labp, label: labo, typeof: tt
+        { '#li' => tag }
+      when RDF::Node
+        frag, fstr = generate_fragment repo, item, base: base,
+          prefixes: prefixes, name: :li, langs: langs, wrap_list: true
+        # append all the strings in the fragment
+        strings << fstr
+        frag
+      end
+    end
+
+    # now finish off with the tag name and don't forget the meta
+    [ol.merge({ "##{ordered ? ?o : ?u}l" => li }), strings.join(' ').strip]
+  end
+
+  # Generate an (X)HTML fragment in XML::Mixup spec format. The
+  # fragment takes the form of a root node which is intended to
+  # represent the subject. The presence of `rel=` or `rev=` attributes
+  # will cause the subject to show up in `resource=` rather than
+  # `about=`. Adjacent resources are represented as `<a>` elements
+  # which get their asserted types and default (long) labels resolved,
+  # and these are collated with the adjacent literals to produce a
+  # list which is sorted according to configured criteria. Predicates
+  # are rolled up into `rel=`, `rev=`, and `property=` attributes.
+  # `rdf:XMLLiteral` terms are parsed and interwoven into the
+  # markup. Blank nodes are collected at the bottom of the list as
+  # (potentially recursively) embedded subtrees, sorted (for now) by
+  # node ID, unless there is a cycle, in which case the cycle is
+  # broken.
+  #
+  # Note: Collating properties might actually turn out to be dumb, and
+  # instead what I should be doing is grouping by property (and an
+  # intermediate sort by property label), but that will result in
+  # redundancies in the meat of the markup. The goal with this
+  # generator is really just to get the data onto the page where it
+  # can be picked up and manipulated by some downstream processor. Any
+  # more sophisticated markup generation on this side is going to have
+  # to be controlled by something like Loupe.
+  #
+  # ```
+  # <name about="#subject" typeof="my:Type">
+  #   <member rel="some:resource other:predicate">
+  #     <a href="/wherever" typeof="another:Type">
+  #       <span property="my:label" xml:lang="en">A link</span>
+  #     </a>
+  #   </member>
+  #   <member property="some:literal" datatype="a:dt">A literal</member>
+  #   <member rel="another:relation" resource="_:blank">
+  #     <member property="lol:embedded">this recurses..</member>
+  #   </member>
+  #   <ol rel="some:list" resource="_:lol" inlist="">
+  #     <li datatype="list:literal">foo</li>
+  #     <li>...(fragment recurses)</li>
+  #   </ol>
+  # </name>
+  # ```
+  #
+  # @param repo [RDF::Repository]
+  # @param subject [RDF::Resource, RDF::Node]
+  # @param struct [Hash, nil]
+  # @param base [RDF::URI, URI]
+  # @param langs [Hash, Array, String] a representation of `Accept-Language`
+  # @param rel [RDF::Resource, Array, nil]
+  # @param rev [RDF::Resource, Array, nil]
+  # @param prefixes [Hash]
+  # @param tag [Symbol]
+  # @param ptag [Symbol] the html tag
+  # @param otag [Symbol]
+  # @param pskip [#to_set] a set of _edges_ (not nodes) to skip
+  # @param oskip [#to_set] a list of _nodes_ (not edges) to skip
+  # @param wrap_list [false, true] whether to wrap a list with an element
+  # @return [Array] pair containing the markup spec and the string value
+  #
+  def generate_fragment repo, subject, struct: nil, base: nil, langs: [],
+      rel: nil, rev: nil, prefixes: {}, tag: :div, ptag: :div, otag: :div,
+      pskip: [], oskip: [], wrap_list: false
+
+    # we need to collate the strings
+    strings = []
+
+    # determine if subject is a list and return early
+    if repo.query([subject, RDF.first, nil]).first
+      if wrap_list
+        out, lstr = generate_list repo, subject,
+          base: base, headers: headers, prefixes: prefixes
+        out = { "##{name}" => out }
+
+        # append list strings to meta
+        strings << lstr
+
+        # any rel or rev will be part of this element then
+        out[:rel] = abbreviate rel, prefixes: prefixes if rel
+        out[:rev] = abbreviate rel, prefixes: prefixes if rev
+
+        return [out, strings.join(' ').strip]
+      else
+        # otherwise just pass it along
+        out, lstr = generate_list repo, subject,
+          base: base, langs: langs, rel: rel, rev: rev, prefixes: prefixes
+        strings << lstr
+
+        return [out, strings.join(' ').strip]
+      end
+    end
+
+    # okay now we get to the actual thing
+    struct ||= struct_for repo, subject, base: base
+
+    # what we're probably gonna want to do then is get all the labels
+    # for all the URI references as well as the string values of any
+    # embedded fragments; literals are going to be their own labels
+
+    pscore = struct.map { |p, os| [p, os.count] }.to_h
+    nodes  = invert_struct(struct).map do |o, ps|
+      next if oskip.include?(o) or !(pskip.to_set & ps).empty?
+
+      pmax = ps.map { |x| pscore[ps] }.max
+      m = t = nil
+      case o
+      when RDF::Literal
+        m = literal_tag o, name: otag, prefixes: prefixes, property: ps
+        t = o.value.strip
+      when RDF::Resource
+        ts = struct_for repo, o
+        tt = asserted_types repo, o, struct: ts
+
+        labp, labo = label_for repo, o, candidates: ts, type: tt
+
+        href = canonical_uri(repo, o, base: base) || o
+
+        m = { "##{otag}" => link_tag(href, base: base, prefixes: prefixes,
+          property: labp, label: labo, typeof: tt, rel: ps) }
+
+        t = (labo || o).value.strip
+
+      when RDF::Node
+        m, t = generate_fragment repo, o, base: base, tag: otag, rel: ps
+      end
+      [o, pmax, t, m]
+    end.compact.sort do |a, b|
+      ao, ap, at, _ = a
+      bo, bp, bt, _ = b
+      c = bp <=> ap
+      c = at.downcase <=> bt.downcase if c == 0
+      c = at <=> bt if c == 0
+      c = ao <=> bo if c == 0
+      c
+    end.map do |o, _, t, m|
+      strings << t
+      [o, m]
+    end.to_h
+
+    out = { "##{tag}" => nodes.values }
+    out[:typeof] = abbreviate(
+      struct[RDF.type], prefixes: prefixes) if struct[RDF.type]
+    out[:rel] = abbreviate(rel, prefixes: prefixes) if rel
+    out[:rev] = abbreviate(rev, prefixes: prefixes) if rev
+
+    # we actually want to return some metadata along with this, in
+    # particular the fragment's string value (ie the concatenation of
+    # all the text nodes)
+
+    [out, strings.join(' ').strip]
+  end
+
+  # Generate a rudimentary (X)HTML document based on a subject node.
+  #
+  # Properties with `owl:inverseOf` relations are resolved and flipped
+  # around, as are instances of `owl:SymmetricProperty`.  Reverse
+  # relations that can't be resolved this way are put in `<link>`
+  # elements in the `<head>` (with the `title=` attribute set to the
+  # short label for handy downstream rendering). In the case that the
+  # reverse adjacent is a blank node, an effort is made to resolve the
+  # nearest non-blank resources and place their addresses in `href=`
+  # while the blank node goes into `resource=`. An attempt is also
+  # made to determine the `<title>` (using #label_for). What remains
+  # is passed to #generate_fragment.
+  #
+  # @return [Nokogiri::XML::Document] the document
+  #
+  def generate_doc repo, subject, base: nil, langs: [], prefixes: {}, vocab: nil
+    # we will need to cache nodes and properties 
+    ncache = Set.new
+    pcache = Set.new
+
+    struct = struct_for repo, subject, base: base
+
+    labp, labo = label_for repo, subject, candidates: struct
+
+    pskip = [RDF.type, labp].flatten
+    oskip = [labo.dup]
+
+    title = title_tag labp, labo, prefixes: prefixes
+
+    uri = canonical_uri repo, subject, base: base
+
+    # otherwise the body is just a special kind of fragment
+    body, _ = generate_fragment repo, subject, struct: struct, base: uri,
+      prefixes: prefixes, langs: langs, tag: :body, ptag: nil, otag: :p,
+      pskip: pskip, oskip: oskip
+
+    xhtml_stub(base: uri, prefix: prefixes, vocab: vocab,
+      title: title, body: body).document
   end
 
   ######## MISC STUFF ########

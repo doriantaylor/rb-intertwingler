@@ -101,24 +101,35 @@ module RDF::SAK
     end
 
     def coerce_config config
+      # start by resolving paths against the working directory
+      root = Pathname.getwd
+
       # config must either be a hash or a file name/pathname/io object
       unless config.respond_to? :to_h
         # when in rome
         require 'yaml'
         config = if config.is_a? IO
                    YAML.load config
-                 else 
-                   YAML.load_file Pathname.new(config).expand_path
+                 else
+                   config = Pathname.new(config).expand_path
+                   # replace root with the path the config is found in
+                   root = config.dirname
+                   YAML.load_file config
                  end
       end
 
       config = normalize_hash config
 
+      # finally, replace the root with whatever the root entry is
+      # inside the config itself
+      root = config[:root] = Pathname(config[:root]).expand_path(root) if
+        config[:root]
+
       # config MUST have source and target dirs
       raise 'Config must have :source, :target, and :private directories' unless
         ([:source, :target, :private] - config.keys).empty?
       [:source, :target].each do |path|
-        dir = config[path] = Pathname.new(config[path]).expand_path
+        dir = config[path] = Pathname.new(config[path]).expand_path(root)
         raise "#{dir} is not a readable directory" unless
           dir.directory? && dir.readable?
       end
@@ -143,7 +154,7 @@ module RDF::SAK
       if config[:graph]
         g = config[:graph]
         g = [g] unless g.is_a? Array
-        config[:graph] = g.map { |x| Pathname.new(x).expand_path }
+        config[:graph] = g.map { |x| Pathname.new(x).expand_path root }
       end
 
       # deal with prefix map
@@ -378,16 +389,18 @@ module RDF::SAK
     # @param subject  [RDF::Resource]
     # @param unique   [true, false] flag for unique return value
     # @param rdf      [true, false] flag to specify RDF::URI vs URI 
+    # @param to_uuid  [true, false] flag to run #canonical_uuid first
     # @param slugs    [true, false] flag to include slugs
     # @param fragment [true, false] flag to include fragment URIs
     #
     # @return [RDF::URI, URI, Array]
     #
     def canonical_uri subject,
-        unique: true, rdf: true, slugs: false, fragment: true
+        unique: true, rdf: true, to_uuid: false, slugs: true, fragment: true
       Util.canonical_uri @graph, subject, base: @base,
-        unique: unique, rdf: rdf, slugs: slugs, fragment: fragment,
-        frag_map: @config[:fragment] || {}, documents: @config[:documents]
+        unique: unique, rdf: rdf, to_uuid: to_uuid, slugs: slugs,
+        fragment: fragment, frag_map: @config[:fragment] || {},
+        documents: @config[:documents]
     end
 
     # Returns subjects from the graph with entailment.
@@ -632,7 +645,7 @@ module RDF::SAK
 
       # make sure these are actually URI objects not RDF::URI
       uris = uris.transform_values { |v| URI(uri_pp v.to_s) }
-      uri  = uris[subject] || canonical_uri(subject, rdf: false)
+      uri  = uris[subject] || canonical_uri(subject, rdf: false, slugs: true)
 
       ignore = ignore.to_set
 
@@ -642,12 +655,12 @@ module RDF::SAK
       { false => nodes, true => revs }.each do |reversed, obj|
         obj.reject { |n, _| ignore.include?(n) || !n.uri? }.each do |k, v|
           # first nuke rdf:type, that's never in there
-          v = v.dup.delete RDF::RDFV.type if reversed
+          v = v.dup.delete RDF.type unless reversed
           next if v.empty?
 
           unless uris[k]
-            cu = canonical_uri k
-            uris[k] = cu || uri_pp(k.to_s)
+            cu = canonical_uri k, slugs: true
+            uris[k] = URI(uri_pp(cu || k.to_s))
           end
 
           # munge the url and make the tag
@@ -735,7 +748,9 @@ module RDF::SAK
     end
 
     def generate_backlinks subject, published: true, ignore: nil
-      uri    = canonical_uri(subject, rdf: false) || URI(uri_pp subject)
+      uri = canonical_uri(
+        subject, rdf: false, slugs: true) || URI(uri_pp subject)
+
       ignore ||= Set.new
       raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
       ignore = ignore.to_set
@@ -1221,7 +1236,10 @@ module RDF::SAK
       target  = @config[published ? :target : :private]
       target.mkpath unless target.directory?
 
-      fh = (target + file).open(?w)
+      fn = target + file
+      fn.dirname.mkpath unless fn.dirname.directory?
+
+      fh = fn.open(?w)
       sitemap.write_to fh
       fh.close
     end
@@ -2236,7 +2254,7 @@ module RDF::SAK
 
           # do backreferences
 
-          op = graph.query(object: s).to_a.select do |stmt|
+          op = graph.query([nil, nil, s]).to_a.select do |stmt|
             sj = stmt.subject
             sj.uri? and !neighbours[sj] and (!published or published?(sj))
           end.reduce({}) do |hash, stmt|
@@ -2443,7 +2461,7 @@ module RDF::SAK
 
     # write public and private variants to target
 
-    def writex_html published: true
+    def write_xhtml published: true
     end
 
     # write modified rdf
@@ -2538,7 +2556,7 @@ module RDF::SAK
         end
 
         # now fix the namespaces for mangled html documents
-        root = doc.root
+        root   = doc.root
         if root.name == 'html'
           unless root.namespace
             # clear this off or it will be duplicated in the output
@@ -2597,14 +2615,18 @@ module RDF::SAK
       LINK_XPATH = ('.//html:*[not(self::html:base)][%s]' %
         (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
-      def rewrite_links node = @doc, uuids: {}, uris: {}, &block
+      def rewrite_links node = @doc, uuids: {}, uris: {}, rdfa: true, &block
         base  = base_for node
         count = 0
         cache = {}
+        names = rdfa ? LINK_ATTR + RDFA_ATTR : LINK_ATTR 
         node.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
-          LINK_ATTR.each do |attr|
+          names.each do |attr|
             attr = attr.to_s
             next unless elem.has_attribute? attr
+
+            # XXX grr bnodes
+            next if elem[attr].strip.start_with? '_:'
 
             abs = base.merge uri_pp(elem[attr].strip)
 
@@ -2713,10 +2735,22 @@ module RDF::SAK
         @context.generate_twitter_meta @uuid
       end
 
-      def transform_xhtml published: true
+      def transform_xhtml published: true, rehydrate: false
         # before we do any more work make sure this is html
         doc  = @doc.dup 1
         body = doc.at_xpath('//html:body[1]', { html: XHTMLNS }) or return
+
+        RDF::SAK::Util.rehydrate body, @context.graph do |cands|
+          unless cands.empty?
+            cands = cands.select do |k, v|
+              type_is?(v[:types],
+                [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent]) 
+            end
+            # XXX TODO make this logic better: if there are still
+            # candidates, sort by preferred predicate for given type
+            cands.keys.sort.first
+          end
+        end if rehydrate
 
         # eliminate comments
         doc.xpath('//comment()[not(ancestor::html:script)]',
@@ -2905,7 +2939,8 @@ module RDF::SAK
         style = doc.xpath('/html:html/html:head/html:style', { html: XHTMLNS })
 
         body = body.dup 1
-        body = { '#body' => body.children.to_a, about: '' }
+        body = { id: UUID::NCName.to_ncname_64(@uuid.to_s.dup, version: 1),
+          about: '', '#body' => body.children.to_a }
         body[:typeof] = @context.abbreviate(types.to_a, vocab: XHV) unless
           types.empty?
 
@@ -2948,9 +2983,10 @@ module RDF::SAK
       # Actually write the transformed document to the target
       #
       # @param published [true, false] 
+      # @param rehydrate 
       #
       # @return [Array] pathname(s) written
-      def write_to_target published: true
+      def write_to_target published: true, rehydrate: false
 
         # in all cases we write to private target
         states = [false]
@@ -2963,7 +2999,7 @@ module RDF::SAK
 
           # XXX this is dumb; it should do something more robust if it
           # fails
-          doc = transform_xhtml(published: state) or next
+          doc = transform_xhtml(published: state, rehydrate: rehydrate) or next
 
           begin
             fh   = Tempfile.create('xml-', target)
@@ -2988,6 +3024,11 @@ module RDF::SAK
         end
 
         ok
+      end
+
+      def scan_terms &block
+        # we're using the static method because it is stateless
+        RDF::SAK::Util.scan_inlines @doc, base: @uri, &block
       end
 
     end

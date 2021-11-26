@@ -106,8 +106,10 @@ module RDF::SAK::NLP
     end
   end
 
+  # https://html.spec.whatwg.org/#usage-summary
   HARVEST_DEFAULT = {
-    'http://www.w3.org/1999/xhtml' => %i[dfn abbr span].freeze
+    'http://www.w3.org/1999/xhtml' => %i[
+      dfn abbr span var kbd samp code q cite data time mark].freeze
   }.freeze
 
   # Recurse into an X(HT?)ML document, harvesting a given set of tags
@@ -149,9 +151,6 @@ module RDF::SAK::NLP
     out + node.children.map do |c|
       harvest_tags c, mapping: mapping, &block
     end.flatten(1) # shuck off the first layer of array
-  end
-
-  def scan_terms doc
   end
 
   def pre_segment element

@@ -1,4 +1,26 @@
 #+STARTUP: showall hidestars
+* desired outcome
+  - [ ] command-line tool that can:
+    - [ ] spawn a scraper
+      - [ ] that traces redirects
+        - [ ] that is smart enough to recognize loops
+      - [ ] that can either resolve a given list or follow links
+      - [ ] that stores content in the content-addressable store
+      - [ ] that returns an rdf graph of the metadata
+    - [ ] spawn a shell
+      - [ ] that can view and edit the rdf graph
+        - [ ] with term completion
+        - [ ] with shortcuts for certain vocabs
+        - [ ] with commands for common bulk rdf operations
+    - [ ] spawn a web server
+      - [ ] that resolves URIs
+        - [ ] that appropriately does redirects
+        - [ ] that resolves 410s (gone)
+        - [ ] that resolves 300s (multiple choices)
+      - [ ] that does content negotiation where applicable
+      - [ ] that generates (x)html with all the trimmings
+      - [ ] that applies transformation functions to whatever is
+        thrown at it (modulo mime type compatibility)
 * TODO major refactor
   - [ ] methods that are strictly extensions of RDF::Repository
     - [ ] actually make these an extension of RDF::Repository
@@ -37,12 +59,15 @@
       - [ ] inline markup (dfn/abbr/span, also em/strong etc) treatment
     - [ ] n-gram match (to skos concepts etc)
     - [ ] inline markup generation
-* TODO loupe processor
+* TODO loupe processor <https://privatealpha.com/ontology/loupe/1#>
   - [ ] aw yiss
   - [ ] predicate order
   - [ ] predicate show/hide
     - note "hide" can mean invisible but present vs completely omitted
       from the representation
+    - gut says "completely omit from representation" should happen at
+      the data source level, ie the processor does not have access to
+      see what it should be omitting from the representation
   - [ ] value order
   - [ ] value show/hide
   - [ ] label determination
