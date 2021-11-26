@@ -2927,21 +2927,26 @@ module RDF::SAK::Util
     ncache = Set.new
     pcache = Set.new
 
+    # compute the struct
     struct = struct_for repo, subject, base: base
 
+    # get the content of the title
     labp, labo = label_for repo, subject, candidates: struct
 
+    # initialize the skips
     pskip = [RDF.type, labp].flatten
     oskip = [labo.dup]
 
-    title = title_tag labp, labo, prefixes: prefixes
-
+    # generate what should be the request-uri
     uri = canonical_uri repo, subject, base: base
 
     # otherwise the body is just a special kind of fragment
     body, _ = generate_fragment repo, subject, struct: struct, base: uri,
       prefixes: prefixes, langs: langs, tag: :body, ptag: nil, otag: :p,
       pskip: pskip, oskip: oskip
+
+    # generate the title
+    title = title_tag labp, labo, prefixes: prefixes
 
     xhtml_stub(base: uri, prefix: prefixes, vocab: vocab,
       title: title, body: body).document
