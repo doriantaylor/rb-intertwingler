@@ -7,6 +7,7 @@ require 'rack/request'
 require 'rack/response'
 require 'http/negotiate'
 require 'uuidtools'
+require 'pathname'
 
 class RDF::SAK::Console
 
@@ -18,6 +19,50 @@ class RDF::SAK::Console
     
   end
 
+  class Response < Rack::Response
+
+    private
+
+    # mapping xml namespaces to content types
+    TYPES = {
+      nil => {
+        html: 'application/xhtml+xml',
+      },
+      'http://www.w3.org/1999/xhtml' => {
+        nil => 'application/xhtml+xml',
+      },
+    }
+
+    def resolve_type node
+      doc  = node.is_a?(Nokogiri::XML::Document) ? node : node.document
+      node = doc.root
+      ns   = node.namespace.href if node.namespace
+      type = TYPES.key?(ns) ?
+        TYPES[ns].fetch(node.name.to_sym, TYPES[ns][nil]) : 'application/xml'
+
+      "#{type};charset=#{(doc.encoding || 'utf-8').downcase}"
+    end
+
+    public
+
+    def initialize body, status, headers
+      body    ||= ''
+      status  ||= 501 # Not Implemented lol
+      headers ||= {}
+
+      if body.is_a? Nokogiri::XML::Document
+        # XXX failure modes in here like there not being a root
+        headers[Rack::CONTENT_TYPE] = resolve_type body
+      
+        body = body.to_xml
+        # XXX why is there no explicit set?
+        headers[Rack::CONTENT_LENGTH] = body.b.length.to_s
+      end
+      
+      super body, status, headers
+    end
+  end
+
   private
 
   # http errors we care about
@@ -26,6 +71,8 @@ class RDF::SAK::Console
     },
     404 => -> req {
       # nothing here, make something?
+      
+      doc = context.xhtml_stub().document
     },
     405 => -> req {
     },
@@ -35,12 +82,16 @@ class RDF::SAK::Console
 
   # content-negotiating static handler
   STATIC = -> req {
+    
   }
 
   DISPATCH = {
     RDF::SAK::Util::UUID_PATH => {
       GET: -> req {
-        uri = req.full_uri
+        uri   = req.full_uri
+        match = RDF::SAK::Util::UUID_PATH.match uri.request_uri
+
+        subject = context.canonical_uuid match.captures.first
 
         # first check if the subject is present; if not then 404
 
@@ -54,14 +105,11 @@ class RDF::SAK::Console
         # without baking it into the quad store
 
         # generate the response (here is where loupe would be handy)
-        doc = RDF::SAK::Util.generate_doc graph, subject, base: req, langs: req.accept_language
-        xml = doc.to_xml
-
+        doc = RDF::SAK::Util.generate_doc graph, subject, base: base,
+         langs: req.accept_language.to_h, prefixes: context.prefixes
+        
         # return 200
-        [200, xml, {
-          'Content-Type'   => 'application/xhtml+xml;charset=utf-8',
-          'Content-Length' => xml.b.length.to_s,
-        }]
+        [200, {}, doc]
       },
       POST: -> req {
         # negotiate input
@@ -74,7 +122,7 @@ class RDF::SAK::Console
       DELETE: -> req {
         # nuke all statements to and from this subject
         # return 204
-        [204, nil, {}]
+        [204, {}, nil]
       },
     },
     # internut hoem paeg maybe just show all the (non-blank) subjects
@@ -82,6 +130,9 @@ class RDF::SAK::Console
     # links collated by type?
     ?/ => {
       GET: -> req {
+        subjects = graph.subjects.sort.select &:uri?
+        body = subjects.map(&:to_s).join "\n"
+        [200, { 'Content-Type' => 'text/plain' }, body]
       },
     },
     # this is the /me resource that tells the ui about who is looking at it
@@ -108,14 +159,20 @@ class RDF::SAK::Console
         # unspecified domain; then you can specify one or more classes
         # in domain= (and range= for parity although this might be dumb)
       },
-    }
+    },
+    /^\/.*/ => {
+      GET: -> req {
+      },
+    },
   }.transform_values do |methods|
     # copies GET to HEAD but only if there is a GET (and no HEAD already)
     methods[:GET] ? { HEAD: methods[:GET] }.merge(methods) : methods
   end.freeze
 
   def dispatch req
-    # match uri or 404
+    uri = req.full_uri
+
+    # match uri or 404; stash the match data while we're at it
     _, methods = DISPATCH.detect { |test, _| test === uri.request_uri }
 
     # match method or 405
@@ -123,8 +180,25 @@ class RDF::SAK::Console
       methods.fetch(req.request_method.to_sym, ERROR[405]) : STATIC
 
     # run the handler, whatever that may be
-    resp = instance_exec uri, req, handler
-    resp = Rack::Response[*resp] unless resp.is_a? Rack::Response
+    resp = instance_exec(req, &handler).to_a
+    # XXX what if there is not one of these? lol
+
+    body = resp.last
+
+    if body.is_a? Nokogiri::XML::Document
+      if btag = body.at_xpath(
+        '/html:html/html:head[1]/html:base[1]', RDF::SAK::Util::XPATHNS)
+        buri = RDF::URI(btag['href'])
+        if buri.authority == base.authority
+          buri.scheme    = uri.scheme
+          buri.authority = RDF::URI(uri.to_s).authority
+          btag['href'] = buri.to_s
+        end
+      end
+    end
+
+    resp = Response[*resp.to_a]
+    
     # XXX maybe nuke the body if it is a HEAD request? ehh i think
     # that happens already
     resp
@@ -132,28 +206,58 @@ class RDF::SAK::Console
 
   public
 
+  attr_reader :context
+
   # Initialize a new Web console.
   #
-  # @param graph [RDF::Repository]
-  # @param
+  # @param context [RDF::SAK::Context] let's just be lazy for now
   #
-  def initialize graph, root: Pathname(?.).expand_path
-    
+  def initialize context
+    @context = context
   end
 
+  # Returns the RDF graph (repository, not quad graph identifier).
+  #
+  # @return [RDF::Repository]
+  #
+  def graph
+    @context.graph
+  end
+
+  # Returns the base URI (if configured, which it should be).
+  #
+  # @return [RDF::URI]
+  #
+  def base
+    @context.base
+  end
+
+  # Returns the configured prefix mapping
+  #
+  # @return [Hash]
+  #
+  def prefixes
+    @context.prefixes
+  end
+
+  # Run the response.
+  #
+  # @param env [Hash] the #Rack environment
+  # 
   def call env
     # normalize the environment in the case of ssl tomfoolery
     env['HTTPS'] = 'on' if env.key? 'REQUEST_SCHEME' and
       env['REQUEST_SCHEME'].to_s.strip.downcase == 'https'
-    req  = Request.new env
+    req = Request.new env
 
     # here is where we would rewrite the request i guess
 
-    # dispatch
+    # you know and maybe resolve it to an actual handler or something
     resp = dispatch req
 
     # here is where we would rewrite the response i guess
 
+    # aand kick it out the door
     resp.finish
   end
 end

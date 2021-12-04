@@ -309,8 +309,8 @@ module RDF::SAK
     # @return [Hash]
     #
     def struct_for subject, rev: false, only: [], inverses: false,
-        uuids: false, canon: false, ucache: {}, scache: {}
-      Util.struct_for @graph, subject,
+        uuids: false, canon: false, ucache: {}, scache: {}, repo: @graph
+      Util.struct_for repo, subject,
         rev: rev, only: only, inverses: inverses, uuids: uuids, canon: canon,
         ucache: ucache, scache: scache
     end
@@ -2466,6 +2466,93 @@ module RDF::SAK
 
     # write modified rdf
 
+    # bulk scan for terms
+    def scan_terms types: [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent],
+        published: false, docs: nil
+      docs ||= all_internal_docs published: published
+
+      # we make a temporary repository
+      scratch = RDF::Repository.new
+
+      # we also start with a pool of terms as they appear in the text
+      pool = {}
+
+      # we iterate over the docs
+      docs.each do |s|
+        # obtain the content
+        doc = visit(s) or next
+
+        # slurp up any rdfa, swapping in canonical uuids
+        RDF::RDFa::Reader.new(doc.doc).each do |stmt|
+          if stmt.subject.iri? and su = canonical_uuid(stmt.subject)
+            stmt.subject = su
+          end
+          if stmt.object.iri? and ou = canonical_uuid(stmt.object)
+            stmt.object = ou
+          end
+
+          scratch << stmt
+        end
+
+        # okay now 
+        doc.scan_terms do |subject, text, attrs, elem|
+
+          # this is where we would lemmatize the term i guess but shrugsies
+          case elem.name.to_sym
+          when :abbr
+            ts = [text]
+
+            # get rid of plurals/possessives for abbreviations
+            if m = /^(\w+)['\u2019e]s$/.match(text)
+              ts << m.captures.first
+            end
+
+            ts.each do |t|
+              x = pool[t] ||= {}
+              if attrs[:title] # won't be here if empty
+                y = pool[attrs[:title]] ||= {}
+                (y[:abbr]  ||= Set[]) << text
+                (x[:refer] ||= Set[]) << attrs[:title]
+              end
+            end
+          when :dfn
+            pool[attrs[:title] || text] ||= {}
+          when :span
+            # if lang is the only attribute 
+            pool[attrs[:title] || text] ||= {} unless
+              attrs.keys.count == 1 and attrs[:lang]
+          end
+        end
+      end
+ 
+      candidates = {}
+
+      @graph.subjects.each do |s|
+        # copy to yet another temporary graph
+        r = (RDF::Repository.new << @graph.query([s, nil, nil]))
+        # now build the struct
+        struct = struct_for s, repo: r
+        next unless rdf_type? s, types
+        [false, true].each do |b|
+          label_for(s, unique: false,
+                    alt: b, candidates: struct).each do |_, labo|
+            (candidates[labo.value] ||= Set[]) << s
+          end
+        end
+        scratch << r
+      end
+
+      warn candidates
+
+      # terms which are abbreviations
+
+      scratch
+    end
+
+    def scan_to_csv fh, published: false, docs: nil
+
+    end
+
     # - internet stuff -
 
     # verify external links for upness
@@ -2473,6 +2560,10 @@ module RDF::SAK
     # collect triples for external links
 
     # fetch references for people/companies/concepts/etc from dbpedia/wikidata
+
+
+
+
 
     # - document context class -
 

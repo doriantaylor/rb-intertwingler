@@ -843,15 +843,18 @@ module RDF::SAK::Util
         # warn "lol uuid #{orig}"
         # if it's a uuid, check that we have it as a subject
         # if we have it as a subject, return it
-        return uri if scache[uri] ||= repo.has_subject?(uri)
+        if scache[uri] ||= repo.has_subject?(uri)
+          return unique ? uri : [uri]
+        end
         # note i don't want to screw around right now dealing with the
         # case that a UUID might not itself be canonical
-
       elsif tu.fragment and
           (uu = UUID::NCName.from_ncname(tu.fragment, version: 1))
         # this is the special case that the fragment is a compact uuid
         uu = RDF::URI("urn:uuid:#{uu}")
-        return uu if scache[uu] ||= repo.has_subject?(uu)
+        if scache[uu] ||= repo.has_subject?(uu)
+          return unique ? uu : [uu]
+        end
       end
     end
 
@@ -920,7 +923,7 @@ module RDF::SAK::Util
                scache: scache, ucache: ucache, base: base
              # if the non-fragment part of the uri doesn't resolve, we
              # can preemptively return nil here
-             return nil if h.empty?
+             return unique ? nil : [] if h.empty?
              h
            end
 
@@ -2329,7 +2332,6 @@ module RDF::SAK::Util
 
       # conditionally set the language
       lang = lang_for e
-      warn e.lang.inspect
       attrs[:lang] = lang if lang
 
       # note we only add the datatype now so that test above works
@@ -2706,7 +2708,7 @@ module RDF::SAK::Util
   # @return [Hash]
   #
   def generate_list repo, list, base: nil, langs: [],
-      rel: nil, rev: nil, prefixes: {}, ordered: true
+      rel: nil, rev: nil, prefixes: {}, ncache: Set.new, ordered: true
     list = RDF::List.new(subject: list) unless list.is_a? RDF::List
 
     ol = { inlist: '' }
@@ -2737,6 +2739,12 @@ module RDF::SAK::Util
         # XXX labp might actually be more than one predicate, never
         # thought of that
 
+        # get everything into the cache
+        ncache |= smush_struct ts
+        ncache |= tt.to_set
+        ncache << labp
+        ncache << labo
+
         # append to strings
         strings << (labo || item).value.strip
 
@@ -2745,7 +2753,7 @@ module RDF::SAK::Util
           property: labp, label: labo, typeof: tt
         { '#li' => tag }
       when RDF::Node
-        frag, fstr = generate_fragment repo, item, base: base,
+        frag, fstr = generate_fragment repo, item, base: base, ncache: ncache,
           prefixes: prefixes, name: :li, langs: langs, wrap_list: true
         # append all the strings in the fragment
         strings << fstr
@@ -2816,17 +2824,20 @@ module RDF::SAK::Util
   # @return [Array] pair containing the markup spec and the string value
   #
   def generate_fragment repo, subject, struct: nil, base: nil, langs: [],
-      rel: nil, rev: nil, prefixes: {}, tag: :div, ptag: :div, otag: :div,
+      rel: nil, rev: nil, prefixes: {}, ncache: Set.new,
+      tag: :div, ptag: :div, otag: :div,
       pskip: [], oskip: [], wrap_list: false
 
     # we need to collate the strings
     strings = []
 
+    ncache << subject if ncache
+
     # determine if subject is a list and return early
     if repo.query([subject, RDF.first, nil]).first
       if wrap_list
-        out, lstr = generate_list repo, subject,
-          base: base, headers: headers, prefixes: prefixes
+        out, lstr = generate_list repo, subject, base: base, ncache: ncache,
+          langs: langs, prefixes: prefixes
         out = { "##{name}" => out }
 
         # append list strings to meta
@@ -2839,8 +2850,8 @@ module RDF::SAK::Util
         return [out, strings.join(' ').strip]
       else
         # otherwise just pass it along
-        out, lstr = generate_list repo, subject,
-          base: base, langs: langs, rel: rel, rev: rev, prefixes: prefixes
+        out, lstr = generate_list repo, subject, base: base, ncache: ncache,
+          langs: langs, rel: rel, rev: rev, prefixes: prefixes
         strings << lstr
 
         return [out, strings.join(' ').strip]
@@ -2849,6 +2860,8 @@ module RDF::SAK::Util
 
     # okay now we get to the actual thing
     struct ||= struct_for repo, subject, base: base
+
+    ncache |= smush_struct struct
 
     # what we're probably gonna want to do then is get all the labels
     # for all the URI references as well as the string values of any
@@ -2928,10 +2941,15 @@ module RDF::SAK::Util
     pcache = Set.new
 
     # compute the struct
-    struct = struct_for repo, subject, base: base
+    struct = struct_for repo, subject, base: base, inverses: true
+
 
     # get the content of the title
     labp, labo = label_for repo, subject, candidates: struct
+
+    ncache |= smush_struct struct
+    ncache << labp
+    ncache << labo
 
     # initialize the skips
     pskip = [RDF.type, labp].flatten
@@ -2942,13 +2960,17 @@ module RDF::SAK::Util
 
     # otherwise the body is just a special kind of fragment
     body, _ = generate_fragment repo, subject, struct: struct, base: uri,
-      prefixes: prefixes, langs: langs, tag: :body, ptag: nil, otag: :p,
-      pskip: pskip, oskip: oskip
+      prefixes: prefixes, langs: langs, ncache: ncache,
+      tag: :body, ptag: nil, otag: :p, pskip: pskip, oskip: oskip
+
+    warn ncache.inspect
+
+    pfx = prefix_subset prefixes, ncache
 
     # generate the title
-    title = title_tag labp, labo, prefixes: prefixes
+    title = title_tag labp, labo, prefixes: prefixes if labo
 
-    xhtml_stub(base: uri, prefix: prefixes, vocab: vocab,
+    xhtml_stub(base: uri, prefix: pfx, vocab: vocab,
       title: title, body: body).document
   end
 
