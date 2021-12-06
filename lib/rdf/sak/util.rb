@@ -147,6 +147,9 @@ module RDF::SAK::Util
 
   UUID_PATH = /^\/+#{UUID_ONLY}/
 
+  # anything that could possibly be construed as whitespace
+  WS_RE = /[\s\u{0085 00a0 1680 2028 2029 202f 205f 3000}\u2000-\u200a]+/
+
   # okay labels: what do we want to do about them? poor man's fresnel!
 
   # basic structure is an asserted base class corresponding to a
@@ -449,6 +452,10 @@ module RDF::SAK::Util
   BITS = { nil => 0, false => 0, true => 1 }
 
   public
+
+  def normalize_space string
+    string.gsub(WS_RE, ' ').strip
+  end
 
   def coerce_node_spec spec, rev: false
     spec = [spec] unless spec.respond_to? :to_a
@@ -820,11 +827,13 @@ module RDF::SAK::Util
   # @param published [true, false] whether to restrict to published docs
   # @param scache [Hash] subject cache `{ subject => true }`
   # @param ucache [Hash] UUID-to-URI cache `{ uuid => [URIs] }`
+  # @param base [RDF::URI]
+  # @param verify [true, false] whether or not to verify (compact) UUID input
   # 
   # @return [RDF::URI, Array]
   #
   def self.canonical_uuid repo, uri, unique: true, published: false,
-      scache: {}, ucache: {}, base: nil
+      scache: {}, ucache: {}, base: nil, verify: true
     # make sure this is actually a uri
     orig = uri = coerce_resource uri, base
     unless uri.is_a? RDF::Node
@@ -843,16 +852,16 @@ module RDF::SAK::Util
         # warn "lol uuid #{orig}"
         # if it's a uuid, check that we have it as a subject
         # if we have it as a subject, return it
-        if scache[uri] ||= repo.has_subject?(uri)
+        if scache[uri] ||= (!verify) || repo.has_subject?(uri)
           return unique ? uri : [uri]
         end
         # note i don't want to screw around right now dealing with the
         # case that a UUID might not itself be canonical
       elsif tu.fragment and
-          (uu = UUID::NCName.from_ncname(tu.fragment, version: 1))
+          (uu = UUID::NCName.from_ncname(tu.fragment, validate: true))
         # this is the special case that the fragment is a compact uuid
         uu = RDF::URI("urn:uuid:#{uu}")
-        if scache[uu] ||= repo.has_subject?(uu)
+        if scache[uu] ||= (!verify) || repo.has_subject?(uu)
           return unique ? uu : [uu]
         end
       end

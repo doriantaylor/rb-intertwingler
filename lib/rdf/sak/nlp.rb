@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 require 'rdf/sak/version' # initialize the symbols
 
+require 'lemmatizer'
+
 # This is the *extremely* lightweight NLP functionality. Goals:
 #
 # * Identify N-grams in the corpus that can be candidates for terms
@@ -88,7 +90,7 @@ module RDF::SAK::NLP
   # This class encapsulates a cache of SKOS concepts (either a concept
   # scheme, a collection, an ordered collection, or just a bundle of
   # concepts) and organizes them by label
-  class ConceptCache
+  class TermCache
     # initialize from a scheme or collection
     def self.from_scheme repo, subject
     end
@@ -106,11 +108,15 @@ module RDF::SAK::NLP
     end
   end
 
+  private
+
   # https://html.spec.whatwg.org/#usage-summary
   HARVEST_DEFAULT = {
     'http://www.w3.org/1999/xhtml' => %i[
       dfn abbr span var kbd samp code q cite data time mark].freeze
   }.freeze
+
+  public
 
   # Recurse into an X(HT?)ML document, harvesting a given set of tags
   # for a given namespace. Returns an array of arrays of the form
@@ -159,7 +165,11 @@ module RDF::SAK::NLP
   def segment doc
   end
 
-  def lemmatize 
+  # this is dumb but whatever
+
+  def lemmatize term
+    lem = @@lem ||= Lemmatizer.new
+    term.strip.split.map { |t| lem.lemma t }.join ' '
   end
 
   # make these instance methods available to the module

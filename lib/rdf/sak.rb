@@ -20,6 +20,7 @@ require 'md-noko'
 require 'uuid-ncname'
 require 'rdf/sak/mimemagic'
 require 'rdf/sak/util'
+require 'rdf/sak/nlp'
 
 # ontologies, mine in particular
 require 'rdf/sak/ci'
@@ -378,9 +379,10 @@ module RDF::SAK
     # 
     # @return [RDF::URI, Array]
     #
-    def canonical_uuid uri, unique: true, published: false
-      Util.canonical_uuid @graph, uri, unique: unique,
-        published: published, scache: @scache, ucache: @ucache, base: @base
+    def canonical_uuid uri,
+        unique: true, published: false, repo: @graph, verify: true
+      Util.canonical_uuid repo, uri, unique: unique, published: published,
+        scache: @scache, ucache: @ucache, base: @base, verify: verify
     end
 
     # Obtain the "best" dereferenceable URI for the subject.
@@ -2466,13 +2468,15 @@ module RDF::SAK
 
     # write modified rdf
 
+
     # bulk scan for terms
     def scan_terms types: [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent],
         published: false, docs: nil
       docs ||= all_internal_docs published: published
 
       # we make a temporary repository
-      scratch = RDF::Repository.new
+      # XXX maybe only select the target types?
+      scratch = RDF::Repository.new << @graph
 
       # we also start with a pool of terms as they appear in the text
       pool = {}
@@ -2482,21 +2486,66 @@ module RDF::SAK
         # obtain the content
         doc = visit(s) or next
 
-        # slurp up any rdfa, swapping in canonical uuids
-        RDF::RDFa::Reader.new(doc.doc).each do |stmt|
-          if stmt.subject.iri? and su = canonical_uuid(stmt.subject)
+        # note the objective here is to get the statements in the rdfa
+        # that are not already in the graph
+
+        # remove garbage from the <head> from the working version; it
+        # was thrown in there ad-hoc
+        html = doc.doc.dup 1
+        html.xpath(
+          '/html:html/html:head/*[not(self::html:title|self::html:base)]',
+          RDF::SAK::Util::XPATHNS).each(&:unlink)
+
+        # slurp up any rdfa, swapping in canonical uuids; note that if
+        # we're doing this here then we assume they are authoritative
+        # and don't check them against the graph
+        RDF::RDFa::Reader.new(html).each do |stmt|
+          if stmt.subject.iri? and
+              su = canonical_uuid(stmt.subject, verify: false)
             stmt.subject = su
           end
-          if stmt.object.iri? and ou = canonical_uuid(stmt.object)
+          if stmt.object.iri? and
+              ou = canonical_uuid(stmt.object, verify: false)
             stmt.object = ou
           end
 
           scratch << stmt
         end
 
-        # okay now 
-        doc.scan_terms do |subject, text, attrs, elem|
+        # what we want to do is construct a net (hash) where the keys
+        # are all acceptable lexical representations of all the terms,
+        # and the values are sets of candidate structures which might
+        # correspond to terms
 
+        # okay now scan the doc for terms
+        doc.scan_terms do |subject, text, attrs, elem|
+          # step zero: normalize the damn thing
+          text = normalize_space text
+
+          # okay we have three grades of label: pref, alt, hidden
+
+          # pref is always going to be the most differentiated lexical
+          # representation of whatever concept; we begin by assuming
+          # that the text in the 
+          pref = text.dup
+
+          # alt is going to be stuff like synonyms and abbreviations
+          # that can be linked to an expanded term
+          alt = Set[]
+
+          # things like plurals and possessives, as well as normalized
+          # lowercase representations of proper nouns go into hidden
+          hidden = Set[]
+
+          # some of these will be proper nouns
+
+          # terms at the beginning of a sentence 
+
+          # XXX THIS IS VERY NAÏVE
+
+          # get rid of any possessives
+          
+          
           # this is where we would lemmatize the term i guess but shrugsies
           case elem.name.to_sym
           when :abbr
@@ -2542,14 +2591,26 @@ module RDF::SAK
         scratch << r
       end
 
-      warn candidates
+      warn pool
 
       # terms which are abbreviations
 
       scratch
     end
 
-    def scan_to_csv fh, published: false, docs: nil
+    # csv output format:
+    # first row: uuid, type, preflabel, description
+
+    # second row: if missing the uuid in the first column then it is
+    # assumed columns 2 through N are altlabels
+
+    # third row: same deal but for 
+
+    # type, altlabel, altlabel, hiddenlabel...
+
+    # @return [Array] suitable for csv output
+
+    def scan_to_csv published: false, docs: nil
 
     end
 
@@ -2570,6 +2631,7 @@ module RDF::SAK
     class Document
       include XML::Mixup
       include Util
+      include NLP
 
       private
 
