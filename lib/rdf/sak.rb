@@ -5,6 +5,7 @@ require 'rdf/sak/version'
 require 'stringio'
 require 'pathname'
 require 'tempfile'
+require 'yaml' # apparently no longer stock
 
 # rdf stuff
 require 'uri'
@@ -397,9 +398,9 @@ module RDF::SAK
     #
     # @return [RDF::URI, URI, Array]
     #
-    def canonical_uri subject,
-        unique: true, rdf: true, to_uuid: false, slugs: true, fragment: true
-      Util.canonical_uri @graph, subject, base: @base,
+    def canonical_uri subject, unique: true, rdf: true, to_uuid: false,
+        slugs: true, fragment: true, repo: @graph
+      Util.canonical_uri repo, subject, base: @base,
         unique: unique, rdf: rdf, to_uuid: to_uuid, slugs: slugs,
         fragment: fragment, frag_map: @config[:fragment] || {},
         documents: @config[:documents]
@@ -414,7 +415,8 @@ module RDF::SAK
     #
     # @return [RDF::Resource]
     #
-    def subjects_for predicate, object, entail: true, only: [], &block
+    def subjects_for predicate, object,
+        entail: true, only: [], repo: @graph, &block
       Util.subjects_for @graph,
         predicate, object, entail: entail, only: only, &block
     end
@@ -430,7 +432,7 @@ module RDF::SAK
     # @return [RDF::Term]
     #
     def objects_for subject, predicate,
-        entail: true, only: [], datatype: nil, &block
+        entail: true, only: [], datatype: nil, repo: @graph, &block
       Util.objects_for @graph, subject, predicate,
         entail: entail, only: only, datatype: datatype, &block
     end
@@ -442,8 +444,8 @@ module RDF::SAK
     #
     # @return [Set]
     #
-    def replacements_for subject, published: true
-      Util.replacements_for @graph, subject, published: published
+    def replacements_for subject, published: true, repo: @graph
+      Util.replacements_for repo, subject, published: published
     end
 
     # Obtain dates for the subject as instances of Date(Time). This is
@@ -455,8 +457,8 @@ module RDF::SAK
     #
     # @return [Array] of dates
     def dates_for subject, predicate: RDF::Vocab::DC.date,
-        datatype: [RDF::XSD.date, RDF::XSD.dateTime]
-      Util.dates_for @graph, subject, predicate: predicate, datatype: datatype
+        datatype: [RDF::XSD.date, RDF::XSD.dateTime], repo: @graph
+      Util.dates_for repo, subject, predicate: predicate, datatype: datatype
     end
 
     # Obtain any specified MIME types for the subject. Just shorthand
@@ -469,8 +471,8 @@ module RDF::SAK
     # @return [Array] of internet media types
     #
     def formats_for subject, predicate: RDF::Vocab::DC.format,
-        datatype: [RDF::XSD.token]
-      Util.objects_for @graph, subject, predicate, datatype: datatype
+        datatype: [RDF::XSD.token], repo: @graph
+      Util.objects_for repo, subject, predicate, datatype: datatype
     end
 
     # Assuming the subject is a thing that has authors, return the
@@ -483,8 +485,8 @@ module RDF::SAK
     #
     # @return [RDF::Value, Array]
     #
-    def authors_for subject, unique: false, contrib: false
-      Util.authors_for @graph, subject, unique: unique, contrib: contrib
+    def authors_for subject, unique: false, contrib: false, repo: @graph
+      Util.authors_for repo, subject, unique: unique, contrib: contrib
     end
 
     # Obtain the most appropriate label(s) for the subject's type(s).
@@ -501,8 +503,8 @@ module RDF::SAK
     # @return [Array] either a predicate-object pair or an array of pairs.
     #
     def label_for subject, candidates: nil, unique: true, type: nil,
-        lang: nil, desc: false, alt: false
-      Util.label_for @graph, subject, candidates: candidates,
+        lang: nil, desc: false, alt: false, repo: @graph
+      Util.label_for repo, subject, candidates: candidates,
         unique: unique, type: type, lang: lang, desc: desc, alt: alt
     end
 
@@ -2468,6 +2470,20 @@ module RDF::SAK
 
     # write modified rdf
 
+    def sponge_docs published: false, docs: nil
+      docs ||= all_internal_docs published: published
+
+      out = RDF::Repository.new
+
+      docs.each do |s|
+        next unless s = canonical_uuid(s)
+        next unless doc = visit(s)
+        warn s
+        out << doc.sponge
+      end
+
+      out
+    end
 
     # bulk scan for terms
     def scan_terms types: [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent],
@@ -2476,7 +2492,11 @@ module RDF::SAK
 
       # we make a temporary repository
       # XXX maybe only select the target types?
-      scratch = RDF::Repository.new << @graph
+      scratch = RDF::Repository.new
+      @graph.query([nil, RDF.type, nil]) do |stmt|
+        scratch << @graph.query([stmt.subject, nil, nil]) if
+          type_is? stmt.object, types
+      end
 
       # we also start with a pool of terms as they appear in the text
       pool = {}
@@ -2512,21 +2532,24 @@ module RDF::SAK
           scratch << stmt
         end
 
-        # what we want to do is construct a net (hash) where the keys
-        # are all acceptable lexical representations of all the terms,
-        # and the values are sets of candidate structures which might
-        # correspond to terms
+        # we want to construct a net (hash) where the keys are all
+        # acceptable lexical representations of all the terms, and the
+        # values are hashes containing those representations  entities
 
         # okay now scan the doc for terms
-        doc.scan_terms do |subject, text, attrs, elem|
+        doc.scan_inlines do |subject, text, attrs, elem|
           # step zero: normalize the damn thing
           text = normalize_space text
+
+          # inline alternate text or nil if none
+          title = attrs[%i[content aria-label title].detect { |a| attrs[a] }]
+          title = nil if title == text
 
           # okay we have three grades of label: pref, alt, hidden
 
           # pref is always going to be the most differentiated lexical
           # representation of whatever concept; we begin by assuming
-          # that the text in the 
+          # that the text in the `text` position is the preferred one
           pref = text.dup
 
           # alt is going to be stuff like synonyms and abbreviations
@@ -2537,81 +2560,238 @@ module RDF::SAK
           # lowercase representations of proper nouns go into hidden
           hidden = Set[]
 
-          # some of these will be proper nouns
+          # do the possessives now
+          if m = /^(.+?)['\u2019]s?$/.match(pref)
+            hidden << pref
+            pref = m.captures.first.strip
+          end
 
-          # terms at the beginning of a sentence 
+          # proper noun?
+          proper = false
 
-          # XXX THIS IS VERY NAÏVE
+          type = RDF::Vocab::SKOS.Concept
 
-          # get rid of any possessives
-          
-          
-          # this is where we would lemmatize the term i guess but shrugsies
           case elem.name.to_sym
           when :abbr
-            ts = [text]
+            # the term is definitely an abbreviation if it is in an
+            # <abbr> tag
 
-            # get rid of plurals/possessives for abbreviations
-            if m = /^(\w+)['\u2019e]s$/.match(text)
-              ts << m.captures.first
+            proper = true
+
+            # do it this way rather than lemmatize
+            if m = /^(.+?)e?s$/.match(pref)
+              hidden << pref
+              pref = m.captures.first.strip
             end
 
-            ts.each do |t|
-              x = pool[t] ||= {}
-              if attrs[:title] # won't be here if empty
-                y = pool[attrs[:title]] ||= {}
-                (y[:abbr]  ||= Set[]) << text
-                (x[:refer] ||= Set[]) << attrs[:title]
-              end
+            # abbr title means the abbr text is the alt
+            if title
+              alt << pref
+              pref = title
             end
           when :dfn
-            pool[attrs[:title] || text] ||= {}
-          when :span
-            # if lang is the only attribute 
-            pool[attrs[:title] || text] ||= {} unless
-              attrs.keys.count == 1 and attrs[:lang]
+            # the term is definitely a concept if it is in a <dfn> tag
+            if title
+              hidden << pref # note this is hidden not alt
+              pref = title
+            end
+          when -> x { x == :span and elem.attributes.empty? }
+            # if it is in a <span> tag with exactly zero attributes,
+            # then it is something like an agent
+            proper = true
+            type = RDF::Vocab::FOAF.Agent
+          when -> x { x == :span and (title || '').split.include? pref }
+            # same deal but use the title instead
+            hidden << pref
+            pref   = title
+            proper = true
+            type   = RDF::Vocab::FOAF.Agent
+          else
+            # unset pref to signal no more operations
+            pref = nil
+            type = nil
           end
+
+          if pref
+            words = pref.split
+            # we can be confident the term is a proper noun if it is
+            # more than one word and the first and last are capitalized
+            proper = true if words.length > 2 and
+              words.any? { |w| /\p{Upper}/.match w }
+            if proper
+              tmp = pref.downcase
+              hidden << tmp if tmp != pref
+            else
+              # if we haven't decided conclusively that the term is a
+              # proper noun (XXX THIS IS WHERE A TAGGER WOULD BE HANDY)
+              # then we can go ahead and downcase and lemmatize it
+              pref = pref.downcase
+              tmp  = doc.lemmatize pref
+              if tmp != pref
+                hidden << pref
+                pref = tmp
+              end
+            end
+
+            # all the candidate keys
+            t = Set[pref] | alt | hidden
+            k = pool.keys.detect { |k| t.include? k }
+            res = k ? pool[k] : {
+              pref: pref, type: type, alt: Set[], hidden: Set[], refs: Set[] }
+
+            # move the key to an alt if the existing one is shorter
+            if res[:pref].length < pref.length
+              res[:alt] << res[:pref]
+              res[:pref] = pref
+            end
+
+            # now merge alt and hidden
+            res[:alt]    |= alt
+            res[:hidden] |= hidden
+
+            # now add these in case we missed them
+            t |= res[:alt] | res[:hidden]
+
+            t.each { |k| pool[k] ||= res }
+
+            # get the subject for this node
+            if s = doc.subject_for(elem, coerce: :rdf)
+              s = canonical_uuid(s, verify: false) || s 
+              res[:refs] << s
+            end
+          end
+
         end
       end
- 
+
+      # okay NOW we want to construct a net of all the concepts etc,
+      # where the keys are normalized, lowercased strings, and the
+      # values are *sets* of resources
+      entries    = {}
       candidates = {}
 
-      @graph.subjects.each do |s|
-        # copy to yet another temporary graph
-        r = (RDF::Repository.new << @graph.query([s, nil, nil]))
-        # now build the struct
-        struct = struct_for s, repo: r
-        next unless rdf_type? s, types
-        [false, true].each do |b|
-          label_for(s, unique: false,
-                    alt: b, candidates: struct).each do |_, labo|
-            (candidates[labo.value] ||= Set[]) << s
-          end
+      scratch.query([nil, RDF.type, nil]) do |stmt|
+        next unless type_is? stmt.object, types
+        s = stmt.subject
+        entry  = entries[s] = { id: s}
+        struct = entry[:struct] = struct_for s, only: :literal
+        pref   = entry[:pref] = (label_for(s, repo: scratch,
+                                           candidates: struct) || []).last
+        alts   = entry[:alts] = (label_for s, repo: scratch, unique: false,
+                                 candidates: struct, alt: true).map(&:last)
+
+        # we want all the labels
+        labels = alts.dup
+        labels.unshift pref if pref
+        labels.uniq.each do |label|
+          lstr = label.value.downcase.strip
+          next if lstr.empty?
+          mapping = candidates[lstr] ||= {}
+          mapping[s] = entry
         end
-        scratch << r
       end
 
-      warn pool
+      out = pool.values.uniq
+      out.each do |entry|
+        entry[:id] = uuidv4
+      end
 
-      # terms which are abbreviations
-
-      scratch
+      out
     end
 
     # csv output format:
-    # first row: uuid, type, preflabel, description
-
-    # second row: if missing the uuid in the first column then it is
-    # assumed columns 2 through N are altlabels
-
-    # third row: same deal but for 
-
-    # type, altlabel, altlabel, hiddenlabel...
-
+    #
+    # * first row: uri (uuid), type, preflabel, description, seealso
+    # * second row: if missing the uuid in the first column then it is
+    #   assumed columns 2 through N are altlabels
+    # * third row: same deal but for hidden labels
+    # * fourth row: same deal but for inverse references
+    #
+    # the next record starts when there is a uri in the first column
+    #
     # @return [Array] suitable for csv output
 
-    def scan_to_csv published: false, docs: nil
+    def scan_to_csv types: [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent],
+        published: false, docs: nil
+      terms = scan_terms types: types, published: published, docs: docs
 
+      out = [
+        ['ID', 'Type', 'Preferred Label', 'Description', 'See Also']
+      ]
+
+      terms.sort do |a, b|
+        c = a[:type] <=> b[:type]
+        c == 0 ? a[:pref].downcase <=> b[:pref].downcase : c
+      end.each do |term|
+        out << [term[:id].to_s, abbreviate(term[:type]), term[:pref].to_s]
+        %i[alt hidden refs].each do |sym|
+          out << (term[sym].empty? ? [] :
+                  ([nil] + term[sym].to_a.map(&:to_s).sort))
+        end
+      end
+
+      out
+    end
+
+
+    def ingest_concept_csv rows
+      # temporary graph
+      out = RDF::Repository.new
+
+      subject = nil
+      ctr = 0
+      rows.each do |row|
+        row = row.fields if row.respond_to? :fields
+        row.map! do |c|
+          c = c.to_s.strip
+          c.empty? ? nil : c
+        end
+
+        if row.first
+          subject = RDF::URI(row.first)
+
+          if row[1] # type
+            type = resolve_curie row[1],
+              prefixes: prefixes, scalar: true, coerce: :rdf
+            out << [subject, RDF.type, type]
+          end
+          if row[2] # preflabel
+            pref = RDF::Literal(row[2], language: 'en')
+            out << [subject, RDF::Vocab::SKOS.prefLabel, pref]
+          end
+          if row[4] # description
+            desc = RDF::Literal(row[3], language: 'en')
+            out << [subject, RDF::Vocab::SKOS.definition, desc]
+          end
+          # 
+          row.drop(4).compact.each do |c|
+            c = RDF::URI(c)
+            out << [subject, RDF::RDFS.seeAlso, c]
+          end
+
+          ctr = 1
+        elsif ctr == 1 # alt labels
+          ctr += 1
+          row.drop(1).compact.each do |c|
+            c = RDF::Literal(c, language: 'en')
+            out << [subject, RDF::Vocab::SKOS.altLabel, c]
+          end
+        elsif ctr == 2 # hidden labels
+          ctr += 1
+          row.drop(1).compact.each do |c|
+            c = RDF::Literal(c, language: 'en')
+            out << [subject, RDF::Vocab::SKOS.hiddenLabel, c]
+          end
+        elsif ctr == 3 # inverse refs
+          ctr += 1
+          row.drop(1).compact.each do |c|
+            c = RDF::URI(c)
+            out << [c, RDF::Vocab::DC.references, subject]
+          end
+        end
+      end
+
+      out
     end
 
     # - internet stuff -
@@ -2644,7 +2824,7 @@ module RDF::SAK
       def initialize context, uuid, doc: nil, uri: nil, mtime: nil
         raise 'context must be a RDF::SAK::Context' unless
           context.is_a? RDF::SAK::Context
-        raise 'uuid must be an RDF::URI' unless
+        raise "uuid must be an RDF::URI, not #{uuid.class}" unless
           uuid.is_a? RDF::URI and uuid.to_s.start_with? 'urn:uuid:'
 
         doc ||= context.locate uuid
@@ -2738,6 +2918,15 @@ module RDF::SAK
 
         # voilà
         @doc = doc
+      end
+
+      def subject_for node = nil,
+          prefixes: @context.prefixes, base: @uri, coerce: :rdf
+        node ||= doc.root
+        prefixes = @context.prefixes.merge(
+          get_prefixes(node, coerce: :term).filter { |k, _| k })
+        RDF::SAK::Util.subject_for node,
+          prefixes: prefixes, base: base, coerce: coerce
       end
 
       # proxy for context published
@@ -3179,7 +3368,39 @@ module RDF::SAK
         ok
       end
 
-      def scan_terms &block
+      # Sponge the RDFa out of the document.
+      # 
+      # @return [RDF::Repository] the statements found in the document.
+      def sponge
+        out = RDF::Repository.new
+
+        # remove garbage from the <head> from the working version; it
+        # was thrown in there ad-hoc
+        html = doc.dup 1
+        html.xpath(
+          '/html:html/html:head/*[not(self::html:title|self::html:base)]',
+          RDF::SAK::Util::XPATHNS).each(&:unlink)
+
+        # slurp up any rdfa, swapping in canonical uuids; note that if
+        # we're doing this here then we assume they are authoritative
+        # and don't check them against the graph
+        RDF::RDFa::Reader.new(html).each do |stmt|
+          if stmt.subject.iri? and
+              su = @context.canonical_uuid(stmt.subject, verify: false)
+            stmt.subject = su
+          end
+          if stmt.object.iri? and
+              ou = @context.canonical_uuid(stmt.object, verify: false)
+            stmt.object = ou
+          end
+
+          out << stmt
+        end
+
+        out
+      end
+
+      def scan_inlines &block
         # we're using the static method because it is stateless
         RDF::SAK::Util.scan_inlines @doc, base: @uri, &block
       end

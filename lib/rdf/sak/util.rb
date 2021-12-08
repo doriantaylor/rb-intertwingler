@@ -4,6 +4,7 @@ require 'rdf/sak/version'
 require 'uri'
 require 'uri/urn'
 require 'set'
+require 'uuidtools'
 require 'uuid-ncname'
 require 'xml-mixup'
 
@@ -133,12 +134,21 @@ module RDF::SAK::Util
   }.transform_values { |v| XPATH[v] }.freeze
 
   URI_COERCIONS = {
-    nil   => -> t { t.to_s },
-    false => -> t { t.to_s },
-    uri:     -> t { URI.parse t.to_s },
+    nil   => -> t { t.to_s.strip },
+    false => -> t { t.to_s.strip },
+    uri:     -> t { URI.parse t.to_s.strip },
     rdf:     -> t {
-      t = t.to_s
+      t = t.to_s.strip
       t.start_with?('_:') ? RDF::Node.new(t.delete_prefix '_:') : RDF::URI(t) },
+    term:   -> t {
+      t = t.to_s.strip
+      if t.start_with? '_:'
+        RDF::Node.new(t.delete_prefix '_:')
+      else
+        t = RDF::URI(t)
+        RDF::Vocabulary.find_term(t) rescue t
+      end
+    },
   }
 
   UUID_ONLY = /\b([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})\b/i
@@ -184,7 +194,8 @@ module RDF::SAK::Util
         [RDF::Vocab::SKOS.prefLabel, RDF::RDFS.label,
           RDF::Vocab::DC.title, RDF::Vocab::DC11.title, RDF::RDFV.value],
         # alt
-        [RDF::Vocab::SKOS.altLabel, RDF::Vocab::DC.alternative],
+        [RDF::Vocab::SKOS.altLabel, RDF::Vocab::DC.alternative,
+         RDF::Vocab::SKOS.hiddenLabel],
       ],
       desc: [
         # main will be cloned into alt
@@ -300,7 +311,7 @@ module RDF::SAK::Util
     if coerce
       coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
       raise 'coerce must be either :uri or :rdf' unless
-        %i[uri rdf].include?(coerce)
+        URI_COERCIONS.keys.include?(coerce)
     end
     coerce
   end
@@ -341,7 +352,7 @@ module RDF::SAK::Util
     if is_ancestor
       # ah right @resource gets special treatment
       if subject = node[:resource]
-        subject = resolve_curie subject,
+        subject = resolve_curie subject, term: false,
           prefixes: prefixes, base: dbase, scalar: true
       else
         # then check @href and @src
@@ -364,9 +375,8 @@ module RDF::SAK::Util
     end
 
     if node[:about]
-
-      subject = resolve_curie node[:about],
-        prefixes: prefixes, base: dbase, scalar: true
+      subject = resolve_curie node[:about], prefixes: prefixes,
+        base: dbase, term: true, scalar: true
 
       # ignore coercion
       return subject if subject.is_a? RDF::Node
@@ -379,8 +389,8 @@ module RDF::SAK::Util
       subject = internal_subject_for parent, base: base
     elsif node[:resource]
       # XXX resolve @about against potential curie
-      subject = resolve_curie node[:resource],
-        prefixes: prefixes, base: dbase, scalar: true
+      subject = resolve_curie node[:resource], prefixes: prefixes,
+        base: dbase, term: true, scalar: true
     elsif node[:href]
       # XXX 2021-05-30 you can't just use this; you have to find a rel
       # or rev that isn't itself disrupted by about/resource/href/src
@@ -453,6 +463,12 @@ module RDF::SAK::Util
 
   public
 
+  def uuidv4 coerce: :rdf
+    coerce = assert_uri_coercion coerce
+    uuid = UUIDTools::UUID.random_create.to_uri
+    coerce ? URI_COERCIONS[coerce].call(uuid) : uuid
+  end
+
   def normalize_space string
     string.gsub(WS_RE, ' ').strip
   end
@@ -518,7 +534,9 @@ module RDF::SAK::Util
     rdftype = rdftype.respond_to?(:to_a) ? rdftype.to_a : [rdftype]
       
     # now squash and coerce
-    rdftype = rdftype.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
+    rdftype = rdftype.uniq.map do |t|
+      RDF::Vocabulary.find_term t rescue t
+    end.compact
 
     # bail out early
     return [] if rdftype.empty?
@@ -538,13 +556,13 @@ module RDF::SAK::Util
 
       qin.each do |q|
         qwork << q # entail doesn't include q
-        qwork += q.entail(:equivalentClass) if q.uri?
+        qwork += q.entail(:equivalentClass) if q.uri? and q.respond_to? :class?
       end
 
       # grep and flatten
       qwork = qwork.map do |t|
         next t if t.is_a? RDF::Vocabulary::Term
-        RDF::Vocabulary.find_term t
+        RDF::Vocabulary.find_term t rescue nil
       end.compact.uniq - seen.to_a
       seen |= qwork
 
@@ -555,12 +573,12 @@ module RDF::SAK::Util
      
       # now deal with subClassOf
       qnext = []
-      qwork.each { |q| qnext += q.send(qmeth) }
+      qwork.each { |q| qnext += q.send(qmeth) if q.respond_to? qmeth }
 
       # grep and flatten this too
       qnext = qnext.map do |t|
         next t if t.is_a? RDF::Vocabulary::Term
-        RDF::Vocabulary.find_term t
+        RDF::Vocabulary.find_term t rescue nil
       end.compact.uniq - seen.to_a
       # do not append qsuper to seen!
 
@@ -1235,9 +1253,9 @@ module RDF::SAK::Util
         # sort by publication status
         pa = pab[a] ||= (published?(repo, a) ? -1 : 0)
         pb = pab[b] ||= (published?(repo, b) ? -1 : 0)
-        c = pa <=> pb
+        c = pa.to_s <=> pb.to_s
         # sort lexically if it's a tie
-        a <=> b if c == 0
+        c == 0 ? a <=> b : c
       end
 
       # the first one will be our baby
@@ -1495,6 +1513,9 @@ module RDF::SAK::Util
     rsrc.values.each { |v| v.sort!.uniq! }
 
     rsrc
+  end
+
+  def label_props repo, type, alt: false, desc: false, &block
   end
 
   # Obtain the most appropriate label(s) for the subject's type(s).
@@ -1937,7 +1958,6 @@ module RDF::SAK::Util
   # @return [URI, RDF::URI, String]
   #
   def coerce_resource arg, base = nil, as: :rdf
-    as = assert_uri_coercion as
     return arg if as and arg.is_a?({ uri: URI, rdf: RDF::URI }[as])
     raise ArgumentError, 'arg must be stringable' unless arg.respond_to? :to_s
 
@@ -2025,6 +2045,7 @@ module RDF::SAK::Util
   # @param prefixes [#to_h] The hash of prefixes (nil key is equivalent
   #  to vocab)
   # @param vocab [nil,#to_s] An optional base URI
+  # @param base [nil,URI,RDF::URI]
   # @param refnode [nil, Nokogiri::XML::Element] A reference node for resolution
   # @param term [false, true] Whether to treat the input as an RDFa _term_
   # @param noop [true, false] Whether to skip if the CURIE can't be resolved
@@ -2034,8 +2055,11 @@ module RDF::SAK::Util
   # @return [nil,URI,RDF::URI,Array<nil,URI,RDF::URI>]
   #
   def resolve_curie curie, prefixes: {}, vocab: nil, base: nil,
-      refnode: nil, term: false, noop: true, scalar: false, coerce: nil
+      refnode: nil, term: true, noop: true, scalar: false, coerce: nil
     prefixes = sanitize_prefixes prefixes
+
+    # make sure this is a URI (not RDF::URI)
+    base = coerce_resource base, as: :uri if base
 
     raise 'coerce must be either :uri or :rdf' if coerce and
       not %i[uri rdf].include?(coerce)
@@ -2073,7 +2097,7 @@ module RDF::SAK::Util
       prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
       prefix = prefix.to_sym if prefix
       tmp = if prefixes[prefix]
-              prefixes[prefix] + slug
+              (((term || prefix) ? prefixes[prefix] : base) + slug).to_s
             else
               noop ? c : nil
             end
@@ -2176,7 +2200,7 @@ module RDF::SAK::Util
   # @param coerce [nil, :uri, :rdf] the coercion scheme, if any
   # @return [nil, String, URI, RDF::URI] the context's base URI
   def get_base elem, default: nil, coerce: nil
-    assert_uri_coercion coerce
+    coerce = assert_uri_coercion coerce
 
     if elem.document?
       elem = elem.root
@@ -2247,7 +2271,9 @@ module RDF::SAK::Util
     end
 
     # don't forget we can coerce
-    prefix.transform_values! { |v| COERCIONS[coerce].call v } if coerce
+    prefix.transform_values! do |v|
+      v ? URI_COERCIONS[coerce].call(v) : v
+    end if coerce
 
     # don't proceed if `traverse` is false
     return prefix unless traverse
