@@ -31,7 +31,167 @@ require 'rdf/sak/pav'
 require 'rdf/sak/scovo'
 require 'rdf/sak/qb'
 
+# 2021-12-09 REFACTORING NOTES: This thing is an utter mess and needs
+# a friggin overhaul. Here is the proposed new layout:
+#
+# * URI resolver: this handles all things URI, which also means CURIE
+#   and prefix mapping and subsetting, and includes all the caches and
+#   crap it needs to do its job.
+#
+# * Individual document resources: a unified interface for either
+#   parsing and manipulating, or outright generating concrete
+#   representations of resources, (X)HTML in particular.
+#
+#   * Specific generators include: Atom feeds, Google site maps, SKOS
+#     concept schemes (and collections), indexes of external links,
+#     qb:DataSet...
+#
+# * Storage drivers: Resolve URIs to actual files (or something else);
+#   read and write in the usual fashion.
+#
+# * Main context for handling global configuration.
+#
+# * Command-line interface.
+#
+# * Web (Rack) application.
+#
+# * General-purpose crawler and HTTP client (caching reverse proxy?).
+#
+# * Statistics and feature-gathering infrastructure (RDFa/JSON-LD/
+#   microdata sponger, word counts, marked-up terminology, NLP...);
+#   maybe some kind of unified interface onto this?
+#
+# * Other stuff that really belongs as an RDF::Repository subclass and
+#   should(?) eventually get kicked up to RDF.rb (subject_for,
+#   object_for, etc).
+
+
 module RDF::SAK
+
+  class URIResolver
+
+    private
+
+    def coerce_terms arg
+    end
+
+    public
+
+    # Create a new URI resolver.
+    #
+    # @param repo [RDF::Repository] where we get our data from
+    # @param base [URI, RDF::URI] base _URL_ (as in dereferenceable)
+    # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
+    # @param documents [RDF::URI, Array<RDF::URI>] the RDF classes we
+    #  consider to be "documents"
+    # @param frag_map [Hash{RDF::URI => Array<RDF::URI, Array(RDF::URI, true)>}]
+    #  a mapping of RDF classes to (inverse?) predicates for deriving
+    #  fragments
+    #
+    def initialize repo, base, prefixes: {},
+        documents: RDF::Vocab::FOAF.Document, frag_map: {}
+
+      # set the base uri; store it as as a URI rather than RDF::URI
+      @base = Util.coerce_resource base, as: :uri
+
+      # register the classes we consider to be "documents"
+      @docs = documents
+      @docs = (@docs.respond_to?(:to_a) ? @docs.to_a : [@docs]).map do |c|
+        c = Util.coerce_resource(c, base) or next
+        (RDF::Vocabulary.find_term c rescue c) || c
+      end.compact.to_set
+
+      # register the mapping of the form { RDFClass => [p1, p2..pn] }
+      # where pn is either a predicate or a pair signifying the
+      # predicate should be evaluated inversely
+      @frags = frag_map.dup.freeze
+
+      # cache of URIs (not necessarily UUIDs) to host documents
+      # (UUIDs), or nils where the URIs are themselves full documents
+      @hosts = {}
+
+      # uri -> uuid cache
+      @uuids = {}
+      # uuid -> uri cache
+      @uris = {}
+    end
+
+    # Clear the resolver's caches but otherwise keep its configuration.
+    #
+    # @return [true]
+    #
+    def flush
+      @hosts.clear
+      @uuids.clear
+      @uris.clear
+
+      # this is a throwaway result mainly intended to mask what would
+      # otherwise return an empty `@uris`
+      true
+    end
+
+    # Return the UUID(s) associated with the subject. May return
+    # `nil` or be a no-op.
+    #
+    # @param subject [URI, RDF::URI, #to_s] the URI to resolve
+    # @param scalar [true, false] whether to return only one UUID if
+    #  more than one is resolved; always returns an array if false
+    # @param verify [true, false] whether any UUID found in the input
+    #  should be resolved against the graph
+    # @param as [:rdf, :uri, :str] coerce the output to either
+    #  {RDF::URI}, {URI}, or string literal, respectively
+    # @param published [false, true] whether to constrain the
+    #  UUID resolution to published documents only
+    # @param noop [false, true] whether to return `nil` or otherwise
+    #  just echo back the input if a UUID can't be resolved
+    #
+    # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil]
+    #
+    def uuid_for subject, scalar: true, verify: true, as: :rdf,
+        published: false, noop: false
+      # XXX we will eventually move canonical_uuid to this class
+      # because it always needs a repo and a base URI anyway
+      Util.canonical_uuid
+    end
+
+    # Return the (dereferenceable) URI(s) associated with the
+    # subject. This will always return something even if it is a
+    # no-op.
+    #
+    # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
+    #
+    def uri_for subject, as: :rdf, relative: false
+      # XXX we will eventually move canonical_uri to this class
+      # because it always needs a repo and a base URI anyway
+    end
+
+    # Returns the "host document" of a given subject (or `nil` if the
+    # subject is not a fragment)
+    #
+    # @return [URI, RDF::URI, nil] the host document, if any
+    #
+    def host_doc subject, unique: true, as: :rdf, published: false
+      subject = uuid_for subject, noop: true
+    end
+
+    # Abbreviate one or more URIs into one or more CURIEs if we
+    # can. Will through if `noop:` is true, or if false, return `nil`
+    # for any URI that can't be abbreviated this way.
+    #
+    # @param subject [URI, RDF::URI, #to_s, Array<URI, RDF::URI, #to_s>]
+    #  the subject URI(s) to abbreviate
+    # @param scalar [true, false] always returns an array if false;
+    #  ignored if passed an array
+    # @param noop [true, false] whether to leave the input alone if it
+    #  can't abbreviate
+    # @param sort [true, false] whether to sort the resulting array;
+    #  meaningless if `scalar` is true
+    #
+    # @return [String, Array<String>, nil] the CURIE(s) 
+    #
+    def abbreviate subject, scalar: true, noop: true, sort: true
+    end
+  end
 
   class Context
     include XML::Mixup
@@ -2382,7 +2542,7 @@ module RDF::SAK
     # @return [RDF::SAK::Context::Document] or nil
 
     def visit uri
-      uri  = canonical_uuid uri
+      uri  = canonical_uuid(uri) or return
       path = locate uri
       return unless path
       Document.new self, uri, uri: canonical_uri(uri), doc: path
@@ -2988,9 +3148,9 @@ module RDF::SAK
 
             # round-trip to uuid and back if we can
             if uuid = uuids[abs] ||= @context.canonical_uuid(abs)
-              abs = cache[abs] ||= @context.canonical_uri(uuid)
+              abs = cache[abs] ||= @context.canonical_uri(uuid, to_uuid: true)
             else
-              abs = cache[abs] ||= @context.canonical_uri(abs)
+              abs = cache[abs] ||= @context.canonical_uri(abs, to_uuid: true)
             end
 
             # reinstate the path parameters
@@ -3000,7 +3160,8 @@ module RDF::SAK
             end
             
 
-            elem[attr] = @uri.route_to(abs.to_s).to_s
+            elem[attr] = @uri.host == abs.host ?
+              @uri.route_to(abs.to_s).to_s : abs.to_s
             count += 1
           end
 
@@ -3080,7 +3241,8 @@ module RDF::SAK
       def transform_xhtml published: true, rehydrate: false
         # before we do any more work make sure this is html
         doc  = @doc.dup 1
-        body = doc.at_xpath('//html:body[1]', { html: XHTMLNS }) or return
+        body = doc.at_xpath(
+          '/html:body|/html:html/html:body[1]', { html: XHTMLNS }) or return
 
         RDF::SAK::Util.rehydrate body, @context.graph do |cands|
           unless cands.empty?
@@ -3096,7 +3258,7 @@ module RDF::SAK
 
         # eliminate comments
         doc.xpath('//comment()[not(ancestor::html:script)]',
-          { html: XHTMLNS }).each { |c| c.unlink }
+          { html: XHTMLNS }).each(&:unlink)
 
         # initial stuff
         struct    = @context.struct_for @uuid, uuids: true, canon: true

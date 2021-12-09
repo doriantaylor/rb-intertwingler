@@ -511,7 +511,7 @@ module RDF::SAK::Util
 
     asserted ||= struct ? (struct[RDF.type].dup || []) : repo.query(
       [subject, RDF.type, nil]).objects.map do |o|
-      RDF::Vocabulary.find_term o
+      RDF::Vocabulary.find_term o rescue o
     end.compact
 
     asserted.select { |t| t && t.uri? }.uniq
@@ -943,7 +943,7 @@ module RDF::SAK::Util
 
     # if we did not get an exact match with a fragment then we have to
     # scan the non-fragment part. note we want *any* host document
-    hosts = if uri.fragment and not uri.fragment.empty?
+    hosts = if uri.uri? and uri.fragment and not uri.fragment.empty?
              tmp = uri.dup
              tmp.fragment = nil
              h = canonical_uuid repo, tmp, unique: false, published: published,
@@ -1233,17 +1233,23 @@ module RDF::SAK::Util
       end.compact.sort { |a, b|
         a.first <=> b.first }.map(&:last).flatten(1).uniq
 
+      # warn "wat #{preds.inspect}"
+
       # accumulate candidate hosts
       hosts = []
       preds.each do |pair|
         pred, rev = pair
         if rev
-          hosts += subjects_for(repo, pred, subject, only: :resource)
-          hosts += subjects_for(repo, pred, head, only: :resource) if head
+          # warn "got here with #{pred} #{subject} #{repo.size}"
+          # warn subjects_for(repo, pred, subject).inspect
+          hosts += subjects_for(repo, pred, subject, only: :resource).to_a
+          hosts += subjects_for(repo, pred, head, only: :resource).to_a if head
         else
-          hosts += objects_for(repo, subject, pred, only: :resource)
+          hosts += objects_for(repo, subject, pred, only: :resource).to_a
         end
       end
+
+      # warn "huhh #{hosts.inspect}"
 
       # now we filter them
       pab = {}
@@ -1301,9 +1307,9 @@ module RDF::SAK::Util
       frag_map: {}, documents: [RDF::Vocab::FOAF.Document]
     subject = coerce_resource subject, base
 
-    subject = canonical_uuid repo, subject if to_uuid
+    subject = canonical_uuid(repo, subject) || subject if to_uuid
 
-    # warn subject
+    warn "lol"
 
     # dealing with non-documents (hash vs slash)
     #
@@ -1474,7 +1480,8 @@ module RDF::SAK::Util
       end
 
       if node # may have been set to nil by the previous operation
-        p = RDF::Vocabulary.find_term(stmt.predicate) || stmt.predicate
+        p = stmt.predicate
+        p = (RDF::Vocabulary.find_term(p) rescue p) || p
         o = rsrc[p] ||= []
         o << node
       end
@@ -2417,7 +2424,7 @@ module RDF::SAK::Util
     node.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
       lang = e.xpath(XPATH[:lang]).to_s.strip.downcase
       # dt   = e['datatype'] # XXX no datatype rn
-      text = (e['content'] || e.xpath('.//text()').to_a.join).strip
+      text = (e['content'] || e.content).strip
 
       # now we have the literals actually in the graph
       lit = cache[text.downcase] or next
