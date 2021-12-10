@@ -72,7 +72,10 @@ module RDF::SAK
 
     private
 
-    def coerce_terms arg
+    def self.coerce_terms arg
+    end
+
+    def coerce_resource arg, as: :rdf
     end
 
     public
@@ -149,7 +152,7 @@ module RDF::SAK
     #
     def uuid_for subject, scalar: true, verify: true, as: :rdf,
         published: false, noop: false
-      # XXX we will eventually move canonical_uuid to this class
+      # XXX we will eventually move `canonical_uuid` to this class
       # because it always needs a repo and a base URI anyway
       Util.canonical_uuid
     end
@@ -161,7 +164,7 @@ module RDF::SAK
     # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
     #
     def uri_for subject, as: :rdf, relative: false
-      # XXX we will eventually move canonical_uri to this class
+      # XXX we will eventually move `canonical_uri` to this class
       # because it always needs a repo and a base URI anyway
     end
 
@@ -1768,9 +1771,9 @@ module RDF::SAK
 
     def write_map_file location, data
       # open file
-      fh = File.new location, 'w'
-      data.sort.each { |k, v| fh.write "#{k}\t#{v}\n" }
-      fh.close # return value is return value from close
+      File.open(location, ?w) do |fh|
+        data.sort.each { |k, v| fh.write "#{k}\t#{v}\n" }
+      end # return value is return value from close
     end
 
     # public again
@@ -1802,6 +1805,22 @@ module RDF::SAK
       # retired slugs/uuids (410)
       write_gone_map docs: docs
       true
+    end
+
+    def generate_xml_catalog published: false, docs: nil, base: ?., extra: {}
+      path = Pathname(base)
+      data = generate_rewrite_map(
+        published: published, docs: docs
+      ).merge(extra).map do |uri, file|
+        uri = self.base + uri
+        { nil => :uri, name: uri, uri: path + "#{file}.xml" }
+      end
+      spec = [
+        { '#doctype' => ['catalog', "-//OASIS//DTD XML Catalogs V1.0//EN" ] },
+        { '#catalog' => data,
+         xmlns: 'urn:oasis:names:tc:entity:xmlns:xml:catalog' }
+      ]
+      markup(spec: spec).document
     end
 
     # generate an alphabetized list as an xhtml document with metadata
