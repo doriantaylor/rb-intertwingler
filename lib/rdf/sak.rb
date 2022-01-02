@@ -40,18 +40,18 @@ require 'rdf/sak/qb'
 #
 # * Individual document resources: a unified interface for either
 #   parsing and manipulating, or outright generating concrete
-#   representations of resources, (X)HTML in particular.
+#   representations of resources, (X|HT)ML in particular.
 #
 #   * Specific generators include: Atom feeds, Google site maps, SKOS
 #     concept schemes (and collections), indexes of external links,
-#     qb:DataSet...
+#     qb:DataSet resources...
 #
 # * Storage drivers: Resolve URIs to actual files (or something else);
 #   read and write in the usual fashion.
 #
 # * Main context for handling global configuration.
 #
-# * Command-line interface.
+# * Command-line interface and shell.
 #
 # * Web (Rack) application.
 #
@@ -64,18 +64,449 @@ require 'rdf/sak/qb'
 # * Other stuff that really belongs as an RDF::Repository subclass and
 #   should(?) eventually get kicked up to RDF.rb (subject_for,
 #   object_for, etc).
-
+g
 
 module RDF::SAK
 
-  class URIResolver
+  # This is to attach inferencing operations directly to the
+  # repository instead of bolting it on every time like a schmuck
+
+
+  # this module bolts functionality onto RDF::Repository
+
+  module Repository
+    include RDF::SAK::Util::Clean
+
+    private
+
+    # rdf term type tests
+    NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
+    NMAP   = { iri: :uri, bnode: :blank }.merge(
+      (%i[uri blank literal] * 2).transpose.to_h)
+
+    # Coerce a node spec into a canonical form. Node specs in
+    # #subjects_for and #objects_for methods are arrays of symbols `:uri`,
+    # `:blank`, `:literal`, and then the synonyms `:resource` (shorthand
+    # for `[:uri, :blank]`), `:iri` for `:uri`, and `:bnode` (for
+    # `:blank`).
+    #
+    # @param spec [Symbol, Array<Symbol>] the node spec
+    # @param rev [false, true] whether the node spec is to be applied to
+    #  a subject node rather than an object node
+    #
+    def coerce_node_spec spec, rev: false
+      spec = [] if spec.nil?
+      spec = spec.respond_to?(:to_a) ? spec.to_a : [spec]
+      spec = spec - [:resource] + [:uri, :blank] if spec.include? :resource
+      raise 'Subjects are never literals' if rev and spec.include? :literal
+
+      # normalize out the synonyms
+      spec = NMAP.values_at(*spec).compact.uniq
+
+      # give us some nice defaults if this is still empty
+      if spec.empty?
+        spec = NTESTS.keys
+        # make sure this doesn't end up in here if we're looking at subjects
+        spec.delete :literal if rev
+      end
+
+      # et voilà
+      spec.uniq
+    end
+
+    # this is the recursive method that runs after the initial input
+    # has been sanitized
+    def predicate_set_internal predicates
+      # short circuit
+      return predicates if predicates.empty?
+
+      # get all the equivalents, again note we can't trust this output
+      # completely so we filter for URIs
+      predicates |= predicates.map do |p|
+        p.entail :equivalentProperty
+      end.flatten.select(&:uri?).to_set
+
+      # get all the subproperties
+      subp = predicates.reduce(Set[]) do |s, p|
+        # we can't actually be sure what's in this
+        s |= p.subProperty.flatten.to_set if p.respond_to? :subProperty
+        s # noop otherwise
+      end
+
+      # subtracting the predicates from the subproperties should have
+      # the effect of a cycle guard
+      return predicates if (subp - predicates).empty?
+
+      # now we can pass in the union of these two sets
+      predicate_set_internal(predicates | subp)
+    end
+
+    # Determine whether a given node matches a node spec.
+    def node_matches? node, spec
+      spec.any? { |k| node.send NTESTS[k] }
+    end
+
+    def is_language? literal, languages
+      return unless literal.literal?
+      return unless lang = literal.language
+      languages = languages.respond_to?(:to_a) ? languages.to_a : [languages]
+      languages.map! { |lang| lang.to_s.strip.tr_s(?_, ?-).downcase }
+      lang = lang.to_s.strip.tr_s(?_, ?-).downcase
+
+      languages.include? lang
+    end
+
+    public
+
+    # Get the objects for a given subject-predicate pair. Either of
+    # `predicate` or `graph` can be array-able, in which case the
+    # Cartesian product will be evaluated. If `entail` is
+    # true (the default), the predicate(s) will be expanded out into
+    # the full set of properties via `rdfs:subPropertyOf` and
+    # `owl:equivalentProperty` relations, as well as `owl:inverseOf`
+    # and `owl:SymmetricProperty` entailments.  Passing in a `graph`
+    # will constrain the search to one or more named graphs, otherwise
+    # all graphs are queried.
+    #
+    # @param subject [RDF::Resource] the subject 
+    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
+    # @param graph [RDF::Resource, Array<RDF::Resource>] the graph(s)
+    # @param entail [true, false] whether to entail
+    # @param only [Symbol, Array<Symbol>] limit to certain node specs
+    # @param language [String, Symbol, Array<String, Symbol>]
+    #  constrain literals to these languages
+    # @param datatype [RDF::URI, Array<RDF::URI>] constrain literals
+    #  to these datatypes
+    # @param swap [false, true] noop for argument parity with #subject_for
+    #
+    # @yieldparam object [RDF::Resource, RDF::Literal] the object
+    # @yieldparam rel [Set<RDF::URI>] predicates pointing toward this
+    #  object from the subject
+    # @yieldparam rev [Set<RDF::URI>] predicates pointing *out* of
+    #  this object to the subject
+    #
+    # @return [Array] the resulting objects, or otherwise the
+    #  aggregate results of the block.
+    #
+    def objects_for subject, predicate, graph: nil, entail: true,
+        only: [], language: nil, datatype: nil, swap: false, &block
+      # XXX you know what might be smart? fine-tuning the entailment
+      # so it also does owl:sameAs on nodes (even the graph),
+      only = coerce_node_spec only
+
+      subject   = assert_resource  subject
+      predicate = assert_resources predicate, blank: false, empty: false
+      datatype  = assert_resources datatype,  blank: false
+      graph     = assert_resources graph
+
+      # entail all the predicates
+      predicate = predicate_set predicate if entail
+
+      # do the reverse predicates once now instead of recomputing them
+      # with every graph
+      revp = unless only == [:literal]
+               r = Set[]
+               # scare up the reverse properties
+               predicate.each do |p|
+                 # inverse properties are available by entailment
+                 r |= p.inverseOf.to_set if p.respond_to? :inverseOf
+                 # symmetric properties go in as-is
+                 r << p if p.type.include? RDF::OWL.SymmetricProperty
+               end
+
+               # don't forget to entail
+               entail ? predicate_set(r) : r
+             end
+
+      # i thought hard about this and the best i could come up with
+      # was a god damn lambda
+      work = -> out, g do
+        predicate.each do |p|
+          query([subject, p, nil, g]).objects.each do |o|
+            # ignore statement objects that don't match the spec
+            next unless node_matches?(o, only)
+
+            # filter out the literals
+            if o.literal?
+              # ignore statement objects that don't match the language
+              next unless language.empty? or is_language? o, language
+              # ignore statement objects that don't match the datatype
+              next unless datatype.empty? or datatype.include? o.datatype
+            end
+
+            entry = out[o] ||= [Set[], Set[]]
+            entry.first << p
+          end
+        end
+
+        # now we do the reverse
+        unless only == [:literal]
+          revp.each do |p|
+            query([nil, p, subject, g]).subjects.each do |s|
+              next unless node_matches? s, only
+              # note of course the subject is never going to be a
+              # literal so we don't have to check for languages/datatypes
+              entry = out[s] ||= [Set[], Set[]]
+              entry.last << p
+            end
+          end
+        end
+
+        # pass out back out
+        out
+      end
+
+      # accumulate the results whether graphy or not; note i *am*
+      # reusing the variable name on the graph version
+      out = graph.empty? ? work.call({}, nil) : graph.reduce({}) do |out, g|
+        work.call out, g
+      end
+
+      # *here* is where the block gets called, on node, preds out, preds in
+      return out.map { |node, preds| block.call node, *preds } if block
+
+      # otherwise we just return the accumulated objects
+      out.keys
+    end
+
+    # Get the subjects for a given predicate-object pair. Behaves just
+    # like #objects_for in many respects, without the provisions for
+    # literals (as subjects never are). The named parameter, `:swap`,
+    # will reorder the positional parameters from the order they
+    # appear in RDF statements (`predicate`, `object`) to always
+    # beginning with the node on the end of the statement (`object`,
+    # `predicate`). This helps mitigate certain acrobatics needed in
+    # contexts when both #subject_for and #object_for are called
+    # together. Note as well that `:only` does not accept `:literal`
+    # as a node spec, since subjects can never be literals.
+    #
+    # @param predicate [RDF::URI] the statement predicate(s) (or the
+    #  object if `:swap` is true)
+    # @param object [RDF::Resource, RDF::Literal] the object (or the
+    #  predicates if `:swap` is true)
+    # @param graph [RDF::Resource, Array<RDF::Resource>] the graph(s)
+    # @param entail [true, false] whether to entail
+    # @param only [Symbol, Array<Symbol>] limit to certain node specs
+    # @param swap [false, true] swap positional parameters as described
+    #
+    # @yieldparam subject [RDF::Resource, RDF::Literal] the object
+    # @yieldparam rel [Set<RDF::URI>] predicates pointing from this
+    #  subject to the object
+    # @yieldparam rev [Set<RDF::URI>] predicates pointing from the
+    #  object to this subject
+    #
+    # @return [Array] the resulting subjects, or otherwise the
+    #  aggregate results of the block.
+    #
+    def subjects_for predicate, object, graph: nil,
+        entail: true, only: [], swap: false, &block
+      # change the order of the positional parameters because this was
+      # a bad idea to do it this way at the outset
+      predicate, object = object, predicate if swap
+
+      only = coerce_node_spec only, rev: true
+
+      predicate = assert_resources predicate, blank: false, empty: false
+      object    = assert_resource  object
+      graph     = assert_resources graph
+
+      predicate = predicate_set predicate if entail
+
+      # note that this is a slightly different regime than object_for
+      revp = unless object.literal?
+               r = Set[]
+               predicate.each do |p|
+                 r |= p.inverseOf.to_set if p.respond_to? :inverseOf
+                 r << p if p.type.include? RDF::OWL.SymmetricProperty
+               end
+               entail ? predicate_set(r) : r
+             end
+
+      work = -> out, g do
+        predicate.each do |p|
+          query([nil, p, object, g]).subjects.each do |s|
+            next unless node_matches? s, only
+            # we don't need to do any fussy testing of literals in here
+            entry = out[s] ||= [Set[], Set[]]
+            entry.first << p
+          end
+        end
+
+        # again our criterion for processing subjects is different
+        unless object.literal?
+          revp.each do |p|
+            query([object, p, nil, g]).objects.each do |o|
+              next unless node_matches? o, only
+              entry = out[o] ||= [Set[], Set[]]
+              entry.last << p
+            end
+          end
+        end
+
+        out
+      end
+
+      # run for each graph if we got 'em
+      out = graph.empty? ? work.call({}, nil) : graph.reduce({}) do |out, g|
+        work.call out, g
+      end
+
+      # process the block if we have one
+      return out.map { |node, preds| block.call node, *preds } if block
+
+      # otherwise just give back the subjects
+      out.keys
+    end
+
+    # Obtain a key-value structure for the given subject, optionally
+    # constraining the result by node type (:resource, :uri/:iri,
+    # :blank/:bnode, :literal)
+    #
+    # @param subject [RDF::Resource] the subject of the inquiry
+    # @apram graph [RDF::Resource, Array<RDF::Resource>] named graph(s)
+    # @param rev [false, true] generate a struct from inbound links
+    # @param only [Symbol, Array<Symbol>] one or more node types
+    # @param inverses [false, true] whether to include
+    #  inverse/symmetric properties
+    #
+    # @yieldparam node [RDF::Resource, RDF::Literal] a node to be manipulated
+    # @yieldreturn [RDF::Resource, RDF::Literal] the transformed node
+    #
+    # @return [Hash{RDF::URI=>Array<RDF::Resource,RDF::Literal>] the struct
+    #
+    def struct_for subject, graph: nil, rev: false, only: nil,
+        inverses: false, &block
+      only    = coerce_node_spec only
+      subject = assert_resource  subject
+      graph   = assert_resources graph
+
+      graph << nil if graph.empty?
+
+      rsrc = {}
+      pattern = rev ? [nil, nil, subject] : [subject, nil, nil]
+      graph.each do |g|
+        query(pattern, graph_name: g) do |stmt|
+           node = rev ? stmt.subject : stmt.object
+           next unless node_matches? node, only
+
+           node = block.call node if block
+
+           p = stmt.predicate
+           p = (RDF::Vocabulary.find_term(p) rescue p) || p
+           (rsrc[p] ||= []) << node
+        end
+
+        if inverses and only != [:literal]
+          pattern = rev ? [subject, nil, nil] : [nil, nil, subject]
+          query(pattern, graph_name: g) do |stmt|
+            node = rev ? stmt.object : stmt.subject
+            next unless node_matches? node, only
+
+            node = block.call node if block
+
+            invs = (stmt.predicate.inverseOf || []).dup
+            invs << stmt.predicate if symmetric? stmt.predicate
+            invs.each { |inverse| (rsrc[inverse] ||= []) << node }
+          end
+        end
+      end
+
+      # make sure these are clean before shipping em out
+      rsrc.values.each { |v| v.sort!.uniq! }
+      rsrc
+    end
+    
+    # Obtain all and only the `rdf:type`s directly asserted on the subject.
+    # 
+    # @param repo [RDF::Queryable]
+    # @param subject [RDF::Resource]
+    # @param type [RDF::Term, :to_a] override searching for type(s) and
+    #  just return what is passed in (XXX why did i do this?)
+    # @param struct [Hash] pull from an attribute-value hash rather than
+    #  the graph
+    #
+    # @return [Array<RDF::URI>] the types asserted on the subject
+    #
+    def types_for subject, graph: nil, entail: false, struct: nil
+      if struct
+        assert_struct struct
+        return struct[RDF.type].select(&:uri?)
+      end
+
+      objects_for subject, RDF.type, graph: graph, entail: entail, only: :uri
+    end
+
+
+    # 
+    def all_of_type rdftype, graph: nil, as: :rdf, &block
+    end
+
+    def predicate_set predicates
+      predicates = assert_resources(
+        predicates, blank: false, vocab: true).to_set
+
+      return predicates if predicates.empty?
+
+      predicate_set_internal predicates
+    end
+
+    # instantiate a Resource
+    def resource term
+    end
+
+    def classes rdftype
+    end
+
+    def properties predicate
+    end
+
+    def list_head subject
+    end
+
+    # lol this is a bastard thing to do but i don't care it's ruby
+    extend RDF::Repository
+  end
+
+  # This class provides a resource-oriented view of the graph.
+  class Resource
+    def initialize repo, subject, resolver: nil
+    end
+
+    # oh hell yes
+    def [] predicate
+      # resolve curie
+    end
+
+    # tempted to do a method_missing thing for predicates in the same
+    # namespace as the subject but tbh that would probably be a mess
+
+  end
+
+  # This class is intended to be a caching URI (and URI-adjacent)
+  # resolver, intended to persist only as long as it needs to, as the
+  # cache is not very sophisticated.
+  class Resolver
 
     private
 
     def self.coerce_terms arg
     end
 
+    def coerce_repo repo
+      
+    end
+
     def coerce_resource arg, as: :rdf
+      # XXX we will move this out of util
+      RDF::SAK::Util.coerce_resource arg, @base, as: as
+    end
+
+    def coerce_resources arg, as: :rdf
+      (arg.respond_to?(:to_a) ? arg.to_a : [arg]).map do |c|
+        c = RDF::SAK::Util.coerce_resource(c, @base, as: as) or next
+        # we try to turn these into vocab terms
+        (RDF::Vocabulary.find_term c rescue c) || c
+      end.compact
     end
 
     public
@@ -84,6 +515,8 @@ module RDF::SAK
     #
     # @param repo [RDF::Repository] where we get our data from
     # @param base [URI, RDF::URI] base _URL_ (as in dereferenceable)
+    # @param aliases [Array<URI, RDF::URI>] alternative base URLs to
+    #  be treated as equivalent in lookups
     # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
     # @param documents [RDF::URI, Array<RDF::URI>] the RDF classes we
     #  consider to be "documents"
@@ -91,14 +524,15 @@ module RDF::SAK
     #  a mapping of RDF classes to (inverse?) predicates for deriving
     #  fragments
     #
-    def initialize repo, base, prefixes: {},
+    def initialize repo, base, aliases: [], prefixes: {},
         documents: RDF::Vocab::FOAF.Document, frag_map: {}
 
       # set the base uri; store it as as a URI rather than RDF::URI
-      @base = Util.coerce_resource base, as: :uri
+      @base    = coerce_resource  base,    as: :uri
+      @aliases = coerce_resources aliases, as: :uri
 
       # register the classes we consider to be "documents"
-      @docs = documents
+      @docs = coerce_resources(documents).to_set
       @docs = (@docs.respond_to?(:to_a) ? @docs.to_a : [@docs]).map do |c|
         c = Util.coerce_resource(c, base) or next
         (RDF::Vocabulary.find_term c rescue c) || c
@@ -109,10 +543,11 @@ module RDF::SAK
       # predicate should be evaluated inversely
       @frags = frag_map.dup.freeze
 
+      # cache of subjects in the graph
+      @subjects = {}
       # cache of URIs (not necessarily UUIDs) to host documents
       # (UUIDs), or nils where the URIs are themselves full documents
       @hosts = {}
-
       # uri -> uuid cache
       @uuids = {}
       # uuid -> uri cache
@@ -121,12 +556,11 @@ module RDF::SAK
 
     # Clear the resolver's caches but otherwise keep its configuration.
     #
-    # @return [true]
+    # @return [true] constant true return value that can be ignored
     #
     def flush
-      @hosts.clear
-      @uuids.clear
-      @uris.clear
+      # empty em all out
+      [@subjects, @hosts, @uuids, @uris].each(&:clear)
 
       # this is a throwaway result mainly intended to mask what would
       # otherwise return an empty `@uris`
@@ -152,20 +586,34 @@ module RDF::SAK
     #
     def uuid_for subject, scalar: true, verify: true, as: :rdf,
         published: false, noop: false
+      subject = coerce_resource subject, @base
       # XXX we will eventually move `canonical_uuid` to this class
       # because it always needs a repo and a base URI anyway
-      Util.canonical_uuid
+      Util.canonical_uuid 
     end
 
-    # Return the (dereferenceable) URI(s) associated with the
-    # subject. This will always return something even if it is a
-    # no-op.
+    # Return the (hopefully dereferenceable) URI(s) associated with
+    # the subject. This will always return something even if it is a
+    # no-op, such as URIs that are valid but not present in the graph.
+    # A resource determined to be a document fragment will be resolved
+    # to its host document and appended as a fragment identifier.
+    # Blank nodes are skolemized, resolved to `/.well-known/genid/...`
+    # if they can't be resolved to a host document. UUIDs (in
+    # canonical or UUID-NCName form) are resolved (again, if not
+    # fragments) as a single path segment off the base (`/<uuid>`).
+    # CURIEs are expanded into their respective terms.
+    #
+    # @param subject [RDF::URI, RDF::Node, URI, String] URI, blank
+    #  node, UUID, or CURIE to be resolved
+    # @param as [:rdf, :uri] coerce the output to one or the other form
+    # @param relative [false, true] return relative to base
     #
     # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
     #
-    def uri_for subject, as: :rdf, relative: false
+    def uri_for subject, as: :rdf, relative: false, roundtrip: false
       # XXX we will eventually move `canonical_uri` to this class
       # because it always needs a repo and a base URI anyway
+      RDF::SAK::Util.canonical_uri @repo, subject
     end
 
     # Returns the "host document" of a given subject (or `nil` if the
@@ -193,6 +641,37 @@ module RDF::SAK
     # @return [String, Array<String>, nil] the CURIE(s) 
     #
     def abbreviate subject, scalar: true, noop: true, sort: true
+    end
+
+    # Determine whether the subject is "published", which canonically
+    # translates to whether querying `?subject bibo:status
+    # bs:published .` returns something. If `circulated` is true, it
+    # will also consider `ci:circulated` as "published". If `retired`
+    # is false (the default), the presence of `ci:retired` will
+    # short-circuit the other tests and return false. When `retired`
+    # is true, the presence of `ci:retired` is ignored. If `indexed`
+    # is true, the presence of `?subject ci:indexed false .` will
+    # cause this to return false.
+    #
+    # @param subject [RDF::Term] the resource to look up
+    # @param circulated [false, true] whether to also count
+    #  `ci:circulated` as "published"
+    # @param retired [false, true] whether to compute the status even
+    #  if `ci:retired` is in the statuses
+    # @param indexed [false, true] whether to compute the status even
+    #  if `ci:indexed` is false
+    #
+    # @return [false, true] whether or not the subject is "published"
+    #
+    def published? subject, circulated: false, retired: false, indexed: false
+    end
+
+    # this thing needs its own souped-up struct_for because of
+    # separation of concerns
+
+    # 
+    def struct_for subject, rev: false, only: [], entail: false,
+        uuids: false, canon: false
     end
   end
 
@@ -1632,9 +2111,13 @@ module RDF::SAK
       base = URI(@base.to_s)
       rwm  = {}
       docs.each do |doc|
+        next unless doc.uri?
         tu = URI(doc.to_s)
         cu = canonical_uri doc, rdf: false
         next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
+
+        # skip fragments
+        next if cu.fragment
 
         # skip external links obvs
         next unless base.route_to(cu).relative?
@@ -1662,9 +2145,11 @@ module RDF::SAK
       # keys are /uuid, values are 
       out = {}
       docs.each do |doc|
+        next unless doc.uri?
         tu = URI(doc.to_s)
         cu = canonical_uri doc, rdf: false
         next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
+        next if tu.fragment
 
         # skip /uuid form
         cp = cu.request_uri.delete_prefix '/'
@@ -1694,9 +2179,11 @@ module RDF::SAK
       out = {}
 
       docs.each do |doc|
+        next unless doc.uri?
         uris  = canonical_uri doc, unique: false, rdf: false
         canon = uris.shift
         next unless canon.respond_to? :request_uri
+        next if canon.fragment
 
         # cache the forward direction
         fwd[doc] = canon
@@ -1807,19 +2294,28 @@ module RDF::SAK
       true
     end
 
-    def generate_xml_catalog published: false, docs: nil, base: ?., extra: {}
-      path = Pathname(base)
+    def generate_xml_catalog published: false, docs: nil, path: ?., extra: {}
+      path = Pathname(path)
+
+      # make a bunch of mappings
       data = generate_rewrite_map(
         published: published, docs: docs
       ).merge(extra).map do |uri, file|
         uri = self.base + uri
-        { nil => :uri, name: uri, uri: path + "#{file}.xml" }
+        file = Pathname(file)
+        file = Pathname("#{file}.xml") if file.extname.empty?
+        file = path + file if file == file.basename
+        { nil => :uri, name: uri, uri: file }
       end
+
+      # set up the markup spec
       spec = [
         { '#doctype' => ['catalog', "-//OASIS//DTD XML Catalogs V1.0//EN" ] },
         { '#catalog' => data,
          xmlns: 'urn:oasis:names:tc:entity:xmlns:xml:catalog' }
       ]
+
+      # out the door
       markup(spec: spec).document
     end
 
@@ -1906,7 +2402,7 @@ module RDF::SAK
         sections = structs.sort do |a, b|
           al = label_for(a.first, candidates: a.last).last
           bl = label_for(b.first, candidates: b.last).last
-          al <=> bl
+          al.value.upcase <=> bl.value.upcase
         end.map do |s, st|
           # now we call the block
           fr = frels[s].to_a if frels[s] and !frels[s].empty?
@@ -2300,6 +2796,8 @@ module RDF::SAK
         [predicate_set(RDF::Vocab::SKOS[k]), v]
       end
 
+      skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }.freeze
+
       ucache = {}
       scache = {}
       struct = struct_for subject, uuids: true, ucache: ucache, scache: scache
@@ -2408,7 +2906,7 @@ module RDF::SAK
             objs = find_in_struct struct, pred, invert: true
             # plump up the structs
             objs.keys.each do |k|
-              neighbours[k] ||= struct_for(k,
+              seen[k] ||= neighbours[k] ||= struct_for(k,
                 uuids: true, inverses: true, ucache: ucache, scache: scache)
             end
 
@@ -2419,7 +2917,7 @@ module RDF::SAK
                       [nil, a.first]).last
                 bl = (label_for(b.first, candidates: neighbours[b.first]) ||
                       [nil, b.first]).last
-                al.value <=> bl.value
+                al.value.upcase <=> bl.value.upcase
               end.map do |o, ps|
                 # XXX this is where i would like canonical_uri to
                 # just "know" to do this (also this will fail if
@@ -2439,14 +2937,28 @@ module RDF::SAK
 
           op = graph.query([nil, nil, s]).to_a.select do |stmt|
             sj = stmt.subject
-            sj.uri? and !neighbours[sj] and (!published or published?(sj))
+            if sj.uri?
+              # XXX there is probably a better way to do this
+              ref_ok = if neighbours[sj]
+                         np = neighbours[sj].keys.to_set - skospreds
+                         no = neighbours[sj].values_at(*np.to_a).flatten.uniq
+                         !np.empty? and no.include? s
+                       else
+                         true
+                       end
+              ref_ok and (!published or published?(sj))
+            end
           end.reduce({}) do |hash, stmt|
             sj = stmt.subject
-            neighbours[sj] ||= struct_for(sj,
+            seen[sj] ||= neighbours[sj] ||= struct_for(sj,
               uuids: true, inverses: true, ucache: ucache, scache: scache)
-            (hash[sj] ||= []) << stmt.predicate
+            unless skospreds.include? stmt.predicate
+              (hash[sj] ||= []) << stmt.predicate
+            end
             hash
           end
+
+          # warn s, op
 
           unless op.empty?
             dl << { ['Referenced By'] => :dt }
@@ -2618,9 +3130,11 @@ module RDF::SAK
     # @param uri
     # 
     # @return [true, false]
-    def published? uri, circulated: false
+    def published? uri, circulated: false, retired: false, indexed: false
       RDF::SAK::Util.published? @graph, uri,
-        circulated: circulated, base: @base
+        circulated: circulated, base: @base, retired: retired,
+        indexed: indexed, frag_map: @config[:fragment] || {},
+        documents: @config[:documents]
     end
 
     # Find a destination pathname for the document

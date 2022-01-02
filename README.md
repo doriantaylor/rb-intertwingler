@@ -30,6 +30,22 @@ personal site](https://doriantaylor.com/), which I use as a test
 corpus. However, this library draws together a number of techniques
 which have been in use with employers and clients for well over a decade.
 
+## 2021-12-29 OVERHAUL LOL
+
+* [ ] RDF::Repository extension (entailment, etc)
+* [ ] URI resolver
+* [ ] generalized markup document interface
+* [ ] data forensics from docs
+  * [ ] nlp
+  * [ ] metrics
+  * [ ] pre-rdfa scan
+* [ ] storage driver
+* [ ] target driver
+* [ ] web microservicey app thing
+  * [ ] caching proxy?
+* [ ] command line (batch mode whatev)
+  * [ ] actual shell
+
 ## Future Directions
 
 Ultimately, this implementation is disposable. What matter are the
