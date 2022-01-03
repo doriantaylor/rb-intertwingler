@@ -36,15 +36,24 @@ module RDF::SAK::Util::Clean
   # Assert that the given argument is an {RDF::Resource}.
   #
   # @param term [RDF::Resource] the input being tested
+  # @param message [String] an overriding error message (not sure if
+  #  dumb)
+  # @param blank [true, false] whether to permit blank nodes
+  # @param vocab [false, true] whether to try to resolve the term
+  #  using {RDF::Vocabulary.find_term}
   #
   # @raise [ArgumentError] if the input is not an {RDF::Resource}
   #
   # @return [RDF::Resource] the argument
   #
   def assert_resource term,
-      message = "Term must be a resource, not #{term.inspect}", blank: true
+      message = "Term must be a resource, not #{term.inspect}",
+      blank: true, vocab: false
     raise ArgumentError, message unless
       term.is_a?(blank ? RDF::Resource : RDF::URI)
+
+    term = (RDF::Vocabulary.find_term(term) rescue term) || term if
+      vocab and term.uri? and not term.is_a? RDF::Vocabulary::Term
 
     term
   end
@@ -88,6 +97,9 @@ module RDF::SAK::Util::Clean
 
     # et voilà
     terms
+  end
+
+  def assert_struct struct
   end
 
   def coerce_resource arg, base = nil, as: :rdf
