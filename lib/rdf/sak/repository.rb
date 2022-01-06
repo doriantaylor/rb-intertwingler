@@ -138,11 +138,13 @@ module RDF::SAK
       spec.any? { |k| node.send NTESTS[k] }
     end
 
+    # this ensures languages are something we can use
     def coerce_languages languages
       languages = languages.respond_to?(:to_a) ? languages.to_a : [languages]
       languages.map { |lang| lang.to_s.strip.tr_s(?_, ?-).downcase }.uniq
     end
 
+    # this tells us if the literal's language is in our given set
     def is_language? literal, languages
       return false unless literal.literal? and lang = literal.language
       languages = coerce_languages languages 
@@ -151,7 +153,10 @@ module RDF::SAK
       languages.include? lang
     end
 
+    # this gives us a set of inverse (and symmetric) properties for
+    # the given input
     def invert_semantic predicates, entail: false
+      predicates = assert_resources predicates, empty: false
       inverted = Set[]
       # scare up the reverse properties
       predicates.each do |p|
@@ -165,6 +170,7 @@ module RDF::SAK
       entail ? property_set(inverted) : inverted
     end
 
+    # this gives us a label spec we can use
     def process_labels struct
       out = {}
 
@@ -242,26 +248,26 @@ module RDF::SAK
     # @return [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
     #  the label structure
     # 
-    def label_struct
+    def label_spec
       @labels ||= process_labels LABELS
     end
 
-    # Set a new structure for determining how labels are
-    # resolved. This is a hash where the keys are RDF types, and the
-    # values are hashes containing the keys `:label` and `:desc`,
-    # whose values are arrays containing one or two values (for main
-    # and alternate; if alternate is missing then main will be used
-    # instead), which themselves are arrays containing one or more RDF
-    # properties, in order of preference for the given class.
+    # Set a new structure for determining how labels are resolved.
+    # This is a hash where the keys are RDF types, and the values are
+    # hashes containing the keys `:label` and `:desc`, whose values
+    # are arrays containing one or two values (for main and alternate;
+    # if alternate is missing then main will be used instead), which
+    # themselves are arrays containing one or more RDF properties, in
+    # order of preference for the given class.
     #
-    # @param struct [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
+    # @param spec [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
     #  what a mouthful
     #
     # @return [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
     #  the same label structure, but normalized
     #
-    def label_struct= struct
-      @labels = process_labels struct
+    def label_spec= spec
+      @labels = process_labels spec
     end
 
     # Get the objects for a given subject-predicate pair. Either of
@@ -558,7 +564,7 @@ module RDF::SAK
 
       strata.each do |types|
         types.each do |cls|
-          next unless preds = (label_struct.dig(
+          next unless preds = (label_spec.dig(
             cls, desc ? :desc : :label) || [])[alt ? 1 : 0]
           preds.each do |p|
             next unless vals = struct[p]
@@ -672,12 +678,14 @@ module RDF::SAK
     # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s) to check
     # @param datatype [RDF::URI, Array<RDF::URI>] the datatype(s) to check
     #
-    # @return [Array<RDF::Literal>] the dates, if any
+    # @return [Array<Date>] the date(time)s, if any
     #
     def dates_for subject, graph: nil, predicate: RDF::Vocab::DC.date,
         datatype: [RDF::XSD.dateTime, RDF::XSD.date]
-      objects_for subject, predicate, graph: graph,
-        datatype: datatype, only: :literal
+      objects_for(subject, predicate, graph: graph,
+        datatype: datatype, only: :literal) do |o|
+        o.object
+      end.select { |d| d.is_a? Date }.sort.uniq
     end
 
     # Return the dates associated with the subject.
@@ -694,8 +702,8 @@ module RDF::SAK
         datatype: [RDF::XSD.token]
       objects_for(subject, predicate,
                   graph: graph, datatype: datatype, only: :literal) do |o|
-        t = o.object
-        t =~ /\/?/ ? RDF::SAK::MimeMagic.new(t.to_s.downcase) : nil
+        t = o.object.to_s.strip.downcase
+        /\//.match?(t) ? RDF::SAK::MimeMagic.new(t) : nil
       end.compact.sort.uniq
     end
 
@@ -734,8 +742,11 @@ module RDF::SAK
       i = 0
       while i < typeq.length do
         type = typeq[i]
-        # we don't want to do this for base types
-        next i += 1 if [RDF::RDFS.Resource, RDF::OWL.Thing].include? type
+        # we don't want to do this for base types; just pass them through
+        if [RDF::RDFS.Resource, RDF::OWL.Thing].include? type
+          out[type] = spec[type]
+          next i += 1
+        end
         # get all the equivalent and subtypes minus those explicitly defined
         tequiv = type_strata(type, descend: true) - typeq
         # splice these in to the queue
@@ -782,20 +793,35 @@ module RDF::SAK
 
     public
 
+    # Returns the spec by which document fragments are determined.
+    # Takes the form of a hash where the keys are RDF types and the
+    # values are also hashes where the keys are predicates, and the
+    # values are flags as to whether the predicate is to be taken as
+    # a reverse relation.
+    #
+    # @return [Hash{RDF::URI=>Hash{RDF::URI=>false,true}}]
+    #
     def fragment_spec
       @fragments ||= expand_fragments FRAGMENTS
     end
 
+    # Set a new fragment spec.
+    #
+    # @param spec [Hash{RDF::URI=>Hash{RDF::URI=>false,true}}] a
+    #  fragment spec
+    #
+    # @return [Hash{RDF::URI=>Hash{RDF::URI=>false,true}}] an
+    #  expando'd spec, with all equivalent classes and properties
+    #  dereferenced.
+    #
     def fragment_spec= spec
       @fragments = expand_fragments spec
     end
 
-    # Retrieve a host document for a fragment, if it exists; null
-    # otherwise (or itself if `:noop` is true).
-    def host_for subject, graph: nil,
-        published: true, unique: true, noop: false, seen: Set[]
-      subject = assert_resource subject
-      graph   = assert_resources graph
+    private
+
+    def host_for_internal subject, seen = Set[],
+        graph: [], published: false, circulated: false
 
       # we begin by looking for an explicit designation
       host = objects_for(subject, RDF::SAK::CI['fragment-of'],
@@ -839,9 +865,8 @@ module RDF::SAK
           a # <-- the accumulator
         end.uniq.select { |h| rdf_type? h, document_types }.sort do |a, b|
           # sort by publication status
-          pa = pab[a] ||= (published?(repo, a) ? -1 : 0)
-          pb = pab[b] ||= (published?(repo, b) ? -1 : 0)
-          # now sort by published-ness
+          pa = pab[a] ||= (published?(a, circulated: circulated) ? -1 : 0)
+          pb = pab[b] ||= (published?(b, circulated: circulated) ? -1 : 0)
           c = pa <=> pb
           # XXX TODO maybe sort by date? i unno
           # sort lexically if it's a tie
@@ -850,22 +875,60 @@ module RDF::SAK
 
         # the first one will be our baby
         if host = hosts.first and not seen.include? host
-          parent = host_document repo, host, base: base, frag_map: frag_map,
-            documents: documents, seen: seen | Set[host]
+          parent = host_for_internal host, seen | Set[host], graph: graph,
+            published: published, circulated: circulated
           return parent if parent
         end
       end
+
+      host
+    end
+
+    public
+
+    # Retrieve a host document for a suspected document fragment, if
+    # it exists; null otherwise (or itself if `:noop` is true).
+    #
+    # @param subject [RDF::Resource] the subject we think may be a fragment
+    # @param graph [RDF::Resource, Array<RDF::Resource>] filter search
+    #  by optional named graph(s)
+    # @param published [false, true, :circulated] only consider
+    #  published (or circulated) documents
+    # @param noop [false, true] return the subject if there is no host
+    #
+    # @return [nil, RDF::Resource] the host document, if any
+    #
+    def host_for subject, graph: nil, published: true, noop: false
+      subject = assert_resource  subject
+      graph   = assert_resources graph
+
+      # smuggle in 'circulated' flag
+      circulated = case published when :circulated then published = true
+                   else false
+                   end
+
+      host = host_for_internal subject, graph: graph,
+        published: published, circulated: circulated
 
       # return the noop
       noop ? host || subject : host
     end
 
-    # Return true if the subject is a document fragment.
+    # Return true if the subject is a fragment of another document.
+    #
+    # @param subject [RDF::Resource] the subject we think may be a fragment
+    # @param graph [RDF::Resource, Array<RDF::Resource>] filter search
+    #  by optional named graph(s)
+    # @param published [false, true, :circulated] only consider
+    #  published (or circulated) documents
+    #
+    # @return [false, true] whether the resource is a fragment
+    #
     def fragment? subject, graph: nil, published: true
       !!host_for(subject, graph: graph, published: published)
     end
 
-    # Retrieve the RDF types considered to be "documents". Thies
+    # Retrieve the RDF types considered to be "documents".
     #
     # @return [Array<RDF::URI>] all recognized document types
     #
@@ -883,12 +946,42 @@ module RDF::SAK
       @documents = expand_documents types
     end
 
+    # Determine whether a resource is considered to be indexed, which
+    # all resources implicitly are. A statement `?s ci:indexed false`
+    # indicates otherwise.
+    #
+    # @param subject [RDF::Resource] the subject to inspect
+    # @param graph [RDF::Resource, Array<RDF::Resource>] named
+    #  graph(s), if any
+    # @param explicit [false, true] whether to stipulate that
+    #  resources must be explicitly indexed
+    # @param fragments [true, false] whether to resolve host documents
+    #  of document fragments
+    #
+    # @return [false, true] whether the subject is indexed
+    #
+    def indexed? subject, graph: nil, explicit: false, fragments: true
+      subject = assert_resource  subject
+      graph   = assert_resources graph
+
+      # test the host document if fragments are allowed
+      subject = host_for subject, graph: graph, published: false,
+        noop: true if fragments
+
+      # get the value of ci:indexed
+      ix = objects_for(subject, RDF::SAK::CI.indexed, graph: graph,
+        only: :literal, datatype: RDF::XSD.boolean).first
+
+      # if there was a value then return it, otherwise it's false if
+      # explicit or true if implicit
+      ix ? ix.object : explicit ? false : true
+    end
+
     # Determine whether the subject is considered "published".
     # 
     # @param subject [RDF::Resource] the subject to inspect
     # @param graph [RDF::Resource, Array<RDF::Resource>] named
     #  graph(s), if any
-
     # @param circulated [false, true] whether to consider
     #  `ci:circulated` as well as `bs:published`
     # @param retired [false, true] whether to _include_ resources that
@@ -901,21 +994,26 @@ module RDF::SAK
     def published? subject, graph: nil, circulated: false, retired: false,
         indexed: false
 
+      # if this is a fragment then we test the host document. note
+      # that we are not filtering published documents here because we
+      # want to test whatever comes out of this
       if host = host_for(subject, graph: graph, published: false)
         return published? host, graph: graph,
           circulated: circulated, retired: retired, indexed: indexed
       end
 
+      # 
       if indexed
         ix = objects_for(subject, RDF::SAK::CI.indexed, graph: graph,
           only: :literal, datatype: RDF::XSD.boolean).first
         return false if ix and ix.object == false
       end
 
-      # obtain the status
+      # obtain the statuses for the given subject
       candidates = objects_for(
         subject, RDF::Vocab::BIBO.status, only: :resource).to_set
 
+      # bail out if the subject has been retired
       return false if !retired and candidates.include? RDF::SAK::CI.retired
 
       # set up a test set of statuses
@@ -1321,10 +1419,10 @@ module RDF::SAK
   class Resource
     attr_reader :repository, :resolver
 
-    def initialize repo, subject, resolver: nil
+    def initialize repository, subject, resolver: nil
       @me = assert_resource subject
 
-      @repository = repo
+      @repository = repository
       @resolver   = resolver
     end
 

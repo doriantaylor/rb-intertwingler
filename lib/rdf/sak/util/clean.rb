@@ -88,7 +88,7 @@ module RDF::SAK::Util::Clean
     raise ArgumentError, "Need at least one term" if terms.empty? and !empty
 
     # resolve to vocabulary terms
-    terms.map! do |t|
+    terms = terms.map do |t|
       t.uri? ? (RDF::Vocabulary.find_term t rescue t) || t : t
     end if vocab
 
