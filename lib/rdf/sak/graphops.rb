@@ -28,7 +28,7 @@ module RDF::SAK
 
   # this module bolts functionality onto RDF::Repository
 
-  module Repository
+  module GraphOps
     include RDF::SAK::Util::Clean
 
     private

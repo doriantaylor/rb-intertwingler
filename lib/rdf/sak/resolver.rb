@@ -1,4 +1,4 @@
-require 'rdf/sak/repository'
+require 'rdf/sak/graphops'
 
 module RDF::SAK
   # This class is intended to be a caching URI (and URI-adjacent)
