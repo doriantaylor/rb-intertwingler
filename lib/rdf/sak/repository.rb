@@ -1,5 +1,6 @@
 require 'rdf/sak/version'
 
+require 'set'
 require 'rdf'
 require 'rdf/vocab'
 require 'rdf/reasoner'
@@ -554,25 +555,28 @@ module RDF::SAK
       subject = assert_resource  subject
       graph   = assert_resources graph
 
+      # get the asserted types
       asserted = types_for subject, graph: graph, struct: struct
 
-      strata = entail ? type_strata(asserted) : asserted
+      # get the full type stratum if we're entailing, otherwise fake
+      # up a single layer for the loop below
+      strata = entail ? type_strata(asserted) : [asserted]
 
       struct ||= struct_for subject, graph: graph, only: :literal
-      seen  = {}
+      seen  = Set[]
       accum = []
 
       strata.each do |types|
-        types.each do |cls|
+        types.each do |type|
           next unless preds = (label_spec.dig(
-            cls, desc ? :desc : :label) || [])[alt ? 1 : 0]
+            type, desc ? :desc : :label) || [])[alt ? 1 : 0]
           preds.each do |p|
             next unless vals = struct[p]
             vals.each do |v|
               next unless v.literal?
               pair = [p, v]
-              accum << pair unless seen[pair]
-              seen[pair] = true
+              accum << pair unless seen.include? pair
+              seen << pair
             end
 
             # XXX TODO sort vals
