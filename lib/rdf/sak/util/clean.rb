@@ -105,5 +105,41 @@ module RDF::SAK::Util::Clean
   def coerce_resource arg, base = nil, as: :rdf
   end
 
+  # turns any data structure into a set of nodes
+  def smush_struct struct, uris: false
+    out = Set.new
+
+    if struct.is_a? RDF::Term
+      if uris
+        case
+        when struct.literal?
+          out << struct.datatype if struct.datatype?
+        when struct.uri? then out << struct
+        end
+      else
+        out << struct
+      end
+    elsif struct.respond_to? :to_a
+      out |= struct.to_a.map do |s|
+        smush_struct(s, uris: uris).to_a
+      end.flatten.to_set
+    end
+
+    out
+  end
+
+  def invert_struct struct
+    nodes = {}
+
+    struct.each do |p, v|
+      v.each do |o|
+        nodes[o] ||= Set.new
+        nodes[o] << p
+      end
+    end
+
+    nodes
+  end
+
   extend self
 end

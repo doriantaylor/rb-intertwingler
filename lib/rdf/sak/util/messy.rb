@@ -1708,6 +1708,10 @@ module RDF::SAK::Util::Messy
     end.compact.sort.uniq
   end
 
+  ##
+  ## RDF STOPS HERE
+  ##
+
   def self.base_for xmlnode, base
     base = URI(base.to_s) unless base.is_a? URI
     out  = base
@@ -2572,42 +2576,6 @@ module RDF::SAK::Util::Messy
 
     # now we return the subset 
     prefixes.select { |k, _| pfx.include? k.to_sym }
-  end
-
-  # turns any data structure into a set of nodes
-  def smush_struct struct, uris: false
-    out = Set.new
-
-    if struct.is_a? RDF::Term
-      if uris
-        case
-        when struct.literal?
-          out << struct.datatype if struct.datatype?
-        when struct.uri? then out << struct
-        end
-      else
-        out << struct
-      end
-    elsif struct.respond_to? :to_a
-      out |= struct.to_a.map do |s|
-        smush_struct(s, uris: uris).to_a
-      end.flatten.to_set
-    end
-
-    out
-  end
-
-  def invert_struct struct
-    nodes = {}
-
-    struct.each do |p, v|
-      v.each do |o|
-        nodes[o] ||= Set.new
-        nodes[o] << p
-      end
-    end
-
-    nodes
   end
 
   def title_tag predicates, content,

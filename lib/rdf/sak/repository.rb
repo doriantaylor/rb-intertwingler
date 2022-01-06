@@ -1,8 +1,27 @@
 require 'rdf/sak/version'
 
 require 'rdf'
+require 'rdf/vocab'
+require 'rdf/reasoner'
+require 'rdf/sak/resolver'
+require 'rdf/sak/util/clean'
+require 'rdf/sak/mimemagic'
+
+# load up my vocabs before reasoner is applied
+require 'rdf/sak/ci'
+require 'rdf/sak/tfo'
+require 'rdf/sak/ibis'
+
+# also third-party vocabs not found in RDF::Vocab
+require 'rdf/sak/pav'
+require 'rdf/sak/qb'
+require 'rdf/sak/scovo'
 
 module RDF::SAK
+
+  # gotta make sure this gets run
+  RDF::Reasoner.apply(:rdfs, :owl)
+
   # This is to attach inferencing operations directly to the
   # repository instead of bolting it on every time like a schmuck
 
@@ -16,7 +35,7 @@ module RDF::SAK
     # rdf term type tests
     NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
     NMAP   = { iri: :uri, bnode: :blank }.merge(
-      (%i[uri blank literal] * 2).transpose.to_h)
+      ([%i[uri blank literal]] * 2).transpose.to_h)
 
     # if the instance data doesn't have an exact property mentioned in
     # the spec, it may have an equivalent property or subproperty we
@@ -119,10 +138,14 @@ module RDF::SAK
       spec.any? { |k| node.send NTESTS[k] }
     end
 
+    def coerce_languages languages
+      languages = languages.respond_to?(:to_a) ? languages.to_a : [languages]
+      languages.map { |lang| lang.to_s.strip.tr_s(?_, ?-).downcase }.uniq
+    end
+
     def is_language? literal, languages
       return false unless literal.literal? and lang = literal.language
-      languages = languages.respond_to?(:to_a) ? languages.to_a : [languages]
-      languages.map! { |lang| lang.to_s.strip.tr_s(?_, ?-).downcase }
+      languages = coerce_languages languages 
       lang = lang.to_s.strip.tr_s(?_, ?-).downcase
 
       languages.include? lang
@@ -131,7 +154,7 @@ module RDF::SAK
     def invert_semantic predicates, entail: false
       inverted = Set[]
       # scare up the reverse properties
-      predicate.each do |p|
+      predicates.each do |p|
         # inverse properties are available by entailment
         inverted |= p.inverseOf.to_set if p.respond_to? :inverseOf
         # symmetric properties go in as-is
@@ -213,15 +236,30 @@ module RDF::SAK
 
     public
 
-    # Retrieve the current structure being used to govern label
-    # retrieval.
+    # Retrieve the current structure being used to govern how labels
+    # are resolved against subjects.
     #
     # @return [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
+    #  the label structure
     # 
     def label_struct
       @labels ||= process_labels LABELS
     end
 
+    # Set a new structure for determining how labels are
+    # resolved. This is a hash where the keys are RDF types, and the
+    # values are hashes containing the keys `:label` and `:desc`,
+    # whose values are arrays containing one or two values (for main
+    # and alternate; if alternate is missing then main will be used
+    # instead), which themselves are arrays containing one or more RDF
+    # properties, in order of preference for the given class.
+    #
+    # @param struct [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
+    #  what a mouthful
+    #
+    # @return [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
+    #  the same label structure, but normalized
+    #
     def label_struct= struct
       @labels = process_labels struct
     end
@@ -484,10 +522,13 @@ module RDF::SAK
     # Returns one or more (depending on the `unique` flag)
     # predicate-object pairs in order of preference.
     #
-    # @param subject [RDF::Resource]
+    # @param subject [RDF::Resource, RDF::Literal] the subject (or the
+    #  label itself)
     # @param unique [true, false] only return the first pair
-    # @param type [RDF::Term, Array] supply asserted types if already retrieved
-    # @param lang [nil] not currently implemented (will be conneg)
+    # @param type [RDF::Term, Array] supply asserted types if already
+    #  retrieved
+    # @param lang [nil, String, Symbol, Array<String, Symbol>] not
+    #  currently implemented (will be conneg)
     # @param desc [false, true] retrieve description instead of label
     # @param alt  [false, true] retrieve alternate instead of main
     #
@@ -497,6 +538,13 @@ module RDF::SAK
     #
     def label_for subject, graph: nil, entail: true, unique: true,
         lang: nil, desc: false, alt: false, struct: nil
+
+      # a literal is its own label
+      if subject.is_a? RDF::Literal
+        # do this for return value parity
+        return unique ? [nil, subject] : [[nil, subject]]
+      end
+
       subject = assert_resource  subject
       graph   = assert_resources graph
 
@@ -505,7 +553,7 @@ module RDF::SAK
       strata = entail ? type_strata(asserted) : asserted
 
       struct ||= struct_for subject, graph: graph, only: :literal
-      seen = {}
+      seen  = {}
       accum = []
 
       strata.each do |types|
@@ -529,13 +577,425 @@ module RDF::SAK
       unique ? accum.first : accum.uniq
     end
 
-    # return all RDF types present in the graph.
+    private
+
+    AUTHOR  = [RDF::SAK::PAV.authoredBy, RDF::Vocab::DC.creator,
+      RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
+    CONTRIB = [RDF::SAK::PAV.contributedBy, RDF::Vocab::DC.contributor,
+      RDF::Vocab::DC11.contributor]
+    AUTHOR_LIST  = [RDF::Vocab::BIBO.authorList]
+    CONTRIB_LIST = [RDF::Vocab::BIBO.contributorList]
+    [AUTHOR, CONTRIB, AUTHOR_LIST, CONTRIB_LIST].each do |preds|
+      i = 0
+      loop do
+        # note we are not using property_set or objects_for because we
+        # *only* want equivalentProperty entailment, not subproperties
+        equiv = preds[i].entail(:equivalentProperty) - preds
+        preds.insert(i + 1, *equiv) unless equiv.empty?
+        i += equiv.length + 1
+        break if i >= preds.length
+      end
+
+      preds.freeze
+    end
+
+    public
+
+    # Return an ordered list of authors (or contributors) for a given
+    # subject. Tries `bibo:authorList` (or `bibo:contributorList`)
+    # first before going on to `dct:creator` etc. Any unsorted authors
+    # not listed in an explicit order are sorted by name (label).
+    #
+    # @param subject [RDF::Resource] the entity whose authors we are
+    #  looking for
+    # @param graph [nil, RDF::Resource] a named graph identifier
+    # @param unique [false, true] whether to return only one value
+    # @param contrib [false, true] whether to list contributors
+    #  instead of authors
+    #
+    # @return [RDF::Term, Array<RDF::Term>] the author(s)
+    #
+    def authors_for subject, graph: nil, unique: false, contrib: false
+      subject = assert_resource subject
+
+      authors = []
+
+      # try the author list;
+      (contrib ? CONTRIB_LIST : AUTHOR_LIST).each do |pred|
+        o = repo.first_object([subject, pred, nil])
+        next unless o
+        # note this use of RDF::List is not particularly well-documented
+        authors += RDF::List.new(subject: o, graph: self).to_a
+      end
+
+      # now try various permutations of the author/contributor predicate
+      unsorted = (contrib ? CONTRIB : AUTHOR).reduce([]) do |u, pred|
+        u + repo.query([subject, pred, nil]).objects
+      end
+
+      # XXX maybe pass in some parameters to this??
+      lcmp = cmp_label
+
+      # sort unsorted according to labels and then append to any
+      # explicitly sorted list
+      authors += unsorted.uniq.sort(&lcmp)
+
+      # note "unique" just means give me the first author; there may
+      # be duplicates from authors being in both lists so we still `uniq`
+      unique ? authors.first : authors.uniq
+    end
+
+    # Return the terminal replacements (as in, replacements that
+    # themselves have not been replaced) for the given subject, if
+    # any.
+    #
+    # @param subject [RDF::Resource] the entity whose replacements we
+    #  are looking for
+    # @param graph [nil, RDF::Resource] a named graph identifier
+    # @param published [false, true] whether to constrain the search
+    #  to published resources
+    # @param 
+    #
+    # @return [Array<RDF::Resource>] the replacements, if any
+    #
+    def replacements_for subject, graph: nil, published: true, noop: false
+      subject = assert_resource subject
+      graph   = assert_resources graph
+
+    end
+
+    # Return the dates associated with the subject.
+    #
+    # @param subject [RDF::Resource] the entity whose replacements we
+    #  are looking for
+    # @param graph [nil, RDF::Resource] a named graph identifier
+    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s) to check
+    # @param datatype [RDF::URI, Array<RDF::URI>] the datatype(s) to check
+    #
+    # @return [Array<RDF::Literal>] the dates, if any
+    #
+    def dates_for subject, graph: nil, predicate: RDF::Vocab::DC.date,
+        datatype: [RDF::XSD.dateTime, RDF::XSD.date]
+      objects_for subject, predicate, graph: graph,
+        datatype: datatype, only: :literal
+    end
+
+    # Return the dates associated with the subject.
+    #
+    # @param subject [RDF::Resource] the entity whose replacements we
+    #  are looking for
+    # @param graph [nil, RDF::Resource] a named graph identifier
+    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s) to check
+    # @param datatype [RDF::URI, Array<RDF::URI>] the datatype(s) to check
+    #
+    # @return [Array<RDF::Literal>] the dates, if any
+    #
+    def formats_for subject, predicate: RDF::Vocab::DC.format,
+        datatype: [RDF::XSD.token]
+      objects_for(subject, predicate,
+                  graph: graph, datatype: datatype, only: :literal) do |o|
+        t = o.object
+        t =~ /\/?/ ? RDF::SAK::MimeMagic.new(t.to_s.downcase) : nil
+      end.compact.sort.uniq
+    end
+
+    private
+
+    # the fragment spec determines the kinds of types which are
+    # always considered fragments (rather than full documents)
+
+    # fragment specs take the form { type => { predicate => reversed? } }
+    FRAGMENTS = {
+      RDF::RDFS.Resource => {
+        RDF::Vocab::FOAF.isPrimaryTopicOf => false,
+        RDF::Vocab::DC.hasPart            => true,
+        RDF::Vocab::DC.isPartOf           => false,
+      }.freeze,
+      # we explicitly add this class because it overrides the fact that 
+      RDF::Vocab::BIBO.DocumentPart => {
+        RDF::Vocab::DC.hasPart            => true,
+        RDF::Vocab::DC.isPartOf           => false,
+      }.freeze,
+    }.freeze
+
+    # these are all the types unambiguously considered to be "documents"
+    DOCUMENTS = [RDF::Vocab::FOAF.Document].freeze
+
+    def expand_documents docs
+      docs = assert_resources docs, blank: false, empty: false, vocab: true
+      type_strata(docs, descend: true) - fragment_spec.keys
+    end
+
+    def expand_fragments spec
+      out = {}
+
+      # create an initial queue of rdf types
+      typeq = spec.keys
+      i = 0
+      while i < typeq.length do
+        type = typeq[i]
+        # we don't want to do this for base types
+        next i += 1 if [RDF::RDFS.Resource, RDF::OWL.Thing].include? type
+        # get all the equivalent and subtypes minus those explicitly defined
+        tequiv = type_strata(type, descend: true) - typeq
+        # splice these in to the queue
+        typeq.insert(i + 1, *tequiv)
+
+        # note it is not strictly necessary to splice at point because
+        # these queues are kind of punned as to their function: both
+        # as a queue and as a set of 'seen' terms. since the terms are
+        # operated on all at once, the order doesn't matter and they
+        # could just as easily be tacked onto the end and there should
+        # be no substantive difference in the behaviour of this routine.
+
+        # prepare the predicate spec
+        ps = {}
+        # now do a queue of predicates
+        predq = spec[type].keys
+        j = 0
+        while j < predq.length do
+          pred = predq[j]
+          rev  = spec[type][pred]
+
+          # get the equivalent properties
+          pequiv = property_set(pred).to_a.sort - predq
+          # do the same thing with the predicates
+          predq.insert(j + 1, *pequiv)
+
+          # bulk-assign spec with the asserted predicate first
+          ([pred] + pequiv).each { |p| ps[p] = rev }
+
+          # increment plus whatever was in the equivalents
+          j += 1 + pequiv.length
+        end
+
+        # bulk assign type spec, same deal
+        ([type] + tequiv).each { |t| out[t] = ps }
+
+        # increment plus whatever was in the equivalents
+        i += 1 + tequiv.length
+      end
+
+      # chuck out an expando'd copy of what was handed in
+      out
+    end
+
+    public
+
+    def fragment_spec
+      @fragments ||= expand_fragments FRAGMENTS
+    end
+
+    def fragment_spec= spec
+      @fragments = expand_fragments spec
+    end
+
+    # Retrieve a host document for a fragment, if it exists; null
+    # otherwise (or itself if `:noop` is true).
+    def host_for subject, graph: nil,
+        published: true, unique: true, noop: false, seen: Set[]
+      subject = assert_resource subject
+      graph   = assert_resources graph
+
+      # we begin by looking for an explicit designation
+      host = objects_for(subject, RDF::SAK::CI['fragment-of'],
+        graph: graph, only: :resource).first
+
+      # get all the classes but the two basic ones that will net everything
+      ft = fragment_spec.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
+
+      types = types_for subject, graph: graph
+      isdoc = type_is? types, document_types
+      frags = type_is? types, ft
+
+      # this condition is true if 
+      unless host or (isdoc and not frags)
+        # attempt to find a list head (although not sure what we do if
+        # there are multiple list heads)
+        head = subjects_for(
+          RDF.first, subject, graph: graph, only: :blank).sort.first
+        head = list_head(head, graph: graph) if head
+        # get an ordered set of [predicate, revp] pairs
+        preds = fragment_spec.map do |type, pv|
+          # this will give us
+          score = type_is?(types, type) or next
+          [score, pv.to_a]
+        end.compact.sort do |a, b|
+          # this will sort the mappings by score
+          a.first <=> b.first
+        end.map(&:last).flatten(1).uniq
+
+        # accumulate candidate hosts and filter them
+        pab = {}
+        hosts = preds.reduce([]) do |a, pair|
+          pred, rev = pair
+          if rev
+            # reverse relations include list heads
+            a += subjects_for pred, subject, graph: graph, only: :resource
+            a += subjects_for pred, head, graph: graph, only: :resource if head
+          else
+            a += objects_for subject, pred, only: :resource
+          end
+          a # <-- the accumulator
+        end.uniq.select { |h| rdf_type? h, document_types }.sort do |a, b|
+          # sort by publication status
+          pa = pab[a] ||= (published?(repo, a) ? -1 : 0)
+          pb = pab[b] ||= (published?(repo, b) ? -1 : 0)
+          # now sort by published-ness
+          c = pa <=> pb
+          # XXX TODO maybe sort by date? i unno
+          # sort lexically if it's a tie
+          c == 0 ? a <=> b : c
+        end
+
+        # the first one will be our baby
+        if host = hosts.first and not seen.include? host
+          parent = host_document repo, host, base: base, frag_map: frag_map,
+            documents: documents, seen: seen | Set[host]
+          return parent if parent
+        end
+      end
+
+      # return the noop
+      noop ? host || subject : host
+    end
+
+    # Return true if the subject is a document fragment.
+    def fragment? subject, graph: nil, published: true
+      !!host_for(subject, graph: graph, published: published)
+    end
+
+    # Retrieve the RDF types considered to be "documents". Thies
+    #
+    # @return [Array<RDF::URI>] all recognized document types
+    #
+    def document_types
+      @documents ||= expand_documents DOCUMENTS
+    end
+
+    # Set the RDF types that are recognized as "documents".
+    #
+    # @param types [RDF::URI, Array<RDF::URI>] said types
+    #
+    # @return [Array<RDF::URI>] all recognized document types
+    #
+    def document_types= types
+      @documents = expand_documents types
+    end
+
+    # Determine whether the subject is considered "published".
+    # 
+    # @param subject [RDF::Resource] the subject to inspect
+    # @param graph [RDF::Resource, Array<RDF::Resource>] named
+    #  graph(s), if any
+
+    # @param circulated [false, true] whether to consider
+    #  `ci:circulated` as well as `bs:published`
+    # @param retired [false, true] whether to _include_ resources that
+    #  are `ci:retired`
+    # @param indexed [false, true] whether to _omit_ resources that
+    #  are `ci:indexed false`
+    # 
+    # @return [true, false] whether the subject is published
+    #
+    def published? subject, graph: nil, circulated: false, retired: false,
+        indexed: false
+
+      if host = host_for(subject, graph: graph, published: false)
+        return published? host, graph: graph,
+          circulated: circulated, retired: retired, indexed: indexed
+      end
+
+      if indexed
+        ix = objects_for(subject, RDF::SAK::CI.indexed, graph: graph,
+          only: :literal, datatype: RDF::XSD.boolean).first
+        return false if ix and ix.object == false
+      end
+
+      # obtain the status
+      candidates = objects_for(
+        subject, RDF::Vocab::BIBO.status, only: :resource).to_set
+
+      return false if !retired and candidates.include? RDF::SAK::CI.retired
+
+      # set up a test set of statuses
+      test = Set[RDF::Vocab::BIBO['status/published']]
+      test << RDF::SAK::CI.circulated if circulated
+
+      # if this isn't empty then we're "published"
+      !(candidates & test).empty?
+    end
+
+    # Obtain the head of a list for a given list subject. Note that
+    # any named graph passed in must be a _singular_ graph, since
+    # while blank node lists that span multiple named graphs are
+    # _possible_, it isn't clear how to handle them.
+    #
+    # @param subject [RDF::Node] a node in the list
+    # @param graph [nil, RDF::URI] an optional named graph
+    #
+    # @return [RDF::Node, nil] the head node or nothing
+    #
+    def list_head subject, graph: nil
+      subject = assert_resource subject
+      graph   = assert_resource graph
+
+      # the current spot in the list
+      nodes = [subject]
+
+      # append the list nodes to the array until we run out
+      while tmp = query(
+        [nil, RDF.rest, nodes.last, graph]).subjects.select(&:node?).sort.first
+        nodes << tmp
+      end
+
+      # the last one is the head of the list
+      nodes.last
+    end
+
+    # Determine whether a subject is a given `rdf:type`.
+    #
+    # @param subject [RDF::Resource] the resource to test
+    # @param type [RDF::Resource, Array<RDF::Resource>] the type(s) to
+    #  test the subject against
+    # @param struct [Hash{RDF::URI=>Array<RDF::Value>}] an optional
+    #  predicate-object structure of cached values
+    #
+    # @return [true, false] whether or not the subject is of the type(s)
+    #
+    def rdf_type? subject, type, struct: nil, graph: nil
+      asserted = types_for subject, graph: graph, struct: struct
+      !!type_is?(asserted, type)
+    end
+
+    # Return all RDF types (that is, all `?t` for `?s rdf:type ?t`)
+    # present in the graph.
+    #
+    # @param graph [RDF::URI, Array<RDF::URI>] constrain search to
+    #  named graph(s)
+    #
+    # @return [Array<RDF::Resource>] the types
+    #
     def all_types graph: nil
       graph = assert_resources graph
       graph << nil if graph.empty?
       graph.map { |g| query([nil, RDF.type, nil, g]).objects }.flatten.uniq
     end
 
+    # Return all subjects in the graph of (a) given type(s). Takes an
+    # optional block for access to the exact type and graph. Returns
+    # an array of subjects, or an array of whatever the block returns.
+    #
+    # @param rdftype [RDF::URI, Array<RDF::URI>] the type(s) to check
+    # @param graph [nil, RDF::URI, Array<RDF::URI>] named graph(s) to
+    #  search, or nil for everything
+    #
+    # @yieldparam subject [RDF::Resource] the subject
+    # @yieldparam type [RDF::Resource] the asserted type of the subject
+    # @yieldparam graph [nil, RDF::URI] the graph where the statement
+    #  was found
+    #
+    # @return [Array<RDF::Resource>] the subjects of the given type(s)
     #
     def all_of_type rdftype, graph: nil, &block
       rdftype = assert_resources rdftype
@@ -545,10 +1005,15 @@ module RDF::SAK
 
       all_types(graph: graph).each do |t|
         next unless type_is? t, rdftype
-        out += graph.map { |g| query([nil, RDF.type, t, g]).subjects }.flatten
+        out += graph.map do |g|
+          query([nil, RDF.type, t, g]).subjects.map do |s|
+            block ? block.call(s, t, g) : s
+          end
+        end.flatten(1)
+        # only flatten the first layer, the second is concatenated
       end
       
-      out.uniq.sort
+      out.sort.uniq
     end
 
     # Obtain a stack of RDF types for an asserted initial type or set
@@ -558,10 +1023,10 @@ module RDF::SAK
     # URI will only appear once in the entire structure. When `descend`
     # is set, the resulting array will be flat.
     #
-    # @param rdftype [RDF::Term, :to_a]
-    # @param descend [true,false] descend instead of ascend
+    # @param rdftype [RDF::Term, :to_a] the type(s) to inspect
+    # @param descend [true, false] descend instead of ascend
     #
-    # @return [Array<Array<RDF::URI>>]
+    # @return [Array<Array<RDF::URI>>] the type stratum
     #
     def type_strata rdftype, descend: false
       rdftype = assert_resources rdftype, vocab: true
@@ -575,7 +1040,7 @@ module RDF::SAK
 
       queue  = [rdftype]
       strata = []
-      seen   = Set.new
+      seen   = Set[]
       qmeth  = descend ? :subClass : :subClassOf 
 
       while qin = queue.shift
@@ -633,14 +1098,12 @@ module RDF::SAK
     #
     def type_is? type, reftype
       # coerce reftype to an array if it isn't already
-      reftype = reftype.respond_to?(:to_a) ? reftype.to_a : [reftype]
+      reftype = assert_resource reftype, blank: false, vocab: true
       return if reftype.empty?
-
-      reftype.map! { |t| RDF::Vocabulary.find_term t rescue t }
 
       # generate types, including optionally base classes if they aren't
       # already present in the strata (this will be automatically 
-      types = type_strata(type)
+      types = type_strata type
       bases = [RDF::RDFS.Resource, RDF::OWL.Thing,
                RDF::Vocab::SCHEMA.Thing] - types.flatten
       # put the base classes in last if there are any left after subtracting
@@ -716,26 +1179,153 @@ module RDF::SAK
       property_set_internal properties
     end
 
-    # instantiate a Resource
-    def resource term
+    # as i will invariably trip over this
+    alias_method :predicate_set, :property_set
+
+    # Generate a closure that can be passed into {Enumerable#sort} for
+    # sorting literals according to the given policy.
+    #
+    # @param reverse [false, true] whether to reverse the sort
+    # @param datatype [RDF::URI, Array<RDF::URI>] preference for datatype(s)
+    # @param language [String, Symbol, Array<String, Symbol>]
+    #  preference for language(s)
+    # @param nocase [true, false] whether to sort case-sensitive
+    # @param longer [false, true] whether to sort longer strings
+    #  before shorter strings where the longer string begins with the
+    #  shorter string
+    #
+    # @return [Proc] the comparison function
+    #
+    def cmp_literal reverse: false, datatype: nil, language: nil,
+        nocase: true, longer: false, resources_first: false
+      datatype = assert_resources datatype, blank: false
+      language = coerce_languages language
+
+      # map the result of literal? to something we can compare
+      cmp_rsrc = { false => 1, true => 0 } 
+      cmp_rsrc[false] = -1 if resources_first
+
+      lambda do |a, b|
+        # first flip if reverse
+        a, b = b, a if reverse
+        # then detect if both are literal
+        c = cmp_rsrc[a.literal?] <=> cmp_rsrc[b.literal?]
+
+        return c if c != 0
+
+        # these are both literal
+        if a.literal?
+          # then detect if both are the same type
+          unless datatype.empty?
+            ad = datatype.index(a.datatype) || Float::INFINITY
+            bd = datatype.index(b.datatype) || Float::INFINITY
+
+            c = ad <=> bd
+
+            return c if c != 0
+          end
+
+          # then detect if both are the same language
+          if a.datatype == RDF.langString and !language.empty?
+            al, bl = [a, b].map do |x|
+              x = x.language.downcase.tr_s(?_, ?-)
+              language.index(x) || Float::INFINITY
+            end
+
+            c = al <=> bl
+
+            return c if c != 0
+          end
+
+          # then optionally squash to lower case
+          a, b = [a, b].map do |x|
+            x = x.value
+            nocase ? x.downcase : x
+          end
+          
+          # then detect if one string starts with the other, and if it
+          # does, what to do with it
+          len = [a, b].map(&:length).min
+          if a[0, len] == b[0, len]
+            c = (a.length <=> b.length) * (longer ? -1 : 1)
+
+            return c if c != 0
+          end
+        end
+
+        # then finally do a lexical comparison
+        a.to_s <=> b.to_s
+      end
     end
 
-    def classes rdftype
+    # Generate a closure that can be passed into {Enumerable#sort} for
+    # sorting the labels of subjects according to the given policy.
+    # This is equivalent to calling #label_for on all the subjects and
+    # then comparing those according to #literal_sort, but caches the
+    # labels for speed.
+    #
+    # @param reverse [false, true] whether to reverse the sort
+    # @param datatype [RDF::URI, Array<RDF::URI>] preference for datatype(s)
+    # @param language [String, Symbol, Array<String, Symbol>]
+    #  preference for language(s)
+    # @param nocase [true, false] whether to sort case-sensitive
+    # @param longer [false, true] whether to sort longer strings
+    #  before shorter strings where the longer string begins with the
+    #  shorter string
+    #
+    # @return [Proc] the comparison function
+    #
+    def cmp_label reverse: false, cache: nil, datatype: nil, language: nil,
+        nocase: false, longer: false, desc: false, alt: false
+
+      # obtain label cmp
+      cmp = cmp_literal reverse: reverse, datatype: datatype,
+        language: language, nocase: nocase, longer: longer
+
+      cache ||= {}
+
+      lambda do |a, b|
+        # obtain and cache the labels
+        cache[a] ||= (label_for(a) || []).last || a
+        cache[b] ||= (label_for(b) || []).last || b
+
+        # now run the label cmp
+        cmp.(cache[a], cache[b])
+      end
     end
 
-    def properties predicate
+    # Instantiate a Resource on the given term. It is up to you to
+    # ensure that `term` is actually in the graph.
+    #
+    # @param term [RDF::Resource] the term in question
+    # @param resolver [nil, RDF::SAK::Resolver] an optional `Resolver`
+    #  instance
+    #
+    # @return [RDF::SAK::Resource] a `Resource` bound to the term
+    #
+    def resource term, resolver: nil
+      term = assert_resource term
+      Resource.new self, term, resolver: resolver
     end
 
-    def list_head subject
-    end
-
-    # lol this is a bastard thing to do but i don't care it's ruby
-    extend RDF::Repository
+    # not sure what these are tbh
+    #
+    # def classes rdftype
+    # end
+    #
+    # def properties predicate
+    # end
   end
 
   # This class provides a resource-oriented view of the graph.
   class Resource
+    attr_reader :repository, :resolver
+
     def initialize repo, subject, resolver: nil
+      @me = assert_resource subject
+
+      @repository = repo
+      @resolver   = resolver
     end
 
     # oh hell yes
@@ -748,4 +1338,9 @@ module RDF::SAK
 
   end
 
+end
+
+# no wait THIS is the bastard thing
+module RDF::Queryable
+  include RDF::SAK::Repository
 end
