@@ -159,13 +159,8 @@ module RDF::SAK::Util::Messy
   }
 
   UUID_ONLY = /\b([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})\b/i
-
   UUID_RE   = /^(?:urn:uuid:)?#{UUID_ONLY}$/i
-
   UUID_PATH = /^\/+#{UUID_ONLY}/
-
-  # anything that could possibly be construed as whitespace
-  WS_RE = /[\s\u{0085 00a0 1680 2028 2029 202f 205f 3000}\u2000-\u200a]+/
 
   # okay labels: what do we want to do about them? poor man's fresnel!
 
@@ -463,18 +458,9 @@ module RDF::SAK::Util::Messy
   # it is so lame i have to do this
   BITS = { nil => 0, false => 0, true => 1 }
 
+  ### ACTUAL CODE STARTS HERE
+
   public
-
-  def uuidv4 coerce: :rdf
-    coerce = assert_uri_coercion coerce
-    uuid = UUIDTools::UUID.random_create.to_uri
-    coerce ? URI_COERCIONS[coerce].call(uuid) : uuid
-  end
-
-  def normalize_space string
-    string.gsub(WS_RE, ' ').strip
-  end
-
 
   # Obtain a stack of types for an asserted initial type or set
   # thereof. Returns an array of arrays, where the first is the
@@ -1279,7 +1265,7 @@ module RDF::SAK::Util::Messy
 
     subject = canonical_uuid(repo, subject) || subject if to_uuid
 
-    warn "lol"
+    # warn "lol"
 
     # dealing with non-documents (hash vs slash)
     #
@@ -1708,6 +1694,44 @@ module RDF::SAK::Util::Messy
     end.compact.sort.uniq
   end
 
+  # Obtain everything that is an owl:equivalentClass or
+  # rdfs:subClassOf the given type.
+  #
+  # @param rdftype [RDF::Term]
+  #
+  # @return [Array]
+
+  def all_related rdftype
+    t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
+    q = [t] # queue
+    c = {}  # cache
+
+    while term = q.shift
+      # add term to cache
+      c[term] = term
+
+      # keep this from tripping up
+      next unless term.uri? and term.respond_to? :class?
+
+      # entail equivalent classes
+      term.entail(:equivalentClass).each do |ec|
+        # add equivalent classes to queue (if not already cached)
+        q.push ec unless c[ec]
+        c[ec] = ec unless ec == term
+      end
+
+      # entail subclasses
+      term.subClass.each do |sc|
+        # add subclasses to queue (if not already cached)
+        q.push sc unless c[sc]
+        c[sc] = sc unless sc == term
+      end
+    end
+
+    # smush the result 
+    c.keys
+  end
+
   ##
   ## RDF STOPS HERE
   ##
@@ -1924,16 +1948,18 @@ module RDF::SAK::Util::Messy
     [uri] + pp
   end
 
-  def split_pp2 path, only: false
-    # ugh apparently we need a special case for ''.split
-    return only ? [] : [''] if !path or path.empty?
+  # NOT USED
+  #
+  # def split_pp2 path, only: false
+  #   # ugh apparently we need a special case for ''.split
+  #   return only ? [] : [''] if !path or path.empty?
 
-    ps = path.to_s.split ?/, -1    # path segments
-    pp = ps.pop.to_s.split ?;, -1  # path parameters
-    bp = (ps + [pp.shift]).join ?/ # base path
+  #   ps = path.to_s.split ?/, -1    # path segments
+  #   pp = ps.pop.to_s.split ?;, -1  # path parameters
+  #   bp = (ps + [pp.shift]).join ?/ # base path
 
-    only ? pp : [bp] + pp
-  end
+  #   only ? pp : [bp] + pp
+  # end
 
   # Coerce a stringlike argument into a URI. Raises an exception if
   # the string can't be turned into a valid URI. Optionally resolves
@@ -2154,27 +2180,6 @@ module RDF::SAK::Util::Messy
     term.sort! if noop && sort
 
     scalar ? term.first : term
-  end
-
-  # Find a subset of a struct for a given set of predicates,
-  # optionally inverting to give the objects as keys and predicates as
-  # values.
-  #
-  # @param struct [Hash]
-  # @param preds  [RDF::URI, #to_a]
-  # @param entail [true, false] whether to entail the predicate(s)
-  # @param invert [true, false] whether to invert the resulting hash
-  #
-  # @return [Hash] the selected subset (which could be empty)
-  #
-  def find_in_struct struct, preds, entail: false, invert: false
-    raise ArgumentError, 'preds must not be nil' if preds.nil?
-    preds = preds.respond_to?(:to_a) ? preds.to_a : [preds]
-    preds = predicate_set preds if entail
-
-    struct = struct.select { |p, _| preds.include? p }
-
-    invert ? invert_struct(struct) : struct
   end
 
   ######## RDFA/XML STUFF ########
@@ -2963,43 +2968,6 @@ module RDF::SAK::Util::Messy
 
   ######## MISC STUFF ########
 
-  # Obtain everything that is an owl:equivalentClass or
-  # rdfs:subClassOf the given type.
-  #
-  # @param rdftype [RDF::Term]
-  #
-  # @return [Array]
-
-  def all_related rdftype
-    t = RDF::Vocabulary.find_term(rdftype) or raise "No type #{rdftype.to_s}"
-    q = [t] # queue
-    c = {}  # cache
-
-    while term = q.shift
-      # add term to cache
-      c[term] = term
-
-      # keep this from tripping up
-      next unless term.uri? and term.respond_to? :class?
-
-      # entail equivalent classes
-      term.entail(:equivalentClass).each do |ec|
-        # add equivalent classes to queue (if not already cached)
-        q.push ec unless c[ec]
-        c[ec] = ec unless ec == term
-      end
-
-      # entail subclasses
-      term.subClass.each do |sc|
-        # add subclasses to queue (if not already cached)
-        q.push sc unless c[sc]
-        c[sc] = sc unless sc == term
-      end
-    end
-
-    # smush the result 
-    c.keys
-  end
 
   # duplicate instance methods as module methods
   extend self

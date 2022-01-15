@@ -102,12 +102,30 @@ module RDF::SAK::Util::Clean
   def assert_struct struct
   end
 
-  def coerce_resource arg, base = nil, as: :rdf
+  # Find a subset of a struct for a given set of predicates,
+  # optionally inverting to give the objects as keys and predicates as
+  # values.
+  #
+  # @param struct [Hash]
+  # @param preds  [RDF::URI, #to_a]
+  # @param entail [true, false] whether to entail the predicate(s)
+  # @param invert [true, false] whether to invert the resulting hash
+  #
+  # @return [Hash] the selected subset (which could be empty)
+  #
+  def find_in_struct struct, preds, entail: false, invert: false
+    raise ArgumentError, 'preds must not be nil' if preds.nil?
+    preds = preds.respond_to?(:to_a) ? preds.to_a : [preds]
+    preds = predicate_set preds if entail
+
+    struct = struct.select { |p, _| preds.include? p }
+
+    invert ? invert_struct(struct) : struct
   end
 
   # turns any data structure into a set of nodes
   def smush_struct struct, uris: false
-    out = Set.new
+    out = Set[]
 
     if struct.is_a? RDF::Term
       if uris
@@ -139,6 +157,17 @@ module RDF::SAK::Util::Clean
     end
 
     nodes
+  end
+
+  private
+
+  # anything that could possibly be construed as whitespace
+  WS_RE = /[\s\u{0085 00a0 1680 2028 2029 202f 205f 3000}\u2000-\u200a]+/
+
+  public
+
+  def normalize_space string
+    string.gsub(WS_RE, ' ').strip
   end
 
   extend self

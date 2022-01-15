@@ -1187,6 +1187,18 @@ module RDF::SAK
       descend ? strata.flatten : strata
     end
 
+    # Obtain everything that is an `owl:equivalentClass` or
+    # `rdfs:subClassOf` the given type. Equivalent to running
+    # #type_strata with `descend: true`.
+    #
+    # @param rdftype [RDF::URI, Array<RDF::URI>] the initial type(s)
+    #
+    # @return [Array<RDF::URI>] the related types
+    #
+    def all_related rdftype
+      type_strata rdftype, descend: true
+    end
+
     # Determine whether one or more `rdf:Class` entities is transitively
     # an `rdfs:subClassOf` or `owl:equivalentClass` of one or more
     # reference types. Returns the subclass "distance" of the "nearest"
@@ -1283,6 +1295,70 @@ module RDF::SAK
 
     # as i will invariably trip over this
     alias_method :predicate_set, :property_set
+
+    private
+
+    # we want https to come before http; one could imagine doing this
+    # for all sorts of other applicable protocol schemes
+    SCHEME_RANK = { https: 0, http: 1 }
+
+    public
+
+    # Generate a closure that can e passed into {Enumerable#sort} for
+    # sorting URIs that would be found in the wild.
+    #
+    # @param www [nil, false, true]
+
+    # @param prioritize [URI, RDF::URI, Array<URI, RDF::URI>] URIs
+    #  relative to these will be put in front of other URIs, 
+    #
+    # @return [Proc] the comparison function
+    #
+    def cmp_uri www: nil, prioritize: []
+      # we only need to ded
+      wre   = /^(?:(www)\.)?(.*?)$/
+      wpref = [false, true].zip(www ? [1, 0] : [0, 1]).to_h
+      cache = {}
+
+      lambda do |a, b|
+        raise 'Comparands must be instances of RDF::Value' unless
+          [a, b].all? { |x| x.is_a? RDF::Value }
+
+        # queue up the comparisons; lol gotta love ruby for being able
+        # to do bastard stuff like this
+        a, b = [a, b].map do |x|
+          # this will return the cache entry or otherwise create it
+          cache[x] ||= begin
+                         o = { id: x }
+                         if x.uri?
+                           o[:rank] = 0
+                           # get scheme and rank
+                           s = x.scheme.downcase.to_sym
+                           o[:scheme] = SCHEME_RANK.fetch s, SCHEME_RANK.size
+                           # get host
+                           if %i[http https].any?(s)and not www.nil?
+                             o[:www], o[:host] = wre.match(
+                               x.host.to_s.downcase)[1, 2]
+                             # overwrite :www with the numeric preference
+                             o[:www] = wpref[o[:www] == 'www']
+                           end
+                         elsif o.blank?
+                           o[:rank] = 1
+                         else
+                           o[:rank] = 2
+                         end
+                         o
+                       end
+        end
+
+        c = a[:rank] <=> b[:rank]
+        if c == 0 and a[:id].uri? # they are both uris
+          c = a[:scheme] <=> b[:scheme]
+        end
+
+        c == 0 ? a[:id] <=> b[:id] : c
+      end
+    end
 
     # Generate a closure that can be passed into {Enumerable#sort} for
     # sorting literals according to the given policy.
@@ -1442,7 +1518,7 @@ module RDF::SAK
 
 end
 
-# no wait THIS is the bastard thing
+# sneak this bad boy into RDF::Queryable
 module RDF::Queryable
-  include RDF::SAK::Repository
+  include RDF::SAK::GraphOps
 end
