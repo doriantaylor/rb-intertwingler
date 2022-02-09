@@ -56,7 +56,7 @@ end
 module RDF::SAK::Util::Messy
   include RDF::SAK::Util::Clean
   include XML::Mixup
-  
+
   private
 
   RDF::Reasoner.apply(:rdfs, :owl)
@@ -307,7 +307,6 @@ module RDF::SAK::Util::Messy
     prefixes.reject! { |k, v| k.nil? || v.nil? } if nonnil
     prefixes
   end
-
 
   def assert_uri_coercion coerce
     if coerce
@@ -1629,7 +1628,7 @@ module RDF::SAK::Util::Messy
     # if we're calling from a published context, we return the
     # (topologically) last published resource(s), even if they are
     # replaced ultimately by unpublished resources.
-      
+
     out = seen.map { |k, v| v[:rev].empty? ? k : nil }.compact - [subject]
 
     # now we modify `out` based on the publication status of the context

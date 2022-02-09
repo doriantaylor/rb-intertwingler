@@ -2116,7 +2116,7 @@ module RDF::SAK
                else
                  { [] => :th }
                end
-          
+
           td = [{ { { [tt.to_s] => :span, property: abbreviate(tp) } => :a,
             rel: 'ci:document', href: href } => :th },
             ab,

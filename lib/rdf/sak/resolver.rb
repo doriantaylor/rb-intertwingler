@@ -1,4 +1,5 @@
 require 'rdf/sak/graphops'
+require 'rdf/sak/uril/clean'
 
 require 'uri'
 require 'uuidtools'
@@ -9,76 +10,9 @@ module RDF::SAK
   # resolver, intended to persist only as long as it needs to, as the
   # cache is not very sophisticated.
   class Resolver
+    include RDF::SAK::Util::Clean
 
     private
-
-    URI_COERCIONS = {
-      nil   => -> t { t.to_s.strip },
-      false => -> t { t.to_s.strip },
-      uri:     -> t { t.is_a?(URI) ? t : URI(t.to_s.strip) },
-      rdf:     -> t {
-        return t if t.is_a? RDF::Resource
-        t = t.to_s.strip
-        t.start_with?('_:') ? RDF::Node(t.delete_prefix '_:') : RDF::URI(t)
-      },
-      term:   -> t {
-        return t if t.is_a? RDF::Vocabulary::Term
-        unless t.is_a? RDF::Resource
-          t = t.to_s.strip
-          t = t.start_with?('_:') ?
-            RDF::Node(t.delete_prefix '_:') : RDF::URI(t)
-        end
-
-        t.uri? ? (RDF::Vocabulary.find_term(t) rescue t) || t : t
-      },
-    }
-
-    def assert_uri_coercion coerce
-      if coerce
-        coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
-        raise "coerce must be in #{URI_COERCIONS.keys}" unless
-          URI_COERCIONS.key?(coerce)
-      end
-      coerce
-    end
-
-    URI_COERCION_TYPES = {
-      nil   => String,
-      false => String,
-      uri:  URI,
-      rdf:  RDF::URI,
-      term: RDF::Vocabulary::Term,
-    }
-
-    def coerce_resource arg, as: :rdf
-      # noop if this is already done
-      return arg if as and arg.is_a? URI_COERCION_TYPES[as]
-
-      arg = arg.to_s.strip
-
-      if arg.start_with? '_:' and as
-        # override the coercion if this is a blank node
-        as = :rdf
-      elsif arg.start_with?(?#) and
-          uuid = UUID::NCName.from_ncname(arg, format: :urn)
-        return URI_COERCIONS[as].call uuid
-      elsif @base
-        begin
-          arg = @base.merge preproc(arg)
-        rescue URI::InvalidURIError => e
-          warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
-          return
-        end
-      end
-
-      URI_COERCIONS[as].call arg
-    end
-
-    def coerce_resources arg, as: :rdf
-      (arg.respond_to?(:to_a) ? arg.to_a : [arg]).map do |c|
-        coerce_resource c, as: as
-      end.compact
-    end
 
     def sanitize_prefixes prefixes, nonnil = false
       raise ArgumentError, 'prefixes must be a hash' unless
@@ -634,7 +568,8 @@ module RDF::SAK
               else
                 noop ? c : nil
               end
-        tmp && coerce ? URI_COERCIONS[coerce].call(tmp) : tmp
+
+        tmp ? coerce_resource(tmp, as: as) : tmp
       end
 
       scalar ? out.first : out
@@ -660,7 +595,7 @@ module RDF::SAK
 
       term = coerce_resources term
       as   = assert_uri_coercion as
-      
+
       # this returns a duplicate that we can mess with
       prefixes = @prefixes.merge(sanitize_prefixes prefixes)
 
@@ -685,7 +620,8 @@ module RDF::SAK
 
         # at this point slug is either an abbreviated term or nil, so:
         slug ||= t if noop
-        URI_COERCIONS[as].call(slug)
+
+        coerce_resource(slug, as: as)
       end
 
       # only sort if noop is set
@@ -719,14 +655,14 @@ module RDF::SAK
         p.split(?:).first.to_sym
       end.uniq.to_set
 
-      # now we return the subset 
+      # now we return the subset
       @prefixes.select { |k, _| pfx.include? k.to_sym }
     end
 
     # this thing needs its own souped-up struct_for because of
     # separation of concerns
 
-    # 
+    #
     def struct_for subject, rev: false, only: [], entail: false,
         uuids: false, canon: false
       struct = @repo.struct_for subject
@@ -771,9 +707,7 @@ module RDF::SAK
     # @return [RDF::URI, URI] the UUID URN
     #
     def uuidv4 as: :rdf
-      as = assert_uri_coercion as
-      uuid = UUIDTools::UUID.random_create.to_uri
-      as ? URI_COERCIONS[as].call(uuid) : uuid
+      coerce_resource(UUIDTools::UUID.random_create.to_uri, as: as)
     end
   end
 end

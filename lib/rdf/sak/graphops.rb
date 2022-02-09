@@ -48,7 +48,7 @@ module RDF::SAK
     # think about dcterms:title is a subproperty of dc11:title even
     # though they are actually more like equivalent properties;
     # owl:equivalentProperty is not as big a conundrum as
-    # rdfs:subPropertyOf. 
+    # rdfs:subPropertyOf.
 
     # if Q rdfs:subPropertyOf P then S Q O implies S P O. this is
     # great but property Q may not be desirable to display.
@@ -148,7 +148,7 @@ module RDF::SAK
     # this tells us if the literal's language is in our given set
     def is_language? literal, languages
       return false unless literal.literal? and lang = literal.language
-      languages = coerce_languages languages 
+      languages = coerce_languages languages
       lang = lang.to_s.strip.tr_s(?_, ?-).downcase
 
       languages.include? lang
@@ -248,7 +248,7 @@ module RDF::SAK
     #
     # @return [Hash{RDF::URI=>Hash{Symbol=>Array<Array<RDF::URI>>}}]
     #  the label structure
-    # 
+    #
     def label_spec
       @labels ||= process_labels LABELS
     end
@@ -281,7 +281,7 @@ module RDF::SAK
     # will constrain the search to one or more named graphs, otherwise
     # all graphs are queried.
     #
-    # @param subject [RDF::Resource] the subject 
+    # @param subject [RDF::Resource] the subject
     # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
     # @param graph [RDF::Resource, Array<RDF::Resource>] the graph(s)
     # @param entail [true, false] whether to entail
@@ -504,9 +504,9 @@ module RDF::SAK
       rsrc.values.each { |v| v.sort!.uniq! }
       rsrc
     end
-    
+
     # Obtain all and only the `rdf:type`s directly asserted on the subject.
-    # 
+    #
     # @param repo [RDF::Queryable]
     # @param subject [RDF::Resource]
     # @param type [RDF::Term, :to_a] override searching for type(s) and
@@ -664,14 +664,72 @@ module RDF::SAK
     # @param graph [nil, RDF::Resource] a named graph identifier
     # @param published [false, true] whether to constrain the search
     #  to published resources
-    # @param 
+    # @param published [true, false]
+    # @param noop [false, true] whether to return unconditionally
     #
     # @return [Array<RDF::Resource>] the replacements, if any
     #
     def replacements_for subject, graph: nil, published: true, noop: false
+      # XXX TODO this thing needs to be coded to handle fragments;
+      # still not sure what to do about fragments
+
       subject = assert_resource subject
       graph   = assert_resources graph
 
+      # `seen` is a hash mapping resources to publication status and
+      # subsequent replacements. it collects all the resources in the
+      # replacement chain in :fwd (replaces) and :rev (replaced-by)
+      # members, along with a boolean :pub. `seen` also performs a
+      # duty as cycle-breaking sentinel.
+
+      seen  = {}
+      queue = [subject]
+      while (test = queue.shift)
+        # fwd is "replaces", rev is "replaced by"
+        entry = seen[test] ||= {
+          pub: published?(test), fwd: Set[], rev: Set[] }
+        queue += (
+          subjects_for(RDF::Vocab::DC.replaces, subject, graph: graph) +
+            objects_for(subject, RDF::Vocab::DC.isReplacedBy, graph: graph,
+            only: :resource)).uniq.map do |r| # r = replacement
+          next if seen.include? r
+          # we preemptively create a structure
+          seen[r] ||= { pub: published?(r), fwd: Set[], rev: Set[] }
+          seen[r][:fwd] << test
+          entry[:rev] << r
+          r
+        end.compact.uniq
+      end
+
+      # if we're calling from a published context, we return the
+      # (topologically) last published resource(s), even if they are
+      # replaced ultimately by unpublished resources.
+
+      out = seen.map { |k, v| v[:rev].empty? ? k : nil }.compact - [subject]
+
+      # now we modify `out` based on the publication status of the context
+      if published
+        pubout = out.select { |o| seen[o][:pub] }
+        # if there is anything left after this, return it
+        return pubout unless pubout.empty?
+        # now we want to find the penultimate elements of `seen` that
+        # are farthest along the replacement chain but whose status is
+        # published
+
+        # start with `out`, take the union of their :fwd members, then
+        # take the subset of those which are published. if the result
+        # is empty, repeat. (this is walking backwards through the
+        # graph we just walked forwards through to construct `seen`)
+        loop do
+          # XXX THIS NEEDS A TEST CASE
+          out = seen.values_at(*out).map { |v| v[:fwd] }.reduce(:+).to_a
+          break if out.empty?
+          pubout = out.select { |o| seen[o][:pub] }
+          return pubout unless pubout.empty?
+        end
+      end
+
+      out
     end
 
     # Return the dates associated with the subject.
@@ -723,7 +781,8 @@ module RDF::SAK
         RDF::Vocab::DC.hasPart            => true,
         RDF::Vocab::DC.isPartOf           => false,
       }.freeze,
-      # we explicitly add this class because it overrides the fact that 
+      # we explicitly add this class because it overrides the fact
+      # that foaf:Document etc are otherwise never fragments
       RDF::Vocab::BIBO.DocumentPart => {
         RDF::Vocab::DC.hasPart            => true,
         RDF::Vocab::DC.isPartOf           => false,
@@ -838,7 +897,7 @@ module RDF::SAK
       isdoc = type_is? types, document_types
       frags = type_is? types, ft
 
-      # this condition is true if 
+      # this condition is true if
       unless host or (isdoc and not frags)
         # attempt to find a list head (although not sure what we do if
         # there are multiple list heads)
@@ -982,7 +1041,7 @@ module RDF::SAK
     end
 
     # Determine whether the subject is considered "published".
-    # 
+    #
     # @param subject [RDF::Resource] the subject to inspect
     # @param graph [RDF::Resource, Array<RDF::Resource>] named
     #  graph(s), if any
@@ -992,7 +1051,7 @@ module RDF::SAK
     #  are `ci:retired`
     # @param indexed [false, true] whether to _omit_ resources that
     #  are `ci:indexed false`
-    # 
+    #
     # @return [true, false] whether the subject is published
     #
     def published? subject, graph: nil, circulated: false, retired: false,
@@ -1006,7 +1065,7 @@ module RDF::SAK
           circulated: circulated, retired: retired, indexed: indexed
       end
 
-      # 
+      #
       if indexed
         ix = objects_for(subject, RDF::SAK::CI.indexed, graph: graph,
           only: :literal, datatype: RDF::XSD.boolean).first
@@ -1114,7 +1173,7 @@ module RDF::SAK
         end.flatten(1)
         # only flatten the first layer, the second is concatenated
       end
-      
+
       out.sort.uniq
     end
 
@@ -1143,7 +1202,7 @@ module RDF::SAK
       queue  = [rdftype]
       strata = []
       seen   = Set[]
-      qmeth  = descend ? :subClass : :subClassOf 
+      qmeth  = descend ? :subClass : :subClassOf
 
       while qin = queue.shift
         qwork = []
@@ -1165,7 +1224,7 @@ module RDF::SAK
 
         # push current layer out
         strata.push qwork.dup unless qwork.empty?
-     
+
         # now deal with subClassOf
         qnext = []
         qwork.each { |q| qnext += q.send(qmeth) if q.respond_to? qmeth }
@@ -1216,7 +1275,7 @@ module RDF::SAK
       return if reftype.empty?
 
       # generate types, including optionally base classes if they aren't
-      # already present in the strata (this will be automatically 
+      # already present in the strata (this will be automatically
       types = type_strata type
       bases = [RDF::RDFS.Resource, RDF::OWL.Thing,
                RDF::Vocab::SCHEMA.Thing] - types.flatten
@@ -1307,22 +1366,87 @@ module RDF::SAK
     # Generate a closure that can e passed into {Enumerable#sort} for
     # sorting URIs that would be found in the wild.
     #
-    # @param www [nil, false, true]
-
+    # @param reverse [false, true] whether to reverse the sort
+    # @param www [nil, true, false] whether the subdomain 'www' should
+    #  always be prioritized (true) when comparing HTTP(S) URLs, or
+    #  always deprioritized (false), or compared normally (nil).
     # @param prioritize [URI, RDF::URI, Array<URI, RDF::URI>] URIs
-    #  relative to these will be put in front of other URIs, 
+    #  that are relative to these will be put in front of other URIs.
+    # @param blankfirst [false, true] whether blank nodes should
+    #  always go before proper URIs, or after them.
     #
     # @return [Proc] the comparison function
     #
-    def cmp_uri www: nil, prioritize: []
-      # we only need to ded
-      wre   = /^(?:(www)\.)?(.*?)$/
-      wpref = [false, true].zip(www ? [1, 0] : [0, 1]).to_h
+    def cmp_resource reverse: false, www: nil, prioritize: [], blankfirst: false
+      # index tables for 'www' and blank-first preferences
+      wpref = [false, true].zip(www ? [1, -1] : [-1, 1]).to_h
+      bpref = [false, true].zip(blankfirst ? [1, 0] : [0, 1]).to_h
       cache = {}
 
+      # this will create a hash (which of course in ruby are ordered)
+      # where the keys are arrays of inverted hostnames, with any
+      # leading 'www' removed (if the related parameter is non-nil)
+      # and the values are arrays of matching URIs, again preserving
+      # the order.
+      prioritize = coerce_resources(prioritize, as: :uri).reduce({}) do |a, u|
+        u = u.normalize
+        h = u.host.to_s.split(?.).reverse
+
+        # we don't care about matching www with these
+        h.pop if h.last == 'www' and not www.nil?
+        # make sure the URI's host agrees with this
+        u.host = h.reverse.join ?.
+        if u.fragment
+          u.fragment = ''
+        elsif u.query
+          u.query = ''
+        else
+          # clip off any terminating path segment that isn't a /
+          u.path = /^(.*\/)[^\/]*$/.match(u.path).captures.first
+        end
+
+        # conditionally initialize *and* conditionally add the URI
+        entry = a[h] ||= []
+        entry << u unless entry.include? u
+        a # the initial hash
+      end
+
+      # this closure returns a priority score for a host/URI; i broke
+      # it out because the main cmp lambda was getting too insane
+      priscore = lambda do |h, u|
+        return prioritize.size unless pri = prioritize[h]
+        # knowing that we match a host in the priority list, we need
+        # to find the URL in the list that "best matches" the
+        # comparand. its index will be added as a decimal point to the
+        # containing index, so the form will be major.minor. match
+        # grades can be characterized thusly:
+        #
+        # * exact match (path, query, fragment)
+        # * match path and query, different fragment
+        # * match path, different query
+        # * partial match on path
+        #
+        # more path segments matched are better than fewer, but a
+        # `../` anywhere is disqualifying
+
+        # XXX TODO the actual URI comparison is going to be a tricky
+        # computation because we want the *lowest* index in `pri` that
+        # matches the *most* of the URI (ie so a higher index will be
+        # preferred over a lower one if it accounts for more path
+        # segments/query/fragment/whatever) and i don't feel like
+        # writing that logic right now.
+
+        # anyway we'll just return the host's index for now
+        prioritize.keys.index h
+      end
+
+      # return a closure that can be passed into Enumerable#sort
       lambda do |a, b|
-        raise 'Comparands must be instances of RDF::Value' unless
-          [a, b].all? { |x| x.is_a? RDF::Value }
+        raise 'Comparands must be instances of RDF::Resource' unless
+          [a, b].all? { |x| x.is_a? RDF::Resource }
+
+        # let's not forget to reverse
+        a, b = b, a if reverse
 
         # queue up the comparisons; lol gotta love ruby for being able
         # to do bastard stuff like this
@@ -1331,29 +1455,69 @@ module RDF::SAK
           cache[x] ||= begin
                          o = { id: x }
                          if x.uri?
-                           o[:rank] = 0
-                           # get scheme and rank
-                           s = x.scheme.downcase.to_sym
-                           o[:scheme] = SCHEME_RANK.fetch s, SCHEME_RANK.size
-                           # get host
-                           if %i[http https].any?(s)and not www.nil?
-                             o[:www], o[:host] = wre.match(
-                               x.host.to_s.downcase)[1, 2]
-                             # overwrite :www with the numeric preference
-                             o[:www] = wpref[o[:www] == 'www']
+                           # get version as URI object
+                           o[:uri]  = u = URI(x.to_s).normalize
+                           o[:rank] = bpref[false]
+                           # get scheme and rank; the fallback number
+                           # only needs to be bigger than matches
+                           o[:scheme] = s = x.scheme.downcase.to_sym
+                           o[:srank]  = SCHEME_RANK.fetch s, SCHEME_RANK.size
+
+                           # get host into an ideally comparable form
+                           # (note this will not work for IPs)
+                           o[:host] = h = u.host.to_s.split(?.).reverse
+                           o[:www]  = 0 # this needs a default
+                           unless www.nil?
+                             # wpref has already been set in the
+                             # preamble; h.pop will only be evaluated
+                             # if the test is true; the double bang
+                             # coerces the expression to a boolean
+                             # which are the keys in wpref (and 'www'
+                             # will be coerced to true)
+                             o[:www] = wpref[!!(h.last == 'www' && h.pop)]
                            end
+
+                           # now we see if the host is on our priority
+                           # list (or get a default high value otherwise)
+                           o[:hrank] = priscore.call h, u
                          elsif o.blank?
-                           o[:rank] = 1
+                           o[:rank] = bpref[true]
                          else
+                            # this just needs to be higher than 0 or
+                            # 1, but honestly this shouldn't get run
                            o[:rank] = 2
                          end
-                         o
+                         o # the new compound comparand
                        end
         end
 
+        # that's the setup, now for the comparison
+
+        # this will put all URIs either before or after all blanks
         c = a[:rank] <=> b[:rank]
-        if c == 0 and a[:id].uri? # they are both uris
-          c = a[:scheme] <=> b[:scheme]
+        return c if c != 0
+
+        # if one is a uri here then they are both uris
+        if a[:id].uri?
+          c = a[:srank]  <=> b[:srank] # pull out the scheme rank
+          c = a[:scheme] <=> b[:scheme] if c == 0
+
+          return c if c != 0
+
+          # if one is hierarchical they are both hierarchical
+          if a[:id].hier?
+            # test priority rank
+            c = a[:hrank] <=> b[:hrank]
+
+            # compare (reversed and segmented) hosts
+            c = a[:host] <=> b[:host] if c == 0
+
+            # if the hosts are the same, test the www policy
+            c = a[:www] <=> b[:www] if c == 0
+
+            # XXX upgrade this for finer-grained control
+            c = a[:uri] <=> b[:uri] if c == 0
+          end
         end
 
         c == 0 ? a[:id] <=> b[:id] : c
@@ -1380,8 +1544,7 @@ module RDF::SAK
       language = coerce_languages language
 
       # map the result of literal? to something we can compare
-      cmp_rsrc = { false => 1, true => 0 } 
-      cmp_rsrc[false] = -1 if resources_first
+      cmp_rsrc = [false, true].zip(resources_first ? [0, 1] : [1, 0]).to_h
 
       lambda do |a, b|
         # first flip if reverse
@@ -1420,7 +1583,7 @@ module RDF::SAK
             x = x.value
             nocase ? x.downcase : x
           end
-          
+
           # then detect if one string starts with the other, and if it
           # does, what to do with it
           len = [a, b].map(&:length).min
@@ -1464,11 +1627,52 @@ module RDF::SAK
 
       lambda do |a, b|
         # obtain and cache the labels
-        cache[a] ||= (label_for(a) || []).last || a
-        cache[b] ||= (label_for(b) || []).last || b
+        cache[a] ||= (label_for(a) || [nil, a]).last
+        cache[b] ||= (label_for(b) || [nil, b]).last
 
         # now run the label cmp
         cmp.(cache[a], cache[b])
+      end
+    end
+
+    # Generate a closure that can be passed into {Enumerable#sort} for
+    # comparing an arbitrary pair of RDF terms. This effectively wraps
+    # and coalesces the behaviour of #cmp_label and #cmp_resource.
+    #
+    # @param reverse [false, true] whether to reverse the sort
+    # @param labels [true, false]
+    # @param datatype [RDF::URI, Array<RDF::URI>] preference for datatype(s)
+    # @param language [String, Symbol, Array<String, Symbol>]
+    #  preference for language(s)
+    # @param nocase [true, false] whether to sort case-sensitive
+    # @param longer [false, true] whether to sort longer strings
+    #  before shorter strings where the longer string begins with the
+    #  shorter string
+    #
+    # @return [Proc] the comparison function
+    #
+    def cmp_term reverse: false, labels: true, cache: nil, datatype: nil,
+        language: nil, nocase: false, longer: false, desc: false, alt: false,
+        www: false, prioritize: [], order: [:uri, :blank, :literal]
+
+      # deal with node order
+      order = coerce_node_spec order
+      ospec = NTESTS.keys.map do |s|
+        [s, order.index(s) || NTESTS.keys.count]
+      end.to_h
+
+      labcmp = cmp_label cache: cache, datatype: datatype, language: language,
+        nocase: nocase, longer: longer, desc: desc, alt: alt
+
+      uricmp = cmp_resource www: www, prioritize: prioritize,
+        blankfirst: ospec[:blank] < ospec[:uri]
+
+      lambda do |a, b|
+        # note we do the reverse here so the whole comparison is reversed
+        a, b = b, a if reverse
+
+        c = labcmp.(a, b)
+        c == 0 ? uricmp.(a, b) : c
       end
     end
 
@@ -1495,7 +1699,9 @@ module RDF::SAK
     # end
   end
 
-  # This class provides a resource-oriented view of the graph.
+  # This class provides a resource-oriented view of the graph. When I
+  # get around to implementing it. (Python librdf has one of these and
+  # it's handy. This should really belong in the core rdflib.)
   class Resource
     attr_reader :repository, :resolver
 
