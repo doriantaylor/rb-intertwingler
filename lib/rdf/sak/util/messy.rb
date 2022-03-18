@@ -1505,7 +1505,7 @@ module RDF::SAK::Util::Messy
       lang: nil, desc: false, alt: false, base: nil
     raise ArgumentError, 'no repo!' unless repo.is_a? RDF::Queryable
     return unless subject.is_a? RDF::Value and subject.resource?
-    
+
     asserted = asserted_types repo, subject, type
 
     # get all the inferred types by layer; add default class if needed
@@ -1537,16 +1537,16 @@ module RDF::SAK::Util::Messy
 
     # try that for now
     unique ? accum.first : accum.uniq
-    
+
     # what we want to do is match the predicates from the subject to
     # the predicates in the label designation
-    
+
     # get label predicate stack(s) for RDF type(s)
-    
+
     # get all predicates in order (use alt stack if doubly specified)
-    
+
     # filter out desired language(s)
-    
+
     # XXX note we will probably want to return the predicate as well
   end
 
@@ -1741,7 +1741,7 @@ module RDF::SAK::Util::Messy
 
     if xmlnode.at_xpath('self::html:*|/html', XPATHNS)
       b = URI(xmlnode.at_xpath(XPATH[:htmlbase], XPATHNS).to_s.strip)
-      
+
       out = b if b.absolute?
     elsif b = xmlnode.root.at_xpath(XPATH[:xmlbase])
       b = URI(b.to_s.strip)
@@ -1819,7 +1819,7 @@ module RDF::SAK::Util::Messy
             d = depth + (child.previous ? 1 : 0)
             text = "\n" + (indent * d) + text
           end
- 
+
           # then we unconditionally *append*, (modulo there being a
           # newline in the original at all), but we have to check by
           # how much: if this is *not* the last node then depth + 1,
@@ -2035,7 +2035,7 @@ module RDF::SAK::Util::Messy
           # we need to escape colons or it will think it's absolute
           return uri_pp(p.split(/;+/).first || '', ':')
         end
-      end        
+      end
     end
     ''
   end

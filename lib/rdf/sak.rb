@@ -19,6 +19,9 @@ require 'linkeddata'
 require 'xml-mixup'
 require 'md-noko'
 require 'uuid-ncname'
+require 'rdf/sak/graphops'
+require 'rdf/sak/resolver'
+
 require 'rdf/sak/mimemagic'
 require 'rdf/sak/util'
 require 'rdf/sak/nlp'
@@ -69,7 +72,7 @@ module RDF::SAK
 
   class Context
     include XML::Mixup
-    include Util
+    include Util::Clean
 
     private
 
@@ -205,6 +208,10 @@ module RDF::SAK
         end
       end
 
+      # XXX 2022-03-17 gotta get rid of or otherwise resolve all these curie
+      # resolution thingies (or ultimately just come up with a better
+      # strategy for config)
+
       # deal with duplicate map
       pfx = config[:prefixes] || {}
       if dups = config[:duplicate]
@@ -228,24 +235,24 @@ module RDF::SAK
 
       # "document" maps, ie things that are never fragments
       config[:documents] = [] unless config[:documents].is_a? Array
-      config[:documents].map! do |d|
-        resolve_curie d.to_s, prefixes: pfx, scalar: true, coerce: :rdf
-      end.compact
+      # config[:documents].map! do |d|
+      #   resolve_curie d.to_s, prefixes: pfx, scalar: true, coerce: :rdf
+      # end.compact
       config[:documents] << RDF::Vocab::FOAF.Document if
         config[:documents].empty?
 
       # fragment maps
       config[:fragment] = {} unless config[:fragment].is_a? Hash
-      config[:fragment] = config[:fragment].map do |k, v|
-        k = resolve_curie k.to_s, prefixes: pfx, scalar: true, coerce: :rdf
-        v = v.respond_to?(:to_a) ? v.to_a : [v]
-        v.map! do |x|
-          x = x.to_s.split(/^\^+/).reverse
-          [resolve_curie(x.first, prefixes: pfx,
-            scalar: true, coerce: :rdf), !!x[1]]
-        end
-        [k, v]
-      end.to_h
+      # config[:fragment] = config[:fragment].map do |k, v|
+      #   k = resolve_curie k.to_s, prefixes: pfx, scalar: true, coerce: :rdf
+      #   v = v.respond_to?(:to_a) ? v.to_a : [v]
+      #   v.map! do |x|
+      #     x = x.to_s.split(/^\^+/).reverse
+      #     [resolve_curie(x.first, prefixes: pfx,
+      #       scalar: true, coerce: :rdf), !!x[1]]
+      #   end
+      #   [k, v]
+      # end.to_h
 
       config
     end
@@ -286,7 +293,9 @@ module RDF::SAK
 
     public
 
-    attr_reader :config, :graph, :base
+    attr_reader :config, :graph, :resolver
+
+    alias_method :repo, :graph
 
     # Initialize a context.
     #
@@ -304,33 +313,77 @@ module RDF::SAK
 
       graph ||= @config[:graph] if @config[:graph]
       base  ||= @config[:base]  if @config[:base]
-      
-      @graph  = coerce_graph graph, type: type
-      @base   = RDF::URI.new base.to_s if base
+
+      @graph    = coerce_graph graph, type: type
+      @resolver = RDF::SAK::Resolver.new @graph, base,
+        prefixes: @config[:prefixes]
+
+      @graph.document_types = @config[:documents]
+      @graph.fragment_spec  = @config[:fragment]
+
       @ucache = RDF::Util::Cache.new(-1)
       @scache = {} # wtf rdf util cache doesn't like booleans
     end
 
+    # Get the base URI.
+    #
+    # @return [RDF::URI] the base URI.
+    #
+    def base
+      @resolver.base
+    end
+
     # Get the prefix mappings from the configuration.
     #
-    # @return [Hash]
-
+    # @return [Hash{Symbol=>RDF::Vocabulary}] The prefixes
+    #
     def prefixes
-      @config[:prefixes] || {}
+      @resolver.prefixes
     end
 
     # Abbreviate a set of terms against the registered namespace
     # prefixes and optional default vocabulary, or otherwise return a
     # string representation of the original URI.
-    
+
     # @param term [RDF::Term]
     # @param prefixes [Hash]
     #
     # @return [String]
     #
-    def abbreviate term, prefixes: @config[:prefixes],
-        vocab: nil, noop: true, sort: true
-      super term, prefixes: prefixes || {}, vocab: vocab, noop: noop, sort: sort
+    def abbreviate term, **args
+      @resolver.abbreviate term, **args
+    end
+
+    # Obtain the canonical UUID for the given URI
+    #
+    # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
+    # @param unique [true, false] return a single resource/nil or an array
+    # @param published [true, false] whether to restrict to published docs
+    #
+    # @return [RDF::URI, Array]
+    #
+    def canonical_uuid uri, unique: true, published: false, verify: true
+      @resolver.uuid_for uri, scalar: unique,
+        published: published, verify: verify
+    end
+
+    # Obtain the "best" dereferenceable URI for the subject.
+    # Optionally returns all candidates.
+    #
+    # @param subject  [RDF::Resource]
+    # @param unique   [true, false] flag for unique return value
+    # @param rdf      [true, false] flag to specify RDF::URI vs URI
+    # @param to_uuid  [true, false] flag to run #canonical_uuid first
+    # @param slugs    [true, false] flag to include slugs
+    # @param fragment [true, false] flag to include fragment URIs
+    #
+    # @return [RDF::URI, URI, Array]
+    #
+    def canonical_uri subject, unique: true, rdf: true, to_uuid: false,
+        slugs: true, fragment: true
+      as = rdf ? :rdf : :uri
+      @resolver.uri_for subject, scalar: unique, as: as, roundtrip: to_uuid,
+        slugs: slugs, fragments: fragment
     end
 
     # Obtain a key-value structure for the given subject, optionally
@@ -344,19 +397,16 @@ module RDF::SAK
     #
     # @return [Hash]
     #
-    def struct_for subject, rev: false, only: [], inverses: false,
-        uuids: false, canon: false, ucache: {}, scache: {}, repo: @graph
-      Util.struct_for repo, subject,
-        rev: rev, only: only, inverses: inverses, uuids: uuids, canon: canon,
-        ucache: ucache, scache: scache
+    def struct_for subject, **args
+      @graph.struct_for subject, **args
     end
 
     # Obtain everything in the graph that is an `rdf:type` of something.
-    # 
+    #
     # @return [Array]
     #
     def all_types
-      @graph.query([nil, RDF.type, nil]).objects.uniq
+      @graph.all_types
     end
 
     # Obtain every subject that is rdf:type the given type or its subtypes.
@@ -366,32 +416,18 @@ module RDF::SAK
     # @return [Array]
     #
     def all_of_type rdftype, exclude: []
-      rdftype = rdftype.respond_to?(:to_a) ? rdftype.to_a : [rdftype]
-      exclude = term_list exclude
-
-      t = rdftype.map do |t|
-        RDF::Vocabulary.find_term(t) rescue nil
-      end.compact.map { |t| all_related(t) }.flatten.uniq
-
-      raise "Could not find types in #{rdftype}" if t.empty?
-
-      out = []
-      (all_types & t - exclude).each do |type|
-        out += subjects_for(RDF.type, type)
-      end
-      
-      out.uniq
+      @graph.all_of_type rdftype, exclude: exclude
     end
 
     # Obtain all and only the rdf:types directly asserted on the subject.
-    # 
+    #
     # @param subject [RDF::Resource]
     # @param type [RDF::Term, :to_a]
     #
     # @return [Array]
     #
-    def asserted_types subject, type = nil, struct: nil
-      Util.asserted_types @graph, subject, type, struct: struct
+    def asserted_types subject, struct: nil
+      @graph.types_for subject, struct: struct
     end
 
     # Determine whether a subject is a given `rdf:type`.
@@ -403,41 +439,7 @@ module RDF::SAK
     # @return [true, false]
     #
     def rdf_type? subject, type, struct: nil
-      Util.rdf_type? @graph, subject, type, struct: struct
-    end
-
-    # Obtain the canonical UUID for the given URI
-    #
-    # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
-    # @param unique [true, false] return a single resource/nil or an array
-    # @param published [true, false] whether to restrict to published docs
-    # 
-    # @return [RDF::URI, Array]
-    #
-    def canonical_uuid uri,
-        unique: true, published: false, repo: @graph, verify: true
-      Util.canonical_uuid repo, uri, unique: unique, published: published,
-        scache: @scache, ucache: @ucache, base: @base, verify: verify
-    end
-
-    # Obtain the "best" dereferenceable URI for the subject.
-    # Optionally returns all candidates.
-    # 
-    # @param subject  [RDF::Resource]
-    # @param unique   [true, false] flag for unique return value
-    # @param rdf      [true, false] flag to specify RDF::URI vs URI 
-    # @param to_uuid  [true, false] flag to run #canonical_uuid first
-    # @param slugs    [true, false] flag to include slugs
-    # @param fragment [true, false] flag to include fragment URIs
-    #
-    # @return [RDF::URI, URI, Array]
-    #
-    def canonical_uri subject, unique: true, rdf: true, to_uuid: false,
-        slugs: true, fragment: true, repo: @graph
-      Util.canonical_uri repo, subject, base: @base,
-        unique: unique, rdf: rdf, to_uuid: to_uuid, slugs: slugs,
-        fragment: fragment, frag_map: @config[:fragment] || {},
-        documents: @config[:documents]
+      @graph.rdf_type? subject, type, struct: struct
     end
 
     # Returns subjects from the graph with entailment.
@@ -449,12 +451,10 @@ module RDF::SAK
     #
     # @return [RDF::Resource]
     #
-    def subjects_for predicate, object,
-        entail: true, only: [], repo: @graph, &block
-      Util.subjects_for @graph,
-        predicate, object, entail: entail, only: only, &block
+    def subjects_for predicate, object, entail: true, only: [], &block
+      @graph.subjects_for predicate, object, entail: entail, only: only, &block
     end
-    
+
     # Returns objects from the graph with entailment.
     #
     # @param subject
@@ -467,8 +467,8 @@ module RDF::SAK
     #
     def objects_for subject, predicate,
         entail: true, only: [], datatype: nil, repo: @graph, &block
-      Util.objects_for @graph, subject, predicate,
-        entail: entail, only: only, datatype: datatype, &block
+      @graph.objects_for subject, predicate, entail: entail, only: only,
+        datatype: datatype, &block
     end
 
     # Find the terminal replacements for the given subject, if any exist.
@@ -478,8 +478,8 @@ module RDF::SAK
     #
     # @return [Set]
     #
-    def replacements_for subject, published: true, repo: @graph
-      Util.replacements_for repo, subject, published: published
+    def replacements_for subject, published: true
+      @graph.replacements_for subject, published: published
     end
 
     # Obtain dates for the subject as instances of Date(Time). This is
@@ -491,8 +491,8 @@ module RDF::SAK
     #
     # @return [Array] of dates
     def dates_for subject, predicate: RDF::Vocab::DC.date,
-        datatype: [RDF::XSD.date, RDF::XSD.dateTime], repo: @graph
-      Util.dates_for repo, subject, predicate: predicate, datatype: datatype
+        datatype: [RDF::XSD.date, RDF::XSD.dateTime]
+      @graph.dates_for subject, predicate: predicate, datatype: datatype
     end
 
     # Obtain any specified MIME types for the subject. Just shorthand
@@ -505,8 +505,8 @@ module RDF::SAK
     # @return [Array] of internet media types
     #
     def formats_for subject, predicate: RDF::Vocab::DC.format,
-        datatype: [RDF::XSD.token], repo: @graph
-      Util.objects_for repo, subject, predicate, datatype: datatype
+        datatype: [RDF::XSD.token]
+      @graph.formats_for subject, predicate: predicate, datatype: datatype
     end
 
     # Assuming the subject is a thing that has authors, return the
@@ -519,8 +519,8 @@ module RDF::SAK
     #
     # @return [RDF::Value, Array]
     #
-    def authors_for subject, unique: false, contrib: false, repo: @graph
-      Util.authors_for repo, subject, unique: unique, contrib: contrib
+    def authors_for subject, unique: false, contrib: false
+      @graph.authors_for subject, unique: unique, contrib: contrib
     end
 
     # Obtain the most appropriate label(s) for the subject's type(s).
@@ -537,9 +537,9 @@ module RDF::SAK
     # @return [Array] either a predicate-object pair or an array of pairs.
     #
     def label_for subject, candidates: nil, unique: true, type: nil,
-        lang: nil, desc: false, alt: false, repo: @graph
-      Util.label_for repo, subject, candidates: candidates,
-        unique: unique, type: type, lang: lang, desc: desc, alt: alt
+        lang: nil, desc: false, alt: false
+      @graph.label_for subject,
+        unique: unique, lang: lang, desc: desc, alt: alt, struct: candidates
     end
 
     SKOS_HIER = [
@@ -1066,12 +1066,13 @@ module RDF::SAK
 
     # generate skos concept schemes
 
-    CONCEPTS = Util.all_related(RDF::Vocab::SKOS.Concept).to_set
-
     def generate_audience_csv file = nil, published: true
+
       require 'csv'
       file = coerce_to_path_or_io file if file
       lab = {}
+
+      @concepts ||= @graph.all_related(RDF::Vocab::SKOS.Concept).to_set
 
       out = all_internal_docs(published: published,
                               exclude: RDF::Vocab::FOAF.Image).map do |s|
@@ -1108,7 +1109,7 @@ module RDF::SAK
         concepts = [RDF::Vocab::DC.subject, CI.introduces,
                     CI.assumes, CI.mentions].map do |pred|
           objects_for(s, pred, only: :resource).map do |o|
-            con = self.objects_for(o, RDF.type).to_set & CONCEPTS
+            con = self.objects_for(o, RDF.type).to_set & @concepts
             next if con.empty?
             next lab[o] if lab[o]
             _, ol = label_for o
@@ -1299,7 +1300,7 @@ module RDF::SAK
           @graph.has_statement? RDF::Statement(s, p, o)
         end
       end
-      
+
       docs
     end
 
@@ -1517,7 +1518,7 @@ module RDF::SAK
         # skip /uuid form
         cp = cu.request_uri.delete_prefix '/'
         next if cu.host == base.host and tu.uuid == cp
-        
+
         rwm[cp] = tu.uuid
       end
 
@@ -1526,7 +1527,7 @@ module RDF::SAK
 
     # give me all UUIDs of all documents, filter for published if
     # applicable
-    # 
+    #
     # find the "best" (relative) URL for the UUID and map the pair
     # together
     def generate_uuid_redirect_map published: false, docs: nil
@@ -1534,7 +1535,7 @@ module RDF::SAK
 
       base = URI(@base.to_s)
 
-      # keys are /uuid, values are 
+      # keys are /uuid, values are
       out = {}
       docs.each do |doc|
         next unless doc.uri?
@@ -2445,7 +2446,7 @@ module RDF::SAK
       files = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).reject do |x|
-        x.directory? or RDF::SAK::MimeMagic.by_path(x).to_s !~ 
+        x.directory? or RDF::SAK::MimeMagic.by_path(x).to_s !~
           /.*(?:markdown|(?:x?ht|x)ml).*/i
       end.uniq
 
@@ -2459,9 +2460,9 @@ module RDF::SAK
     end
 
     # Visit (open) the document at the given URI.
-    # 
+    #
     # @param uri [RDF::URI, URI, :to_s]
-    # 
+    #
     # @return [RDF::SAK::Context::Document] or nil
 
     def visit uri
@@ -2518,23 +2519,23 @@ module RDF::SAK
     end
 
     # Determine whether the URI represents a published document.
-    # 
+    #
     # @param uri
-    # 
+    #
     # @return [true, false]
+    #
     def published? uri, circulated: false, retired: false, indexed: false
-      RDF::SAK::Util.published? @graph, uri,
-        circulated: circulated, base: @base, retired: retired,
-        indexed: indexed, frag_map: @config[:fragment] || {},
-        documents: @config[:documents]
+      @graph.published? @resolver.uuid_for(uri),
+        circulated: circulated, retired: retired, indexed: indexed
     end
 
     # Find a destination pathname for the document
     #
     # @param uri
     # @param published
-    # 
+    #
     # @return [Pathname]
+    #
     def target_for uri, published: false
       uri = coerce_resource uri
       uri = canonical_uuid uri
@@ -3145,7 +3146,7 @@ module RDF::SAK
           v = RDF::URI(v)
           RDF::Vocabulary.find_term(v) rescue v
         end.merge prefixes
-      
+
         if node.parent and node.parent.element?
           prefixes_for node.parent, prefixes
         else
@@ -3173,7 +3174,7 @@ module RDF::SAK
           unless cands.empty?
             cands = cands.select do |k, v|
               type_is?(v[:types],
-                [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent]) 
+                [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent])
             end
             # XXX TODO make this logic better: if there are still
             # candidates, sort by preferred predicate for given type

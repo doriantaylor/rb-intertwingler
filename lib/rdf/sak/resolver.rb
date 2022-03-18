@@ -1,5 +1,5 @@
 require 'rdf/sak/graphops'
-require 'rdf/sak/uril/clean'
+require 'rdf/sak/util/clean'
 
 require 'uri'
 require 'uuidtools'
@@ -98,7 +98,7 @@ module RDF::SAK
     #  escaped, treated as a {Regexp} character class
     #
     # @return [String] the preprocessed URI string
-    # 
+    #
     def preproc uri, extra = ''
       # take care of malformed escapes
       uri = uri.to_s.b.gsub(/%(?![0-9A-Fa-f]{2})/n, '%25')
@@ -132,7 +132,7 @@ module RDF::SAK
     #
     def split_pp uri, only: false
       begin
-        u = (uri.is_a?(URI) ? uri : URI(uri_pp uri.to_s)).normalize
+        u = (uri.is_a?(URI) ? uri : URI(preproc uri.to_s)).normalize
 
       rescue URI::InvalidURIError => e
         # these stock error messages don't even tell you what the uri is
@@ -193,7 +193,7 @@ module RDF::SAK
     #
     def terminal_slug uri
       uri = coerce_resource uri, as: :uri
-      # 
+      #
       return unless uri.respond_to? :path
       if f = uri.fragment and not f.empty?
         return f
@@ -204,7 +204,7 @@ module RDF::SAK
             # we need to escape colons or consumers will think it's absolute
             return preproc(p.split(/;+/).first || '', ':')
           end
-        end        
+        end
       end
       '' # can't remember why but the default return value is empty string
     end
@@ -322,7 +322,7 @@ module RDF::SAK
         RDF::SAK::CI.alias, RDF::OWL.sameAs]
       candidates = nil
       uris.each do |u|
-        # this will give us a hash where the keys are 
+        # this will give us a hash where the keys are
         candidates = @repo.subjects_for(sa, u, entail: false) do |s, f|
           # skip non-uuid subjects
           next unless UUID_RE.match? s
@@ -385,14 +385,14 @@ module RDF::SAK
         # find any replacements
         reps = @repo.replacements_for(k, published: published) - [k]
 
-        # 
+        #
         unless reps.empty?
           v[:replaced] = true
           reps.each do |r|
             c = candidates[r] ||= {
               rank: v[:rank], published: @repo.published?(r),
               mtime: @repo.dates_for(r).last || v[:mtime] || DateTime.new }
-            
+
             # adjust rank and modification time of the replacement to
             # that of the replaced if they are more favourable
             c[:rank]  = v[:rank]  if v[:rank]  < c[:rank]
@@ -442,6 +442,9 @@ module RDF::SAK
     #  node, UUID, or CURIE to be resolved
     # @param as [:rdf, :uri] coerce the output to one or the other form
     # @param relative [false, true] return relative to base
+    # @param roundtrip [false, true] resolve UUID first
+    # @param slugs [false, true] attempt to resolve from slugs as well
+    # @param fragments [true, false] resolve fragment URIs
     #
     # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
     #
@@ -502,7 +505,7 @@ module RDF::SAK
         if subject.uri? and (slugs or host)
           secondary += @repo.objects_for(
             subject, RDF::SAK::CI.slug, entail: false,
-            only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)   
+            only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)
         end
       end
 
@@ -521,7 +524,7 @@ module RDF::SAK
         end
       end
 
-      # 
+      #
       out = (primary + secondary).uniq
 
       # eliminate fragment URIs unless explicitly allowed
@@ -533,7 +536,7 @@ module RDF::SAK
       # turn these into URIs if the thing says so
       out.map! { |u| URI(preproc u.to_s) } if as == :uri
 
-      scalar ? out.first : out 
+      scalar ? out.first : out
     end
 
     # Resolve a CURIE to a full URI using the embedded prefix map,
@@ -659,6 +662,8 @@ module RDF::SAK
       @prefixes.select { |k, _| pfx.include? k.to_sym }
     end
 
+    # XXX 2022-03-16 A BUNCH OF THIS STUFF WE SHOULD IGNORE I THINK
+
     # this thing needs its own souped-up struct_for because of
     # separation of concerns
 
@@ -698,6 +703,7 @@ module RDF::SAK
     # @return [false, true] whether or not the subject is "published"
     #
     def published? subject, circulated: false, retired: false, indexed: false
+
     end
 
     # Generate a random (version 4 in RFC 4122) UUID URN.

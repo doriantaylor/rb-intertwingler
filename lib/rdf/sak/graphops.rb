@@ -525,6 +525,8 @@ module RDF::SAK
       objects_for subject, RDF.type, graph: graph, entail: entail, only: :uri
     end
 
+    alias_method :asserted_types, :types_for
+
     # Obtain the most appropriate label(s) for the subject's type(s).
     # Returns one or more (depending on the `unique` flag)
     # predicate-object pairs in order of preference.
@@ -1040,7 +1042,16 @@ module RDF::SAK
       ix ? ix.object : explicit ? false : true
     end
 
-    # Determine whether the subject is considered "published".
+
+    # Determine whether the subject is "published", which canonically
+    # translates to whether querying `?subject bibo:status
+    # bs:published .` returns something. If `circulated` is true, it
+    # will also consider `ci:circulated` as "published". If `retired`
+    # is false (the default), the presence of `ci:retired` will
+    # short-circuit the other tests and return false. When `retired`
+    # is true, the presence of `ci:retired` is ignored. If `indexed`
+    # is true, the presence of `?subject ci:indexed false .` will
+    # cause this to return false.
     #
     # @param subject [RDF::Resource] the subject to inspect
     # @param graph [RDF::Resource, Array<RDF::Resource>] named
@@ -1150,6 +1161,8 @@ module RDF::SAK
     # @param rdftype [RDF::URI, Array<RDF::URI>] the type(s) to check
     # @param graph [nil, RDF::URI, Array<RDF::URI>] named graph(s) to
     #  search, or nil for everything
+    # @param exclude [RDF::URI, Array<RDF::URI>] explicit RDF types to
+    #  exclude
     #
     # @yieldparam subject [RDF::Resource] the subject
     # @yieldparam type [RDF::Resource] the asserted type of the subject
@@ -1158,14 +1171,16 @@ module RDF::SAK
     #
     # @return [Array<RDF::Resource>] the subjects of the given type(s)
     #
-    def all_of_type rdftype, graph: nil, &block
+    def all_of_type rdftype, graph: nil, exclude: [], &block
       rdftype = assert_resources rdftype
       graph   = assert_resources graph
+      exclude = assert_resources exclude
       # get all the RDF types in the graph(s)
       out = []
 
       all_types(graph: graph).each do |t|
         next unless type_is? t, rdftype
+        next if !exclude.empty? and type_is? t, exclude
         out += graph.map do |g|
           query([nil, RDF.type, t, g]).subjects.map do |s|
             block ? block.call(s, t, g) : s
@@ -1724,7 +1739,12 @@ module RDF::SAK
 
 end
 
-# sneak this bad boy into RDF::Queryable
+# sneak this bad boy into RDF::Queryable where it belongs
 module RDF::Queryable
+  include RDF::SAK::GraphOps
+end
+
+# also put it in RDF::Repository as a downstream module has a `method_missing`
+class RDF::Repository
   include RDF::SAK::GraphOps
 end
