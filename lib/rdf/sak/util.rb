@@ -659,7 +659,7 @@ module RDF::SAK::Util
 
     # note we don't 
     while tmp = repo.query(
-      [nil, RDF.rest, node]).subjects.select(&:node?).sort.first
+      [nil, RDF.rest, subject]).subjects.select(&:node?).sort.first
       nodes << tmp
     end
 
