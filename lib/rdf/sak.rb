@@ -1545,7 +1545,7 @@ module RDF::SAK
             end
 
             hp ||= canonical_uri a
-            
+
             x['#author'].push({ '#uri' => hp.to_s }) if hp
           end
 
@@ -1561,12 +1561,12 @@ module RDF::SAK
         else
           titles[uu] = uu.to_s
         end
-        
+
         # get abstract
         if (d = label_for uu, desc: true)
           xml['#entry'].push({ '#summary' => d[1].to_s })
         end
-        
+
         entries[uu] = xml
       end
 
@@ -1636,13 +1636,20 @@ module RDF::SAK
         cu = canonical_uri doc, rdf: false
         next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
 
+        # don't map fragments
+        next if cu.fragment
+
         # skip external links obvs
-        next unless base.route_to(cu).relative?
+        # XXX THIS DOES NOT WORK
+        # next unless base.route_to(cu).relative?
+
+        # this should though
+        next unless cu.host == base.host
 
         # skip /uuid form
         cp = cu.request_uri.delete_prefix '/'
-        next if cu.host == base.host and tu.uuid == cp
-        
+        next if tu.uuid == cp
+
         rwm[cp] = tu.uuid
       end
 
@@ -1651,7 +1658,7 @@ module RDF::SAK
 
     # give me all UUIDs of all documents, filter for published if
     # applicable
-    # 
+    #
     # find the "best" (relative) URL for the UUID and map the pair
     # together
     def generate_uuid_redirect_map published: false, docs: nil
@@ -1659,7 +1666,7 @@ module RDF::SAK
 
       base = URI(@base.to_s)
 
-      # keys are /uuid, values are 
+      # keys are /uuid, values are ?
       out = {}
       docs.each do |doc|
         tu = URI(doc.to_s)

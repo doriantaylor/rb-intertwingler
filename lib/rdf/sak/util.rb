@@ -657,9 +657,12 @@ module RDF::SAK::Util
   def self.list_head repo, subject
     nodes = [subject]
 
-    # note we don't 
+    # note we don't (???)
     while tmp = repo.query(
-      [nil, RDF.rest, subject]).subjects.select(&:node?).sort.first
+      [nil, RDF.rest, nodes.last]).subjects.select(&:node?).sort.first
+      # just return the looping guy if there is a loop
+      return tmp if nodes.include? tmp
+      # otherwise append
       nodes << tmp
     end
 
@@ -1286,12 +1289,12 @@ module RDF::SAK::Util
   # true]` pair indicates the predicate should be evaluated in
   # reverse. Ordinary inverse and symmetric properties, as well as
   # predicates that map to lists, are handled automatically.
-  # 
+  #
   # @param repo      [RDF::Queryable]
   # @param subject   [RDF::Resource]
   # @param base      [RDF::URI, URI]
   # @param unique    [true, false] flag for unique return value
-  # @param rdf       [true, false] flag to specify RDF::URI vs URI 
+  # @param rdf       [true, false] flag to specify RDF::URI vs URI
   # @param slugs     [true, false] flag to include slugs
   # @param subj_only [true, false] flag to constrain candidates to subjects
   # @param fragment  [true, false] flag to include fragment URIs
@@ -1309,7 +1312,7 @@ module RDF::SAK::Util
 
     subject = canonical_uuid(repo, subject) || subject if to_uuid
 
-    warn "lol"
+    # warn "lol"
 
     # dealing with non-documents (hash vs slash)
     #
@@ -1335,7 +1338,7 @@ module RDF::SAK::Util
       frag_map: frag_map, documents: documents
 
     # Get the canonical uri for the host!
-    hosturi = canonical_uri(repo, host, base: base, slugs: true) if host 
+    hosturi = canonical_uri(repo, host, base: base, slugs: true) if host
 
     # warn hosturi
 
