@@ -312,6 +312,8 @@ module RDF::SAK
       datatype  = assert_resources datatype,  blank: false
       graph     = assert_resources graph
 
+      language = (language.respond_to?(:to_a) ? language.to_a : [language])
+
       # entail all the predicates
       predicate = property_set predicate if entail
 
@@ -404,7 +406,7 @@ module RDF::SAK
       only = coerce_node_spec only, rev: true
 
       predicate = assert_resources predicate, blank: false, empty: false
-      object    = assert_resource  object
+      object    = assert_term      object
       graph     = assert_resources graph
 
       predicate = property_set predicate if entail
@@ -507,7 +509,6 @@ module RDF::SAK
 
     # Obtain all and only the `rdf:type`s directly asserted on the subject.
     #
-    # @param repo [RDF::Queryable]
     # @param subject [RDF::Resource]
     # @param type [RDF::Term, :to_a] override searching for type(s) and
     #  just return what is passed in (XXX why did i do this?)
@@ -563,6 +564,8 @@ module RDF::SAK
       # get the full type stratum if we're entailing, otherwise fake
       # up a single layer for the loop below
       strata = entail ? type_strata(asserted) : [asserted]
+      strata << [RDF::RDFS.Resource] unless
+        strata.flatten.include? RDF::RDFS.Resource
 
       struct ||= struct_for subject, graph: graph, only: :literal
       seen  = Set[]
@@ -634,7 +637,7 @@ module RDF::SAK
 
       # try the author list;
       (contrib ? CONTRIB_LIST : AUTHOR_LIST).each do |pred|
-        o = repo.first_object([subject, pred, nil])
+        o = first_object([subject, pred, nil])
         next unless o
         # note this use of RDF::List is not particularly well-documented
         authors += RDF::List.new(subject: o, graph: self).to_a
@@ -642,7 +645,7 @@ module RDF::SAK
 
       # now try various permutations of the author/contributor predicate
       unsorted = (contrib ? CONTRIB : AUTHOR).reduce([]) do |u, pred|
-        u + repo.query([subject, pred, nil]).objects
+        u + query([subject, pred, nil]).objects
       end
 
       # XXX maybe pass in some parameters to this??
@@ -762,7 +765,7 @@ module RDF::SAK
     #
     # @return [Array<RDF::Literal>] the dates, if any
     #
-    def formats_for subject, predicate: RDF::Vocab::DC.format,
+    def formats_for subject, graph: nil, predicate: RDF::Vocab::DC.format,
         datatype: [RDF::XSD.token]
       objects_for(subject, predicate,
                   graph: graph, datatype: datatype, only: :literal) do |o|
@@ -1286,7 +1289,7 @@ module RDF::SAK
     #
     def type_is? type, reftype
       # coerce reftype to an array if it isn't already
-      reftype = assert_resource reftype, blank: false, vocab: true
+      reftype = assert_resources reftype, blank: false, vocab: true
       return if reftype.empty?
 
       # generate types, including optionally base classes if they aren't

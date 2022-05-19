@@ -5,8 +5,7 @@ require 'rdf'
 require 'uri'
 
 # do this so we don't have to indent all to hell
-module RDF::SAK::Util
-end
+module RDF::SAK::Util; end
 
 module RDF::SAK::Util::Clean
   private
@@ -21,17 +20,28 @@ module RDF::SAK::Util::Clean
       t.start_with?('_:') ? RDF::Node(t.delete_prefix '_:') : RDF::URI(t)
     },
     term:   -> t {
+      # noop if it's a vocab term
       return t if [RDF::Vocabulary::Term, RDF::Vocabulary].any? do |c|
         t.is_a? c
       end
 
+      # turn to uri or bnode if neither
       unless t.is_a? RDF::Resource
         t = t.to_s.strip
         t = t.start_with?('_:') ? RDF::Node(t.delete_prefix '_:') : RDF::URI(t)
       end
 
-      t.uri? ? (RDF::Vocabulary.find_term(t) rescue nil) ||
-        RDF::Vocabulary.find(t) || t : t
+      # try to resolve it to a vocab term
+      if t.uri?
+        t = (RDF::Vocabulary.find_term(t) rescue t) || t
+        if !t.is_a?(RDF::Vocabulary::Term) and tt = RDF::Vocabulary.find(t)
+          t = tt if tt.to_uri == t
+        end
+        # ugh this thing
+        t = RDF::RDFV if t == RDF
+      end
+
+      t
     },
   }
 
@@ -56,17 +66,18 @@ module RDF::SAK::Util::Clean
 
   # assertions and coercions
 
-
   # Coerce the argument into a resource, either {URI} or {RDF::URI}
   # (or {RDF::Node}). The type can be specified
   #
   # @param arg [#to_s, URI, RDF::URI, RDF::Node] the argument to
   #  coerce into a resource
   # @param as [:rdf, :uri, :term, false, nil] how to coerce the result
+  # @yieldparam arg [String] the argument for further processing
+  # @yieldreturn [#to_s] the preprocessed argument
   #
   # @return [RDF::URI, URI, RDF::Vocabulary::Term, RDF::Vocabulary, String]
   #
-  def coerce_resource arg, as: :rdf
+  def coerce_resource arg, as: :rdf, &block
     # noop if this is already done
     return arg if as and arg.is_a? URI_COERCION_TYPES[as]
 
@@ -78,13 +89,9 @@ module RDF::SAK::Util::Clean
     elsif arg.start_with?(?#) and
         uuid = UUID::NCName.from_ncname(arg, format: :urn)
       return URI_COERCIONS[as].call uuid
-    elsif @base
-      begin
-        arg = @base.merge preproc(arg)
-      rescue URI::InvalidURIError => e
-        warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
-        return
-      end
+    elsif block
+      arg = block.call arg
+      return if arg.nil?
     end
 
     URI_COERCIONS[as].call arg
@@ -107,6 +114,12 @@ module RDF::SAK::Util::Clean
     (arg.respond_to?(:to_a) ? arg.to_a : [arg]).map do |c|
       coerce_resource c, as: as
     end.compact
+  end
+
+  def assert_term term
+    raise ArgumentError, "term must be an RDF::Value" unless
+      term.is_a? RDF::Value
+    term
   end
 
   # Assert that the given argument is an {RDF::Resource}.
@@ -175,8 +188,21 @@ module RDF::SAK::Util::Clean
     terms
   end
 
-  # def assert_struct struct
-  # end
+  # Test that the hash is a struct
+  #
+  # @param struct [Hash] (we hope)
+  #
+  # @return [Hash] the struct
+  #
+  def assert_struct struct
+    if struct.is_a? Hash and struct.all? do |pair|
+        pair.first.is_a? RDF::URI and
+          pair.last.is_a? Array and pair.last.all? { |x| x.is_a? RDF::Value }
+      end
+      return struct
+    end
+    raise ArgumentError, "struct is not valid: #{struct.inspect}"
+  end
 
   # Find a subset of a struct for a given set of predicates,
   # optionally inverting to give the objects as keys and predicates as

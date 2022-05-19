@@ -12,23 +12,46 @@ module RDF::SAK
   class Resolver
     include RDF::SAK::Util::Clean
 
-    private
-
-    def sanitize_prefixes prefixes, nonnil = false
+    # Return a hash mapping a set of RDF prefixes to their vocabularies.
+    #
+    # @param prefixes [Hash, #to_h] the input prefixes
+    # @param nonnil [false, true] whether to remove the nil prefix
+    #
+    def self.sanitize_prefixes prefixes, nonnil = false
+      prefixes = {} unless prefixes
       raise ArgumentError, 'prefixes must be a hash' unless
         prefixes.is_a? Hash or prefixes.respond_to? :to_h
       prefixes = prefixes.to_h.map do |k, v|
-        k = k.to_s.to_sym if k
-        v = RDF::Vocabulary.find(v.to_s) || RDF::URI(v.to_s) if
-          v and not v.is_a?(RDF::URI)
-        [k, v]
-      end.to_h
+        k = k.to_s.to_sym unless k.nil?
+        if v
+          # 2022-05-18 XXX THIS IS A CLUSTERFUCK
+          #
+          # what we want is the official vocab if it exists, an
+          # on-the-fly vocab if it doesn't, and to use RDF::RDFV
+          # instead of RDF if it shows up
+          #
+          # we notice that bibo:status/ resolves to bibo: with .find
+          # so we need to check if the uri is the same before accepting it
+          v = RDF::URI(v) unless v.is_a? RDF::URI
+          v = if v.is_a?(Class) and v.ancestors.include?(RDF::Vocabulary)
+                v # arrrrghhh
+              elsif vv = RDF::Vocabulary.find(v)
+                vv.to_uri == v ? vv : Class.new(RDF::Vocabulary(v))
+              else
+                Class.new(RDF::Vocabulary(v))
+              end
+          v = RDF::RDFV if v == RDF
+          [k, v]
+        end
+      end.compact.to_h
 
-      prefixes.reject! { |k, v| k.nil? || v.nil? } if nonnil
+      prefixes.reject! { |k, _| k.nil? } if nonnil
       prefixes
     end
 
-    public
+    def sanitize_prefixes prefixes, nonnil = false
+      self.class.sanitize_prefixes prefixes, nonnil
+    end
 
     attr_reader :repo, :base, :aliases, :prefixes
 
@@ -99,7 +122,7 @@ module RDF::SAK
     #
     # @return [String] the preprocessed URI string
     #
-    def preproc uri, extra = ''
+    def self.preproc uri, extra = ''
       # take care of malformed escapes
       uri = uri.to_s.b.gsub(/%(?![0-9A-Fa-f]{2})/n, '%25')
 
@@ -121,6 +144,10 @@ module RDF::SAK
       out.gsub(/(%[0-9A-Fa-f]{2})/, &:upcase)
     end
 
+    def preproc uri, extra = ''
+      self.class.preproc uri, extra
+    end
+
     alias_method :preprocess, :preproc
 
     # Given a URI as input, split any path parameters out of the last
@@ -130,7 +157,7 @@ module RDF::SAK
     # @param only [false, true] whether to only return the parameters
     # @return [Array] (See description)
     #
-    def split_pp uri, only: false
+    def self.split_pp uri, only: false
       begin
         u = (uri.is_a?(URI) ? uri : URI(preproc uri.to_s)).normalize
 
@@ -220,6 +247,30 @@ module RDF::SAK
 
     public
 
+    def self.coerce_resource arg, as: :rdf, &block
+      RDF::SAK::Util::Clean.coerce_resource arg, as: as, &block
+    end
+
+    # Coerce the argument into a resource, either {URI} or {RDF::URI}
+    # (or {RDF::Node}). The type can be specified
+    #
+    # @param arg [#to_s, URI, RDF::URI, RDF::Node] the argument to
+    #  coerce into a resource
+    # @param as [:rdf, :uri, :term, false, nil] how to coerce the result
+    #
+    # @return [RDF::URI, URI, RDF::Vocabulary::Term, RDF::Vocabulary, String]
+    #
+    def coerce_resource arg, as: :rdf
+      self.class.coerce_resource arg, as: as do |arg|
+        begin
+          @base ? @base.merge(preproc arg.to_s.strip) : arg
+        rescue URI::InvalidURIError => e
+          warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
+          nil
+        end
+      end
+    end
+
     # Return the UUID(s) associated with the subject. May return
     # `nil` or be a no-op, if specified.
     #
@@ -240,7 +291,7 @@ module RDF::SAK
     def uuid_for uri, scalar: true, verify: true, as: :rdf,
         published: false, circulated: false, noop: false
       # this ensures the input is an absolute RDF::URI
-      orig = uri = coerce_resource uri, @base
+      orig = uri = coerce_resource uri
 
       # do an initial check here to determine if we already have a UUID
       unless uri.is_a? RDF::Node
@@ -334,7 +385,7 @@ module RDF::SAK
         end.compact.to_h
 
         # this is a funny way to say quit on the first match
-        nnbreak unless candidates.empty?
+        break unless candidates.empty?
       end
 
       # after we have checked the URI(s) verbatim against the graph,
@@ -463,7 +514,11 @@ module RDF::SAK
              end
 
       # now we do the round trip if called for
-      term = roundtrip ? uuid_for(uuid || term) : uuid
+      if tmp = roundtrip ? uuid_for(uuid || term) : uuid
+        term = tmp
+      else
+        return term
+      end
 
       # give us the host uri if available
       hosturi = if uuid
@@ -486,7 +541,7 @@ module RDF::SAK
              end
 
       # generate a comparator proc
-      cmp = @repo.cmp_uri prioritize: [@base] + @aliases
+      cmp = @repo.cmp_resource prioritize: [@base] + @aliases
 
       # obtain a sorted list of primary URIs (those identified by
       # ci:canonical and ci:canonical-slug)
@@ -498,13 +553,13 @@ module RDF::SAK
       end
 
       secondary = []
-      if primary.empty? or not unique
-        secondary = @repo.objects_for(subject,
+      if primary.empty? or not scalar
+        secondary = @repo.objects_for(term,
           [RDF::OWL.sameAs, RDF::SAK::CI['alias-for']],
           entail: false, only: :resource).sort(&cmp)
-        if subject.uri? and (slugs or host)
+        if term.uri? and (slugs or host)
           secondary += @repo.objects_for(
-            subject, RDF::SAK::CI.slug, entail: false,
+            term, RDF::SAK::CI.slug, entail: false,
             only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)
         end
       end
@@ -528,13 +583,60 @@ module RDF::SAK
       out = (primary + secondary).uniq
 
       # eliminate fragment URIs unless explicitly allowed
-      unless fragment
+      unless fragments
         tmp = out.reject(&:fragment)
         out = tmp unless tmp.empty?
       end
 
       # turn these into URIs if the thing says so
       out.map! { |u| URI(preproc u.to_s) } if as == :uri
+
+      scalar ? out.first : out
+    end
+
+    # XXX 2022-05-17 NOTE THAT RDF::SAK::Util::resolve_curie is more
+    # complex than this; it assumes you can hand it stuff from
+    # existing markup, so this is kinda the lite version
+
+
+    # Resolve a CURIE to a full URI using the embedded prefix map,
+    # with optional overrides. Multiple values, including CURIE
+    # strings containing spaces, will be split and expanded out
+    # individually. Safe CURIEs (as in encased in square brackets) are
+    # handled appropriately.
+    #
+    # @param curie [String, Array<String>] one or more CURIEs
+    # @param as [:rdf, :uri, :term, false, nil] coercion types
+    # @param scalar [true, false] whether to return a single value
+    # @param base [URI, RDF::URI] overriding base URI
+    # @param prefixes [Hash{Symbol, nil => RDF::Vocabulary}]
+    #  overriding prefix map, if needed
+    #
+    # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil]
+    #
+    def self.resolve_curie curie,
+        as: :term, scalar: true, base: nil, prefixes: {}, noop: false
+      prefixes = { rdf: RDF::RDFV }.merge(sanitize_prefixes prefixes)
+
+      out = (curie.respond_to?(:to_a) ? curie.to_a : [curie]).map do |c|
+        RDF::SAK::Util::Clean.normalize_space(c).split
+      end.flatten.compact.map do |c|
+        prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
+        prefix = prefix.to_sym if prefix
+        tmp = if v = prefixes[prefix]
+                # note that we will need another resolve_curie for
+                # dealing with markup
+                case v
+                when RDF::Vocabulary then v[slug]
+                when RDF::URI then v + slug
+                else RDF::URI(v.to_s + slug)
+                end
+              else
+                noop ? c : nil
+              end
+
+        tmp ? coerce_resource(tmp, as: as) : tmp
+      end.compact
 
       scalar ? out.first : out
     end
@@ -561,21 +663,8 @@ module RDF::SAK
       # smush together any overriding prefixes
       prefixes = @prefixes.merge(sanitize_prefixes prefixes)
 
-      out = (curie.respond_to?(:to_a) ? curie.to_a : [curie]).map do |c|
-        RDF::SAK::Util.normalize_space(c).split
-      end.flatten.compact.map do |c|
-        prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
-        prefix = prefix.to_sym if prefix
-        tmp = if prefixes[prefix]
-                (((term || prefix) ? prefixes[prefix] : base) + slug).to_s
-              else
-                noop ? c : nil
-              end
-
-        tmp ? coerce_resource(tmp, as: as) : tmp
-      end
-
-      scalar ? out.first : out
+      self.class.resolve_curie curie, as: as, scalar: scalar,
+        base: base, prefixes: prefixes
     end
 
     # Abbreviate one or more URIs into one or more CURIEs if we
@@ -593,13 +682,14 @@ module RDF::SAK
     #
     # @return [String, Array<String>, nil] the CURIE(s) in question
     #
-    def abbreviate term, as: :rdf, scalar: true,
-        noop: true, sort: true, prefixes: {}
+    def abbreviate term, scalar: true,
+        noop: true, sort: true, prefixes: {}, vocab: nil
 
       term = coerce_resources term
       as   = assert_uri_coercion as
 
       # this returns a duplicate that we can mess with
+      prefixes[nil] = vocab if vocab
       prefixes = @prefixes.merge(sanitize_prefixes prefixes)
 
       rev = prefixes.invert
@@ -609,8 +699,11 @@ module RDF::SAK
         slug = nil # we want this value to be nil if no match and !noop
 
         # try matching each prefix URI from longest to shortest
-        rev.sort { |a, b| b.first.length <=> a.first.length }.each do |uri, pfx|
-          slug = t.delete_prefix uri.to_s
+        rev.sort do |a, b|
+          b.first.to_uri.to_s.length <=> a.first.to_uri.to_s.length
+        end.each do |vocab, pfx|
+          slug = t.delete_prefix vocab.to_s
+          # warn [slug, pfx].inspect
           # this is saying the URI either doesn't match or abbreviates to ""
           if slug == t or pfx.nil? && slug.empty?
             slug = nil
@@ -624,7 +717,7 @@ module RDF::SAK
         # at this point slug is either an abbreviated term or nil, so:
         slug ||= t if noop
 
-        coerce_resource(slug, as: as)
+        slug
       end
 
       # only sort if noop is set
@@ -678,7 +771,7 @@ module RDF::SAK
     #
     # @return [URI, RDF::URI, nil] the host document, if any
     #
-    def host_for subject, unique: true, as: :rdf, published: false
+    def host_for subject, scalar: true, as: :rdf, published: false
       subject = uuid_for subject, noop: true
     end
 

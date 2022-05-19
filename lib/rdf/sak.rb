@@ -193,20 +193,13 @@ module RDF::SAK
       if config[:graph]
         g = config[:graph]
         g = [g] unless g.is_a? Array
-        config[:graph] = g.map { |x| Pathname.new(x).expand_path root }
+        config[:graph] = g.map { |x| Pathname(x).expand_path root }
       end
 
       # deal with prefix map
-      if config[:prefixes]
-        config[:prefixes] = config[:prefixes].transform_values do |p|
-          # we have to wrap this in case it fails
-          begin
-            RDF::Vocabulary.find_term(p) || RDF::URI(p)
-          rescue
-            RDF::URI(p)
-          end
-        end
-      end
+      config[:prefixes] =
+        RDF::SAK::Resolver.sanitize_prefixes config[:prefixes] if
+        config[:prefixes]
 
       # XXX 2022-03-17 gotta get rid of or otherwise resolve all these curie
       # resolution thingies (or ultimately just come up with a better
@@ -215,12 +208,12 @@ module RDF::SAK
       # deal with duplicate map
       pfx = config[:prefixes] || {}
       if dups = config[:duplicate]
-        base = URI(uri_pp config[:base])
+        base = RDF::SAK::Resolver.coerce_resource config[:base], as: :uri
         if dups.is_a? Hash
           config[:duplicate] = dups.map do |ruri, preds|
             preds = [preds] unless preds.is_a? Array
             preds.map! do |p|
-              resolve_curie p, prefixes: pfx, scalar: true, coerce: :rdf
+              RDF::SAK::Resolver.resolve_curie p, prefixes: pfx
             end
             [RDF::URI((base + ruri.to_s).to_s), Set.new(preds)]
           end.to_h
@@ -235,24 +228,25 @@ module RDF::SAK
 
       # "document" maps, ie things that are never fragments
       config[:documents] = [] unless config[:documents].is_a? Array
-      # config[:documents].map! do |d|
-      #   resolve_curie d.to_s, prefixes: pfx, scalar: true, coerce: :rdf
-      # end.compact
+      config[:documents].map! do |d|
+        RDF::SAK::Resolver.resolve_curie d, prefixes: pfx
+      end.compact
       config[:documents] << RDF::Vocab::FOAF.Document if
         config[:documents].empty?
 
       # fragment maps
       config[:fragment] = {} unless config[:fragment].is_a? Hash
-      # config[:fragment] = config[:fragment].map do |k, v|
-      #   k = resolve_curie k.to_s, prefixes: pfx, scalar: true, coerce: :rdf
-      #   v = v.respond_to?(:to_a) ? v.to_a : [v]
-      #   v.map! do |x|
-      #     x = x.to_s.split(/^\^+/).reverse
-      #     [resolve_curie(x.first, prefixes: pfx,
-      #       scalar: true, coerce: :rdf), !!x[1]]
-      #   end
-      #   [k, v]
-      # end.to_h
+      config[:fragment] = config[:fragment].map do |k, v|
+        k = RDF::SAK::Resolver.resolve_curie k.to_s, prefixes: pfx
+        # warn "yo #{k.inspect}"
+        v = v.respond_to?(:to_a) ? v.to_a : [v]
+        v = v.reduce({}) do |a, x|
+          x = x.to_s.split(/^\^+/).reverse
+          a[RDF::SAK::Resolver.resolve_curie(x.first, prefixes: pfx)] = !!x[1]
+          a
+        end
+        [k, v]
+      end.to_h
 
       config
     end
@@ -283,14 +277,6 @@ module RDF::SAK
       terms.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
     end
 
-    def coerce_resource arg
-      super arg, @base
-    end
-
-    def coerce_uuid_urn arg
-      super arg, @base
-    end
-
     public
 
     attr_reader :config, :graph, :resolver
@@ -314,9 +300,13 @@ module RDF::SAK
       graph ||= @config[:graph] if @config[:graph]
       base  ||= @config[:base]  if @config[:base]
 
+      # warn base.inspect
+
       @graph    = coerce_graph graph, type: type
       @resolver = RDF::SAK::Resolver.new @graph, base,
         prefixes: @config[:prefixes]
+
+      # warn @config[:fragment]
 
       @graph.document_types = @config[:documents]
       @graph.fragment_spec  = @config[:fragment]
@@ -398,7 +388,8 @@ module RDF::SAK
     # @return [Hash]
     #
     def struct_for subject, **args
-      @graph.struct_for subject, **args
+      # note that this is the resolver one not the repo one
+      @resolver.struct_for subject, **args
     end
 
     # Obtain everything in the graph that is an `rdf:type` of something.
@@ -682,7 +673,7 @@ module RDF::SAK
       end
 
       # make sure these are actually URI objects not RDF::URI
-      uris = uris.transform_values { |v| URI(uri_pp v.to_s) }
+      uris = uris.transform_values { |v| URI(@resolver.preproc v.to_s) }
       uri  = uris[subject] || canonical_uri(subject, rdf: false, slugs: true)
 
       ignore = ignore.to_set
@@ -698,7 +689,7 @@ module RDF::SAK
 
           unless uris[k]
             cu = canonical_uri k, slugs: true
-            uris[k] = URI(uri_pp(cu || k.to_s))
+            uris[k] = URI(@resolver.preproc(cu || k.to_s))
           end
 
           # munge the url and make the tag
@@ -787,7 +778,7 @@ module RDF::SAK
 
     def generate_backlinks subject, published: true, ignore: nil
       uri = canonical_uri(
-        subject, rdf: false, slugs: true) || URI(uri_pp subject)
+        subject, rdf: false, slugs: true) || URI(@resolver.preproc subject)
 
       ignore ||= Set.new
       raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
@@ -804,9 +795,9 @@ module RDF::SAK
         labels[pr] ||= label_for pr
       end
 
-      # prune out 
+      # prune out
       nodes.select! { |k, _| published? k } if published
-      
+
       return if nodes.empty?
 
       li = nodes.sort do |a, b|
@@ -816,7 +807,7 @@ module RDF::SAK
         lab = labels[rsrc] || [nil, rsrc]
         lp  = abbreviate(lab[0]) if lab[0]
         ty  = abbreviate(types[rsrc]) if types[rsrc]
-        
+
         { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
           href: uri.route_to(cu), typeof: ty, rev: abbreviate(preds) }] => :li }
       end.compact
@@ -1305,7 +1296,7 @@ module RDF::SAK
     end
 
     def indexed? subject
-      subject = coerce_resource subject
+      subject = @resolver.coerce_resource subject
       indexed = objects_for subject, RDF::SAK::CI.indexed,
         only: :literal, datatype: RDF::XSD.boolean
       # assume the subject is indexed but we are looking for explicit
@@ -1343,7 +1334,7 @@ module RDF::SAK
 
         # skip unless the entry is indexed
         next unless indexed? uu
-        
+
         # get audiences
         audy = audiences_for uu, proximate: true
         audn = audiences_for uu, proximate: true, invert: true
@@ -1513,11 +1504,15 @@ module RDF::SAK
         next if cu.fragment
 
         # skip external links obvs
-        next unless base.route_to(cu).relative?
+        # XXX THIS DOES NOT WORK
+        # next unless base.route_to(cu).relative?
+
+        # this should though
+        next unless cu.host == base.host
 
         # skip /uuid form
         cp = cu.request_uri.delete_prefix '/'
-        next if cu.host == base.host and tu.uuid == cp
+        next if tu.uuid == cp
 
         rwm[cp] = tu.uuid
       end
@@ -2000,7 +1995,7 @@ module RDF::SAK
           lp, lo = (label_for(k, candidates: st) || [nil, k])
 
           if %w[http https].include? uri.scheme
-            span = if lp 
+            span = if lp
                      x = { [lo.to_s] => :span, property: abbreviate(lp) }
                      x[:datatype]  = lo.datatype if lo.datatype?
                      x['xml:lang'] = lo.language if lo.language?
@@ -2415,13 +2410,12 @@ module RDF::SAK
     # Locate the file in the source directory associated with the given URI.
     #
     # @param [RDF::URI, URI, :to_s] the URI requested
-    # 
+    #
     # @return [Pathname] of the corresponding file or nil if no file was found.
     #
     def locate uri
-      uri = coerce_resource uri
-
-      base = URI(@base.to_s)
+      uri  = @resolver.coerce_resource uri
+      base = @resolver.base
 
       tu = URI(uri) # copy of uri for testing content
       unless tu.scheme == 'urn' and tu.nid == 'uuid'
@@ -2435,22 +2429,24 @@ module RDF::SAK
 
       # try all canonical URIs
       (canonical_uri uri, unique: false, slugs: true).each do |u|
+        # warn u.inspect
         u = URI(u.to_s)
+        # warn "#{u.hostname} #{base.hostname}".inspect
         next unless u.hostname == base.hostname
         p = CGI.unescape u.path[/^\/*(.*?)$/, 1]
         candidates.push(@config[:source] + p)
       end
 
-      # warn candidates
+      # warn "candidates: #{candidates.inspect}"
 
       files = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).reject do |x|
-        x.directory? or RDF::SAK::MimeMagic.by_path(x).to_s !~
-          /.*(?:markdown|(?:x?ht|x)ml).*/i
+        x.directory? or /.*(?:markdown|(?:x?ht|x)ml).*/i !~
+          RDF::SAK::MimeMagic.by_path(x).to_s
       end.uniq
 
-      #warn files
+      # warn files.inspect
 
       # XXX implement negotiation algorithm
       return files.first
@@ -2537,7 +2533,7 @@ module RDF::SAK
     # @return [Pathname]
     #
     def target_for uri, published: false
-      uri = coerce_resource uri
+      uri = @resolver.coerce_resource uri
       uri = canonical_uuid uri
       target = @config[published?(uri) && published ? :target : :private]
 
@@ -3084,7 +3080,6 @@ module RDF::SAK
               abs = abs.dup
               abs.path = ([abs.path] + pp).join(';')
             end
-            
 
             elem[attr] = @uri.host == abs.host ?
               @uri.route_to(abs.to_s).to_s : abs.to_s
@@ -3102,7 +3097,7 @@ module RDF::SAK
       end
 
       OBJS = [:href, :src].freeze
-      
+
       # ancestor node always with (@property and not @content) and
       # not @resource|@href|@src unless @rel|@rev
       LITXP = ['(ancestor::*[@property][not(@content)]',
@@ -3267,7 +3262,8 @@ module RDF::SAK
             bodylinks[urev[ru] || ru] = true
 
             if rel = resources[urev[ru] || ru]
-              elem['rel'] = (@context.abbreviate rel, vocab: vocab).join ' '
+              elem['rel'] =
+                (@context.abbreviate rel, vocab: vocab, scalar: false).join ' '
             end
 
             label = labels[urev[ru] || ru]
@@ -3375,12 +3371,12 @@ module RDF::SAK
           types.empty?
 
         # prepare only the prefixes we need to resolve the data we need
-        rsc = @context.abbreviate(
+        rsc = @context.resolver.abbreviate(
           (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
-          noop: false).map do |x|
+          noop: false, scalar: false).map do |x|
           next if x.nil?
-          x.split(?:)[0].to_sym
-        end.select { |x| not x.nil? }.to_set
+          x.split(?:).first.to_sym
+        end.compact.to_set
 
         pfx = @context.prefixes.select do |k, _|
           rsc.include? k
