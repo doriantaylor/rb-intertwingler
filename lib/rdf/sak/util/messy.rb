@@ -109,7 +109,7 @@ module RDF::SAK::Util::Messy
     dehydrate: './/html:a[count(*)=1][html:dfn|html:abbr|html:span]',
     rehydrate: (
       %w[abbr[not(ancestor::html:dfn)]] + (INLINES - ['abbr'])).map { |e|
-        ".//html:#{e}[not(parent::html:a)]" }.join(?|).freeze,
+        ".//html:#{e}[not(ancestor::html:a)]" }.join(?|).freeze,
     htmllinks: (%w[*[not(self::html:base)][@href]/@href
       *[@src]/@src object[@data]/@data *[@srcset]/@srcset
       form[@action]/@action].map { |e|
@@ -2407,6 +2407,9 @@ module RDF::SAK::Util::Messy
     end
 
     node.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
+      # XXX figure out why this next line is necessary
+      next if e.xpath('count(ancestor::html:a[@href][1]) != 0', XPATHNS)
+
       lang = e.xpath(XPATH[:lang]).to_s.strip.downcase
       # dt   = e['datatype'] # XXX no datatype rn
       text = (e['content'] || e.content).strip

@@ -335,7 +335,7 @@ module RDF::SAK
       # one URI).
       uris = if uri.respond_to? :path and uri.path.start_with? ?/
                # split off path parameters
-               uu, *pp = split_pp uri
+               uu, *pp = self.class.split_pp uri
                if pp.empty?
                  [uri] # no path parameters; this is a noop
                else
@@ -381,6 +381,8 @@ module RDF::SAK
             # we xor this because BITS[true] ^ 1 == 0, and 0 < 1
             rank: BITS[f.include? RDF::SAK::CI.canonical] ^ 1,
             published: @repo.published?(s, circulated: circulated),
+            ctime: @repo.dates_for(s,
+              predicate: RDF::Vocab::DC.created).last || DateTime.new,
             mtime: @repo.dates_for(s).last || DateTime.new }]
         end.compact.to_h
 
@@ -394,7 +396,7 @@ module RDF::SAK
       hosts = if uri.uri? and uri.fragment and not uri.fragment.empty?
                 tmp = uri.dup
                 tmp.fragment = nil
-                h = canonical_uuid tmp, scalar: false, published: published,
+                h = uuid_for tmp, scalar: false, published: published,
                   circulated: circulated
                 # a fragment URI for which the non-fragment part does
                 # not resolve to a UUID should likewise not resolve
@@ -415,6 +417,8 @@ module RDF::SAK
             entry = candidates[s] ||= {
               rank: 0b11,
               published: @repo.published?(s, circulated: circulated),
+              ctime: @repo.dates_for(s,
+                predicate: RDF::Vocab::DC.created).last || DateTime.new,
               mtime: @repo.dates_for(s).last || DateTime.new }
             # reset the rank if it is a lower number (higher rank)
             rank  = (BITS[exact] << 1 | BITS[f.include? sl.first]) ^ 0b11
@@ -442,12 +446,16 @@ module RDF::SAK
           reps.each do |r|
             c = candidates[r] ||= {
               rank: v[:rank], published: @repo.published?(r),
+              ctime: @repo.dates_for(r,
+                predicate: RDF::Vocab::DC.created).last ||
+                v[:ctime] || DateTime.new,
               mtime: @repo.dates_for(r).last || v[:mtime] || DateTime.new }
 
             # adjust rank and modification time of the replacement to
             # that of the replaced if they are more favourable
             c[:rank]  = v[:rank]  if v[:rank]  < c[:rank]
             c[:mtime] = v[:mtime] if v[:mtime] > c[:mtime]
+            c[:ctime] = v[:ctime] if v[:ctime] > c[:ctime]
           end
         end
       end
@@ -466,6 +474,7 @@ module RDF::SAK
         c = published ? BITS[bs[:published]] <=> BITS[as[:published]] : 0
         c = as[:rank]  <=> bs[:rank]  if c == 0
         c = bs[:mtime] <=> as[:mtime] if c == 0
+        c = bs[:ctime] <=> as[:ctime] if c == 0
 
         # finally compare lexically if none of the others resolve
         c == 0 ? a.first <=> b.first : c
@@ -746,13 +755,14 @@ module RDF::SAK
       terms = smush_struct terms, uris: true
 
       # now we abbreviate all the resources
-      pfx = abbreviate(
-        terms.to_a, noop: false, sort: false).uniq.compact.map do |p|
-        p.split(?:).first.to_sym
+      pfx = abbreviate(terms.to_a, noop: false,
+                       sort: false, scalar: false).compact.map do |c|
+        c = /^(?:([^:]+):)?/.match(c).captures.first
+        c ? c.to_sym : c
       end.uniq.to_set
 
       # now we return the subset
-      @prefixes.select { |k, _| pfx.include? k.to_sym }
+      @prefixes.select { |k, _| pfx.include? k }
     end
 
     # XXX 2022-03-16 A BUNCH OF THIS STUFF WE SHOULD IGNORE I THINK

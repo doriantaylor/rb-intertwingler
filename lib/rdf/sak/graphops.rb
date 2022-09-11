@@ -774,6 +774,43 @@ module RDF::SAK
       end.compact.sort.uniq
     end
 
+    # Return a Hash containing common values useful for ranking
+    # subjects. Includes whether the
+    #
+    # @param subject [RDF::Resource] a subject node
+    # @param graph [nil, RDF::Resource] an optional graph identifier
+    # @param date [nil,Date,DateTime] a default date
+    # @param ints [false, true] whether to represent booleans as integers
+    #
+    # @return [Hash] a data structure for ranking
+    #
+    def ranking_data_for subject, graph: nil, date: nil, ints: false
+      date ||= DateTime.new
+
+      out = {
+       published:  published?(subject, graph: graph, circulated: false),
+       circulated: published?(subject, graph: graph, circulated: true),
+       replaced:   replaced?(subject, graph: graph),
+       retired:    retired?(subject, graph: graph),
+       ctime: dates_for(subject, graph: graph,
+         predicate: RDF::Vocab::DC.created).last || date,
+       mtime: dates_for(subject, graph: graph).last || date,
+      }
+
+      # convert to integers lol
+      if ints
+        # XXX H88888888 >:|
+        bits = { false => 0, true => 1 }
+
+        %i[published circulated replaced retired].each do |k|
+          # love me some mutable data structures
+          out[k] = bits[out[k]]
+        end
+      end
+
+      out
+    end
+
     private
 
     # the fragment spec determines the kinds of types which are
@@ -952,7 +989,37 @@ module RDF::SAK
       host
     end
 
+    def hcache
+      @hcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    def tscache
+      @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    def tdcache
+      @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
     public
+
+    def cache_limit
+      @cache_limit ||= Float::INFINITY
+    end
+
+    def cache_limit= limit
+      hcache.capacity  = limit
+      tscache.capacity = limit
+      tdcache.capacity = limit
+      @cache_limit = limit
+    end
+
+    def flush_cache
+      hcache.clear
+      tscache.clear
+      tdcache.clear
+      nil
+    end
 
     # Retrieve a host document for a suspected document fragment, if
     # it exists; null otherwise (or itself if `:noop` is true).
@@ -975,7 +1042,13 @@ module RDF::SAK
                    else false
                    end
 
-      host = host_for_internal subject, graph: graph,
+      key = [subject, graph.sort, published, noop]
+
+      @hcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+
+      return @hcache[key] if @hcache.key? key
+
+      @hcache[key] = host = host_for_internal subject, graph: graph,
         published: published, circulated: circulated
 
       # return the noop
@@ -1012,6 +1085,30 @@ module RDF::SAK
     #
     def document_types= types
       @documents = expand_documents types
+    end
+
+    # Return all subjects in the graph that conform to the configured
+    # notion of a "document".
+    #
+    # @param internal [true, false] whether to include internal documents
+    # @param external [true, false] whether to include external documents
+    # @param published [true, false] whether to limit to published documents
+    # @param fragments [false, true] whether to include document fragments
+    #
+    # @return [Array] the documents
+    #
+    def all_documents internal: true, external: true,
+        published: false, fragments: false
+      docs = all_of_type(document_types)
+      docs.reject! do |d|
+        d.to_s.downcase.start_with? 'urn:uuid:'
+      end unless internal
+      docs.reject! do |d|
+        not d.to_s.downcase.start_with? 'urn:uuid:'
+      end unless external
+      docs.select! { |d| published? d } if published
+      docs.reject! { |d| fragment?(d) } unless fragments
+      docs
     end
 
     # Determine whether a resource is considered to be indexed, which
@@ -1099,6 +1196,40 @@ module RDF::SAK
 
       # if this isn't empty then we're "published"
       !(candidates & test).empty?
+    end
+
+    # Returns whether the subject has a `bibo:status` of `ci:retired`.
+    #
+    # @param subject [RDF::Resource] the subject to inspect
+    # @param graph [RDF::Resource, Array<RDF::Resource>] named
+    #  graph(s), if any
+    #
+    # @return [false, true] whether the subject is retired
+    #
+    def retired? subject, graph: nil
+      objects_for(subject, RDF::Vocab::BIBO.status,
+        graph: graph, only: :resource).include?(RDF::SAK::CI.retired)
+    end
+
+    # Returns whether the subject is dct:isReplacedBy some other node.
+    #
+    # @param subject [RDF::Resource] the subject to inspect
+    # @param graph [RDF::Resource, Array<RDF::Resource>] named
+    #  graph(s), if any
+    # @param published [false, true] replacements must be published
+    #
+    # @return [false, true] whether the subject is retired
+    #
+    def replaced? subject, graph: nil, published: false
+      # get proximate replacement minus self
+      candidates = subjects_for(RDF::Vocab::DC.replaces, subject,
+        graph: graph, only: :resource) - [subject]
+
+      # remove the unpublished ones
+      candidates.select! { |c| published? c } if published
+
+      # if empty then false
+      !candidates.empty?
     end
 
     # Obtain the head of a list for a given list subject. Note that
@@ -1212,6 +1343,15 @@ module RDF::SAK
 
       return [] if rdftype.empty?
 
+      cache = if descend
+                @tdcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+              else
+                @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+              end
+
+      # this may be called as a class method
+      rdftype.each { |t| return cache[t] if cache.key? t } if cache
+
       # essentially what we want to do is construct a layer of
       # asserted classes and their inferred equivalents, then probe
       # the classes in the first layer for subClassOf assertions,
@@ -1261,7 +1401,12 @@ module RDF::SAK
       end
 
       # voila
-      descend ? strata.flatten : strata
+      out = descend ? strata.flatten : strata
+
+      # this may be called as a class method
+      rdftype.each { |t| cache[t] = out } if cache
+
+      out
     end
 
     # Obtain everything that is an `owl:equivalentClass` or
@@ -1478,7 +1623,7 @@ module RDF::SAK
                            o[:rank] = bpref[false]
                            # get scheme and rank; the fallback number
                            # only needs to be bigger than matches
-                           o[:scheme] = s = x.scheme.downcase.to_sym
+                           o[:scheme] = s = x.scheme.downcase.to_s.to_sym
                            o[:srank]  = SCHEME_RANK.fetch s, SCHEME_RANK.size
 
                            # get host into an ideally comparable form
@@ -1511,6 +1656,8 @@ module RDF::SAK
 
         # that's the setup, now for the comparison
 
+        # warn [a, b].inspect
+
         # this will put all URIs either before or after all blanks
         c = a[:rank] <=> b[:rank]
         return c if c != 0
@@ -1538,7 +1685,8 @@ module RDF::SAK
           end
         end
 
-        c == 0 ? a[:id] <=> b[:id] : c
+        # XXX c.to_i because the <=> here can return nil which is a nono
+        c.to_i == 0 ? a[:id].to_s <=> b[:id].to_s : c.to_i
       end
     end
 
@@ -1723,7 +1871,7 @@ module RDF::SAK
   class Resource
     attr_reader :repository, :resolver
 
-    def initialize repository, subject, resolver: nil
+    def initialize repository, subject, resolver: nil, cache: 1000
       @me = assert_resource subject
 
       @repository = repository

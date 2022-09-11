@@ -21,7 +21,7 @@ class RDF::SAK::Document
     (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
   OBJS = [:href, :src].freeze
-      
+
   # ancestor node always with (@property and not @content) and
   # not @resource|@href|@src unless @rel|@rev
   LITXP = ['(ancestor::*[@property][not(@content)]',
@@ -32,7 +32,7 @@ class RDF::SAK::Document
 
   attr_reader :repo, :subject, :doc, :base, :prefixes
 
-  # Initialize a document context. 
+  # Initialize a document context.
   def initialize repo, doc, subject: nil, base: nil, resolve: nil,
       prefixes: {}, transform: nil, scache: {}, ucache: {}
     # coerce the document
@@ -134,7 +134,7 @@ class RDF::SAK::Document
         '(/html:html/html:head/html:base[@href])[1]/@href', XPATHNS
       ).to_s.strip
       b = URI(b)
-      
+
       base = b if b.absolute?
     elsif b = doc.root.at_xpath('ancestor-or-self::*[@xml:base][1]/@xml:base')
       b = URI(b.to_s.strip)
@@ -247,7 +247,7 @@ class RDF::SAK::Document
     pfx = node.namespace_declarations.filter(&:prefix).map do |n|
       [n.prefix.to_sym, n.href]
     end.to_h
-    
+
     # then add @prefix overtop of the namespaces
     if node[:prefix]
       x = node[:prefix].strip.split(/\s+/)
@@ -261,7 +261,7 @@ class RDF::SAK::Document
 
     # since we're ascending the tree, input takes precedence
     prefixes = pfx.merge prefixes
-      
+
     if node.parent and node.parent.element?
       prefixes_for(node.parent, prefixes)
     else
@@ -284,8 +284,8 @@ class RDF::SAK::Document
              when nil then Set.new
              when Proc then ignore
              when -> x { x.respond_to? :to_set } then ignore = ignore.to_set
-             else 
-               raise 'ignore must be either a proc or amenable to a set' 
+             else
+               raise 'ignore must be either a proc or amenable to a set'
              end
     nodes  = {}
     labels = {}
@@ -326,7 +326,7 @@ class RDF::SAK::Document
 
     # prune out unpublished
     nodes.select! { |k, _| published? k } if published
-      
+
     return if nodes.empty?
 
     if terse
@@ -347,7 +347,7 @@ class RDF::SAK::Document
         lab = labels[rsrc] || [nil, rsrc]
         lp  = abbreviate(lab.first) if lab.first
         ty  = abbreviate(types[rsrc]) if types[rsrc]
-        
+
         { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a, typeof: ty,
           href: uri.route_to(cu), rev: abbreviate(preds) }] => :li }
       end.compact
@@ -452,7 +452,7 @@ class RDF::SAK::Document
           resources[o].add p
 
           # add to type
-          types.add o if p == RDF::RDFV.type 
+          types.add o if p == RDF::RDFV.type
         end
       end
     end
@@ -639,8 +639,6 @@ class RDF::SAK::Document
     body[:typeof] = abbreviate(types.to_a, vocab: XHV) unless
       types.empty?
 
-    
-
     # prepare only the prefixes we need to resolve the data we need
     rsc = abbreviate(
       (struct.keys + resources.keys + datatypes.to_a +
@@ -683,7 +681,5 @@ class RDF::SAK::Document
 
     doc
   end
-
-  
 
 end

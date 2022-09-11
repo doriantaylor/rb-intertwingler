@@ -50,10 +50,13 @@ Gem::Specification.new do |spec|
 
   # stuff for docstats
   spec.add_runtime_dependency 'descriptive_statistics', '>= 2.5.1'
+  spec.add_runtime_dependency 'engtagger',              '>= 0.3.2'
+  spec.add_runtime_dependency 'lemmatizer',             '>= 0.2.2'
+
 
   # stuff i wrote
-  spec.add_runtime_dependency 'xml-mixup',      '>= 0.1.10'
-  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.2.2'
+  spec.add_runtime_dependency 'xml-mixup',      '>= 0.1.16'
+  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4'
   spec.add_runtime_dependency 'md-noko',        '>= 0.1.0'
   spec.add_runtime_dependency 'http-negotiate', '>= 0.1.0'
 
