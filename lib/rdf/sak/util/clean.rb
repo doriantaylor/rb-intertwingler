@@ -258,13 +258,37 @@ module RDF::SAK::Util::Clean
     out
   end
 
-  def invert_struct struct
+  # Invert a given struct so that `{ predicate => Set[object] }`
+  # becomes `{ object => Set[predicate] }`. Optionally run a block in
+  # the inner loop. If the block returns an `Array`, the first two
+  # values will be assigned to the predicate and object in the
+  # returned inverted struct. Return an explicit `nil` in the block to
+  #
+  # @param struct [Hash{RDF::Resource => Set}] a structure containing
+  #  the predicates and objects for a given subject.
+  # @yieldparam predicate [RDF::Resource] the predicate of the statement
+  # @yieldparam object    [RDF::Value] the object of the statement
+  # @yieldreturn          [nil, Array] an optional predicate-object pair.
+  #
+  # @return [Hash] the inverted struct.
+  #
+  def invert_struct struct, &block
     nodes = {}
 
     struct.each do |p, v|
       v.each do |o|
+        # copy the predicate so we don't overwrite it
+        pi = p
+
+        if block
+          tmp = block.call pi, o
+          # assign block return if it has one
+          pi, o = *tmp if tmp.is_a? Array
+        end
+
+        # now assign to output
         nodes[o] ||= Set.new
-        nodes[o] << p
+        nodes[o] << pi
       end
     end
 

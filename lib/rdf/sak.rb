@@ -696,7 +696,8 @@ module RDF::SAK
           # munge the url and make the tag
           ru  = uri.route_to(uris[k])
           ln  = { nil => :link, href: ru.to_s }
-          ln[reversed ? :rev : :rel] = abbreviate v.to_a, vocab: vocab
+          ln[reversed ? :rev : :rel] = @resolver.abbreviate v.to_a,
+            scalar: false, vocab: vocab
 
           # add the title
           if lab = labels[k]
@@ -715,6 +716,8 @@ module RDF::SAK
               ln[['']] = :script
             end
           end
+
+          # warn ln.inspect
 
           # finally add the link
           links << ln
@@ -3114,7 +3117,15 @@ module RDF::SAK
             # XXX grr bnodes
             next if elem[attr].strip.start_with? '_:'
 
-            abs = base.merge uri_pp(elem[attr].strip)
+            # warn "trying raw #{elem[attr].strip}"
+
+            # GRRRR URI::URN (or rather URI) is way way too anal
+            begin
+              tmp = uri_pp(elem[attr].strip)
+              abs = base.merge tmp
+            rescue URI::InvalidComponentError
+              next
+            end
 
             # fix e.g. http->https
             if abs.host == @uri.host and abs.scheme != @uri.scheme
@@ -3143,13 +3154,18 @@ module RDF::SAK
               abs.path = ([abs.path] + pp).join(';')
             end
 
+            # warn "trying #{abs}"
             elem[attr] = @uri.host == abs.host ?
               @uri.route_to(abs.to_s).to_s : abs.to_s
+            # warn "that (#{abs} -> #{elem[attr]}) worked lol"
             count += 1
           end
 
+          # warn "now trying block"
           block.call elem if block
+          # warn "block worked"
         end
+
 
         count
       end
@@ -3267,31 +3283,30 @@ module RDF::SAK
         # which we need to mine (predicates, classes, datatypes) for
         # prefixes among other things.
 
-        struct.each do |p, v|
-          v.each do |o|
-            if o.literal?
-              literals[o] ||= Set.new
-              literals[o].add p
+        inv = @context.invert_struct struct do |p, o|
+          if o.literal?
+            literals[o] ||= Set.new
+            literals[o] << p
 
-              # collect the datatype
-              datatypes.add o.datatype if o.has_datatype?
-            else
-              # normalize URIs
-              if o.to_s.start_with? 'urn:uuid:'
-                ufwd[o] ||= @context.canonical_uri o
-              elsif cu = @context.canonical_uuid(o)
-                o = urev[o] ||= cu
-              end
-
-
-              # collect the resource
-              resources[o] ||= Set.new
-              resources[o].add p
-
-              # add to type
-              types.add o if p == RDF::RDFV.type
+            # collect the datatype
+            datatypes << o.datatype if o.has_datatype?
+          else
+            # normalize URIs
+            if o.to_s.start_with? 'urn:uuid:'
+              ufwd[o] ||= @context.canonical_uri o
+            elsif cu = @context.canonical_uuid(o)
+              o = urev[o] ||= cu
             end
+
+            # collect the resource
+            resources[o] ||= Set.new
+            resources[o] << p
+
+            # add to type
+            types << o if p == RDF::RDFV.type
           end
+
+          nil # so we don't accidentally pollute the output
         end
         urev.merge! ufwd.invert
 
@@ -3321,6 +3336,7 @@ module RDF::SAK
           vocab = uri_pp(vocab.to_s) if vocab
 
           if elem.key?('href') or elem.key?('src')
+            # warn [@uri, elem['href'] || elem['src']].inspect
             vu = uri_pp(elem['href'] || elem['src'])
             ru = RDF::URI(@uri.merge(vu))
             bodylinks[urev[ru] || ru] = true
@@ -3336,6 +3352,7 @@ module RDF::SAK
             end
           end
         end
+
 
         # and now we do the head
         links = @context.head_links @uuid, struct: struct, nodes: resources,
