@@ -1,10 +1,10 @@
 # -*- encoding: utf-8 -*-
 # frozen_string_literal: true
-# This file generated automatically using rdf vocabulary format from https://privatealpha.com/ontology/transformation/1#
+# This file generated automatically using rdf vocabulary format from https://vocab.methodandstructure.com/transformation#
 require 'rdf'
 module RDF::SAK
   # @!parse
-  #   # Vocabulary for <https://privatealpha.com/ontology/transformation/1#>
+  #   # Vocabulary for <https://vocab.methodandstructure.com/transformation#>
   #   #
   #   # Transformation Functions Ontology
   #   #
@@ -89,211 +89,207 @@ module RDF::SAK
   #     attr_reader :xpath
   #
   #   end
-  TFO = Class.new(RDF::StrictVocabulary("https://privatealpha.com/ontology/transformation/1#")) do
+  TFO = Class.new(RDF::StrictVocabulary("https://vocab.methodandstructure.com/transformation#")) do
 
     # Ontology definition
-    ontology :"https://privatealpha.com/ontology/transformation/1#",
-      "bibo:uri": "tfo:".freeze,
-      comment: %(This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages.).freeze,
-      "dc:created": "2014-06-05T03:06:58Z".freeze,
-      "dc:creator": "https://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:description": "This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages.".freeze,
-      "dc:modified": ["2020-01-20T06:05:13Z".freeze, "2020-04-11T02:51:52Z".freeze, "2020-06-10T18:27:35Z".freeze, "2020-07-03T04:49:40Z".freeze],
-      "dc:references": ["https://www.iana.org/assignments/media-types/media-types.xhtml".freeze, "https://www.w3.org/TR/prov-o/".freeze, "https://www.w3.org/TR/rdf-schema/".freeze, "https://www.w3.org/TR/xmlschema-2/".freeze],
-      "dc:subject": "tfo:".freeze,
-      "dc:title": "Transformation Functions Ontology".freeze,
-      "foaf:primaryTopic": "tfo:".freeze,
-      "http://purl.org/vocab/vann/preferredNamespacePrefix": "tfo".freeze,
-      isDefinedBy: "tfo:".freeze,
-      "owl:sameAs": ["https://privatealpha.com/ontology/permutation/1".freeze, "https://privatealpha.com/ontology/permutation/1#".freeze],
-      type: ["bibo:Webpage".freeze, "owl:Ontology".freeze]
+    ontology :"https://vocab.methodandstructure.com/transformation#",
+      comment: {en: "This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages."},
+      "http://purl.org/dc/terms/created": "2014-06-05T03:06:58Z",
+      "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
+      "http://purl.org/dc/terms/description": {en: "This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages."},
+      "http://purl.org/dc/terms/modified": ["2020-01-20T06:05:13Z", "2020-04-11T02:51:52Z", "2020-06-10T18:27:35Z", "2020-07-03T04:49:40Z"],
+      "http://purl.org/dc/terms/references": ["https://www.iana.org/assignments/media-types/media-types.xhtml", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/rdf-schema/", "https://www.w3.org/TR/xmlschema-2/"],
+      "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/transformation#",
+      "http://purl.org/dc/terms/title": {en: "Transformation Functions Ontology"},
+      "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/transformation#",
+      "http://purl.org/vocab/vann/preferredNamespacePrefix": "tfo",
+      "http://www.w3.org/2002/07/owl#sameAs": ["https://privatealpha.com/ontology/permutation/1", "https://privatealpha.com/ontology/permutation/1#", "https://privatealpha.com/ontology/transformation/1", "https://privatealpha.com/ontology/transformation/1#"],
+      "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/transformation#",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      type: ["http://purl.org/ontology/bibo/Specification", "http://www.w3.org/2002/07/owl#Ontology"]
 
     # Class definitions
     term :Application,
-      comment: %(This class represents an application of a transformation function, connecting a specific input and scalar parameters with its output.).freeze,
-      label: "Application".freeze,
-      subClassOf: "tfo:Partial".freeze,
-      type: "owl:Class".freeze
+      comment: {en: "This class represents an application of a transformation function, connecting a specific input and scalar parameters with its output."},
+      label: {en: "Application"},
+      subClassOf: "https://vocab.methodandstructure.com/transformation#Partial",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :MarkupTransform,
-      comment: %(This class represents the set of transformation functions that operate exclusively over \(HTML/XML\) markup.).freeze,
-      label: "MarkupTransform".freeze,
-      subClassOf: "tfo:Transform".freeze,
-      type: "owl:Class".freeze
+      comment: {en: "This class represents the set of transformation functions that operate exclusively over (HTML/XML) markup."},
+      label: {en: "MarkupTransform"},
+      subClassOf: "https://vocab.methodandstructure.com/transformation#Transform",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Parameter,
-      comment: %(This class provides a specification for a parameter in a given function.).freeze,
-      label: "Parameter".freeze,
-      subClassOf: ["rdf:Property".freeze, term(
-          allValuesFrom: "tfo:Partial".freeze,
-          onProperty: "rdfs:domain".freeze
+      comment: {en: "This class provides a specification for a parameter in a given function."},
+      label: {en: "Parameter"},
+      subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#Property", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/transformation#Partial",
+          onProperty: "http://www.w3.org/2000/01/rdf-schema#domain"
         )],
-      type: "owl:Class".freeze
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :ParameterList,
-      comment: %(This class represents a list with the restriction that its members be tfo:Parameter nodes.).freeze,
-      label: "ParameterList".freeze,
-      subClassOf: ["rdf:List".freeze, term(
-          allValuesFrom: "tfo:Parameter".freeze,
-          onProperty: "rdf:first".freeze
+      comment: {en: "This class represents a list with the restriction that its members be tfo:Parameter nodes."},
+      label: {en: "ParameterList"},
+      subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#List", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/transformation#Parameter",
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
         ), term(
-          allValuesFrom: "tfo:ParameterList".freeze,
-          onProperty: "rdf:rest".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/transformation#ParameterList",
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
         )],
-      type: "owl:Class".freeze
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Partial,
-      comment: %(This class represents a partial application of a transformation function, affording the encapsulation and re-use of existing parameters.).freeze,
-      label: "Partial".freeze,
-      subClassOf: "prov:Activity".freeze,
-      type: "owl:Class".freeze
+      comment: {en: "This class represents a partial application of a transformation function, affording the encapsulation and re-use of existing parameters."},
+      label: {en: "Partial"},
+      subClassOf: "http://www.w3.org/ns/prov#Activity",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Transform,
-      comment: %(This class provides a specification for a transformation function.).freeze,
-      label: "Transform".freeze,
-      subClassOf: "prov:SoftwareAgent".freeze,
-      type: "owl:Class".freeze
+      comment: {en: "This class provides a specification for a transformation function."},
+      label: {en: "Transform"},
+      subClassOf: "http://www.w3.org/ns/prov#SoftwareAgent",
+      type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
     property :accepts,
-      comment: %(Specifies the list of content-types, in order of preference, that the function can process.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "accepts".freeze,
+      comment: {en: "Specifies the list of content-types, in order of preference, that the function can process."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "accepts"},
       range: term(
-          unionOf: list("tfo:content-type".freeze, "rdf:List".freeze)
+          unionOf: list("https://vocab.methodandstructure.com/transformation#content-type", "http://www.w3.org/1999/02/22-rdf-syntax-ns#List")
         ),
-      type: "owl:ObjectProperty".freeze
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"by-uri",
-      comment: %(Specifies a regular expression for matching against URIs.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "by-uri".freeze,
-      range: "tfo:regexp".freeze,
-      type: "owl:DatatypeProperty".freeze
+      comment: {en: "Specifies a regular expression for matching against URIs."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "by-uri"},
+      range: "https://vocab.methodandstructure.com/transformation#regexp",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :"by-xpath",
-      comment: %(Specifies an XPath expression for matching against markup \(HTML/XML\) content.).freeze,
-      domain: "tfo:MarkupTransform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "by-xpath".freeze,
-      range: "tfo:xpath".freeze,
-      type: "owl:DatatypeProperty".freeze
+      comment: {en: "Specifies an XPath expression for matching against markup (HTML/XML) content."},
+      domain: "https://vocab.methodandstructure.com/transformation#MarkupTransform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "by-xpath"},
+      range: "https://vocab.methodandstructure.com/transformation#xpath",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :completes,
-      comment: %(Identifies a tfo:Partial function that this tfo:Application completes.).freeze,
-      domain: "tfo:Application".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "completes".freeze,
-      range: "tfo:Partial".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+      comment: {en: "Identifies a tfo:Partial function that this tfo:Application completes."},
+      domain: "https://vocab.methodandstructure.com/transformation#Application",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "completes"},
+      range: "https://vocab.methodandstructure.com/transformation#Partial",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :default,
-      comment: %(Specifies one or more default values for a parameter.).freeze,
-      domain: "tfo:Parameter".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "default".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Specifies one or more default values for a parameter."},
+      domain: "https://vocab.methodandstructure.com/transformation#Parameter",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "default"},
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :implementation,
-      comment: %(URI to the implementation of the function.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "implementation".freeze,
-      range: "rdfs:Resource".freeze,
-      "skos:usageNote": "The URI is meant to be dereferenced by an internal implementation, e.g. file:, jar:, or an idiosyncratic scheme like urn:x-python:.".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+      comment: {en: "URI to the implementation of the function."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      "http://www.w3.org/2004/02/skos/core#usageNote": {en: "The URI is meant to be dereferenced by an internal implementation, e.g. file:, jar:, or an idiosyncratic scheme like urn:x-python:."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "implementation"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Resource",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :input,
-      comment: %(Specifies the resource that was the input of the transformation function.).freeze,
-      domain: "tfo:Application".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "input".freeze,
-      range: "rdfs:Resource".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+      comment: {en: "Specifies the resource that was the input of the transformation function."},
+      domain: "https://vocab.methodandstructure.com/transformation#Application",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "input"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Resource",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :"not-by-uri",
-      comment: %(Specifies a regular expression for anti-matching against URIs.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "not-by-uri".freeze,
-      range: "tfo:regexp".freeze,
-      type: "owl:DatatypeProperty".freeze
+      comment: {en: "Specifies a regular expression for anti-matching against URIs."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "not-by-uri"},
+      range: "https://vocab.methodandstructure.com/transformation#regexp",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :"not-by-xpath",
-      comment: %(Specifies an XPath expression for anti-matching against markup \(HTML/XML\) content.).freeze,
-      domain: "tfo:MarkupTransform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "not-by-xpath".freeze,
-      range: "tfo:xpath".freeze,
-      type: "owl:DatatypeProperty".freeze
+      comment: {en: "Specifies an XPath expression for anti-matching against markup (HTML/XML) content."},
+      domain: "https://vocab.methodandstructure.com/transformation#MarkupTransform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "not-by-xpath"},
+      range: "https://vocab.methodandstructure.com/transformation#xpath",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :output,
-      comment: %(Specifies the resource that was the output of the transformation function.).freeze,
-      domain: "tfo:Application".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "output".freeze,
-      range: "rdfs:Resource".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+      comment: {en: "Specifies the resource that was the output of the transformation function."},
+      domain: "https://vocab.methodandstructure.com/transformation#Application",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "output"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Resource",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :parameter,
-      comment: %(Binds a parameter object to its function.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "parameter".freeze,
-      range: "tfo:Parameter".freeze,
-      "skos:usageNote": "Parameters can either be supplied to the function as key-value pairs or sequentially.".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Binds a parameter object to its function."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      "http://www.w3.org/2004/02/skos/core#usageNote": {en: "Parameters can either be supplied to the function as key-value pairs or sequentially."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "parameter"},
+      range: "https://vocab.methodandstructure.com/transformation#Parameter",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"parameter-list",
-      comment: %(Specifies the sequence of parameters when the invocation method of the function is sequential.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "parameter-list".freeze,
-      range: "tfo:ParameterList".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+      comment: {en: "Specifies the sequence of parameters when the invocation method of the function is sequential."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "parameter-list"},
+      range: "https://vocab.methodandstructure.com/transformation#ParameterList",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :prefix,
-      comment: %(Specifies a SHACL prefix declaration for complementing any associated XPath expression.).freeze,
-      domain: "tfo:MarkupTransform".freeze,
-      label: "prefix".freeze,
-      note: %(
-            Note that the existing sh:declare property has a domain of owl:Ontology so we can't use it for this.
-          ).freeze,
-      range: "sh:PrefixDeclaration".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Specifies a SHACL prefix declaration for complementing any associated XPath expression."},
+      domain: "https://vocab.methodandstructure.com/transformation#MarkupTransform",
+      label: {en: "prefix"},
+      note: {en: "\n            Note that the existing sh:declare property has a domain of owl:Ontology so we can't use it for this.\n          "},
+      range: "http://www.w3.org/ns/shacl#PrefixDeclaration",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :returns,
-      comment: %(Specifies the list of content-types, in order of preference, that the function is capable of returning.).freeze,
-      domain: "tfo:Transform".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "returns".freeze,
+      comment: {en: "Specifies the list of content-types, in order of preference, that the function is capable of returning."},
+      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "returns"},
       range: term(
-          unionOf: list("tfo:content-type".freeze, "rdf:List".freeze)
+          unionOf: list("https://vocab.methodandstructure.com/transformation#content-type", "http://www.w3.org/1999/02/22-rdf-syntax-ns#List")
         ),
-      type: "owl:ObjectProperty".freeze
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :transform,
-      comment: %(Specifies the transform associated with this particular application).freeze,
-      domain: "tfo:Partial".freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "transform".freeze,
-      range: "tfo:Transform".freeze,
-      type: ["owl:FunctionalProperty".freeze, "owl:ObjectProperty".freeze]
+      comment: {en: "Specifies the transform associated with this particular application"},
+      domain: "https://vocab.methodandstructure.com/transformation#Partial",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "transform"},
+      range: "https://vocab.methodandstructure.com/transformation#Transform",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
 
     # Datatype definitions
     term :"content-type",
-      comment: %(A literal that represents a content-type such as that which is found in the HTTP Accept: or Content-Type: header.).freeze,
-      isDefinedBy: "tfo:".freeze,
-      label: "content-type".freeze,
-      "owl:onDatatype": "xsd:token".freeze,
-      "owl:withRestrictions": list(term(
-          "xsd:pattern": "^([!\#$%&'\\*\\+\\-.^_`|~0-9-A-Za-z]+)(?:/[!\#$%&'\\*\\+\\-.^_`|~0-9-A-Za-z]+)?)$".freeze
+      comment: {en: "A literal that represents a content-type such as that which is found in the HTTP Accept: or Content-Type: header."},
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["https://tools.ietf.org/html/rfc7230#section-3.2.6", "https://tools.ietf.org/html/rfc7231#section-5.3.2"],
+      "http://www.w3.org/2002/07/owl#onDatatype": "http://www.w3.org/2001/XMLSchema#token",
+      "http://www.w3.org/2002/07/owl#withRestrictions": list(term(
+          "http://www.w3.org/2001/XMLSchema#pattern": "^([!\#$%&'\\*\\+\\-.^_`|~0-9-A-Za-z]+)(?:/[!\#$%&'\\*\\+\\-.^_`|~0-9-A-Za-z]+)?)$"
         )),
-      "rdfs:seeAlso": ["https://tools.ietf.org/html/rfc7230#section-3.2.6".freeze, "https://tools.ietf.org/html/rfc7231#section-5.3.2".freeze],
-      type: "rdfs:Datatype".freeze
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "content-type"},
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
     term :iregexp,
-      comment: %(A case-insensitive regular expression.).freeze,
-      label: "iregexp".freeze,
-      note: %(
-          Note that we do not intend to provide the full complement of flags for regular expressions like m, s, or x.
-        ).freeze,
-      "owl:onDatatype": "xsd:string".freeze,
-      subClassOf: "tfo:regexp".freeze,
-      type: "rdfs:Datatype".freeze
+      comment: {en: "A case-insensitive regular expression."},
+      "http://www.w3.org/2002/07/owl#onDatatype": "http://www.w3.org/2001/XMLSchema#string",
+      label: {en: "iregexp"},
+      note: {en: "\n          Note that we do not intend to provide the full complement of flags for regular expressions like m, s, or x.\n        "},
+      subClassOf: "https://vocab.methodandstructure.com/transformation#regexp",
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
     term :regexp,
-      comment: %(A regular expression.).freeze,
-      label: "regexp".freeze,
-      "owl:onDatatype": "xsd:string".freeze,
-      "skos:usageNote": "\n          We do not specify a flavour, but in practice we should assume PCRE or ECMA-262.\n        ".freeze,
-      type: "rdfs:Datatype".freeze
+      comment: {en: "A regular expression."},
+      "http://www.w3.org/2002/07/owl#onDatatype": "http://www.w3.org/2001/XMLSchema#string",
+      "http://www.w3.org/2004/02/skos/core#usageNote": {en: "\n          We do not specify a flavour, but in practice we should assume PCRE or ECMA-262.\n        "},
+      label: {en: "regexp"},
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
     term :xpath,
-      comment: %(An XPath expression.).freeze,
-      label: "xpath".freeze,
-      "owl:onDatatype": "xsd:string".freeze,
-      type: "rdfs:Datatype".freeze
+      comment: {en: "An XPath expression."},
+      "http://www.w3.org/2002/07/owl#onDatatype": "http://www.w3.org/2001/XMLSchema#string",
+      label: {en: "xpath"},
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
 
     RDF::Vocabulary.register :tfo, self if
       RDF::Vocabulary.respond_to? :register

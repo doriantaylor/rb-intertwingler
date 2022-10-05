@@ -2400,7 +2400,8 @@ module RDF::SAK::Util::Messy
   #
   # (maybe add +code+/+kbd+/+samp+/+var+/+time+ one day too)
   #
-  def rehydrate node, graph, cache: {}, &block
+  def rehydrate node, resolver, cache: {}, rescan: false, &block
+    graph = resolver.repo
     # collect all the literals
     graph.each_object do |o|
       (cache[o.value.strip.downcase] ||= Set.new) << o if o.literal?
@@ -2411,8 +2412,11 @@ module RDF::SAK::Util::Messy
       next if e.xpath('count(ancestor::html:a[@href][1]) != 0', XPATHNS)
 
       lang = e.xpath(XPATH[:lang]).to_s.strip.downcase
-      # dt   = e['datatype'] # XXX no datatype rn
-      text = (e['content'] || e.content).strip
+      dt   = e['datatype']
+
+      # deal with <time> element XXX should also deal with XMLLiteral
+      text = (e.name == 'time' && e['datetime'] ||
+              e['content'] || e.content).strip
 
       # now we have the literals actually in the graph
       lit = cache[text.downcase] or next
@@ -2468,13 +2472,33 @@ module RDF::SAK::Util::Messy
         # we should actually probably move any prefix/vocab/xmlns
         # declarations from the inner node to the outer one (although
         # in practice this will be an unlikely configuration)
-        pfx = get_prefixes e
+        pfx  = get_prefixes e
+        base = get_base e
+
+        # find the subject for this node
+        subject = subject_for(e, prefixes: pfx, base: base)
+        preds = if subject
+                  su = resolver.uuid_for(subject) || subject
+                  pp = graph.query([su, nil, chosen]).predicates.uniq
+
+                  if pp.empty?
+                    pp << RDF::SAK::CI.mentions
+                    pp.each { |p| graph << [su, p, chosen] } if rescan
+                  end
+
+                  warn "#{su} #{pp.inspect} #{chosen}"
+
+                  pp
+                else
+                  []
+                end
 
         # here we have pretty much everything except for the prefixes
         # and wherever we want to actually link to.
 
         inner = e.dup
         spec  = { [inner] => :a, href: chosen.to_s }
+        spec[:rel] = abbreviate preds, prefixes: pfx unless preds.empty?
         # we should have types
         spec[:typeof] = abbreviate cc[:types], prefixes: pfx unless
           cc[:types].empty?
@@ -2696,7 +2720,7 @@ module RDF::SAK::Util::Messy
   # @param repo  [RDF::Repository]
   # @param list  [RDF::Term]
   # @param base  [RDF::URI, URI]
-  # @param langs [#to_a, String] 
+  # @param langs [#to_a, String]
   # @param rel   [RDF::Term, #to_a]
   # @param rev   [RDF::Term, #to_a]
   # @return [Hash]
@@ -2813,7 +2837,7 @@ module RDF::SAK::Util::Messy
   # @param ptag [Symbol] the html tag
   # @param otag [Symbol]
   # @param pskip [#to_set] a set of _edges_ (not nodes) to skip
-  # @param oskip [#to_set] a list of _nodes_ (not edges) to skip
+  # @param oskip [#to_set] a set of _nodes_ (not edges) to skip
   # @param wrap_list [false, true] whether to wrap a list with an element
   # @return [Array] pair containing the markup spec and the string value
   #
@@ -2930,7 +2954,7 @@ module RDF::SAK::Util::Messy
   # @return [Nokogiri::XML::Document] the document
   #
   def generate_doc repo, subject, base: nil, langs: [], prefixes: {}, vocab: nil
-    # we will need to cache nodes and properties 
+    # we will need to cache nodes and properties
     ncache = Set.new
     pcache = Set.new
 

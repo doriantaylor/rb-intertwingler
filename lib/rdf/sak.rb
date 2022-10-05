@@ -2289,7 +2289,8 @@ module RDF::SAK
 
         xhtml_stub(base: base, title: title, transform: @config[:transform],
           prefix: pfx, vocab: XHV, link: links, meta: meta,
-          attr: { about: '', typeof: @resolver.abbreviate(types) },
+          attr: { id: UUID::NCName.to_ncname_64(subject, version: 1),
+                 about: '', typeof: @resolver.abbreviate(types) },
           content: spec).document
       elsif @graph.type_is?(types, RDF::Vocab::SKOS.Collection)
         # make a flat list of just transclusions
@@ -2388,10 +2389,13 @@ module RDF::SAK
 
           op = graph.query([nil, nil, s]).to_a.select do |stmt|
             sj = stmt.subject
-            if sj.uri?
+
+            if sj.uri? and sj != subject
               # XXX there is probably a better way to do this
               ref_ok = if neighbours[sj]
-                         np = neighbours[sj].keys.to_set - skospreds
+                         np = neighbours[sj].keys.to_set - skospreds -
+                           [RDF::Vocab::SKOS.member,
+                            RDF::Vocab::SKOS.hasTopConcept]
                          no = neighbours[sj].values_at(*np.to_a).flatten.uniq
                          !np.empty? and no.include? s
                        else
@@ -3202,7 +3206,6 @@ module RDF::SAK
         end.transform_keys do |k|
           k.delete_prefix('xmlns:').to_sym
         end
-
         # then add @prefix overtop of the namespaces
         if node[:prefix]
           x = node[:prefix].strip.split(/\s+/)
@@ -3237,23 +3240,26 @@ module RDF::SAK
         @context.generate_twitter_meta @uuid
       end
 
-      def transform_xhtml published: true, rehydrate: false
+      def transform_xhtml published: true, rehydrate: false, rescan: false
         # before we do any more work make sure this is html
-        repo = @context.graph
         doc  = @doc.dup 1
         body = doc.at_xpath(
           '/html:body|/html:html/html:body[1]', { html: XHTMLNS }) or return
 
-        RDF::SAK::Util::Messy.rehydrate body, repo do |cands|
-          unless cands.empty?
-            cands = cands.select do |k, v|
+        resolver = @context.resolver
+        repo     = @context.graph
+
+        # XXX KILL THIS
+        RDF::SAK::Util::Messy.rehydrate body, resolver, rescan: rescan do |cs|
+          unless cs.empty?
+            cs.select! do |k, v|
               repo.type_is?(v[:types],
                 [RDF::Vocab::SKOS.Concept #, RDF::Vocab::FOAF.Agent
                 ])
             end
             # XXX TODO make this logic better: if there are still
             # candidates, sort by preferred predicate for given type
-            cands.keys.sort.first
+            cs.keys.sort.first
           end
         end if rehydrate
 
@@ -3262,7 +3268,7 @@ module RDF::SAK
           { html: XHTMLNS }).each(&:unlink)
 
         # initial stuff
-        struct    = @context.struct_for @uuid, uuids: true, canon: true
+        struct    = resolver.struct_for @uuid, uuids: true, canon: true
         # rstruct   = @context.struct_for @uuid, uuids: true, rev: true
         resources = {}
         literals  = {}
@@ -3270,9 +3276,9 @@ module RDF::SAK
         urev      = {} # uri  -> uuid
         datatypes = Set.new
         types     = Set.new
-        authors   = @context.authors_for(@uuid)
-        title     = @context.label_for @uuid, candidates: struct
-        desc      = @context.label_for @uuid, candidates: struct, desc: true
+        authors   = repo.authors_for @uuid
+        title     = repo.label_for @uuid, struct: struct
+        desc      = repo.label_for @uuid, struct: struct, desc: true
 
         # rewrite content
         title = title[1] if title
@@ -3292,9 +3298,9 @@ module RDF::SAK
             datatypes << o.datatype if o.has_datatype?
           else
             # normalize URIs
-            if o.to_s.start_with? 'urn:uuid:'
-              ufwd[o] ||= @context.canonical_uri o
-            elsif cu = @context.canonical_uuid(o)
+            if o.to_s.downcase.start_with? 'urn:uuid:'
+              ufwd[o] ||= resolver.uri_for o
+            elsif cu = resolver.uuid_for(o)
               o = urev[o] ||= cu
             end
 
@@ -3312,7 +3318,7 @@ module RDF::SAK
 
         labels = resources.keys.map do |k|
           # turn this into a pair which subsequently gets turned into a hash
-          [k, @context.label_for(k) ]
+          [k, repo.label_for(k) ]
         end.to_h
 
         #warn labels
@@ -3320,12 +3326,12 @@ module RDF::SAK
         # handle the title
         title ||= RDF::Literal('')
         tm = { '#title' => title,
-          property: @context.abbreviate(literals[title].to_a, vocab: XHV) }
+          property: resolver.abbreviate(literals[title].to_a, vocab: XHV) }
         if tl = title.language
           tm['xml:lang'] = tl # if xmlns
           tm['lang'] = tl
         elsif tdt = title.datatype and tdt != RDF::XSD.string
-          tm[:datatype] = @context.abbreviate(tdt)
+          tm[:datatype] = resolver.abbreviate(tdt)
         end
 
         # we accumulate a record of the links in the body so we know
@@ -3343,7 +3349,7 @@ module RDF::SAK
 
             if rel = resources[urev[ru] || ru]
               elem['rel'] =
-                (@context.abbreviate rel, vocab: vocab, scalar: false).join ' '
+                (resolver.abbreviate rel, vocab: vocab, scalar: false).join ' '
             end
 
             label = labels[urev[ru] || ru]
@@ -3365,8 +3371,8 @@ module RDF::SAK
         end.each do |s, preds|
 
           o = {}
-          u = ufwd[s] ||= @context.canonical_uuid s
-          s = urev[u] ||= @context.canonical_uri u if u
+          u = ufwd[s] ||= resolver.uuid_for s
+          s = urev[u] ||= resolver.uri_for u if u
           f = {}
 
           # do not include this subject as these links are already included!
@@ -3374,13 +3380,13 @@ module RDF::SAK
 
           # gather up the objects, then gather up the predicates
 
-          @context.objects_for u || s, preds, only: :resource do |obj, rel|
+          repo.objects_for u || s, preds, only: :resource do |obj, rel|
             # XXX do not know why += |= etc does not work
-            x = @context.canonical_uuid(obj) || obj
-            urev[x] ||= @context.canonical_uri x
+            x = resolver.uuid_for(obj) || obj
+            urev[x] ||= resolver.uri_for x
             y = o[x] ||= Set.new
             o[x] = y | rel
-            f[x] = @context.formats_for x
+            f[x] = repo.formats_for x
           end
 
           srel = @uri.route_to((u ? urev[u] || s : s).to_s)
@@ -3388,8 +3394,8 @@ module RDF::SAK
           # now collect all the other predicates
           o.keys.each do |obj|
             hrel = @uri.route_to((urev[obj] || obj).to_s)
-            o[obj] |= @context.graph.query([u || s, nil, obj]).predicates.to_set
-            rels = @context.abbreviate o[obj].to_a, vocab: XHV
+            o[obj] |= repo.query([u || s, nil, obj]).predicates.to_set
+            rels = resolver.abbreviate o[obj].to_a, vocab: XHV
             ln = { nil => :link, about: srel, rel: rels, href: hrel }
             ln[:type] = f[obj].first if f[obj]
 
@@ -3404,14 +3410,14 @@ module RDF::SAK
         authors.each do |a|
           name  = labels[urev[a] || a] or next
           datatypes.add name[0] # a convenient place to chuck this
-          prop  = @context.abbreviate(name[0])
+          prop  = resolver.abbreviate(name[0])
           name  = name[1]
           about = @uri.route_to((ufwd[a] || a).to_s)
           tag   = { nil => :meta, about: about.to_s, name: :author,
                    property: prop, content: name.to_s }
 
           if name.has_datatype? and name.datatype != RDF::XSD.string
-            tag[:datatype] = @context.abbreviate(name.datatype)
+            tag[:datatype] = resolver.abbreviate(name.datatype)
           elsif name.has_language?
             tag['xml:lang'] = tag[:lang] = name.language
           end
@@ -3420,13 +3426,13 @@ module RDF::SAK
 
         literals.each do |k, v|
           next if k == title
-          rel = @context.abbreviate v.to_a, vocab: XHV
+          rel = resolver.abbreviate v.to_a, vocab: XHV
           elem = { nil => :meta, property: rel, content: k.to_s }
           elem[:name] = :description if k == desc
 
           if k.has_datatype?
             datatypes.add k.datatype # so we get the prefix
-            elem[:datatype] = @context.abbreviate k.datatype, vocab: XHV
+            elem[:datatype] = resolver.abbreviate k.datatype, vocab: XHV
           end
 
           meta.push(elem)
@@ -3448,18 +3454,18 @@ module RDF::SAK
         body = body.dup 1
         body = { id: UUID::NCName.to_ncname_64(@uuid.to_s.dup, version: 1),
           about: '', '#body' => body.children.to_a }
-        body[:typeof] = @context.abbreviate(types.to_a, vocab: XHV) unless
+        body[:typeof] = resolver.abbreviate(types.to_a, vocab: XHV) unless
           types.empty?
 
         # prepare only the prefixes we need to resolve the data we need
-        rsc = @context.resolver.abbreviate(
+        rsc = resolver.abbreviate(
           (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
           noop: false, scalar: false).map do |x|
           next if x.nil?
           x.split(?:).first.to_sym
         end.compact.to_set
 
-        pfx = @context.prefixes.select do |k, _|
+        pfx = resolver.prefixes.select do |k, _|
           rsc.include? k
         end.transform_values { |v| v.to_s }
 
@@ -3493,7 +3499,7 @@ module RDF::SAK
       # @param rehydrate
       #
       # @return [Array] pathname(s) written
-      def write_to_target published: true, rehydrate: false
+      def write_to_target published: true, rehydrate: false, rescan: false
 
         # in all cases we write to private target
         states = [false]
@@ -3506,7 +3512,8 @@ module RDF::SAK
 
           # XXX this is dumb; it should do something more robust if it
           # fails
-          doc = transform_xhtml(published: state, rehydrate: rehydrate) or next
+          doc = transform_xhtml(
+            published: state, rehydrate: rehydrate, rescan: rescan) or next
 
           begin
             fh   = Tempfile.create('xml-', target)

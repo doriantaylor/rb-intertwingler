@@ -1,246 +1,336 @@
 # -*- encoding: utf-8 -*-
 # frozen_string_literal: true
-# This file generated automatically using rdf vocabulary format from https://privatealpha.com/ontology/ibis/1#
+# This file generated automatically using rdf vocabulary format from https://vocab.methodandstructure.com/ibis#
 require 'rdf'
 module RDF::SAK
   # @!parse
-  #   # Vocabulary for <https://privatealpha.com/ontology/ibis/1#>
+  #   # Vocabulary for <https://vocab.methodandstructure.com/ibis#>
+  #   #
+  #   # IBIS (bis) Vocabulary
+  #   #
+  #   # IBIS
+  #   #
+  #   # This document specifies a vocabulary for describing an IBIS (issue-based information system).
+  #   # @version 0.4
+  #   # @see http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf
+  #   # @see http://hyperdata.org/xmlns/ibis/
+  #   # @see https://vocab.methodandstructure.com/1.rdf
+  #   # @see https://vocab.methodandstructure.com/1.n3
+  #   # @see http://dublincore.org/documents/dcmi-terms/
+  #   # @see http://www.w3.org/TR/prov-o/
+  #   # @see https://vocab.methodandstructure.com/ontology/process-model/1#
+  #   # @see http://www.cc.gatech.edu/~ellendo/rittel/rittel-issues.pdf
+  #   # @see http://en.wikipedia.org/wiki/Issue-Based_Information_System
   #   class IBIS < RDF::StrictVocabulary
+  #     # An Argument is a type of Issue that explicitly supports or refutes a Position.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Argument
+  #
+  #     # An Issue or Position can be marked Invariant to denote that it has been deemed outside of the influence of the Agents in the system, i.e., something to be steered around.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Invariant
+  #
+  #     # An Issue is a state of affairs, claimed by one or more Agents to either be a misfit itself, or affecting some other Issue or Position.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Issue
+  #
+  #     # A network of issues, positions, and arguments.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Network
+  #
+  #     # A Position asserts a moral, ethical, pragmatic, or similar kind of assertion, typically identifying what, if anything, should be done about an Issue.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Position
+  #
+  #     # The subject is an issue concerning the object, which can be any resource.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :concerns
+  #
+  #     # An Agent can endorse a concept without having initially mentioned or advanced it, and without any additional comment.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :endorses
+  #
+  #     # The subject is a more generic form of the object.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :generalizes
+  #
+  #     # Indicates a subject argument that opposes an object position.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :opposes
+  #
+  #     # Indicates an issue that raises doubt on a belief.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :questions
+  #
+  #     # Indicates when a concept replaces another concept of the same type.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :replaces
+  #
+  #     # Indicates a position that responds to the subject issue.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :response
+  #
+  #     # The subject is a more specific form of the object.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :specializes
+  #
+  #     # Indicates when the subject belief suggests the object issue.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :suggests
+  #
+  #     # Indicates a subject argument that supports an object position.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :supports
+  #
   #   end
-  class IBIS < RDF::StrictVocabulary("https://privatealpha.com/ontology/ibis/1#")
+  IBIS = Class.new(RDF::StrictVocabulary("https://vocab.methodandstructure.com/ibis#")) do
 
     # Ontology definition
-    ontology :"https://privatealpha.com/ontology/ibis/1#",
-      "bibo:uri": "ibis:".freeze,
-      comment: %(This document specifies a vocabulary for describing an IBIS \(issue-based information system\).).freeze,
-      "dc:created": "2012-12-11T22:22:53-08:00".freeze,
-      "dc:creator": "http://doriantaylor.com/person/dorian-taylor#me".freeze,
-      "dc:modified": ["2012-12-12T16:04:50-08:00".freeze, "2014-02-24T21:14:13Z".freeze, "2018-02-22T03:39:14Z".freeze],
-      "dc:title": "IBIS (bis) Vocabulary".freeze,
-      "http://purl.org/vocab/vann/preferredNamespacePrefix": "ibis".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "IBIS".freeze,
-      "owl:imports": "skos:".freeze,
-      "owl:versionInfo": "0.3".freeze,
-      "rdfs:seeAlso": ["http://dublincore.org/documents/dcmi-terms/".freeze, "http://en.wikipedia.org/wiki/Issue-Based_Information_System".freeze, "http://hyperdata.org/xmlns/ibis/".freeze, "http://www.cc.gatech.edu/~ellendo/rittel/rittel-issues.pdf".freeze, "http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf".freeze, "http://www.w3.org/TR/prov-o/".freeze, "https://privatealpha.com/ontology/ibis/1.n3".freeze, "https://privatealpha.com/ontology/ibis/1.rdf".freeze, "https://privatealpha.com/ontology/process-model/1#".freeze],
-      type: ["bibo:Webpage".freeze, "owl:Ontology".freeze]
+    ontology :"https://vocab.methodandstructure.com/ibis#",
+      comment: {en: "This document specifies a vocabulary for describing an IBIS (issue-based information system)."},
+      "http://purl.org/dc/terms/created": "2012-12-11T22:22:53-08:00",
+      "http://purl.org/dc/terms/creator": ["http://doriantaylor.com/person/dorian-taylor#me", "https://doriantaylor.com/person/dorian-taylor#me"],
+      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z"],
+      "http://purl.org/dc/terms/references": "http://www.w3.org/2004/02/skos/core#Concept",
+      "http://purl.org/dc/terms/title": {en: "IBIS (bis) Vocabulary"},
+      "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/ibis#",
+      "http://purl.org/vocab/vann/preferredNamespacePrefix": "ibis",
+      "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/ontology/",
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://dublincore.org/documents/dcmi-terms/", "http://en.wikipedia.org/wiki/Issue-Based_Information_System", "http://hyperdata.org/xmlns/ibis/", "http://www.cc.gatech.edu/~ellendo/rittel/rittel-issues.pdf", "http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf", "http://www.w3.org/TR/prov-o/", "https://vocab.methodandstructure.com/1.n3", "https://vocab.methodandstructure.com/1.rdf", "https://vocab.methodandstructure.com/ontology/process-model/1#"],
+      "http://www.w3.org/2002/07/owl#imports": "http://www.w3.org/2004/02/skos/core#",
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.4",
+      "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "IBIS"},
+      type: ["http://purl.org/ontology/bibo/Webpage", "http://www.w3.org/2002/07/owl#Ontology"]
 
     # Class definitions
     term :Argument,
-      comment: %(An Argument is a type of Issue that explicitly supports or refutes a Position.).freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "Argument".freeze,
-      "owl:disjointWith": "ibis:Position".freeze,
-      "skos:usageNote": "An Argument need not only relate in scope to another Argument, but it must only be replaced by another argument.".freeze,
-      subClassOf: ["ibis:Issue".freeze, term(
-          allValuesFrom: "ibis:Argument".freeze,
-          onProperty: "ibis:replaced-by".freeze,
-          type: "owl:Restriction".freeze
+      comment: {en: "An Argument is a type of Issue that explicitly supports or refutes a Position."},
+      "http://www.w3.org/2002/07/owl#disjointWith": "https://vocab.methodandstructure.com/ibis#Position",
+      "http://www.w3.org/2004/02/skos/core#usageNote": {en: "An Argument need not only relate in scope to another Argument, but it must only be replaced by another argument."},
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "Argument"},
+      subClassOf: ["https://vocab.methodandstructure.com/ibis#Issue", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Argument",
+          onProperty: "https://vocab.methodandstructure.com/ibis#replaced-by",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Argument".freeze,
-          onProperty: "ibis:replaces".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Argument",
+          onProperty: "https://vocab.methodandstructure.com/ibis#replaces",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         )],
-      type: "owl:Class".freeze
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Invariant,
-      comment: %(An Issue or Position can be marked Invariant to denote that it has been deemed outside of the influence of the Agents in the system, i.e., something to be steered around.).freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "Invariant".freeze,
-      subClassOf: "skos:Concept".freeze,
-      type: "owl:Class".freeze
+      comment: {en: "An Issue or Position can be marked Invariant to denote that it has been deemed outside of the influence of the Agents in the system, i.e., something to be steered around."},
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "Invariant"},
+      subClassOf: "http://www.w3.org/2004/02/skos/core#Concept",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Issue,
-      comment: %(An Issue is a state of affairs, claimed by one or more Agents to either be a misfit itself, or affecting some other Issue or Position.).freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "Issue".freeze,
-      "owl:disjointWith": "ibis:Position".freeze,
-      subClassOf: ["skos:Concept".freeze, term(
-          allValuesFrom: "ibis:Issue".freeze,
-          onProperty: "ibis:replaced-by".freeze,
-          type: "owl:Restriction".freeze
+      comment: {en: "An Issue is a state of affairs, claimed by one or more Agents to either be a misfit itself, or affecting some other Issue or Position."},
+      "http://www.w3.org/2002/07/owl#disjointWith": "https://vocab.methodandstructure.com/ibis#Position",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "Issue"},
+      subClassOf: ["http://www.w3.org/2004/02/skos/core#Concept", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Issue",
+          onProperty: "http://www.w3.org/2004/02/skos/core#broaderTransitive",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Issue".freeze,
-          onProperty: "ibis:replaces".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Issue",
+          onProperty: "http://www.w3.org/2004/02/skos/core#narrowerTransitive",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Issue".freeze,
-          onProperty: "skos:broaderTransitive".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Issue",
+          onProperty: "https://vocab.methodandstructure.com/ibis#replaced-by",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Issue".freeze,
-          onProperty: "skos:narrowerTransitive".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Issue",
+          onProperty: "https://vocab.methodandstructure.com/ibis#replaces",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         )],
-      type: "owl:Class".freeze
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Network,
-      comment: %(A network of issues, positions, and arguments.).freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "Network".freeze,
-      subClassOf: "skos:ConceptScheme".freeze,
-      type: "owl:Class".freeze
+      comment: {en: "A network of issues, positions, and arguments."},
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "Network"},
+      subClassOf: "http://www.w3.org/2004/02/skos/core#ConceptScheme",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Position,
-      comment: %(A Position asserts a moral, ethical, pragmatic, or similar kind of assertion, typically identifying what, if anything, should be done about an Issue.).freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "Position".freeze,
-      "owl:disjointWith": ["ibis:Argument".freeze, "ibis:Issue".freeze],
-      subClassOf: ["skos:Concept".freeze, term(
-          allValuesFrom: "ibis:Position".freeze,
-          onProperty: "ibis:replaced-by".freeze,
-          type: "owl:Restriction".freeze
+      comment: {en: "A Position asserts a moral, ethical, pragmatic, or similar kind of assertion, typically identifying what, if anything, should be done about an Issue."},
+      "http://www.w3.org/2002/07/owl#disjointWith": ["https://vocab.methodandstructure.com/ibis#Argument", "https://vocab.methodandstructure.com/ibis#Issue"],
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "Position"},
+      subClassOf: ["http://www.w3.org/2004/02/skos/core#Concept", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Position",
+          onProperty: "http://www.w3.org/2004/02/skos/core#broaderTransitive",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Position".freeze,
-          onProperty: "ibis:replaces".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Position",
+          onProperty: "http://www.w3.org/2004/02/skos/core#narrowerTransitive",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Position".freeze,
-          onProperty: "skos:broaderTransitive".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Position",
+          onProperty: "https://vocab.methodandstructure.com/ibis#replaced-by",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         ), term(
-          allValuesFrom: "ibis:Position".freeze,
-          onProperty: "skos:narrowerTransitive".freeze,
-          type: "owl:Restriction".freeze
+          allValuesFrom: "https://vocab.methodandstructure.com/ibis#Position",
+          onProperty: "https://vocab.methodandstructure.com/ibis#replaces",
+          type: "http://www.w3.org/2002/07/owl#Restriction"
         )],
-      type: "owl:Class".freeze
+      type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
+    property :"concern-of",
+      comment: {en: "The subject is an issue concerning the object, which can be any resource."},
+      domain: "https://vocab.methodandstructure.com/ibis#Issue",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#concerns",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "concern-of"},
+      range: "http://www.w3.org/2002/07/owl#Thing",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :concerns,
-      comment: %(The subject is an issue concerning the object, which can be any resource.).freeze,
-      domain: "ibis:Issue".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "concerns".freeze,
-      range: "owl:Thing".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "The subject is an issue concerning the object, which can be any resource."},
+      domain: "https://vocab.methodandstructure.com/ibis#Issue",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#concern-of",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "concerns"},
+      range: "http://www.w3.org/2002/07/owl#Thing",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"endorsed-by",
-      comment: %(A concept can be endorsed by an Agent without said Agent having mentioned or advanced it initially, and without any additional comment.).freeze,
-      domain: "skos:Concept".freeze,
-      inverseOf: "ibis:endorses".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "endorsed by".freeze,
-      note: %(This term, along with ibis:endorses, enables an Agent to signal its agreement with a concept. To signal disagreement, explain why with an ibis:Argument that ibis:opposes the concept.).freeze,
-      range: "foaf:Agent".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "A concept can be endorsed by an Agent without said Agent having mentioned or advanced it initially, and without any additional comment."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#endorses",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "endorsed by"},
+      note: {en: "This term, along with ibis:endorses, enables an Agent to signal its agreement with a concept. To signal disagreement, explain why with an ibis:Argument that ibis:opposes the concept."},
+      range: "http://xmlns.com/foaf/0.1/Agent",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :endorses,
-      comment: %(An Agent can endorse a concept without having initially mentioned or advanced it, and without any additional comment.).freeze,
-      domain: "foaf:Agent".freeze,
-      inverseOf: "ibis:endorsed-by".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "endorses".freeze,
-      note: %(This term, along with ibis:endorsed-by, enables an Agent to signal its agreement with a concept. To signal disagreement, explain why with an ibis:Argument that ibis:opposes the concept.).freeze,
-      range: "skos:Concept".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "An Agent can endorse a concept without having initially mentioned or advanced it, and without any additional comment."},
+      domain: "http://xmlns.com/foaf/0.1/Agent",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#endorsed-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "endorses"},
+      note: {en: "This term, along with ibis:endorsed-by, enables an Agent to signal its agreement with a concept. To signal disagreement, explain why with an ibis:Argument that ibis:opposes the concept."},
+      range: "http://www.w3.org/2004/02/skos/core#Concept",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :generalizes,
-      comment: %(The subject is a more generic form of the object.).freeze,
-      equivalentProperty: "skos:narrower".freeze,
-      inverseOf: "ibis:specializes".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "generalizes".freeze,
-      note: %(The equivalent property skos:narrower asserts that the object is narrower than the subject, while the subject of ibis:generalizes is more general than the object.).freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "The subject is a more generic form of the object."},
+      equivalentProperty: "http://www.w3.org/2004/02/skos/core#narrower",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#specializes",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "generalizes"},
+      note: {en: "The equivalent property skos:narrower asserts that the object is narrower than the subject, while the subject of ibis:generalizes is more general than the object."},
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"opposed-by",
-      comment: %(Indicates a subject position opposed by an object argument.).freeze,
-      domain: "ibis:Position".freeze,
-      inverseOf: "ibis:opposes".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "opposed by".freeze,
-      range: "ibis:Argument".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates a subject position opposed by an object argument."},
+      domain: "https://vocab.methodandstructure.com/ibis#Position",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#opposes",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "opposed by"},
+      range: "https://vocab.methodandstructure.com/ibis#Argument",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :opposes,
-      comment: %(Indicates a subject argument that opposes an object position.).freeze,
-      domain: "ibis:Argument".freeze,
-      inverseOf: "ibis:opposed-by".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "opposes".freeze,
-      range: "ibis:Position".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates a subject argument that opposes an object position."},
+      domain: "https://vocab.methodandstructure.com/ibis#Argument",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#opposed-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "opposes"},
+      range: "https://vocab.methodandstructure.com/ibis#Position",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"questioned-by",
-      comment: %(Indicates a belief called into question by an issue.).freeze,
-      domain: "skos:Concept".freeze,
-      inverseOf: "ibis:questions".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "questioned by".freeze,
-      range: "ibis:Issue".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates a belief called into question by an issue."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#questions",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "questioned by"},
+      range: "https://vocab.methodandstructure.com/ibis#Issue",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggests",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :questions,
-      comment: %(Indicates an issue that raises doubt on a belief.).freeze,
-      domain: "ibis:Issue".freeze,
-      inverseOf: "ibis:questioned-by".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "questions".freeze,
-      range: "skos:Concept".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates an issue that raises doubt on a belief."},
+      domain: "https://vocab.methodandstructure.com/ibis#Issue",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#questioned-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "questions"},
+      range: "http://www.w3.org/2004/02/skos/core#Concept",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggested-by",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"replaced-by",
-      comment: %(Indicates when a concept is replaced by another concept of the same type.).freeze,
-      domain: "skos:Concept".freeze,
-      inverseOf: "ibis:replaces".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "replaced by".freeze,
-      range: "skos:Concept".freeze,
-      subPropertyOf: "dc:isReplacedBy".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates when a concept is replaced by another concept of the same type."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#replaces",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "replaced by"},
+      range: "http://www.w3.org/2004/02/skos/core#Concept",
+      subPropertyOf: "http://purl.org/dc/terms/isReplacedBy",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :replaces,
-      comment: %(Indicates when a concept replaces another concept of the same type.).freeze,
-      domain: "skos:Concept".freeze,
-      inverseOf: "ibis:replaced-by".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "replaces".freeze,
-      range: "skos:Concept".freeze,
-      subPropertyOf: "dc:replaces".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates when a concept replaces another concept of the same type."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#replaced-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "replaces"},
+      range: "http://www.w3.org/2004/02/skos/core#Concept",
+      subPropertyOf: "http://purl.org/dc/terms/replaces",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"responds-to",
-      comment: %(Indicates an issue to which the subject position responds.).freeze,
-      domain: "ibis:Position".freeze,
-      inverseOf: "ibis:response".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "responds to".freeze,
-      range: "ibis:Issue".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates an issue to which the subject position responds."},
+      domain: "https://vocab.methodandstructure.com/ibis#Position",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#response",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "responds to"},
+      range: "https://vocab.methodandstructure.com/ibis#Issue",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :response,
-      comment: %(Indicates a position that responds to the subject issue.).freeze,
-      domain: "ibis:Issue".freeze,
-      inverseOf: "ibis:responds-to".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "response".freeze,
-      range: "ibis:Position".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates a position that responds to the subject issue."},
+      domain: "https://vocab.methodandstructure.com/ibis#Issue",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#responds-to",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "response"},
+      range: "https://vocab.methodandstructure.com/ibis#Position",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :specializes,
-      comment: %(The subject is a more specific form of the object.).freeze,
-      equivalentProperty: "skos:broader".freeze,
-      inverseOf: "ibis:generalizes".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "specializes".freeze,
-      note: %(The equivalent property skos:broader asserts that the object is broader than the subject, while the subject of ibis:specializes is more specific than the object.).freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "The subject is a more specific form of the object."},
+      equivalentProperty: "http://www.w3.org/2004/02/skos/core#broader",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#generalizes",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "specializes"},
+      note: {en: "The equivalent property skos:broader asserts that the object is broader than the subject, while the subject of ibis:specializes is more specific than the object."},
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"suggested-by",
-      comment: %(Indicates when the subject issue is suggested by the object belief.).freeze,
-      domain: "ibis:Issue".freeze,
-      inverseOf: "ibis:suggests".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "suggested by".freeze,
-      range: "skos:Concept".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates when the subject issue is suggested by the object belief."},
+      domain: "https://vocab.methodandstructure.com/ibis#Issue",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#suggests",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "suggested by"},
+      range: "http://www.w3.org/2004/02/skos/core#Concept",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :suggests,
-      comment: %(Indicates when the subject belief suggests the object issue.).freeze,
-      domain: "skos:Concept".freeze,
-      inverseOf: "ibis:suggested-by".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "suggests".freeze,
-      range: "ibis:Issue".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates when the subject belief suggests the object issue."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#suggested-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "suggests"},
+      range: "https://vocab.methodandstructure.com/ibis#Issue",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"supported-by",
-      comment: %(Indicates a subject position supported by an object argument.).freeze,
-      domain: "ibis:Position".freeze,
-      inverseOf: "ibis:supports".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "supported by".freeze,
-      range: "ibis:Argument".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates a subject position supported by an object argument."},
+      domain: "https://vocab.methodandstructure.com/ibis#Position",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#supports",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "supported by"},
+      range: "https://vocab.methodandstructure.com/ibis#Argument",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :supports,
-      comment: %(Indicates a subject argument that supports an object position.).freeze,
-      domain: "ibis:Argument".freeze,
-      inverseOf: "ibis:supported-by".freeze,
-      isDefinedBy: "ibis:".freeze,
-      label: "supports".freeze,
-      range: "ibis:Position".freeze,
-      type: "owl:ObjectProperty".freeze
+      comment: {en: "Indicates a subject argument that supports an object position."},
+      domain: "https://vocab.methodandstructure.com/ibis#Argument",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#supported-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "supports"},
+      range: "https://vocab.methodandstructure.com/ibis#Position",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
 
     RDF::Vocabulary.register :ibis, self if
       RDF::Vocabulary.respond_to? :register
