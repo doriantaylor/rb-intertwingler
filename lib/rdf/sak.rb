@@ -677,7 +677,12 @@ module RDF::SAK
       uris = uris.transform_values { |v| URI(@resolver.preproc v.to_s) }
       uri  = uris[subject] || canonical_uri(subject, rdf: false, slugs: true)
 
-      ignore = ignore.to_set
+      # make ignore more robust
+      ignore = ignore.uniq.select(&:iri?).map do |i|
+        [i, @resolver.uuid_for(i, noop: true, verify: false)]
+      end.flatten.to_set
+
+      # warn ignore.sort.inspect
 
       # output
       links = []
@@ -3111,18 +3116,21 @@ module RDF::SAK
       end
 
       # notice these are only RDFa attributes that take URIs
-      RDFA_ATTR  = [:about, :resource, :typeof].freeze
-      LINK_ATTR  = [:href, :src, :data, :action, :longdesc].freeze
+      RDFA_ATTR  = %i[about resource typeof].freeze
+      LINK_ATTR  = %i[href src data action longdesc].freeze
       LINK_XPATH = ('.//html:*[not(self::html:base)][%s]' %
         (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
       def rewrite_links node = @doc, uuids: {}, uris: {}, rdfa: true, &block
+        res   = @context.resolver
         base  = base_for node
-        count = 0
+        out   = []
         cache = {}
         names = rdfa ? LINK_ATTR + RDFA_ATTR : LINK_ATTR
-        node.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
-          names.each do |attr|
+        xpath = ('.//html:*[not(self::html:base)][%s]' %
+          names.map { |a| "@#{a.to_s}" }.join(?|))
+        node.xpath(xpath, { html: XHTMLNS }).each do |elem|
+          (names - [:typeof]).each do |attr|
             attr = attr.to_s
             next unless elem.has_attribute? attr
 
@@ -3153,24 +3161,28 @@ module RDF::SAK
 
             abs = RDF::URI(abs.to_s)
 
+            # warn "first #{abs.inspect}"
+
             # round-trip to uuid and back if we can
-            if uuid = uuids[abs] ||= @context.canonical_uuid(abs)
-              abs = cache[abs] ||= @context.canonical_uri(uuid, to_uuid: true)
+            if uuid = uuids[abs] ||= res.uuid_for(abs, verify: false)
+              abs = cache[abs] ||= res.uri_for(uuid, roundtrip: true)
             else
-              abs = cache[abs] ||= @context.canonical_uri(abs, to_uuid: true)
+              abs = cache[abs] ||= res.uri_for(abs, roundtrip: true)
             end
+
+            # warn "then #{abs.inspect}"
 
             # reinstate the path parameters
             if !pp.empty? && split_pp(abs, only: true).empty?
               abs = abs.dup
-              abs.path = ([abs.path] + pp).join(';')
+              abs.path = ([abs.path] + pp).join(?;)
             end
 
             # warn "trying #{abs}"
             elem[attr] = @uri.host == abs.host ?
               @uri.route_to(abs.to_s).to_s : abs.to_s
             # warn "that (#{abs} -> #{elem[attr]}) worked lol"
-            count += 1
+            out << abs
           end
 
           # warn "now trying block"
@@ -3178,8 +3190,8 @@ module RDF::SAK
           # warn "block worked"
         end
 
-
-        count
+        # uhh is there any better return value here?
+        out.uniq
       end
 
       # sponge the document for rdfa
@@ -3262,7 +3274,7 @@ module RDF::SAK
 
         # XXX KILL THIS
         RDF::SAK::Util::Messy.rehydrate body, resolver, rescan: rescan do |cs|
-          warn cs.inspect
+          # warn cs.inspect
           unless cs.empty?
             cs.select! do |k, v|
               repo.type_is?(v[:types],
@@ -3348,8 +3360,7 @@ module RDF::SAK
 
         # we accumulate a record of the links in the body so we know
         # which ones to skip in the head
-        bodylinks = {}
-        rewrite_links body, uuids: ufwd, uris: urev do |elem|
+        bodylinks = rewrite_links body, uuids: ufwd, uris: urev do |elem|
           vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
           vocab = uri_pp(vocab.to_s) if vocab
 
@@ -3357,7 +3368,7 @@ module RDF::SAK
             # warn [@uri, elem['href'] || elem['src']].inspect
             vu = uri_pp(elem['href'] || elem['src'])
             ru = RDF::URI(@uri.merge(vu))
-            bodylinks[urev[ru] || ru] = true
+            # bodylinks[urev[ru] || ru] = true
 
             if rel = resources[urev[ru] || ru]
               elem['rel'] =
@@ -3374,7 +3385,7 @@ module RDF::SAK
 
         # and now we do the head
         links = @context.head_links @uuid, struct: struct, nodes: resources,
-          prefixes: @context.prefixes, ignore: bodylinks.keys, labels: labels,
+          prefixes: @context.prefixes, ignore: bodylinks, labels: labels,
           vocab: XHV, rev: RDF::SAK::CI.document
 
         # we want to duplicate links from particular subjects (eg the root)
@@ -3601,6 +3612,14 @@ module RDF::SAK
 
         html.root[:prefix] = flatten_attr prefixes.transform_values(&:to_s)
 
+        # this prevents what i think was causing the first section to
+        # be incorrectly identified with the document
+        if body = html.at_xpath('/html:html/html:body', XPATHNS)
+          body[:about] = '' unless %w[about resource typeof].any? do |a|
+            body.key? a
+          end
+        end
+
         # warn html.root[:prefix]
 
         # if the document has no rdfa
@@ -3614,7 +3633,7 @@ module RDF::SAK
           stmt.subject = res.uuid_for s, verify: false, noop: true if s.iri?
           stmt.object  = res.uuid_for o, verify: false, noop: true if o.iri?
 
-          warn stmt
+          # warn stmt
 
           # warn o if stmt.object.nil?
 

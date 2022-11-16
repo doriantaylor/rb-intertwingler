@@ -869,7 +869,7 @@ module RDF::SAK
       label: "words-and-blocks",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
 
-    RDF::Vocabulary.register :ibis, self if
+    RDF::Vocabulary.register :ci, self if
       RDF::Vocabulary.respond_to? :register
   end
 end
