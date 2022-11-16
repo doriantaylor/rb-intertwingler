@@ -503,7 +503,8 @@ module RDF::SAK
       end
 
       # make sure these are clean before shipping em out
-      rsrc.values.each { |v| v.sort!.uniq! }
+      cmp = cmp_term
+      rsrc.values.each { |v| v.sort!(&cmp).uniq! }
       rsrc
     end
 
@@ -1526,7 +1527,7 @@ module RDF::SAK
 
     public
 
-    # Generate a closure that can e passed into {Enumerable#sort} for
+    # Generate a closure that can be passed into {Enumerable#sort} for
     # sorting URIs that would be found in the wild.
     #
     # @param reverse [false, true] whether to reverse the sort
@@ -1720,7 +1721,7 @@ module RDF::SAK
 
         return c if c != 0
 
-        # these are both literal
+        # at this point these are both literal so only need to test one
         if a.literal?
           # then detect if both are the same type
           unless datatype.empty?
@@ -1744,9 +1745,10 @@ module RDF::SAK
             return c if c != 0
           end
 
-          # then optionally squash to lower case
+          # at this point we're comparing values
           a, b = [a, b].map do |x|
             x = x.value
+            # optionally squash to lower case
             nocase ? x.downcase : x
           end
 
@@ -1838,7 +1840,8 @@ module RDF::SAK
         a, b = b, a if reverse
 
         c = labcmp.(a, b)
-        c == 0 ? uricmp.(a, b) : c
+        # warn "#{a.inspect} <=> #{b.inspect} == #{c}"
+        c == 0 && [a, b].all?(&:iri?) ? uricmp.(a, b) : c
       end
     end
 

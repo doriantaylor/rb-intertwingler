@@ -10,4 +10,4 @@ task :default => :spec
 
 # XXX turn this into a rake task at some point :P
 
-# rdf serialize --uri 'https://privatealpha.com/ontology/content-inventory/1#' --output-format vocabulary --module-name RDF::SAK --class-name CI -o lib/rdf/sak/ci.rb --strict 'https://privatealpha.com/ontology/content-inventory/1#'
+# rdf serialize --uri 'https://vocab.methodandstructure.com/content-inventory#' --output-format vocabulary --module-name RDF::SAK --class-name CI -o lib/rdf/sak/ci.rb --strict 'https://vocab.methodandstructure.com/content-inventory#'

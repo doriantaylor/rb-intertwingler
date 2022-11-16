@@ -11,6 +11,10 @@ module RDF::SAK
   #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
   #   # @version 0.14
   #   class CI < RDF::StrictVocabulary
+  #     # This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Abstract
+  #
   #     # An action, as its name implies, is meant to represent something a person or other agent ought to do to a document.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Action
@@ -19,6 +23,10 @@ module RDF::SAK
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Advertisement
   #
+  #     # This is an explicit document appendix class, intended to belong to BIBO, which appears to be abandonware.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Appendix
+  #
   #     # An audience represents the set of people who are the intended recipients of the resource. This class is at once an agent class as well as a conceptual entity, capable of being mixed into a SKOS concept scheme.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Audience
@@ -26,6 +34,10 @@ module RDF::SAK
   #     # In order to merge a document, we must define the target to which it ought to be merged. This class is identical to an Action, save for such a property.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Merge
+  #
+  #     # This is an explicit document section (i.e., sub-chapter) class.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Section
   #
   #     # Identifies a variable which can be embedded into a document and assigned an rdf:value.
   #     # @return [RDF::Vocabulary::Term]
@@ -267,7 +279,7 @@ module RDF::SAK
       comment: {en: "This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies."},
       "http://purl.org/dc/terms/created": "2012-01-23T11:52:00-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z"],
       "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy", "http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://vocab.org/frbr/core", "http://vocab.org/frbr/extended", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
       "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/dc/terms/title": {en: "A Content Inventory Vocabulary"},
@@ -281,6 +293,12 @@ module RDF::SAK
       type: ["http://purl.org/ontology/bibo/Webpage", "http://www.w3.org/2002/07/owl#Ontology"]
 
     # Class definitions
+    term :Abstract,
+      comment: {en: "This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware."},
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "Abstract",
+      subClassOf: "http://purl.org/ontology/bibo/DocumentPart",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Action,
       comment: {en: "An action, as its name implies, is meant to represent something a person or other agent ought to do to a document."},
       "http://www.w3.org/2004/02/skos/core#usageNote": {en: "Being a subclass of an event, a ci:Action can have agents, factors, products, places and times ascribed to it."},
@@ -295,6 +313,13 @@ module RDF::SAK
       label: "Advertisement",
       subClassOf: "http://xmlns.com/foaf/0.1/Document",
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :Appendix,
+      comment: {en: "This is an explicit document appendix class, intended to belong to BIBO, which appears to be abandonware."},
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://github.com/structureddynamics/Bibliographic-Ontology-BIBO/pull/17",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "Appendix",
+      subClassOf: "http://purl.org/ontology/bibo/DocumentPart",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Audience,
       comment: {en: "An audience represents the set of people who are the intended recipients of the resource. This class is at once an agent class as well as a conceptual entity, capable of being mixed into a SKOS concept scheme."},
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://purl.org/dc/terms/audience", "http://www.w3.org/ns/org#Role"],
@@ -307,6 +332,12 @@ module RDF::SAK
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "Merge",
       subClassOf: "https://vocab.methodandstructure.com/content-inventory#Action",
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :Section,
+      comment: {en: "This is an explicit document section (i.e., sub-chapter) class."},
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "Section",
+      subClassOf: "http://purl.org/ontology/bibo/DocumentPart",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Variable,
       comment: {en: "Identifies a variable which can be embedded into a document and assigned an rdf:value."},
@@ -838,7 +869,7 @@ module RDF::SAK
       label: "words-and-blocks",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
 
-    RDF::Vocabulary.register :ci, self if
+    RDF::Vocabulary.register :ibis, self if
       RDF::Vocabulary.respond_to? :register
   end
 end

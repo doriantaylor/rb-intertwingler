@@ -4,6 +4,139 @@ require 'time'
 require 'nokogiri'
 require 'xml-mixup'
 
+# This is the base class for (X)HTML+RDFa documents.
+class RDF::SAK::Document
+  include XML::Mixup
+  include RDF::SAK::NLP
+
+  def initialize resolver, subject
+    @resolver = resolver
+    @subject  = subject
+  end
+
+  def head_links
+  end
+
+  def head_meta
+  end
+
+  def twitter_meta
+  end
+
+  def backlinks
+  end
+
+  # STATIC METHODS THAT ONLY TOUCH MARKUP
+
+  def self.reindent elem
+  end
+
+  def self.subtree elem, xpath = '/*', reindent: true, prefixes: {}
+  end
+
+  def self.get_base elem
+  end
+
+  def self.get_prefixes elem
+  end
+
+  def self.subject_for elem
+  end
+
+  def self.lang_for elem
+  end
+
+  def self.modernize elem
+  end
+
+  def self.scan_inlines elem
+  end
+
+  def self.dehydrate elem
+  end
+
+  def self.rehydrate elem
+  end
+
+  def self.rewrite_links elem
+  end
+
+  # these all need the resolver
+
+  def self.prefix_subset resolver, nodes, prefixes: {}
+  end
+
+  def self.title_tag resolver, predicates, content
+  end
+
+  def self.literal_tag resolver, value, name: :span, property: nil, text: nil,
+      prefixes: {}, vocab: nil
+  end
+
+  def self.link_tag resolver, target, rel: nil, rev: nil, href: nil, about: nil,
+      typeof: nil, label: nil, property: nil, name: :a, placeholder: nil,
+      base: nil, prefixes: nil, vocab: nil
+  end
+
+  def self.generate_list resolver, list, base: nil, langs: [],
+      rel: nil, rev: nil, prefixes: {}, ncache: Set.new, ordered: true
+  end
+
+  def self.generate_fragment resolver, subject, struct: nil, base: nil, langs: [],
+      rel: nil, rev: nil, prefixes: {}, ncache: Set.new,
+      tag: :div, ptag: :div, otag: :div, pskip: [], oskip: [], wrap_list: false
+  end
+
+  def self.generate_doc resolver, subject, struct: nil, base: nil, langs: [],
+      prefixes: {}, vocab: nil
+  end
+
+  # This class encapsulates an (X)HTML document that comes from an
+  # (X)HTML or Markdown source.
+  class Parsed
+
+    private
+
+    # do the actual parsing here
+
+    public
+
+    def initialize resolver, subject, source: nil, type: nil, lang: nil
+      super resolver, subject
+      # @source =
+
+      # XXX parse rdfa/other metadata??
+    end
+
+    # Transform the document and return it.
+    def transform
+      # we strip off the <head> and generate a new one
+    end
+
+    # Transform the document and replace it internally.
+    def transform!
+      @doc = transform
+    end
+  end
+
+  # This class is for things like SKOS concept schemes, rosters,
+  # reading lists, etc.
+  class Index
+
+    # we'll make this a class method
+    def self.alphabetized_list resolver, subject
+    end
+
+  end
+end
+
+### YO do you know what would be way sick? if i made a document class
+### generator thing that would be based on rdf type. totally wouldn't
+### be abused.
+###
+### (this also implies some kind of class/instance-based dispatcher,
+### then we gotta start talking about shacl, loupe, etc)
+
 class RDF::SAK::Document
   include XML::Mixup
   include RDF::SAK::Util

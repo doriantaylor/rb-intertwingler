@@ -108,7 +108,7 @@ module RDF::SAK::Util::Messy
       end.flatten).join(?|),
     dehydrate: './/html:a[count(*)=1][html:dfn|html:abbr|html:span]',
     rehydrate: (
-      %w[abbr[not(ancestor::html:dfn)]] + (INLINES - ['abbr'])).map { |e|
+      %w[abbr[not(ancestor::html:dfn)]] + (INLINES - %w[a abbr])).map { |e|
         ".//html:#{e}[not(ancestor::html:a)]" }.join(?|).freeze,
     htmllinks: (%w[*[not(self::html:base)][@href]/@href
       *[@src]/@src object[@data]/@data *[@srcset]/@srcset
@@ -2368,7 +2368,7 @@ module RDF::SAK::Util::Messy
       if block
         block.call subject, text, attrs, e
       else
-        # otherwise 
+        # otherwise
         [subject, text, attrs, e.name.to_sym]
       end
     end.compact.uniq
@@ -2410,9 +2410,13 @@ module RDF::SAK::Util::Messy
     node.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
       # XXX figure out why this next line is necessary
       next if e.xpath('count(ancestor::html:a[@href][1]) != 0', XPATHNS)
+      # this should keep most stupid stuff from happening
+      next if e.xpath('boolean(self::*[@rel|@rev][@property and not(@content)])')
+      # lol this was always returning [] which is true; also note
+      # `at_xpath` breaks if the return type isn't a node set
 
       lang = e.xpath(XPATH[:lang]).to_s.strip.downcase
-      dt   = e['datatype']
+      # dt   = e['datatype'] # not used currently
 
       # deal with <time> element XXX should also deal with XMLLiteral
       text = (e.name == 'time' && e['datetime'] ||

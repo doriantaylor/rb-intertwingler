@@ -1278,6 +1278,16 @@ module RDF::SAK
       fh.close
     end
 
+    def write_turtle file
+      file = Pathname(file).expand_path.open('wb') unless file.is_a? IO
+      # warn file
+      RDF::Writer.for(:turtle).open(file, prefixes: resolver.prefixes) do |w|
+        # warn graph.size
+        w << graph
+      end
+      file.close unless file.closed?
+    end
+
     # generate atom feed
 
     #
@@ -1523,7 +1533,7 @@ module RDF::SAK
           cp = cu.request_uri.delete_prefix '/'
           next if tu.uuid == cp
 
-          # XXX 
+          # XXX
           # next if @graph.replacements_for(doc, published: published).empty?
 
           (rwm[cp] ||= []) << doc
@@ -1869,7 +1879,8 @@ module RDF::SAK
 
       xhtml_stub(base: base, title: title, transform: @config[:transform],
         prefix: pfx, vocab: XHV, link: links, meta: meta,
-        attr: { about: '', typeof: types }, content: spec
+        attr: { id: UUID::NCName.to_ncname_64(subject.to_s.dup),
+          about: '', typeof: types }, content: spec
       ).document
     end
 
@@ -2185,7 +2196,8 @@ module RDF::SAK
         xf = config.dig(:stats, :transform) || config[:transform]
 
         out[s] = xhtml_stub(base: base, title: title,
-          transform: xf, attr: { about: '', typeof: types },
+          transform: xf, attr: {
+            id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
           prefix: prefixes, content: {
             [{ [{ [{ ['About'] => :th, colspan: 4 },
                 { ['Counts'] => :th, colspan: 4 },
@@ -2953,10 +2965,6 @@ module RDF::SAK
 
     # fetch references for people/companies/concepts/etc from dbpedia/wikidata
 
-
-
-
-
     # - document context class -
 
     class Document
@@ -3212,7 +3220,7 @@ module RDF::SAK
           a = []
           b = []
           x.each_index { |i| (i % 2 == 0 ? a : b).push x[i] }
-          a.map!(&:to_sym)
+          a.map! { |x| x.gsub(/:.*/, '').to_sym }
           # if the size is uneven the values will be nil, so w drop em
           pfx.merge! a.zip(b).to_h.reject { |_, v| v.nil? }
         end
@@ -3240,7 +3248,7 @@ module RDF::SAK
         @context.generate_twitter_meta @uuid
       end
 
-      def transform_xhtml published: true, rehydrate: false, rescan: false
+      def transform_xhtml published: true, rehydrate: false, rescan: false, sponge: false
         # before we do any more work make sure this is html
         doc  = @doc.dup 1
         body = doc.at_xpath(
@@ -3249,12 +3257,16 @@ module RDF::SAK
         resolver = @context.resolver
         repo     = @context.graph
 
+        # sponge initially
+        sponge doc, repo: repo if sponge
+
         # XXX KILL THIS
         RDF::SAK::Util::Messy.rehydrate body, resolver, rescan: rescan do |cs|
+          warn cs.inspect
           unless cs.empty?
             cs.select! do |k, v|
               repo.type_is?(v[:types],
-                [RDF::Vocab::SKOS.Concept #, RDF::Vocab::FOAF.Agent
+                [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent
                 ])
             end
             # XXX TODO make this logic better: if there are still
@@ -3490,6 +3502,9 @@ module RDF::SAK
           script << doc.create_text_node('')
         end
 
+        # sponge the generated data back lol
+        sponge doc, repo: repo if sponge
+
         doc
       end
 
@@ -3499,7 +3514,7 @@ module RDF::SAK
       # @param rehydrate
       #
       # @return [Array] pathname(s) written
-      def write_to_target published: true, rehydrate: false, rescan: false
+      def write_to_target published: true, rehydrate: false, rescan: false, sponge: false
 
         # in all cases we write to private target
         states = [false]
@@ -3512,8 +3527,8 @@ module RDF::SAK
 
           # XXX this is dumb; it should do something more robust if it
           # fails
-          doc = transform_xhtml(
-            published: state, rehydrate: rehydrate, rescan: rescan) or next
+          doc = transform_xhtml(published: state, rehydrate: rehydrate,
+                                rescan: rescan, sponge: sponge) or next
 
           begin
             fh   = Tempfile.create('xml-', target)
@@ -3548,8 +3563,8 @@ module RDF::SAK
       #
       # @return [RDF::Repository] the statements found in the document.
       #
-      def sponge overwrite: false
-        out = RDF::Repository.new
+      def sponge doc = @doc, repo: nil, overwrite: false
+        repo ||= RDF::Repository.new
 
         # remove garbage from the <head> from the working version; it
         # was thrown in there ad-hoc
@@ -3565,19 +3580,28 @@ module RDF::SAK
         # gather up all of the values of the rdfa attributes
         prefixes = {}
         found = html.xpath(CURIE_TAGS, RDF::SAK::Util::XPATHNS).map do |elem|
-          prefixes = prefixes_for elem, prefixes
+          prefixes = RDF::SAK::Util::Messy.get_prefixes(elem).merge prefixes
           CURIES.map { |a| elem[a].to_s.strip.split }
         end.flatten.reject { |c| /:(?=\/\/)/.match? c }.map do |c|
           c = /^(?:([^:]+):)?/.match(c).captures.first
           c ? c.to_sym : c
-        end
+        end.to_set
 
         # merge any found prefixes with our prefixes
-        prefixes = res.prefixes.select do |k, _|
-          found.include? k
-        end.merge prefixes
+        prefixes = res.prefixes.merge(prefixes).select do |k, _|
+          found.include? k and not k.nil?
+        end
+
+        # warn found.inspect
+        # warn prefixes.inspect
+
+        # warn prefixes.sort.inspect
+
+        # warn found.inspect, res.prefixes.keys.to_set.inspect, prefixes.inspect
 
         html.root[:prefix] = flatten_attr prefixes.transform_values(&:to_s)
+
+        # warn html.root[:prefix]
 
         # if the document has no rdfa
 
@@ -3585,20 +3609,19 @@ module RDF::SAK
         # we're doing this here then we assume they are authoritative
         # and don't check them against the graph
         RDF::RDFa::Reader.new(html).each do |stmt|
-          if stmt.subject.iri? and
-              su = res.uuid_for(stmt.subject, verify: false)
-            stmt.subject = su
-          end
-          if stmt.object.iri? and ou = res.uuid_for(stmt.object, verify: false)
-            stmt.object = ou
-          end
+          s, o = stmt.subject, stmt.object
 
-          # warn stmt
+          stmt.subject = res.uuid_for s, verify: false, noop: true if s.iri?
+          stmt.object  = res.uuid_for o, verify: false, noop: true if o.iri?
 
-          out << stmt
+          warn stmt
+
+          # warn o if stmt.object.nil?
+
+          repo << stmt
         end
 
-        out
+        repo
       end
 
       def scan_inlines &block

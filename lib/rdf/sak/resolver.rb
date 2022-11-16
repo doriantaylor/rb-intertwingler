@@ -49,9 +49,12 @@ module RDF::SAK
       prefixes
     end
 
-    def sanitize_prefixes prefixes, nonnil = false
-      self.class.sanitize_prefixes prefixes, nonnil
-    end
+    # we're doing this pattern to take a select set of instance
+    # methods that happen to be stateless and put them in the class
+    # because apparently `self.class.whatever` method resolution is
+    # CRAZY slow
+    define_method :sanitize_prefixes,
+      singleton_method(:sanitize_prefixes).to_proc
 
     attr_reader :repo, :base, :aliases, :prefixes
 
@@ -122,6 +125,7 @@ module RDF::SAK
     #
     # @return [String] the preprocessed URI string
     #
+
     def self.preproc uri, extra = ''
       # take care of malformed escapes
       uri = uri.to_s.b.gsub(/%(?![0-9A-Fa-f]{2})/n, '%25')
@@ -144,9 +148,7 @@ module RDF::SAK
       out.gsub(/(%[0-9A-Fa-f]{2})/, &:upcase)
     end
 
-    def preproc uri, extra = ''
-      self.class.preproc uri, extra
-    end
+    define_method :preproc, self.singleton_method(:preproc).to_proc
 
     alias_method :preprocess, :preproc
 
@@ -185,6 +187,8 @@ module RDF::SAK
       return pp if only
       [uri] + pp
     end
+
+    define_method :split_pp, self.singleton_method(:split_pp).to_proc
 
     # Given a URI as input, split any query parameters into an array of
     # key-value pairs. If `:only` is true, this will just return the
@@ -247,9 +251,8 @@ module RDF::SAK
 
     public
 
-    def self.coerce_resource arg, as: :rdf, &block
-      RDF::SAK::Util::Clean.coerce_resource arg, as: as, &block
-    end
+    define_singleton_method :coerce_resource,
+      RDF::SAK::Util::Clean.method(:coerce_resource).unbind
 
     # Coerce the argument into a resource, either {URI} or {RDF::URI}
     # (or {RDF::Node}). The type can be specified
@@ -261,7 +264,8 @@ module RDF::SAK
     # @return [RDF::URI, URI, RDF::Vocabulary::Term, RDF::Vocabulary, String]
     #
     def coerce_resource arg, as: :rdf
-      self.class.coerce_resource arg, as: as do |arg|
+      # again self.class is suuuuuuuuper slow
+      RDF::SAK::Util::Clean.coerce_resource arg, as: as do |arg|
         begin
           @base ? @base.merge(preproc arg.to_s.strip) : arg
         rescue URI::InvalidURIError => e
@@ -335,7 +339,7 @@ module RDF::SAK
       # one URI).
       uris = if uri.respond_to? :path and uri.path.start_with? ?/
                # split off path parameters
-               uu, *pp = self.class.split_pp uri
+               uu, *pp = split_pp uri
                if pp.empty?
                  [uri] # no path parameters; this is a noop
                else
@@ -397,7 +401,7 @@ module RDF::SAK
                 tmp = uri.dup
                 tmp.fragment = nil
                 h = uuid_for tmp, scalar: false, published: published,
-                  circulated: circulated
+                  circulated: circulated, noop: noop
                 # a fragment URI for which the non-fragment part does
                 # not resolve to a UUID should likewise not resolve
                 # (XXX: or should it?)
@@ -480,8 +484,13 @@ module RDF::SAK
         c == 0 ? a.first <=> b.first : c
       end.map(&:first).compact
 
-      # cache if there is something to cache
-      @uuids[orig] = out unless out.empty?
+      if out.empty?
+        # ensure we return noop
+        out << orig if noop
+      else
+        # cache if there is something to cache
+        @uuids[orig] = out
+      end
 
       # return the first (ie most preferred) UUID
       scalar ? out.first : out
