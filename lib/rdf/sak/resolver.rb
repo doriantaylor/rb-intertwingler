@@ -780,9 +780,20 @@ module RDF::SAK
     # separation of concerns
 
     #
-    def struct_for subject, rev: false, only: [], entail: false,
-        uuids: false, canon: false
-      struct = @repo.struct_for subject
+    def struct_for subject, graph: nil, only: nil, rev: false, inverses: false,
+        uuids: false, canon: false, &block
+      @repo.struct_for subject, graph: graph, only: only, rev: rev,
+        inverses: inverses do |term|
+          if term.iri?
+            if uuids
+              term = uuid_for term, verify: false, noop: true
+            elsif canon
+              # XXX revisit this, we may want to parametrize
+              term = uri_for term
+            end
+          end
+          block ? block.call(term) : term
+        end
     end
 
     # Returns the "host document" of a given subject (or `nil` if the

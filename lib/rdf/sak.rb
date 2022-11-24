@@ -1846,9 +1846,13 @@ module RDF::SAK
       base = @resolver.uri_for subject, as: :rdf, slugs: true
       spec = alpha.sort { |a, b| a.first <=> b.first }.map do |key, structs|
         # sort these and run the block
+
         sections = structs.sort do |a, b|
-          al = @graph.label_for(a.first, struct: a.last).last
-          bl = @graph.label_for(b.first, struct: b.last).last
+          if a.nil? or b.nil?
+            raise "#{key.inspect} => #{structs.inspect}"
+          end
+          al = @graph.label_for(a.first, noop: true, struct: a.last).last
+          bl = @graph.label_for(b.first, noop: true, struct: b.last).last
           al.value.upcase <=> bl.value.upcase
         end.map do |s, st|
           # now we call the block
@@ -2333,11 +2337,15 @@ module RDF::SAK
           # sequence of elements beginning with the heading
           el = begin
                  lp, lo = @graph.label_for(s, struct: struct)
-                 [literal_tag(lo, name: :h3, property: lp, prefixes: prefixes)]
+                 if lp
+                   [literal_tag(lo, name: :h3, property: lp, prefixes: prefixes)]
+                 else
+                   [{ [s.to_s] => :h3 }]
+                 end
                end
 
           # now we do definitions
-          cmp = @graph.cmp_resource
+          cmp = @graph.cmp_term
           el += find_in_struct(struct, RDF::Vocab::SKOS.definition,
                                entail: true, invert: true).sort do |a, b|
               cmp.(a.first, b.first)
@@ -2375,8 +2383,8 @@ module RDF::SAK
             objs = find_in_struct struct, pred, invert: true
             # plump up the structs
             objs.keys.each do |k|
-              seen[k] ||= neighbours[k] ||= struct_for(k,
-                uuids: true, inverses: true, ucache: ucache, scache: scache)
+              seen[k] ||= neighbours[k] ||= @resolver.struct_for(k,
+                uuids: true, inverses: true)
             end
 
             unless objs.empty?
@@ -3574,7 +3582,7 @@ module RDF::SAK
       #
       # @return [RDF::Repository] the statements found in the document.
       #
-      def sponge doc = @doc, repo: nil, overwrite: false
+      def sponge doc = @doc, uri = @uri, repo: nil, overwrite: false
         repo ||= RDF::Repository.new
 
         # remove garbage from the <head> from the working version; it
@@ -3627,7 +3635,7 @@ module RDF::SAK
         # slurp up any rdfa, swapping in canonical uuids; note that if
         # we're doing this here then we assume they are authoritative
         # and don't check them against the graph
-        RDF::RDFa::Reader.new(html).each do |stmt|
+        RDF::RDFa::Reader.new(html, base_uri: @uri.to_s).each do |stmt|
           s, o = stmt.subject, stmt.object
 
           stmt.subject = res.uuid_for s, verify: false, noop: true if s.iri?

@@ -164,7 +164,7 @@ module RDF::SAK::Util::Clean
       unique: true, vocab: false
     # normalize to array
     terms = [] if terms.nil?
-    terms = terms.respond_to?(:to_a) ? terms.to_a : [terms]
+    terms = terms.respond_to?(:to_a) ? terms.to_a.dup : [terms]
 
     # ensure everything is a resource (or uri)
     tc = blank ? RDF::Resource : RDF::URI

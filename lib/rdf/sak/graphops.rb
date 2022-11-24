@@ -308,7 +308,7 @@ module RDF::SAK
       only = coerce_node_spec only
 
       subject   = assert_resource  subject
-      predicate = assert_resources predicate, blank: false, empty: false
+      predicate = assert_resources predicate, blank: false, empty: true
       datatype  = assert_resources datatype,  blank: false
       graph     = assert_resources graph
 
@@ -323,6 +323,9 @@ module RDF::SAK
 
       # add a single nil graph for triple semantics
       graph << nil if graph.empty?
+
+      # add a single nil predicate for wildcards
+      predicate << nil if predicate.empty?
 
       # okay go
       out = graph.reduce({}) do |out, g|
@@ -405,7 +408,7 @@ module RDF::SAK
 
       only = coerce_node_spec only, rev: true
 
-      predicate = assert_resources predicate, blank: false, empty: false
+      predicate = assert_resources predicate, blank: false, empty: true
       object    = assert_term      object
       graph     = assert_resources graph
 
@@ -416,6 +419,8 @@ module RDF::SAK
 
       # add nil graph to the array for triple semantics
       graph << nil if graph.empty?
+
+      predicate << nil if predicate.empty?
 
       # okay go
       out = graph.reduce({}) do |out, g|
@@ -548,7 +553,7 @@ module RDF::SAK
     #  pairs.
     #
     def label_for subject, graph: nil, entail: true, unique: true,
-        lang: nil, desc: false, alt: false, struct: nil
+        lang: nil, desc: false, alt: false, noop: false, struct: nil
 
       # a literal is its own label
       if subject.is_a? RDF::Literal
@@ -589,6 +594,8 @@ module RDF::SAK
           end
         end
       end
+
+      accum << [nil, subject] if noop and accum.empty?
 
       unique ? accum.first : accum.uniq
     end
@@ -1313,6 +1320,9 @@ module RDF::SAK
       # get all the RDF types in the graph(s)
       out = []
 
+      # if this is an empty array we get nothing back
+      graph << nil if graph.empty?
+
       all_types(graph: graph).each do |t|
         next unless type_is? t, rdftype
         next if !exclude.empty? and type_is? t, exclude
@@ -1706,7 +1716,7 @@ module RDF::SAK
     # @return [Proc] the comparison function
     #
     def cmp_literal reverse: false, datatype: nil, language: nil,
-        nocase: true, longer: false, resources_first: false
+        nocase: true, longer: false, longer_raw: nil, resources_first: false
       datatype = assert_resources datatype, blank: false
       language = coerce_languages language
 
@@ -1734,14 +1744,22 @@ module RDF::SAK
           end
 
           # then detect if both are the same language
-          if a.datatype == RDF.langString and !language.empty?
+          if [a, b].any?(&:language?) and !language.empty?
             al, bl = [a, b].map do |x|
-              x = x.language.downcase.tr_s(?_, ?-)
+              x = x.language.to_s.downcase.tr_s(?_, ?-)
               language.index(x) || Float::INFINITY
             end
 
             c = al <=> bl
 
+            return c if c != 0
+          end
+
+          # unconditionally return the longer string
+          unless longer_raw.nil?
+            al, bl = a.value.strip.length, b.value.strip.length
+            al, bl = bl, al unless longer_raw?
+            c = al <=> bl
             return c if c != 0
           end
 

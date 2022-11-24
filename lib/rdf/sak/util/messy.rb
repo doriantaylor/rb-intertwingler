@@ -81,6 +81,9 @@ module RDF::SAK::Util::Messy
     li main nav p pre section table].freeze
   INLINES = %w[a dfn abbr span var kbd samp code q cite data time mark].freeze
 
+  # rehydrate boilerplate
+  RH_BP = '[not(@rel|@rev|@property|@about|@resource|@typeof)]'.freeze
+
   XPATH = {
     htmlbase: proc {
       x = ['ancestor-or-self::html:html[1]/' \
@@ -109,7 +112,9 @@ module RDF::SAK::Util::Messy
     dehydrate: './/html:a[count(*)=1][html:dfn|html:abbr|html:span]',
     rehydrate: (
       %w[abbr[not(ancestor::html:dfn)]] + (INLINES - %w[a abbr])).map { |e|
-        ".//html:#{e}[not(ancestor::html:a)]" }.join(?|).freeze,
+      ".//html:#{e}#{RH_BP}" }.join(?|).freeze,
+    rh_filter:
+    'ancestor::html:a|ancestor::*[@property and not(@content)]'.freeze,
     htmllinks: (%w[*[not(self::html:base)][@href]/@href
       *[@src]/@src object[@data]/@data *[@srcset]/@srcset
       form[@action]/@action].map { |e|
@@ -2391,29 +2396,33 @@ module RDF::SAK::Util::Messy
   end
 
   # Scan all the +dfn+/+abbr+/+span+ tags in the document that are not
-  # already wrapped in a link. This method scans the text (or
-  # +@content+) of each element and compares it to the contents of the
-  # graph. If the process locates a subject, it will use that subject
-  # as the basis of a link. if there are zero subjects, or more than
-  # one, then the method executes a block which can be used to pick
-  # (e.g., via user interface) a definite subject or otherwise add one.
+  # already wrapped in a link, or already RDFa. This method scans the
+  # text (or +@content+) of each element and compares it to the
+  # contents of the graph. If the process locates a subject, it will
+  # use that subject as the basis of a link. if there are zero
+  # subjects, or more than one, then the method executes a block which
+  # can be used to pick (e.g., via user interface) a definite subject
+  # or otherwise add one.
   #
   # (maybe add +code+/+kbd+/+samp+/+var+/+time+ one day too)
   #
-  def rehydrate node, resolver, cache: {}, rescan: false, &block
+  # @param node [Nokogiri::XML::Node] the root node
+  # @param resolver [RDF::SAK::Resolver] the URI resolver
+  # @param base [nil, URI, RDF::URI]
+  # @param cache [Hash]
+  # @param rescan [false, true] dumb name for something that adds triples
+  #
+  def rehydrate node, resolver, base: nil, cache: {}, rescan: false, &block
     graph = resolver.repo
     # collect all the literals
     graph.each_object do |o|
-      (cache[o.value.strip.downcase] ||= Set.new) << o if o.literal?
+      lemma = RDF::SAK::NLP.lemmatize o.value
+      (cache[lemma.downcase] ||= Set.new) << o if o.literal?
     end
 
     node.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
-      # XXX figure out why this next line is necessary
-      next if e.xpath('count(ancestor::html:a[@href][1]) != 0', XPATHNS)
-      # this should keep most stupid stuff from happening
-      next if e.xpath('boolean(self::*[@rel|@rev][@property and not(@content)])')
-      # lol this was always returning [] which is true; also note
-      # `at_xpath` breaks if the return type isn't a node set
+      # split the xpath up so it isn't as costly to run
+      next if e.at_xpath(XPATH[:rh_filter], XPATHNS)
 
       lang = e.xpath(XPATH[:lang]).to_s.strip.downcase
       # dt   = e['datatype'] # not used currently
@@ -2447,17 +2456,19 @@ module RDF::SAK::Util::Messy
         y[:types]  ||= graph.query([x.subject, RDF.type, nil]).objects.sort
       end
 
-      # if there's only one candidate, this is basically a noop
-      chosen = cand.keys.first if cand.size == 1
-
-      # call the block to reconcile any gaps or conflicts
-      if block_given? and cand.size != 1
+      # passing a block to this method enables e.g. interactive
+      # control over which candidates, if any, get applied to the tag.
+      if block_given?
         # the block is expected to return one of the candidates or
         # nil. we call the block with the graph so that the block can
         # manipulate its contents.
-        chosen = block.call cand
+        chosen = block.call cand, e
         raise ArgumentError, 'block must return nil or a term' unless
           chosen.nil? or chosen.is_a? RDF::Term
+      elsif !cand.empty?
+        # y'know some kind of deterministic differentiation mechanism
+        # would be useful here but i can't think of one
+        chosen = cand.keys.first
       end
 
       if chosen
@@ -2476,11 +2487,11 @@ module RDF::SAK::Util::Messy
         # we should actually probably move any prefix/vocab/xmlns
         # declarations from the inner node to the outer one (although
         # in practice this will be an unlikely configuration)
-        pfx  = get_prefixes e
-        base = get_base e
+        pfx   = get_prefixes e
+        ebase = get_base e, default: base
 
         # find the subject for this node
-        subject = subject_for(e, prefixes: pfx, base: base)
+        subject = subject_for(e, prefixes: pfx, base: ebase)
         preds = if subject
                   su = resolver.uuid_for(subject) || subject
                   pp = graph.query([su, nil, chosen]).predicates.uniq
@@ -2523,7 +2534,7 @@ module RDF::SAK::Util::Messy
   public
 
   # Returns the set of RDFa terms that are found in the subtree from
-  # the given node on down. Does not 
+  # the given node on down. Does not
 
   def collect_rdfa_terms node, prefixes: {}, vocab: nil
     out = Set.new

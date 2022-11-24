@@ -19,7 +19,7 @@ The proximate goals of this implementation are as follows:
   presentation](https://github.com/doriantaylor/rdfa-xslt),
 * Development of a deterministic, standards-compliant, [client-side
   transclusion mechanism](https://github.com/doriantaylor/xslt-transclusion).
- 
+
 Finally, this library is also intended to establish a set of hard
 requirements for the kind of RDF and Linked Data infrastructure that
 would be necessary to replicate its behaviour in a more comprehensive
@@ -30,16 +30,16 @@ personal site](https://doriantaylor.com/), which I use as a test
 corpus. However, this library draws together a number of techniques
 which have been in use with employers and clients for well over a decade.
 
-## 2021-12-29 OVERHAUL LOL
+## MAJOR REFACTOR/OVERHAUL LOL
 
-* [ ] RDF::Repository extension (entailment, etc)
-* [ ] URI resolver
+* [x] RDF::Repository extension (entailment, etc)
+* [x] URI resolver
 * [ ] generalized markup document interface
 * [ ] data forensics from docs
   * [ ] nlp
   * [ ] metrics
   * [ ] pre-rdfa scan
-* [ ] storage driver
+* [ ] source driver
 * [ ] target driver
 * [ ] web microservicey app thing
   * [ ] caching proxy?

@@ -2,6 +2,23 @@
 require 'rdf/sak/version' # initialize the symbols
 
 require 'lemmatizer'
+require 'engtagger'
+
+private
+
+# XXX why does this feel super familiar
+POS_MAP = {
+  noun: %i[xnn nnp nnps nns],
+  verb: %i[vb vbd vbg vbn vbp vbz],
+  adj:  %i[jj jjr jjs],
+  adv:  %i[rb rbr rbs rp],
+}.reduce({}) do |hash, pair|
+  target = pair.first
+  pair.last.each { |v| hash[v] = pair.first }
+  hash
+end.freeze
+
+public
 
 # This is the *extremely* lightweight NLP functionality. Goals:
 #
@@ -167,9 +184,22 @@ module RDF::SAK::NLP
 
   # this is dumb but whatever
 
-  def lemmatize term
-    lem = @@lem ||= Lemmatizer.new
-    term.strip.split.map { |t| lem.lemma t }.join ' '
+  def lemmatize text, type = nil
+    # XXX parameters for these? lol
+    tag = @@tagger ||= EngTagger.new
+    lem = @@lemma  ||= Lemmatizer.new
+
+    tag.tag_pairs(text.strip).map do |pair|
+      word, t = pair
+      unless %i[pos pp sym].any? { |s| s == t }
+        # if the word is merely capitalized we downcase it (XXX maybe
+        # do something smarter like check if more than 50% of the
+        # characters are uppercase rather than just the first one; ie
+        # more than half, the thing is an acronym)
+        word.downcase! if word == word.downcase.capitalize
+        lem.lemma word, POS_MAP[t] || type
+      end
+    end.compact.join ' '
   end
 
   # make these instance methods available to the module
