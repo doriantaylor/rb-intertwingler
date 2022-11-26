@@ -156,16 +156,22 @@ module RDF::SAK
 
     # this gives us a set of inverse (and symmetric) properties for
     # the given input
-    def invert_semantic predicates, entail: false
-      predicates = assert_resources predicates, empty: false
-      inverted = Set[]
-      # scare up the reverse properties
-      predicates.each do |p|
-        # inverse properties are available by entailment
-        inverted |= p.inverseOf.to_set if p.respond_to? :inverseOf
-        # symmetric properties go in as-is
-        inverted << p if symmetric? p
-      end
+    def invert_semantic properties, entail: false
+      properties = assert_resources properties, empty: false
+
+      inverted = properties.map do |p|
+        if icache[p]
+          icache[p]
+        else
+          # inverse properties are available by entailment
+          set = p.respond_to?(:inverseOf) ? p.inverseOf.to_set : Set[]
+          # symmetric properties go in as-is
+          set << p if symmetric? p
+          icache[p] = set
+        end
+      end.reduce :|
+
+      # warn properties.inspect, inverted.inspect
 
       # don't forget to entail
       entail ? property_set(inverted) : inverted
@@ -320,6 +326,8 @@ module RDF::SAK
       # do the reverse predicates once now instead of recomputing them
       # with every graph
       revp = invert_semantic predicate, entail: entail unless only == [:literal]
+
+      # warn "wat #{revp} #{only}"
 
       # add a single nil graph for triple semantics
       graph << nil if graph.empty?
@@ -934,6 +942,7 @@ module RDF::SAK
     private
 
     def host_for_internal subject, seen = Set[],
+        dtypes = document_types & all_types,
         graph: [], published: false, circulated: false
 
       # we begin by looking for an explicit designation
@@ -942,12 +951,14 @@ module RDF::SAK
 
       # get all the classes but the two basic ones that will net everything
       ft = fragment_spec.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
+      dt = document_types & all_types
 
       types = types_for subject, graph: graph
-      isdoc = type_is? types, document_types
+      isdoc = type_is? types, dt
       frags = type_is? types, ft
 
-      # this condition is true if
+      # this condition is true if there is no explicit host document
+      # and the subject itself is not a document type or explicit fragment type
       unless host or (isdoc and not frags)
         # attempt to find a list head (although not sure what we do if
         # there are multiple list heads)
@@ -965,22 +976,37 @@ module RDF::SAK
         end.map(&:last).flatten(1).uniq
 
         # accumulate candidate hosts and filter them
+        tab = {}
         pab = {}
+        pmap = {}
         hosts = preds.reduce([]) do |a, pair|
           pred, rev = pair
+          px = pmap[pred] ||= property_set pred
           if rev
             # reverse relations include list heads
-            a += subjects_for pred, subject, graph: graph, only: :resource
-            a += subjects_for pred, head, graph: graph, only: :resource if head
+            a += subjects_for px, subject,
+              graph: graph, entail: false, only: :resource
+            a += subjects_for px, head,
+              graph: graph, entail: false, only: :resource if head
           else
-            a += objects_for subject, pred, only: :resource
+            a += objects_for subject, px, entail: false, only: :resource
           end
           a # <-- the accumulator
-        end.uniq.select { |h| rdf_type? h, document_types }.sort do |a, b|
+        end.uniq.reject do |h|
+          ((tab[h] ||= types_for h) & dt).empty?
+        end.sort do |a, b|
           # sort by publication status
-          pa = pab[a] ||= (published?(a, circulated: circulated) ? -1 : 0)
-          pb = pab[b] ||= (published?(b, circulated: circulated) ? -1 : 0)
+          pa, pb = [a, b].map do |x|
+            pab[x] ||= (published?(x, circulated: circulated) ? -1 : 0)
+          end
           c = pa <=> pb
+          # sort by priority in config (ish; ordering could be better)
+          if c == 0
+            pa, pb = [a, b].map do |x|
+              tab[x].map { |y| dtypes.index(y) || Float::INFINITY }.min
+            end
+            c = pa <=> pb
+          end
           # XXX TODO maybe sort by date? i unno
           # sort lexically if it's a tie
           c == 0 ? a <=> b : c
@@ -988,8 +1014,8 @@ module RDF::SAK
 
         # the first one will be our baby
         if host = hosts.first and not seen.include? host
-          parent = host_for_internal host, seen | Set[host], graph: graph,
-            published: published, circulated: circulated
+          parent = host_for_internal host, seen | Set[host], dtypes,
+            graph: graph, published: published, circulated: circulated
           return parent if parent
         end
       end
@@ -1006,7 +1032,15 @@ module RDF::SAK
     end
 
     def tdcache
-      @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @tdcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    def pcache
+      @pcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    def icache
+      @icache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
     end
 
     public
@@ -1019,13 +1053,17 @@ module RDF::SAK
       hcache.capacity  = limit
       tscache.capacity = limit
       tdcache.capacity = limit
-      @cache_limit = limit
+      pcache.capacity  = limit
+      icache.capacity  = limit
+      @cache_limit     = limit
     end
 
     def flush_cache
       hcache.clear
       tscache.clear
       tdcache.clear
+      pcache.clear
+      icache.clear
       nil
     end
 
@@ -1479,37 +1517,6 @@ module RDF::SAK
       false
     end
 
-    private
-
-    # this is the recursive method that runs after the initial input
-    # has been sanitized
-    def property_set_internal properties
-      # short circuit
-      return properties if properties.empty?
-
-      # get all the equivalents, again note we can't trust this output
-      # completely so we filter for URIs
-      properties |= properties.to_a.map do |p|
-        p.entail :equivalentProperty
-      end.flatten.select(&:uri?).to_set
-
-      # get all the subproperties
-      subp = properties.reduce(Set[]) do |s, p|
-        # we can't actually be sure what's in this
-        s |= p.subProperty.flatten.to_set if p.respond_to? :subProperty
-        s # noop otherwise
-      end
-
-      # subtracting the predicates from the subproperties should have
-      # the effect of a cycle guard
-      return properties if (subp - properties).empty?
-
-      # now we can pass in the union of these two sets
-      property_set_internal(properties | subp)
-    end
-
-    public
-
     # Obtain all the properties that are equivalent to or
     # subproperties of the given propert(y|ies).
     #
@@ -1523,7 +1530,27 @@ module RDF::SAK
 
       return properties if properties.empty?
 
-      property_set_internal properties
+      # if there are cache entries for all the properties in the set,
+      # union them together and return it
+      properties.map do |p|
+        if pcache[p]
+          pcache[p]
+        else
+          # get all the equivalents, again note we can't trust this output
+          # completely so we filter for URIs
+          ep = Set[p] | p.entail(:equivalentProperty).select(&:uri?).to_set
+          ep.map do |e|
+            # get the subproperties of each
+            sp = e.respond_to?(:entail) ?
+              e.entail(:subProperty).flatten.to_set : Set[]
+            pe = pcache[e] || Set[]
+            pe |= (ep | sp)
+            pcache[e] = pe
+            # warn pcache[e]
+            pe
+          end.reduce :|
+        end
+      end.reduce :|
     end
 
     # as i will invariably trip over this
