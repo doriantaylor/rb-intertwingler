@@ -1993,7 +1993,7 @@ module RDF::SAK
         lh['xml:lang'] = lo.language if lo.language?
 
         # rdfs:seeAlso -> amazon (or whatever) link
-        sa = find_in_struct(struct, RDF::RDFS.seeAlso, invert: true)
+        sa = @graph.find_in_struct(struct, RDF::RDFS.seeAlso, invert: true)
         if sa and !sa.empty?
           sao, sap = sa.sort { |a, b| a.first <=> b.first }.first
           sap = abbreviate(sap, prefixes: prefixes)
@@ -2020,7 +2020,7 @@ module RDF::SAK
           lseen = {}
 
           dd = ops.map do |p, op|
-            opmap = find_in_struct struct, p, invert: true
+            opmap = @graph.find_in_struct struct, p, invert: true
             instance_exec(opmap, lseen, published, &op)
           end.flatten(1)
 
@@ -2192,8 +2192,8 @@ module RDF::SAK
             p = CI[f]
             if y = c[:struct][p] and !y.empty?
               h << y = y.first
-              x[:property] = abbreviate p
-              x[:datatype] = abbreviate y.datatype if y.datatype?
+              x[:property] = @resolver.abbreviate p
+              x[:datatype] = @resolver.abbreviate y.datatype if y.datatype?
             end
             x
           end
@@ -2346,7 +2346,7 @@ module RDF::SAK
 
           # now we do definitions
           cmp = @graph.cmp_term
-          el += find_in_struct(struct, RDF::Vocab::SKOS.definition,
+          el += @graph.find_in_struct(struct, RDF::Vocab::SKOS.definition,
                                entail: true, invert: true).sort do |a, b|
               cmp.(a.first, b.first)
           end.map do |o, ps|
@@ -2363,13 +2363,13 @@ module RDF::SAK
           end
 
           # do alternate labels
-          dl = find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
+          dl = @graph.find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
                               entail: true, invert: true).sort do |a, b|
             a.first <=> b.first
           end.map do |o, ps|
             next unless o.literal?
 
-            dd = { [o.value] => :dd, property: abbreviate(ps) }
+            dd = { [o.value] => :dd, property: @resolver.abbreviate(ps) }
             dd[:'xml:lang'] = dd[:lang] = o.language if o.language?
             dd[:datatype] = o.datatype if o.datatype?
             dd
@@ -2380,7 +2380,7 @@ module RDF::SAK
           dl += rels.map do |pred, dt|
             # this will give us a map of neighbours to the predicates
             # actually used to relate them
-            objs = find_in_struct struct, pred, invert: true
+            objs = @graph.find_in_struct struct, pred, invert: true
             # plump up the structs
             objs.keys.each do |k|
               seen[k] ||= neighbours[k] ||= @resolver.struct_for(k,
@@ -2899,7 +2899,7 @@ module RDF::SAK
         c = a[:type] <=> b[:type]
         c == 0 ? a[:pref].downcase <=> b[:pref].downcase : c
       end.each do |term|
-        out << [term[:id].to_s, abbreviate(term[:type]), term[:pref].to_s]
+        out << [term[:id].to_s, @resolver.abbreviate(term[:type]), term[:pref].to_s]
         %i[alt hidden refs].each do |sym|
           out << (term[sym].empty? ? [] :
                   ([nil] + term[sym].to_a.map(&:to_s).sort))

@@ -302,7 +302,7 @@ module RDF::SAK::Util::Messy
     preds.freeze
   end
 
-  def sanitize_prefixes prefixes, nonnil = false
+  def sanitize_prefixes prefixes, nonnil: false
     raise ArgumentError, 'prefixes must be a hash' unless
       prefixes.is_a? Hash or prefixes.respond_to? :to_h
     prefixes = prefixes.to_h.map do |k, v|
@@ -2607,7 +2607,7 @@ module RDF::SAK::Util::Messy
   # @param nodes [Array<RDF::Term>] The nodes to supply
   # @return [Hash] The prefix subset
   def prefix_subset prefixes, nodes
-    prefixes = sanitize_prefixes prefixes, true
+    prefixes = sanitize_prefixes prefixes, nonnil: true
 
     raise 'nodes must be arrayable' unless nodes.respond_to? :to_a
 
@@ -2620,7 +2620,7 @@ module RDF::SAK::Util::Messy
       p.split(?:).first.to_sym
     end.uniq.to_set
 
-    # now we return the subset 
+    # now we return the subset
     prefixes.select { |k, _| pfx.include? k.to_sym }
   end
 

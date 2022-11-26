@@ -1890,6 +1890,63 @@ module RDF::SAK
       end
     end
 
+    # Invert a given struct so that `{ predicate => Set[object] }`
+    # becomes `{ object => Set[predicate] }`. Optionally run a block in
+    # the inner loop. If the block returns an `Array`, the first two
+    # values will be assigned to the predicate and object in the
+    # returned inverted struct. Return an explicit `nil` in the block to
+    #
+    # @param struct [Hash{RDF::Resource => Set}] a structure containing
+    #  the predicates and objects for a given subject.
+    # @yieldparam predicate [RDF::Resource] the predicate of the statement
+    # @yieldparam object    [RDF::Value] the object of the statement
+    # @yieldreturn          [nil, Array] an optional predicate-object pair.
+    #
+    # @return [Hash] the inverted struct.
+    #
+    def invert_struct struct, &block
+      nodes = {}
+
+      struct.each do |p, v|
+        v.each do |o|
+          # copy the predicate so we don't overwrite it
+          pi = p
+
+          if block
+            tmp = block.call pi, o
+            # assign block return if it has one
+            pi, o = *tmp if tmp.is_a? Array
+          end
+
+          # now assign to output
+          nodes[o] ||= Set.new
+          nodes[o] << pi
+        end
+      end
+
+      nodes
+    end
+
+    # Find a subset of a struct for a given set of predicates,
+    # optionally inverting to give the objects as keys and predicates as
+    # values.
+    #
+    # @param struct [Hash]
+    # @param properties [RDF::URI, #to_a] the properties to find
+    # @param entail [false, true] whether to entail the predicate(s)
+    # @param invert [false, true] whether to invert the resulting hash
+    #
+    # @return [Hash] the selected subset (which could be empty)
+    #
+    def find_in_struct struct, properties, entail: false, invert: false
+      properties = coerce_resources properties
+      properties = property_set properties if entail
+
+      struct = struct.select { |p, _| properties.include? p }
+
+      invert ? invert_struct(struct) : struct
+    end
+
     # Instantiate a Resource on the given term. It is up to you to
     # ensure that `term` is actually in the graph.
     #

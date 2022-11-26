@@ -12,13 +12,14 @@ module RDF::SAK
   class Resolver
     include RDF::SAK::Util::Clean
 
-    # Return a hash mapping a set of RDF prefixes to their vocabularies.
-    #
-    # @param prefixes [Hash, #to_h] the input prefixes
-    # @param nonnil [false, true] whether to remove the nil prefix
-    #
-    def self.sanitize_prefixes prefixes, nonnil = false
-      prefixes = {} unless prefixes
+    private
+
+    # we make this a lambda so we can implicitly pass in the cache in
+    # the instance method but also have it as a static method too;
+    # also `self.class.whatever` is *insanely* slow
+    SANITIZE_PREFIXES = -> prefixes, nonnil: false, cache: nil do
+      prefixes = {} unless prefixes         # noop prefixes
+      cache    = {} unless cache.is_a? Hash # noop cache
       raise ArgumentError, 'prefixes must be a hash' unless
         prefixes.is_a? Hash or prefixes.respond_to? :to_h
       prefixes = prefixes.to_h.map do |k, v|
@@ -33,15 +34,17 @@ module RDF::SAK
           # we notice that bibo:status/ resolves to bibo: with .find
           # so we need to check if the uri is the same before accepting it
           v = RDF::URI(v) unless v.is_a? RDF::URI
-          v = if v.is_a?(Class) and v.ancestors.include?(RDF::Vocabulary)
+          v = if cache[v.to_s]
+                cache[v.to_s]
+              elsif v.is_a?(Class) and v.ancestors.include?(RDF::Vocabulary)
                 v # arrrrghhh
-              elsif vv = RDF::Vocabulary.find(v)
+              elsif vv = RDF::Vocabulary.find(v) # XXX SLOW AF hence cache
                 vv.to_uri == v ? vv : Class.new(RDF::Vocabulary(v))
               else
                 Class.new(RDF::Vocabulary(v))
               end
           v = RDF::RDFV if v == RDF
-          [k, v]
+          [k, cache[v.to_s] = v]
         end
       end.compact.to_h
 
@@ -49,12 +52,28 @@ module RDF::SAK
       prefixes
     end
 
-    # we're doing this pattern to take a select set of instance
-    # methods that happen to be stateless and put them in the class
-    # because apparently `self.class.whatever` method resolution is
-    # CRAZY slow
-    define_method :sanitize_prefixes,
-      singleton_method(:sanitize_prefixes).to_proc
+    public
+
+    # Return a hash mapping a set of RDF prefixes to their vocabularies.
+    #
+    # @param prefixes [Hash, #to_h] the input prefixes
+    # @param nonnil [false, true] whether to remove the nil prefix
+    # @param cache [Hash] an optional cache for the slowness
+    #
+    # @return [Hash] sanitized prefix map
+    #
+    define_singleton_method :sanitize_prefixes, SANITIZE_PREFIXES
+
+    # Return a hash mapping a set of RDF prefixes to their vocabularies.
+    #
+    # @param prefixes [Hash, #to_h] the input prefixes
+    # @param nonnil [false, true] whether to remove the nil prefix
+    #
+    # @return [Hash] sanitized prefix map
+    #
+    def sanitize_prefixes prefixes, nonnil: false
+      SANITIZE_PREFIXES.call prefixes, nonnil: nonnil, cache: @vocabs
+    end
 
     attr_reader :repo, :base, :aliases, :prefixes
 
@@ -86,6 +105,8 @@ module RDF::SAK
       @uuids = {}
       # uuid -> uri cache
       @uris  = {}
+      # map uri.to_s to rdf vocab
+      @vocabs = {}
     end
 
     # Clear the resolver's caches but otherwise keep its configuration.
@@ -94,7 +115,7 @@ module RDF::SAK
     #
     def flush
       # empty em all out
-      [@subjects, @hosts, @uuids, @uris].each(&:clear)
+      [@subjects, @hosts, @uuids, @uris, @vocabs].each(&:clear)
 
       # this is a throwaway result mainly intended to mask what would
       # otherwise return the array
@@ -700,15 +721,27 @@ module RDF::SAK
     #
     # @return [String, Array<String>, nil] the CURIE(s) in question
     #
-    def abbreviate term, scalar: true,
-        noop: true, sort: true, prefixes: {}, vocab: nil
+    def abbreviate term, scalar: true, noop: true, sort: true,
+        prefixes: {}, vocab: nil, cache: nil
 
-      term = coerce_resources term
-      as   = assert_uri_coercion as
+      term  = coerce_resources term
+      as    = assert_uri_coercion as
+      cache = {} unless cache.is_a? Hash
 
       # this returns a duplicate that we can mess with
-      prefixes[nil] = vocab if vocab
-      prefixes = @prefixes.merge(sanitize_prefixes prefixes)
+      if vocab
+        vocab = coerce_resource vocab
+        prefixes[nil] = vocab
+      elsif prefixes.key? nil
+        prefixes[nil] = coerce_resource prefixes[nil]
+      end
+
+      # only do this if there's something to do, cause it's expensive
+      # XXX also figure out a sensible way to cache this move
+      prefixes = sanitize_prefixes prefixes unless
+        prefixes.empty? or (prefixes.size == 1 and prefixes.key? nil)
+      # okay now merge
+      prefixes = @prefixes.merge prefixes
 
       rev = prefixes.invert
 
