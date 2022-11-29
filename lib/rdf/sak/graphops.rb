@@ -249,6 +249,26 @@ module RDF::SAK
 
     public
 
+    # Returns the input term coerced to an RDF::Vocabulary::Term.
+    #
+    # @param term [URI, RDF::URI, RDF::Vocabulary::Term, #to_s] the term
+    # @param strict [false, true] whether to strictly enforce the conversion
+    #
+    # @return [RDF::Vocabulary::Term, RDF::URI, nil]
+    #
+    def coerce_term term, uri: false, strict: false
+      out = tcache[coerce_resource(term).to_s] ||=
+        coerce_resource term, as: :term
+
+      return if uri and !out.uri?
+
+      return if strict and [RDF::Vocabulary::Term, RDF::Vocabulary].none? do |c|
+        out.is_a? c
+      end
+
+      out
+    end
+
     # Retrieve the current structure being used to govern how labels
     # are resolved against subjects.
     #
@@ -495,8 +515,7 @@ module RDF::SAK
 
            node = block.call node if block
 
-           p = stmt.predicate
-           p = (RDF::Vocabulary.find_term(p) rescue p) || p
+           p = coerce_term stmt.predicate
            (rsrc[p] ||= []) << node
         end
 
@@ -1023,24 +1042,51 @@ module RDF::SAK
       host
     end
 
+    # XXX YO MAYBE REIN IN THE CACHES? lol
+
+    # host document cache
     def hcache
       @hcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
     end
 
+    # term cache
+    def tcache
+      @tcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    # type strata cache
     def tscache
       @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
     end
 
+    # type strata descending cache
     def tdcache
       @tdcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
     end
 
+    # property set cache
     def pcache
       @pcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
     end
 
+    # inverseOf cache
     def icache
       @icache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    # equivalents cache
+    def eqcache
+      @eqcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    # subproperty/class cache
+    def sbcache
+      @sbcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+    end
+
+    # superproperty/class cache
+    def sucache
+      @sucache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
     end
 
     public
@@ -1051,19 +1097,27 @@ module RDF::SAK
 
     def cache_limit= limit
       hcache.capacity  = limit
+      tcache.capacity  = limit
       tscache.capacity = limit
       tdcache.capacity = limit
       pcache.capacity  = limit
       icache.capacity  = limit
+      eqcache.capacity = limit
+      sbcache.capacity = limit
+      sucache.capacity = limit
       @cache_limit     = limit
     end
 
     def flush_cache
       hcache.clear
+      tcache.clear
       tscache.clear
       tdcache.clear
       pcache.clear
       icache.clear
+      eqcache.clear
+      sbcache.clear
+      sucache.clear
       nil
     end
 
@@ -1187,7 +1241,6 @@ module RDF::SAK
       # explicit or true if implicit
       ix ? ix.object : explicit ? false : true
     end
-
 
     # Determine whether the subject is "published", which canonically
     # translates to whether querying `?subject bibo:status
@@ -1375,6 +1428,97 @@ module RDF::SAK
       out.sort.uniq
     end
 
+    # Obtain equivalents for a given term, which can either be a class
+    # or a property. This method wraps a cache around `term.entail`,
+    # which is slow.
+    #
+    # @param term [RDF::Vocabulary::Term] input term
+    #
+    # @return [Array<RDF::Vocabulary::Term>] the equivalent terms
+    #
+    def equivs_for term
+      term = assert_resource term, vocab: true
+
+      entailment = case
+                   when term.property? then :equivalentProperty
+                   when term.class? then :equivalentClass
+                   else
+                     return [term] # equivalents always include itself
+                   end
+
+      # note we want the deep entailment for this one
+      eqcache[term.to_s] ||= [term] + term.entail(entailment).map do |t|
+        coerce_term t, uri: true
+      end.compact.uniq
+    end
+
+    # Obtain (shallow) subclasses/properties for a given term, which
+    # can either be a class or a property. May be empty. Also cached.
+    #
+    # @param term [RDF::Vocabulary::Term] input term
+    #
+    # @return [Array<RDF::Vocabulary::Term>] the subordinate terms
+    #
+    def subs_for term
+      term = assert_resource term, vocab: true
+
+      return sbcache[term.to_s] if sbcache.key? term.to_s
+
+      entailment = case
+                   when term.property? then :subProperty
+                   when term.class? then :subClass
+                   else
+                     return [] # subs/supers do not
+                   end
+
+      # get the equivalents
+      equivs = equivs_for term
+
+      # now get the adjacents
+      terms = equivs.map do |equiv|
+        equiv.send(entailment).map { |t| coerce_term t, uri: true }
+      end.flatten.compact.uniq
+
+      # add to the cache
+      equivs.each { |t| sbcache[t.to_s] = terms }
+
+      terms
+    end
+
+    # Obtain (shallow) superclasses/properties for a given term, which
+    # can either be a class or a property. May be empty. Also cached.
+    #
+    # @param term [RDF::Vocabulary::Term] input term
+    #
+    # @return [Array<RDF::Vocabulary::Term>] the superordinate terms
+    #
+    def supers_for term
+      term = assert_resource term, vocab: true
+      term = assert_resource term, vocab: true
+
+      return sucache[term.to_s] if sucache.key? term.to_s
+
+      entailment = case
+                   when term.property? then :subPropertyOf
+                   when term.class? then :subClassOf
+                   else
+                     return [] # subs/supers do not
+                   end
+
+      # get the equivalents
+      equivs = equivs_for term
+
+      # now get the superordinates
+      terms = equivs.map do |equiv|
+        equiv.send(entailment).map { |t| coerce_term t, uri: true }
+      end.flatten.compact.uniq
+
+      # add to the cache
+      equivs.each { |t| sucache[t.to_s] = terms }
+
+      terms
+    end
+
     # Obtain a stack of RDF types for an asserted initial type or set
     # thereof. Returns an array of arrays, where the first is the
     # asserted types and their inferred equivalents, and subsequent
@@ -1383,7 +1527,7 @@ module RDF::SAK
     # is set, the resulting array will be flat.
     #
     # @param rdftype [RDF::Term, :to_a] the type(s) to inspect
-    # @param descend [true, false] descend instead of ascend
+    # @param descend [false, true] descend instead of ascend
     #
     # @return [Array<Array<RDF::URI>>] the type stratum
     #
@@ -1392,24 +1536,141 @@ module RDF::SAK
 
       return [] if rdftype.empty?
 
-      cache = if descend
-                @tdcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
-              else
-                @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
-              end
+      # The input, `rdftype`, should be an array containing one or
+      # more RDF::Vocabulary::Term objects (though may contain
+      # RDF::URI). The relationships between the terms (if more than
+      # one) passed in as input could be nothing, or the terms could
+      # be related; we don't care. The job here (in the default
+      # ascending mode) is to return an array of arrays of terms,
+      # beginning with the union of the equivalents of the input
+      # terms, with each subsequent neighbour doing the same for one
+      # rung up the inheritance hierarchy until it terminates with the
+      # most generic types. (In descending mode, this structure is
+      # flattened.)
+      #
+      # The strategy, since the entailment process is slow and we want
+      # to take advantage of caching, is to create (or pull from
+      # cache) the stratum for each term in the input separately, then
+      # knit the layers together.
 
-      # this may be called as a class method
-      rdftype.each { |t| return cache[t] if cache.key? t } if cache
+      # We partition the input into a hash of already-cached roots and
+      # a work queue with its initial elements, each of which consists
+      # of a pair containing an input term (wrapped in an array to
+      # normalize for subsequent runs) and the same term again meant
+      # to signify a stratum's root. We retrieve the cache now as we
+      # anticipate the caches eventually being shared across threads.
+      # Note we stringify the cache keys to eliminate the possibility
+      # of having one key with an RDF::URI and another with an
+      # RDF::Vocabulary::Term with the same value. (These should
+      # always be RDF::Vocabulary::Term instances unless there isn't
+      # one available, but I don't want to chance one slipping out.)
 
-      # essentially what we want to do is construct a layer of
-      # asserted classes and their inferred equivalents, then probe
-      # the classes in the first layer for subClassOf assertions,
-      # which will form the second layer, and so on.
+      cache = descend ? tdcache : tscache # descendant vs ancestor cache
+      cached, queue = rdftype.reduce([{},[]]) do |pair, type|
+        if cache.key?(type.to_s)
+          # pull the cache now
+          pair.first[type.to_s] = cache[type.to_s]
+        else
+          # push a dummy onto the queue: [term, parent, root]
+          pair.last << [type, nil, nil]
+        end
+        pair
+      end
+
+      # Now we run the queue until it is empty, accumulating the
+      # results. We also accumulate into intermediate caches for all
+      # equivalent classes (really slow) and sub/superclasses (not as
+      # slow as equivalents but still pretty slow). These are just
+      # hashes where the key is the (stringified) type in question and
+      # the value is the pool of equivalents. (Note we don't try to
+      # preemptively expand equivalents for sub/superclasses and we
+      # don't try to resolve e.g. rdfs:subClassOf [] owl:unionOf
+      # ... because it isn't clear how to interpret that in this
+      # context.)
+
+      qmeth  = descend ? :subs_for : :supers_for # inheritance direction
+      work   = {} # the working set
+      equivs = {} # equivalent classes (XXX look into caching these too)
+      hiers  = {} # either super or subclasses, depending on `descend`
+
+      while (term, parent, root = queue.shift)
+        # This loop starts with the input separated into one-element
+        # arrays containing the input terms, but subsequent runs will
+        # contain super/subclasses which could be anything. Likewise
+        # it's possible that equivalent or super/subclasses have
+        # already been passed in as input, so we have to account for that.
+
+        # The general pattern of the loop body is to expand the
+        # equivalent classes of all the terms we've been given (again
+        # we're looking at either a single input term or a set of
+        # sub/superclasses from a previous run), and then pass the
+        # next rung in the type hierarchy into the next iteration.
+        # "L1" caches therefore need to point from every class from a
+        # set of equivalents to that set of equivalent/super/
+        # subclasses.
+        types = types.reduce([]) do |ts, type|
+          ts += if equivs.key? type.to_s
+                  equivs[type.to_s]
+                elsif type.uri? and type.respond_to? :class?
+                  x = equivs_for term
+                  # collate equivalent classes, but only the ones that
+                  # are actual vocabulary terms
+                  x = ([type] + type.entail(:equivalentClass)).map do |t|
+                    coerce_term t, strict: true
+                  end.compact.sort.uniq
+                  # map each equivalent class in the preliminary cache
+                  x.each { |t| equivs[t.to_s] = x }
+                else
+                  next [] unless type.uri?
+                  equivs[type.to_s] = [type]
+                end
+        end.uniq
+
+        # At this point we have a set of equivalent classes for one or
+        # more arbitrary classes
+
+        ([root] + types).uniq.each do |t|
+          w = work[t.to_s] ||= []
+          w << types
+        end
+
+        # now we generate the next rung in the inheritance hierarchy
+        hier = equiv.reduce([]) do |a, ec|
+          if hiers.key? ec.to_s
+            a += hiers[ec.to_s] # note this may be empty
+          elsif ec.respond_to? qmeth
+            a += hiers[ec.to_s] = ec.send(qmeth).map do |sc|
+              coerce_term sc, strict: true
+            end.compact.sort.uniq
+          end
+          a
+        end.uniq
+
+        queue << [hier, root] unless hier.empty?
+
+      end
+
+      # at this point,  both `cached` and `work` are hashes that contain ind
+
+      # at this point we will have a mix of cached versus in-situ
+      # generated type strata for each RDF type in the input.
+
+      strata = rdftype.map do |type|
+        # note `cached` vs `cache`, in case cache was flushed
+        if cached[type.to_s]
+          cached[type.to_s]
+        elsif work[type.to_s]
+          cache[type.to_s] = work[type.to_s]
+        end
+      end.compact.reduce do |a, b|
+        a.zip(b)
+      end
 
       queue  = [rdftype]
       strata = []
       seen   = Set[]
-      qmeth  = descend ? :subClass : :subClassOf
+
+
 
       while qin = queue.shift
         qwork = []
@@ -1422,8 +1683,7 @@ module RDF::SAK
 
         # grep and flatten
         qwork = qwork.map do |t|
-          next t if t.is_a? RDF::Vocabulary::Term
-          RDF::Vocabulary.find_term t rescue nil
+          coerce_term t, strict: true
         end.compact.uniq - seen.to_a
         seen |= qwork
 
@@ -1433,13 +1693,16 @@ module RDF::SAK
         strata.push qwork.dup unless qwork.empty?
 
         # now deal with subClassOf
-        qnext = []
-        qwork.each { |q| qnext += q.send(qmeth) if q.respond_to? qmeth }
+        # qnext = []
+        # qwork.each { |q| qnext += q.send(qmeth) if q.respond_to? qmeth }
+
+        qnext = qwork.reduce([]) do |a, q|
+          a + (q.respond_to?(qmeth) ? q.send(qmeth) : [])
+        end
 
         # grep and flatten this too
         qnext = qnext.map do |t|
-          next t if t.is_a? RDF::Vocabulary::Term
-          RDF::Vocabulary.find_term t rescue nil
+          coerce_term t, strict: true
         end.compact.uniq - seen.to_a
         # do not append qsuper to seen!
 
@@ -1450,12 +1713,12 @@ module RDF::SAK
       end
 
       # voila
-      out = descend ? strata.flatten : strata
+      strata = descend ? strata.flatten : strata
 
       # this may be called as a class method
-      rdftype.each { |t| cache[t] = out } if cache
+      # rdftype.each { |t| cache[t] = out } if cache
 
-      out
+      strata
     end
 
     # Obtain everything that is an `owl:equivalentClass` or

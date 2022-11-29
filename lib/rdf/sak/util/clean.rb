@@ -43,14 +43,18 @@ module RDF::SAK::Util::Clean
 
       t
     },
+    vocab:  -> t {
+      raise NotImplementedError, 'lol vocab coercion not implemented'
+    },
   }
 
   URI_COERCION_TYPES = {
-    nil   => String,
-    false => String,
-    uri:  URI,
-    rdf:  RDF::URI,
-    term: RDF::Vocabulary::Term,
+    nil    => String,
+    false  => String,
+    uri:   URI,
+    rdf:   RDF::URI,
+    term:  RDF::Vocabulary::Term,
+    vocab: RDF::Vocabulary,
   }
 
   def assert_uri_coercion coerce

@@ -60,7 +60,7 @@ module RDF::SAK
     # @param nonnil [false, true] whether to remove the nil prefix
     # @param cache [Hash] an optional cache for the slowness
     #
-    # @return [Hash] sanitized prefix map
+    # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
     #
     define_singleton_method :sanitize_prefixes, SANITIZE_PREFIXES
 
@@ -69,7 +69,7 @@ module RDF::SAK
     # @param prefixes [Hash, #to_h] the input prefixes
     # @param nonnil [false, true] whether to remove the nil prefix
     #
-    # @return [Hash] sanitized prefix map
+    # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
     #
     def sanitize_prefixes prefixes, nonnil: false
       SANITIZE_PREFIXES.call prefixes, nonnil: nonnil, cache: @vocabs
