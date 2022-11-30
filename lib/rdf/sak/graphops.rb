@@ -1437,19 +1437,29 @@ module RDF::SAK
     # @return [Array<RDF::Vocabulary::Term>] the equivalent terms
     #
     def equivs_for term
-      term = assert_resource term, vocab: true
+      # completely short-circuit
+      return eqcache[term.to_s] if eqcache.key? term.to_s
+
+      # first off we do the cached resolution
+      term = coerce_term(term, uri: true) or return []
 
       entailment = case
+                   when !term.is_a?(RDF::Vocabulary::Term)
+                     nil
                    when term.property? then :equivalentProperty
                    when term.class? then :equivalentClass
                    else
-                     return [term] # equivalents always include itself
+                     nil
                    end
 
       # note we want the deep entailment for this one
-      eqcache[term.to_s] ||= [term] + term.entail(entailment).map do |t|
+      equivs = [term]
+      equivs += term.entail(entailment).map do |t|
         coerce_term t, uri: true
-      end.compact.uniq
+      end.compact.uniq if entailment
+
+      # return the equivalents
+      equivs.each { |e| eqcache[e.to_s] = equivs }
     end
 
     # Obtain (shallow) subclasses/properties for a given term, which
@@ -1460,24 +1470,33 @@ module RDF::SAK
     # @return [Array<RDF::Vocabulary::Term>] the subordinate terms
     #
     def subs_for term
-      term = assert_resource term, vocab: true
-
+      # completely short-circuit
       return sbcache[term.to_s] if sbcache.key? term.to_s
 
+      term = coerce_term(term, uri: true) or return []
+
       entailment = case
+                   when !term.is_a?(RDF::Vocabulary::Term)
+                     nil
                    when term.property? then :subProperty
                    when term.class? then :subClass
                    else
-                     return [] # subs/supers do not
+                     nil
                    end
 
       # get the equivalents
       equivs = equivs_for term
 
       # now get the adjacents
-      terms = equivs.map do |equiv|
-        equiv.send(entailment).map { |t| coerce_term t, uri: true }
-      end.flatten.compact.uniq
+      terms = if entailment
+                equivs.map do |equiv|
+                  equiv.send(entailment).map do |t|
+                    coerce_term t, uri: true
+                  end if equiv.respond_to? entailment
+                end.flatten.compact.uniq
+              else
+                []
+              end
 
       # add to the cache
       equivs.each { |t| sbcache[t.to_s] = terms }
@@ -1493,28 +1512,36 @@ module RDF::SAK
     # @return [Array<RDF::Vocabulary::Term>] the superordinate terms
     #
     def supers_for term
-      term = assert_resource term, vocab: true
-      term = assert_resource term, vocab: true
-
+      # completely short-circuit
       return sucache[term.to_s] if sucache.key? term.to_s
 
+      term = coerce_term(term, uri: true) or return []
+
       entailment = case
+                   when !term.is_a?(RDF::Vocabulary::Term)
+                     nil
                    when term.property? then :subPropertyOf
                    when term.class? then :subClassOf
                    else
-                     return [] # subs/supers do not
+                     nil
                    end
 
       # get the equivalents
       equivs = equivs_for term
 
-      # now get the superordinates
-      terms = equivs.map do |equiv|
-        equiv.send(entailment).map { |t| coerce_term t, uri: true }
-      end.flatten.compact.uniq
+      # now get the adjacents
+      terms = if entailment
+                equivs.map do |equiv|
+                  equiv.send(entailment).map do |t|
+                    coerce_term t, uri: true
+                  end if equiv.respond_to? entailment
+                end.flatten.compact.uniq
+              else
+                []
+              end
 
       # add to the cache
-      equivs.each { |t| sucache[t.to_s] = terms }
+      equivs.each { |t| sbcache[t.to_s] = terms }
 
       terms
     end
@@ -1536,189 +1563,25 @@ module RDF::SAK
 
       return [] if rdftype.empty?
 
-      # The input, `rdftype`, should be an array containing one or
-      # more RDF::Vocabulary::Term objects (though may contain
-      # RDF::URI). The relationships between the terms (if more than
-      # one) passed in as input could be nothing, or the terms could
-      # be related; we don't care. The job here (in the default
-      # ascending mode) is to return an array of arrays of terms,
-      # beginning with the union of the equivalents of the input
-      # terms, with each subsequent neighbour doing the same for one
-      # rung up the inheritance hierarchy until it terminates with the
-      # most generic types. (In descending mode, this structure is
-      # flattened.)
-      #
-      # The strategy, since the entailment process is slow and we want
-      # to take advantage of caching, is to create (or pull from
-      # cache) the stratum for each term in the input separately, then
-      # knit the layers together.
-
-      # We partition the input into a hash of already-cached roots and
-      # a work queue with its initial elements, each of which consists
-      # of a pair containing an input term (wrapped in an array to
-      # normalize for subsequent runs) and the same term again meant
-      # to signify a stratum's root. We retrieve the cache now as we
-      # anticipate the caches eventually being shared across threads.
-      # Note we stringify the cache keys to eliminate the possibility
-      # of having one key with an RDF::URI and another with an
-      # RDF::Vocabulary::Term with the same value. (These should
-      # always be RDF::Vocabulary::Term instances unless there isn't
-      # one available, but I don't want to chance one slipping out.)
-
-      cache = descend ? tdcache : tscache # descendant vs ancestor cache
-      cached, queue = rdftype.reduce([{},[]]) do |pair, type|
-        if cache.key?(type.to_s)
-          # pull the cache now
-          pair.first[type.to_s] = cache[type.to_s]
-        else
-          # push a dummy onto the queue: [term, parent, root]
-          pair.last << [type, nil, nil]
-        end
-        pair
-      end
-
-      # Now we run the queue until it is empty, accumulating the
-      # results. We also accumulate into intermediate caches for all
-      # equivalent classes (really slow) and sub/superclasses (not as
-      # slow as equivalents but still pretty slow). These are just
-      # hashes where the key is the (stringified) type in question and
-      # the value is the pool of equivalents. (Note we don't try to
-      # preemptively expand equivalents for sub/superclasses and we
-      # don't try to resolve e.g. rdfs:subClassOf [] owl:unionOf
-      # ... because it isn't clear how to interpret that in this
-      # context.)
-
       qmeth  = descend ? :subs_for : :supers_for # inheritance direction
-      work   = {} # the working set
-      equivs = {} # equivalent classes (XXX look into caching these too)
-      hiers  = {} # either super or subclasses, depending on `descend`
-
-      while (term, parent, root = queue.shift)
-        # This loop starts with the input separated into one-element
-        # arrays containing the input terms, but subsequent runs will
-        # contain super/subclasses which could be anything. Likewise
-        # it's possible that equivalent or super/subclasses have
-        # already been passed in as input, so we have to account for that.
-
-        # The general pattern of the loop body is to expand the
-        # equivalent classes of all the terms we've been given (again
-        # we're looking at either a single input term or a set of
-        # sub/superclasses from a previous run), and then pass the
-        # next rung in the type hierarchy into the next iteration.
-        # "L1" caches therefore need to point from every class from a
-        # set of equivalents to that set of equivalent/super/
-        # subclasses.
-        types = types.reduce([]) do |ts, type|
-          ts += if equivs.key? type.to_s
-                  equivs[type.to_s]
-                elsif type.uri? and type.respond_to? :class?
-                  x = equivs_for term
-                  # collate equivalent classes, but only the ones that
-                  # are actual vocabulary terms
-                  x = ([type] + type.entail(:equivalentClass)).map do |t|
-                    coerce_term t, strict: true
-                  end.compact.sort.uniq
-                  # map each equivalent class in the preliminary cache
-                  x.each { |t| equivs[t.to_s] = x }
-                else
-                  next [] unless type.uri?
-                  equivs[type.to_s] = [type]
-                end
-        end.uniq
-
-        # At this point we have a set of equivalent classes for one or
-        # more arbitrary classes
-
-        ([root] + types).uniq.each do |t|
-          w = work[t.to_s] ||= []
-          w << types
-        end
-
-        # now we generate the next rung in the inheritance hierarchy
-        hier = equiv.reduce([]) do |a, ec|
-          if hiers.key? ec.to_s
-            a += hiers[ec.to_s] # note this may be empty
-          elsif ec.respond_to? qmeth
-            a += hiers[ec.to_s] = ec.send(qmeth).map do |sc|
-              coerce_term sc, strict: true
-            end.compact.sort.uniq
-          end
-          a
-        end.uniq
-
-        queue << [hier, root] unless hier.empty?
-
-      end
-
-      # at this point,  both `cached` and `work` are hashes that contain ind
-
-      # at this point we will have a mix of cached versus in-situ
-      # generated type strata for each RDF type in the input.
-
-      strata = rdftype.map do |type|
-        # note `cached` vs `cache`, in case cache was flushed
-        if cached[type.to_s]
-          cached[type.to_s]
-        elsif work[type.to_s]
-          cache[type.to_s] = work[type.to_s]
-        end
-      end.compact.reduce do |a, b|
-        a.zip(b)
-      end
-
-      queue  = [rdftype]
       strata = []
-      seen   = Set[]
+      queue  = [rdftype]
 
+      while terms = queue.shift
+        # do equivalent classes
+        terms = terms.map { |t| equivs_for t }.flatten.uniq
 
+        # only add to the strata if there is a there there
+        seen  = strata.flatten
+        layer = terms.reject { |t| seen.include? t }
+        strata << layer unless layer.empty?
 
-      while qin = queue.shift
-        qwork = []
-
-        qin.each do |q|
-          qwork << q # entail doesn't include q
-          qwork += q.entail(:equivalentClass) if
-            q.uri? and q.respond_to? :class?
-        end
-
-        # grep and flatten
-        qwork = qwork.map do |t|
-          coerce_term t, strict: true
-        end.compact.uniq - seen.to_a
-        seen |= qwork
-
-        # warn "qwork == #{qwork.inspect}"
-
-        # push current layer out
-        strata.push qwork.dup unless qwork.empty?
-
-        # now deal with subClassOf
-        # qnext = []
-        # qwork.each { |q| qnext += q.send(qmeth) if q.respond_to? qmeth }
-
-        qnext = qwork.reduce([]) do |a, q|
-          a + (q.respond_to?(qmeth) ? q.send(qmeth) : [])
-        end
-
-        # grep and flatten this too
-        qnext = qnext.map do |t|
-          coerce_term t, strict: true
-        end.compact.uniq - seen.to_a
-        # do not append qsuper to seen!
-
-        # warn "qsuper == #{qsuper.inspect}"
-
-        # same deal, conditionally push the input queue
-        queue.push qnext.dup unless qnext.empty?
+        # now do hierarchically adjacent terms
+        hier  = terms.map { |t| send qmeth, t }.flatten.uniq
+        queue << hier unless hier.empty?
       end
 
-      # voila
-      strata = descend ? strata.flatten : strata
-
-      # this may be called as a class method
-      # rdftype.each { |t| cache[t] = out } if cache
-
-      strata
+      descend ? strata.flatten : strata
     end
 
     # Obtain everything that is an `owl:equivalentClass` or
