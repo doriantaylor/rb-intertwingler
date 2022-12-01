@@ -2432,7 +2432,7 @@ module RDF::SAK::Util::Messy
               e['content'] || e.content).strip
 
       # now we have the literals actually in the graph
-      lit = cache[text.downcase] or next
+      lit = cache[RDF::SAK::NLP.lemmatize(text).downcase] or next
       lit = lit.to_a.sort do |a, b|
         c = 0
         if lang
@@ -2440,9 +2440,10 @@ module RDF::SAK::Util::Messy
           bc = b.language? && b.language.downcase == lang ? -1 : 0
           c = ac <=> bc
         end
+
         if c == 0
-          d = b.value.length <=> a.value.length # prefer longer strings
-          a <=> b if d == 0 # otherwise lexical sort
+          c = b.value.length <=> a.value.length # prefer longer strings
+          c == 0 ? a.value <=> b.value : c # otherwise lexical sort
         else
           c
         end

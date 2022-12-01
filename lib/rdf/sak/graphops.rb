@@ -871,7 +871,7 @@ module RDF::SAK
 
     def expand_documents docs
       docs = assert_resources docs, blank: false, empty: false, vocab: true
-      type_strata(docs, descend: true) - fragment_spec.keys
+      type_strata docs, descend: true
     end
 
     def expand_fragments spec
@@ -961,8 +961,10 @@ module RDF::SAK
     private
 
     def host_for_internal subject, seen = Set[],
-        dtypes = document_types & all_types,
-        graph: [], published: false, circulated: false
+        dtypes = nil, graph: [], published: false, circulated: false
+      # caching manoeuvre
+      key = [subject.to_s, graph.sort, published]
+      return hcache[key] if hcache.key? key
 
       # we begin by looking for an explicit designation
       host = objects_for(subject, RDF::SAK::CI['fragment-of'],
@@ -970,10 +972,10 @@ module RDF::SAK
 
       # get all the classes but the two basic ones that will net everything
       ft = fragment_spec.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
-      dt = document_types & all_types
+      dtypes ||= document_types(fragments: true) & all_types
 
       types = types_for subject, graph: graph
-      isdoc = type_is? types, dt
+      isdoc = type_is? types, dtypes
       frags = type_is? types, ft
 
       # this condition is true if there is no explicit host document
@@ -1012,7 +1014,7 @@ module RDF::SAK
           end
           a # <-- the accumulator
         end.uniq.reject do |h|
-          ((tab[h] ||= types_for h) & dt).empty?
+          ((tab[h] ||= types_for h) & dtypes).empty?
         end.sort do |a, b|
           # sort by publication status
           pa, pb = [a, b].map do |x|
@@ -1021,6 +1023,7 @@ module RDF::SAK
           c = pa <=> pb
           # sort by priority in config (ish; ordering could be better)
           if c == 0
+            # warn "#{tab[a]} <=> #{tab[b]}"
             pa, pb = [a, b].map do |x|
               tab[x].map { |y| dtypes.index(y) || Float::INFINITY }.min
             end
@@ -1035,11 +1038,11 @@ module RDF::SAK
         if host = hosts.first and not seen.include? host
           parent = host_for_internal host, seen | Set[host], dtypes,
             graph: graph, published: published, circulated: circulated
-          return parent if parent
+          host = parent if parent
         end
       end
 
-      host
+      hcache[key] = host
     end
 
     # XXX YO MAYBE REIN IN THE CACHES? lol
@@ -1142,13 +1145,7 @@ module RDF::SAK
                    else false
                    end
 
-      key = [subject, graph.sort, published, noop]
-
-      @hcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
-
-      return @hcache[key] if @hcache.key? key
-
-      @hcache[key] = host = host_for_internal subject, graph: graph,
+      host = host_for_internal subject, graph: graph,
         published: published, circulated: circulated
 
       # return the noop
@@ -1173,8 +1170,9 @@ module RDF::SAK
     #
     # @return [Array<RDF::URI>] all recognized document types
     #
-    def document_types
+    def document_types fragments: false
       @documents ||= expand_documents DOCUMENTS
+      fragments ? @documents : @documents - fragment_spec.keys
     end
 
     # Set the RDF types that are recognized as "documents".
@@ -1490,9 +1488,10 @@ module RDF::SAK
       # now get the adjacents
       terms = if entailment
                 equivs.map do |equiv|
-                  equiv.send(entailment).map do |t|
-                    coerce_term t, uri: true
-                  end if equiv.respond_to? entailment
+                  if equiv.is_a? RDF::Vocabulary::Term
+                    # warn "#{equiv} => #{equiv.respond_to?(entailment)}"
+                    equiv.send(entailment).map { |t| coerce_term t, uri: true }
+                  end
                 end.flatten.compact.uniq
               else
                 []
@@ -1532,9 +1531,9 @@ module RDF::SAK
       # now get the adjacents
       terms = if entailment
                 equivs.map do |equiv|
-                  equiv.send(entailment).map do |t|
-                    coerce_term t, uri: true
-                  end if equiv.respond_to? entailment
+                  if equiv.is_a? RDF::Vocabulary::Term
+                    equiv.send(entailment).map { |t| coerce_term t, uri: true }
+                  end
                 end.flatten.compact.uniq
               else
                 []

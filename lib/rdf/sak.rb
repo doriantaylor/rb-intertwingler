@@ -2262,7 +2262,7 @@ module RDF::SAK
         broader: 'Has Broader',
         narrower: 'Has Narrower',
         related: 'Has Related' }.map do |k, v|
-        [@graph.predicate_set(RDF::Vocab::SKOS[k]), v]
+        [@graph.property_set(RDF::Vocab::SKOS[k]), v]
       end
 
       skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }.freeze
@@ -2321,7 +2321,9 @@ module RDF::SAK
             # just return the sections i guess lol
             { [''] => :script, type: 'application/xhtml+xml',
               src: @resolver.uri_for(s, slugs: true),
-              rel: @resolver.abbreviate(fp) }
+              rel: @resolver.abbreviate(fp),
+              typeof: @resolver.abbreviate(
+                @graph.types_for(s, struct: struct)) }
         end
       elsif @graph.type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
         # note i'm not sure about this whole 'seen' business
@@ -2383,8 +2385,16 @@ module RDF::SAK
             objs = @graph.find_in_struct struct, pred, invert: true
             # plump up the structs
             objs.keys.each do |k|
-              seen[k] ||= neighbours[k] ||= @resolver.struct_for(k,
+              # neighbours[k] goes first or it is short circuited
+              neighbours[k] ||= seen[k] ||= @resolver.struct_for(k,
                 uuids: true, inverses: true)
+            end
+
+            # only show relations to concepts in this scheme
+            objs.select! do |k, _|
+              x = @graph.find_in_struct neighbours[k],
+                RDF::Vocab::SKOS.inScheme, entail: true, invert: true
+              x.key? subject
             end
 
             unless objs.empty?
