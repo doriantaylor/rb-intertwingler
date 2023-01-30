@@ -4,6 +4,139 @@ require 'time'
 require 'nokogiri'
 require 'xml-mixup'
 
+# This is the base class for (X)HTML+RDFa documents.
+class RDF::SAK::Document
+  include XML::Mixup
+  include RDF::SAK::NLP
+
+  def initialize resolver, subject
+    @resolver = resolver
+    @subject  = subject
+  end
+
+  def head_links
+  end
+
+  def head_meta
+  end
+
+  def twitter_meta
+  end
+
+  def backlinks
+  end
+
+  # STATIC METHODS THAT ONLY TOUCH MARKUP
+
+  def self.reindent elem
+  end
+
+  def self.subtree elem, xpath = '/*', reindent: true, prefixes: {}
+  end
+
+  def self.get_base elem
+  end
+
+  def self.get_prefixes elem
+  end
+
+  def self.subject_for elem
+  end
+
+  def self.lang_for elem
+  end
+
+  def self.modernize elem
+  end
+
+  def self.scan_inlines elem
+  end
+
+  def self.dehydrate elem
+  end
+
+  def self.rehydrate elem
+  end
+
+  def self.rewrite_links elem
+  end
+
+  # these all need the resolver
+
+  def self.prefix_subset resolver, nodes, prefixes: {}
+  end
+
+  def self.title_tag resolver, predicates, content
+  end
+
+  def self.literal_tag resolver, value, name: :span, property: nil, text: nil,
+      prefixes: {}, vocab: nil
+  end
+
+  def self.link_tag resolver, target, rel: nil, rev: nil, href: nil, about: nil,
+      typeof: nil, label: nil, property: nil, name: :a, placeholder: nil,
+      base: nil, prefixes: nil, vocab: nil
+  end
+
+  def self.generate_list resolver, list, base: nil, langs: [],
+      rel: nil, rev: nil, prefixes: {}, ncache: Set.new, ordered: true
+  end
+
+  def self.generate_fragment resolver, subject, struct: nil, base: nil, langs: [],
+      rel: nil, rev: nil, prefixes: {}, ncache: Set.new,
+      tag: :div, ptag: :div, otag: :div, pskip: [], oskip: [], wrap_list: false
+  end
+
+  def self.generate_doc resolver, subject, struct: nil, base: nil, langs: [],
+      prefixes: {}, vocab: nil
+  end
+
+  # This class encapsulates an (X)HTML document that comes from an
+  # (X)HTML or Markdown source.
+  class Parsed
+
+    private
+
+    # do the actual parsing here
+
+    public
+
+    def initialize resolver, subject, source: nil, type: nil, lang: nil
+      super resolver, subject
+      # @source =
+
+      # XXX parse rdfa/other metadata??
+    end
+
+    # Transform the document and return it.
+    def transform
+      # we strip off the <head> and generate a new one
+    end
+
+    # Transform the document and replace it internally.
+    def transform!
+      @doc = transform
+    end
+  end
+
+  # This class is for things like SKOS concept schemes, rosters,
+  # reading lists, etc.
+  class Index
+
+    # we'll make this a class method
+    def self.alphabetized_list resolver, subject
+    end
+
+  end
+end
+
+### YO do you know what would be way sick? if i made a document class
+### generator thing that would be based on rdf type. totally wouldn't
+### be abused.
+###
+### (this also implies some kind of class/instance-based dispatcher,
+### then we gotta start talking about shacl, loupe, etc)
+
 class RDF::SAK::Document
   include XML::Mixup
   include RDF::SAK::Util
@@ -21,7 +154,7 @@ class RDF::SAK::Document
     (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
   OBJS = [:href, :src].freeze
-      
+
   # ancestor node always with (@property and not @content) and
   # not @resource|@href|@src unless @rel|@rev
   LITXP = ['(ancestor::*[@property][not(@content)]',
@@ -32,7 +165,7 @@ class RDF::SAK::Document
 
   attr_reader :repo, :subject, :doc, :base, :prefixes
 
-  # Initialize a document context. 
+  # Initialize a document context.
   def initialize repo, doc, subject: nil, base: nil, resolve: nil,
       prefixes: {}, transform: nil, scache: {}, ucache: {}
     # coerce the document
@@ -134,7 +267,7 @@ class RDF::SAK::Document
         '(/html:html/html:head/html:base[@href])[1]/@href', XPATHNS
       ).to_s.strip
       b = URI(b)
-      
+
       base = b if b.absolute?
     elsif b = doc.root.at_xpath('ancestor-or-self::*[@xml:base][1]/@xml:base')
       b = URI(b.to_s.strip)
@@ -247,7 +380,7 @@ class RDF::SAK::Document
     pfx = node.namespace_declarations.filter(&:prefix).map do |n|
       [n.prefix.to_sym, n.href]
     end.to_h
-    
+
     # then add @prefix overtop of the namespaces
     if node[:prefix]
       x = node[:prefix].strip.split(/\s+/)
@@ -261,7 +394,7 @@ class RDF::SAK::Document
 
     # since we're ascending the tree, input takes precedence
     prefixes = pfx.merge prefixes
-      
+
     if node.parent and node.parent.element?
       prefixes_for(node.parent, prefixes)
     else
@@ -284,8 +417,8 @@ class RDF::SAK::Document
              when nil then Set.new
              when Proc then ignore
              when -> x { x.respond_to? :to_set } then ignore = ignore.to_set
-             else 
-               raise 'ignore must be either a proc or amenable to a set' 
+             else
+               raise 'ignore must be either a proc or amenable to a set'
              end
     nodes  = {}
     labels = {}
@@ -326,7 +459,7 @@ class RDF::SAK::Document
 
     # prune out unpublished
     nodes.select! { |k, _| published? k } if published
-      
+
     return if nodes.empty?
 
     if terse
@@ -347,7 +480,7 @@ class RDF::SAK::Document
         lab = labels[rsrc] || [nil, rsrc]
         lp  = abbreviate(lab.first) if lab.first
         ty  = abbreviate(types[rsrc]) if types[rsrc]
-        
+
         { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a, typeof: ty,
           href: uri.route_to(cu), rev: abbreviate(preds) }] => :li }
       end.compact
@@ -452,7 +585,7 @@ class RDF::SAK::Document
           resources[o].add p
 
           # add to type
-          types.add o if p == RDF::RDFV.type 
+          types.add o if p == RDF::RDFV.type
         end
       end
     end
@@ -639,8 +772,6 @@ class RDF::SAK::Document
     body[:typeof] = abbreviate(types.to_a, vocab: XHV) unless
       types.empty?
 
-    
-
     # prepare only the prefixes we need to resolve the data we need
     rsc = abbreviate(
       (struct.keys + resources.keys + datatypes.to_a +
@@ -683,7 +814,5 @@ class RDF::SAK::Document
 
     doc
   end
-
-  
 
 end

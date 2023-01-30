@@ -19,6 +19,9 @@ require 'linkeddata'
 require 'xml-mixup'
 require 'md-noko'
 require 'uuid-ncname'
+require 'rdf/sak/graphops'
+require 'rdf/sak/resolver'
+
 require 'rdf/sak/mimemagic'
 require 'rdf/sak/util'
 require 'rdf/sak/nlp'
@@ -30,6 +33,7 @@ require 'rdf/sak/ibis'
 require 'rdf/sak/pav'
 require 'rdf/sak/scovo'
 require 'rdf/sak/qb'
+require 'rdf/sak/adms'
 
 # 2021-12-09 REFACTORING NOTES: This thing is an utter mess and needs
 # a friggin overhaul. Here is the proposed new layout:
@@ -40,18 +44,18 @@ require 'rdf/sak/qb'
 #
 # * Individual document resources: a unified interface for either
 #   parsing and manipulating, or outright generating concrete
-#   representations of resources, (X)HTML in particular.
+#   representations of resources, (X|HT)ML in particular.
 #
 #   * Specific generators include: Atom feeds, Google site maps, SKOS
 #     concept schemes (and collections), indexes of external links,
-#     qb:DataSet...
+#     qb:DataSet resources...
 #
 # * Storage drivers: Resolve URIs to actual files (or something else);
 #   read and write in the usual fashion.
 #
 # * Main context for handling global configuration.
 #
-# * Command-line interface.
+# * Command-line interface and shell.
 #
 # * Web (Rack) application.
 #
@@ -65,136 +69,7 @@ require 'rdf/sak/qb'
 #   should(?) eventually get kicked up to RDF.rb (subject_for,
 #   object_for, etc).
 
-
 module RDF::SAK
-
-  class URIResolver
-
-    private
-
-    def self.coerce_terms arg
-    end
-
-    def coerce_resource arg, as: :rdf
-    end
-
-    public
-
-    # Create a new URI resolver.
-    #
-    # @param repo [RDF::Repository] where we get our data from
-    # @param base [URI, RDF::URI] base _URL_ (as in dereferenceable)
-    # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
-    # @param documents [RDF::URI, Array<RDF::URI>] the RDF classes we
-    #  consider to be "documents"
-    # @param frag_map [Hash{RDF::URI => Array<RDF::URI, Array(RDF::URI, true)>}]
-    #  a mapping of RDF classes to (inverse?) predicates for deriving
-    #  fragments
-    #
-    def initialize repo, base, prefixes: {},
-        documents: RDF::Vocab::FOAF.Document, frag_map: {}
-
-      # set the base uri; store it as as a URI rather than RDF::URI
-      @base = Util.coerce_resource base, as: :uri
-
-      # register the classes we consider to be "documents"
-      @docs = documents
-      @docs = (@docs.respond_to?(:to_a) ? @docs.to_a : [@docs]).map do |c|
-        c = Util.coerce_resource(c, base) or next
-        (RDF::Vocabulary.find_term c rescue c) || c
-      end.compact.to_set
-
-      # register the mapping of the form { RDFClass => [p1, p2..pn] }
-      # where pn is either a predicate or a pair signifying the
-      # predicate should be evaluated inversely
-      @frags = frag_map.dup.freeze
-
-      # cache of URIs (not necessarily UUIDs) to host documents
-      # (UUIDs), or nils where the URIs are themselves full documents
-      @hosts = {}
-
-      # uri -> uuid cache
-      @uuids = {}
-      # uuid -> uri cache
-      @uris = {}
-    end
-
-    # Clear the resolver's caches but otherwise keep its configuration.
-    #
-    # @return [true]
-    #
-    def flush
-      @hosts.clear
-      @uuids.clear
-      @uris.clear
-
-      # this is a throwaway result mainly intended to mask what would
-      # otherwise return an empty `@uris`
-      true
-    end
-
-    # Return the UUID(s) associated with the subject. May return
-    # `nil` or be a no-op.
-    #
-    # @param subject [URI, RDF::URI, #to_s] the URI to resolve
-    # @param scalar [true, false] whether to return only one UUID if
-    #  more than one is resolved; always returns an array if false
-    # @param verify [true, false] whether any UUID found in the input
-    #  should be resolved against the graph
-    # @param as [:rdf, :uri, :str] coerce the output to either
-    #  {RDF::URI}, {URI}, or string literal, respectively
-    # @param published [false, true] whether to constrain the
-    #  UUID resolution to published documents only
-    # @param noop [false, true] whether to return `nil` or otherwise
-    #  just echo back the input if a UUID can't be resolved
-    #
-    # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil]
-    #
-    def uuid_for subject, scalar: true, verify: true, as: :rdf,
-        published: false, noop: false
-      # XXX we will eventually move `canonical_uuid` to this class
-      # because it always needs a repo and a base URI anyway
-      Util.canonical_uuid
-    end
-
-    # Return the (dereferenceable) URI(s) associated with the
-    # subject. This will always return something even if it is a
-    # no-op.
-    #
-    # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
-    #
-    def uri_for subject, as: :rdf, relative: false
-      # XXX we will eventually move `canonical_uri` to this class
-      # because it always needs a repo and a base URI anyway
-    end
-
-    # Returns the "host document" of a given subject (or `nil` if the
-    # subject is not a fragment)
-    #
-    # @return [URI, RDF::URI, nil] the host document, if any
-    #
-    def host_doc subject, unique: true, as: :rdf, published: false
-      subject = uuid_for subject, noop: true
-    end
-
-    # Abbreviate one or more URIs into one or more CURIEs if we
-    # can. Will through if `noop:` is true, or if false, return `nil`
-    # for any URI that can't be abbreviated this way.
-    #
-    # @param subject [URI, RDF::URI, #to_s, Array<URI, RDF::URI, #to_s>]
-    #  the subject URI(s) to abbreviate
-    # @param scalar [true, false] always returns an array if false;
-    #  ignored if passed an array
-    # @param noop [true, false] whether to leave the input alone if it
-    #  can't abbreviate
-    # @param sort [true, false] whether to sort the resulting array;
-    #  meaningless if `scalar` is true
-    #
-    # @return [String, Array<String>, nil] the CURIE(s) 
-    #
-    def abbreviate subject, scalar: true, noop: true, sort: true
-    end
-  end
 
   class Context
     include XML::Mixup
@@ -319,30 +194,27 @@ module RDF::SAK
       if config[:graph]
         g = config[:graph]
         g = [g] unless g.is_a? Array
-        config[:graph] = g.map { |x| Pathname.new(x).expand_path root }
+        config[:graph] = g.map { |x| Pathname(x).expand_path root }
       end
 
       # deal with prefix map
-      if config[:prefixes]
-        config[:prefixes] = config[:prefixes].transform_values do |p|
-          # we have to wrap this in case it fails
-          begin
-            RDF::Vocabulary.find_term(p) || RDF::URI(p)
-          rescue
-            RDF::URI(p)
-          end
-        end
-      end
+      config[:prefixes] =
+        RDF::SAK::Resolver.sanitize_prefixes config[:prefixes] if
+        config[:prefixes]
+
+      # XXX 2022-03-17 gotta get rid of or otherwise resolve all these curie
+      # resolution thingies (or ultimately just come up with a better
+      # strategy for config)
 
       # deal with duplicate map
       pfx = config[:prefixes] || {}
       if dups = config[:duplicate]
-        base = URI(uri_pp config[:base])
+        base = RDF::SAK::Resolver.coerce_resource config[:base], as: :uri
         if dups.is_a? Hash
           config[:duplicate] = dups.map do |ruri, preds|
             preds = [preds] unless preds.is_a? Array
             preds.map! do |p|
-              resolve_curie p, prefixes: pfx, scalar: true, coerce: :rdf
+              RDF::SAK::Resolver.resolve_curie p, prefixes: pfx
             end
             [RDF::URI((base + ruri.to_s).to_s), Set.new(preds)]
           end.to_h
@@ -358,7 +230,7 @@ module RDF::SAK
       # "document" maps, ie things that are never fragments
       config[:documents] = [] unless config[:documents].is_a? Array
       config[:documents].map! do |d|
-        resolve_curie d.to_s, prefixes: pfx, scalar: true, coerce: :rdf
+        RDF::SAK::Resolver.resolve_curie d, prefixes: pfx
       end.compact
       config[:documents] << RDF::Vocab::FOAF.Document if
         config[:documents].empty?
@@ -366,12 +238,13 @@ module RDF::SAK
       # fragment maps
       config[:fragment] = {} unless config[:fragment].is_a? Hash
       config[:fragment] = config[:fragment].map do |k, v|
-        k = resolve_curie k.to_s, prefixes: pfx, scalar: true, coerce: :rdf
+        k = RDF::SAK::Resolver.resolve_curie k.to_s, prefixes: pfx
+        # warn "yo #{k.inspect}"
         v = v.respond_to?(:to_a) ? v.to_a : [v]
-        v.map! do |x|
+        v = v.reduce({}) do |a, x|
           x = x.to_s.split(/^\^+/).reverse
-          [resolve_curie(x.first, prefixes: pfx,
-            scalar: true, coerce: :rdf), !!x[1]]
+          a[RDF::SAK::Resolver.resolve_curie(x.first, prefixes: pfx)] = !!x[1]
+          a
         end
         [k, v]
       end.to_h
@@ -405,17 +278,11 @@ module RDF::SAK
       terms.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
     end
 
-    def coerce_resource arg
-      super arg, @base
-    end
-
-    def coerce_uuid_urn arg
-      super arg, @base
-    end
-
     public
 
-    attr_reader :config, :graph, :base
+    attr_reader :config, :graph, :resolver
+
+    alias_method :repo, :graph
 
     # Initialize a context.
     #
@@ -433,33 +300,81 @@ module RDF::SAK
 
       graph ||= @config[:graph] if @config[:graph]
       base  ||= @config[:base]  if @config[:base]
-      
-      @graph  = coerce_graph graph, type: type
-      @base   = RDF::URI.new base.to_s if base
+
+      # warn base.inspect
+
+      @graph    = coerce_graph graph, type: type
+      @resolver = RDF::SAK::Resolver.new @graph, base,
+        prefixes: @config[:prefixes]
+
+      # warn @config[:fragment]
+
+      @graph.document_types = @config[:documents]
+      @graph.fragment_spec  = @config[:fragment]
+
       @ucache = RDF::Util::Cache.new(-1)
       @scache = {} # wtf rdf util cache doesn't like booleans
     end
 
+    # Get the base URI.
+    #
+    # @return [RDF::URI] the base URI.
+    #
+    def base
+      @resolver.base
+    end
+
     # Get the prefix mappings from the configuration.
     #
-    # @return [Hash]
-
+    # @return [Hash{Symbol=>RDF::Vocabulary}] The prefixes
+    #
     def prefixes
-      @config[:prefixes] || {}
+      @resolver.prefixes
     end
 
     # Abbreviate a set of terms against the registered namespace
     # prefixes and optional default vocabulary, or otherwise return a
     # string representation of the original URI.
-    
+
     # @param term [RDF::Term]
     # @param prefixes [Hash]
     #
     # @return [String]
     #
-    def abbreviate term, prefixes: @config[:prefixes],
-        vocab: nil, noop: true, sort: true
-      super term, prefixes: prefixes || {}, vocab: vocab, noop: noop, sort: sort
+    def abbreviate term, **args
+      @resolver.abbreviate term, **args
+    end
+
+    # Obtain the canonical UUID for the given URI
+    #
+    # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
+    # @param unique [true, false] return a single resource/nil or an array
+    # @param published [true, false] whether to restrict to published docs
+    #
+    # @return [RDF::URI, Array]
+    #
+    def canonical_uuid uri, unique: true, published: false, verify: true
+      @resolver.uuid_for uri, scalar: unique,
+        published: published, verify: verify
+    end
+
+    # Obtain the "best" dereferenceable URI for the subject.
+    # Optionally returns all candidates.
+    #
+    # @param subject  [RDF::Resource]
+    # @param unique   [true, false] flag for unique return value
+    # @param rdf      [true, false] flag to specify RDF::URI vs URI
+    # @param to_uuid  [true, false] flag to run #canonical_uuid first
+    # @param slugs    [true, false] flag to include slugs
+    # @param fragment [true, false] flag to include fragment URIs
+    #
+    # @return [RDF::URI, URI, Array]
+    #
+    def canonical_uri subject, unique: true, rdf: true, to_uuid: false,
+        slugs: true, fragment: true
+      as = rdf ? :rdf : :uri
+      @resolver.uri_for subject, scalar: unique, as: as, roundtrip: to_uuid,
+        slugs: slugs, fragments: fragment
     end
 
     # Obtain a key-value structure for the given subject, optionally
@@ -473,19 +388,17 @@ module RDF::SAK
     #
     # @return [Hash]
     #
-    def struct_for subject, rev: false, only: [], inverses: false,
-        uuids: false, canon: false, ucache: {}, scache: {}, repo: @graph
-      Util.struct_for repo, subject,
-        rev: rev, only: only, inverses: inverses, uuids: uuids, canon: canon,
-        ucache: ucache, scache: scache
+    def struct_for subject, **args
+      # note that this is the resolver one not the repo one
+      @resolver.struct_for subject, **args
     end
 
     # Obtain everything in the graph that is an `rdf:type` of something.
-    # 
+    #
     # @return [Array]
     #
     def all_types
-      @graph.query([nil, RDF.type, nil]).objects.uniq
+      @graph.all_types
     end
 
     # Obtain every subject that is rdf:type the given type or its subtypes.
@@ -495,32 +408,18 @@ module RDF::SAK
     # @return [Array]
     #
     def all_of_type rdftype, exclude: []
-      rdftype = rdftype.respond_to?(:to_a) ? rdftype.to_a : [rdftype]
-      exclude = term_list exclude
-
-      t = rdftype.map do |t|
-        RDF::Vocabulary.find_term(t) rescue nil
-      end.compact.map { |t| all_related(t) }.flatten.uniq
-
-      raise "Could not find types in #{rdftype}" if t.empty?
-
-      out = []
-      (all_types & t - exclude).each do |type|
-        out += subjects_for(RDF.type, type)
-      end
-      
-      out.uniq
+      @graph.all_of_type rdftype, exclude: exclude
     end
 
     # Obtain all and only the rdf:types directly asserted on the subject.
-    # 
+    #
     # @param subject [RDF::Resource]
     # @param type [RDF::Term, :to_a]
     #
     # @return [Array]
     #
-    def asserted_types subject, type = nil, struct: nil
-      Util.asserted_types @graph, subject, type, struct: struct
+    def asserted_types subject, struct: nil
+      @graph.types_for subject, struct: struct
     end
 
     # Determine whether a subject is a given `rdf:type`.
@@ -532,41 +431,7 @@ module RDF::SAK
     # @return [true, false]
     #
     def rdf_type? subject, type, struct: nil
-      Util.rdf_type? @graph, subject, type, struct: struct
-    end
-
-    # Obtain the canonical UUID for the given URI
-    #
-    # @param uri [RDF::URI, URI, to_s] the subject of the inquiry
-    # @param unique [true, false] return a single resource/nil or an array
-    # @param published [true, false] whether to restrict to published docs
-    # 
-    # @return [RDF::URI, Array]
-    #
-    def canonical_uuid uri,
-        unique: true, published: false, repo: @graph, verify: true
-      Util.canonical_uuid repo, uri, unique: unique, published: published,
-        scache: @scache, ucache: @ucache, base: @base, verify: verify
-    end
-
-    # Obtain the "best" dereferenceable URI for the subject.
-    # Optionally returns all candidates.
-    # 
-    # @param subject  [RDF::Resource]
-    # @param unique   [true, false] flag for unique return value
-    # @param rdf      [true, false] flag to specify RDF::URI vs URI 
-    # @param to_uuid  [true, false] flag to run #canonical_uuid first
-    # @param slugs    [true, false] flag to include slugs
-    # @param fragment [true, false] flag to include fragment URIs
-    #
-    # @return [RDF::URI, URI, Array]
-    #
-    def canonical_uri subject, unique: true, rdf: true, to_uuid: false,
-        slugs: true, fragment: true, repo: @graph
-      Util.canonical_uri repo, subject, base: @base,
-        unique: unique, rdf: rdf, to_uuid: to_uuid, slugs: slugs,
-        fragment: fragment, frag_map: @config[:fragment] || {},
-        documents: @config[:documents]
+      @graph.rdf_type? subject, type, struct: struct
     end
 
     # Returns subjects from the graph with entailment.
@@ -578,12 +443,10 @@ module RDF::SAK
     #
     # @return [RDF::Resource]
     #
-    def subjects_for predicate, object,
-        entail: true, only: [], repo: @graph, &block
-      Util.subjects_for @graph,
-        predicate, object, entail: entail, only: only, &block
+    def subjects_for predicate, object, entail: true, only: [], &block
+      @graph.subjects_for predicate, object, entail: entail, only: only, &block
     end
-    
+
     # Returns objects from the graph with entailment.
     #
     # @param subject
@@ -596,8 +459,8 @@ module RDF::SAK
     #
     def objects_for subject, predicate,
         entail: true, only: [], datatype: nil, repo: @graph, &block
-      Util.objects_for @graph, subject, predicate,
-        entail: entail, only: only, datatype: datatype, &block
+      @graph.objects_for subject, predicate, entail: entail, only: only,
+        datatype: datatype, &block
     end
 
     # Find the terminal replacements for the given subject, if any exist.
@@ -607,8 +470,8 @@ module RDF::SAK
     #
     # @return [Set]
     #
-    def replacements_for subject, published: true, repo: @graph
-      Util.replacements_for repo, subject, published: published
+    def replacements_for subject, published: true
+      @graph.replacements_for subject, published: published
     end
 
     # Obtain dates for the subject as instances of Date(Time). This is
@@ -620,8 +483,8 @@ module RDF::SAK
     #
     # @return [Array] of dates
     def dates_for subject, predicate: RDF::Vocab::DC.date,
-        datatype: [RDF::XSD.date, RDF::XSD.dateTime], repo: @graph
-      Util.dates_for repo, subject, predicate: predicate, datatype: datatype
+        datatype: [RDF::XSD.date, RDF::XSD.dateTime]
+      @graph.dates_for subject, predicate: predicate, datatype: datatype
     end
 
     # Obtain any specified MIME types for the subject. Just shorthand
@@ -634,8 +497,8 @@ module RDF::SAK
     # @return [Array] of internet media types
     #
     def formats_for subject, predicate: RDF::Vocab::DC.format,
-        datatype: [RDF::XSD.token], repo: @graph
-      Util.objects_for repo, subject, predicate, datatype: datatype
+        datatype: [RDF::XSD.token]
+      @graph.formats_for subject, predicate: predicate, datatype: datatype
     end
 
     # Assuming the subject is a thing that has authors, return the
@@ -648,8 +511,8 @@ module RDF::SAK
     #
     # @return [RDF::Value, Array]
     #
-    def authors_for subject, unique: false, contrib: false, repo: @graph
-      Util.authors_for repo, subject, unique: unique, contrib: contrib
+    def authors_for subject, unique: false, contrib: false
+      @graph.authors_for subject, unique: unique, contrib: contrib
     end
 
     # Obtain the most appropriate label(s) for the subject's type(s).
@@ -666,9 +529,9 @@ module RDF::SAK
     # @return [Array] either a predicate-object pair or an array of pairs.
     #
     def label_for subject, candidates: nil, unique: true, type: nil,
-        lang: nil, desc: false, alt: false, repo: @graph
-      Util.label_for repo, subject, candidates: candidates,
-        unique: unique, type: type, lang: lang, desc: desc, alt: alt
+        lang: nil, desc: false, alt: false
+      @graph.label_for subject,
+        unique: unique, lang: lang, desc: desc, alt: alt, struct: candidates
     end
 
     SKOS_HIER = [
@@ -811,10 +674,15 @@ module RDF::SAK
       end
 
       # make sure these are actually URI objects not RDF::URI
-      uris = uris.transform_values { |v| URI(uri_pp v.to_s) }
+      uris = uris.transform_values { |v| URI(@resolver.preproc v.to_s) }
       uri  = uris[subject] || canonical_uri(subject, rdf: false, slugs: true)
 
-      ignore = ignore.to_set
+      # make ignore more robust
+      ignore = ignore.uniq.select(&:iri?).map do |i|
+        [i, @resolver.uuid_for(i, noop: true, verify: false)]
+      end.flatten.to_set
+
+      # warn ignore.sort.inspect
 
       # output
       links = []
@@ -827,13 +695,14 @@ module RDF::SAK
 
           unless uris[k]
             cu = canonical_uri k, slugs: true
-            uris[k] = URI(uri_pp(cu || k.to_s))
+            uris[k] = URI(@resolver.preproc(cu || k.to_s))
           end
 
           # munge the url and make the tag
           ru  = uri.route_to(uris[k])
           ln  = { nil => :link, href: ru.to_s }
-          ln[reversed ? :rev : :rel] = abbreviate v.to_a, vocab: vocab
+          ln[reversed ? :rev : :rel] = @resolver.abbreviate v.to_a,
+            scalar: false, vocab: vocab
 
           # add the title
           if lab = labels[k]
@@ -852,6 +721,8 @@ module RDF::SAK
               ln[['']] = :script
             end
           end
+
+          # warn ln.inspect
 
           # finally add the link
           links << ln
@@ -916,7 +787,7 @@ module RDF::SAK
 
     def generate_backlinks subject, published: true, ignore: nil
       uri = canonical_uri(
-        subject, rdf: false, slugs: true) || URI(uri_pp subject)
+        subject, rdf: false, slugs: true) || URI(@resolver.preproc subject)
 
       ignore ||= Set.new
       raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
@@ -933,9 +804,9 @@ module RDF::SAK
         labels[pr] ||= label_for pr
       end
 
-      # prune out 
+      # prune out
       nodes.select! { |k, _| published? k } if published
-      
+
       return if nodes.empty?
 
       li = nodes.sort do |a, b|
@@ -945,7 +816,7 @@ module RDF::SAK
         lab = labels[rsrc] || [nil, rsrc]
         lp  = abbreviate(lab[0]) if lab[0]
         ty  = abbreviate(types[rsrc]) if types[rsrc]
-        
+
         { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
           href: uri.route_to(cu), typeof: ty, rev: abbreviate(preds) }] => :li }
       end.compact
@@ -1011,12 +882,12 @@ module RDF::SAK
 
       # uggh put these somewhere
       preds = {
-        hp:    predicate_set(RDF::Vocab::DC.hasPart),
-        sa:    predicate_set(RDF::RDFS.seeAlso),
-        canon: predicate_set([RDF::OWL.sameAs, CI.canonical]),
-        ref:   predicate_set(RDF::Vocab::DC.references),
-        al:    predicate_set(RDF::Vocab::BIBO.contributorList),
-        cont:  predicate_set(RDF::Vocab::DC.contributor),
+        hp:    @graph.predicate_set(RDF::Vocab::DC.hasPart),
+        sa:    @graph.predicate_set(RDF::RDFS.seeAlso),
+        canon: @graph.predicate_set([RDF::OWL.sameAs, CI.canonical]),
+        ref:   @graph.predicate_set(RDF::Vocab::DC.references),
+        al:    @graph.predicate_set(RDF::Vocab::BIBO.contributorList),
+        cont:  @graph.predicate_set(RDF::Vocab::DC.contributor),
       }
 
       # collect up all the parts (as in dct:hasPart)
@@ -1099,7 +970,7 @@ module RDF::SAK
           h2c[0] = { [lp[1].to_s] => :a, rel: rel,
             property: p.call(lp[1]), href: cu.to_s }
         else
-          h2[:property] = p.call(lp[1])  
+          h2[:property] = p.call(lp[1])
         end
 
         # authors &c
@@ -1126,7 +997,7 @@ module RDF::SAK
                 # multiple lists but FINE FOR NOW
                 ul[:inlist] ||= ''
                 tl.each do |a|
-                  seen << a 
+                  seen << a
                   lab = labels[a] ? { [labels[a][1]] => :span,
                     property: abbreviate(labels[a][0]) } : a
                   li << { [lab] => :li, resource: a }
@@ -1144,7 +1015,7 @@ module RDF::SAK
         end.map do |ref, pset|
           lab = labels[ref] ? { [labels[ref][1]] => :span,
             property: abbreviate(labels[ref][0]) } : ref
-                  
+
           { [{ [lab] => :a, rev: abbreviate(pset), href: canon[ref] }] => :li }
         end
 
@@ -1167,11 +1038,11 @@ module RDF::SAK
       nodes += smush_struct labels
 
       # get prefixes
-      pfx = prefix_subset prefixes, nodes
+      pfx = @resolver.prefix_subset nodes
 
       # get title tag
       title = title_tag labels[id][0], labels[id][1],
-        prefixes: prefixes, lang: 'en'
+        prefixes: @resolver.prefixes, lang: 'en'
 
       # get links
       link = head_links id, struct: struct, ignore: bodynodes,
@@ -1195,12 +1066,13 @@ module RDF::SAK
 
     # generate skos concept schemes
 
-    CONCEPTS = Util.all_related(RDF::Vocab::SKOS.Concept).to_set
-
     def generate_audience_csv file = nil, published: true
+
       require 'csv'
       file = coerce_to_path_or_io file if file
       lab = {}
+
+      @concepts ||= @graph.all_related(RDF::Vocab::SKOS.Concept).to_set
 
       out = all_internal_docs(published: published,
                               exclude: RDF::Vocab::FOAF.Image).map do |s|
@@ -1237,7 +1109,7 @@ module RDF::SAK
         concepts = [RDF::Vocab::DC.subject, CI.introduces,
                     CI.assumes, CI.mentions].map do |pred|
           objects_for(s, pred, only: :resource).map do |o|
-            con = self.objects_for(o, RDF.type).to_set & CONCEPTS
+            con = self.objects_for(o, RDF.type).to_set & @concepts
             next if con.empty?
             next lab[o] if lab[o]
             _, ol = label_for o
@@ -1411,6 +1283,26 @@ module RDF::SAK
       fh.close
     end
 
+    def reload_graph
+      resolver.flush
+      graph.clear
+      graph.flush_cache
+
+      @config[:graph].each { |f| graph.load f }
+
+      graph
+    end
+
+    def write_turtle file
+      file = Pathname(file).expand_path.open('wb') unless file.is_a? IO
+      # warn file
+      RDF::Writer.for(:turtle).open(file, prefixes: resolver.prefixes) do |w|
+        # warn graph.size
+        w << graph
+      end
+      file.close unless file.closed?
+    end
+
     # generate atom feed
 
     #
@@ -1428,12 +1320,12 @@ module RDF::SAK
           @graph.has_statement? RDF::Statement(s, p, o)
         end
       end
-      
+
       docs
     end
 
     def indexed? subject
-      subject = coerce_resource subject
+      subject = @resolver.coerce_resource subject
       indexed = objects_for subject, RDF::SAK::CI.indexed,
         only: :literal, datatype: RDF::XSD.boolean
       # assume the subject is indexed but we are looking for explicit
@@ -1471,7 +1363,7 @@ module RDF::SAK
 
         # skip unless the entry is indexed
         next unless indexed? uu
-        
+
         # get audiences
         audy = audiences_for uu, proximate: true
         audn = audiences_for uu, proximate: true, invert: true
@@ -1504,7 +1396,7 @@ module RDF::SAK
         next if skip
 
         canon = URI.parse(canonical_uri(uu).to_s)
-        
+
         xml = { '#entry' => [
           { '#link' => nil, rel: :alternate, href: canon, type: 'text/html' },
           { '#id' => uu.to_s }
@@ -1514,7 +1406,7 @@ module RDF::SAK
         published = (objects_for uu,
                      [RDF::Vocab::DC.issued, RDF::Vocab::DC.created],
                      datatype: RDF::XSD.dateTime)[0]
-        
+
         # get latest updated date
         updated = (objects_for uu, RDF::Vocab::DC.modified,
                    datatype: RDF::XSD.dateTime).sort[-1]
@@ -1628,32 +1520,70 @@ module RDF::SAK
 
     # generate rewrite map(s)
     def generate_rewrite_map published: false, docs: nil
-      docs ||= reachable published: published
-      base = URI(@base.to_s)
+      docs ||= @graph.all_documents external: false, published: published
+      base = @resolver.base
+      umap = {}
       rwm  = {}
+
       docs.each do |doc|
-        tu = URI(doc.to_s)
-        cu = canonical_uri doc, rdf: false
-        next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
+        next unless doc.uri?
+        tu = umap[doc] = URI(doc.to_s)
+        next unless tu.respond_to?(:uuid)
 
-        # don't map fragments
-        next if cu.fragment
+        @resolver.uri_for(doc, scalar: false, slugs: true).each do |cu|
+          # must be http(s)
+          next unless cu.scheme.to_s.downcase.start_with? 'http'
 
-        # skip external links obvs
-        # XXX THIS DOES NOT WORK
-        # next unless base.route_to(cu).relative?
+          # skip fragments
+          next if cu.fragment
 
-        # this should though
-        next unless cu.host == base.host
+          # skip external links obvs
+          # XXX THIS DOES NOT WORK
+          # next unless base.route_to(cu).relative?
 
-        # skip /uuid form
-        cp = cu.request_uri.delete_prefix '/'
-        next if tu.uuid == cp
+          # this should though
+          next unless cu.host == base.host
 
-        rwm[cp] = tu.uuid
+          # skip /uuid form
+          cp = cu.request_uri.delete_prefix '/'
+          next if tu.uuid == cp
+
+          # XXX
+          # next if @graph.replacements_for(doc, published: published).empty?
+
+          (rwm[cp] ||= []) << doc
+        end
       end
 
-      rwm
+      # ranking hash
+      r = {}
+
+      rwm.transform_values do |uuids|
+        if uuids.size == 1
+          umap[uuids.first].uuid
+        else
+          # otherwise we need to figure out what the right one is
+          uuids.each do |u|
+            r[u] ||= @graph.ranking_data_for u, ints: true
+          end
+
+          u = uuids.sort do |a, b|
+            c = r[a][:replaced]   <=> r[b][:replaced]
+            c = r[a][:retired]    <=> r[b][:retired]    if c == 0
+            c = r[b][:published]  <=> r[a][:published]  if c == 0
+            c = r[b][:circulated] <=> r[a][:circulated] if c == 0
+            c = r[b][:mtime]      <=> r[a][:mtime]      if c == 0
+            c = r[b][:ctime]      <=> r[a][:ctime]      if c == 0
+
+            # okay this is us giving up
+            c = a.to_s <=> b.to_s if c == 0
+
+            c # finally
+          end.first
+
+          umap[u].uuid
+        end
+      end
     end
 
     # give me all UUIDs of all documents, filter for published if
@@ -1662,16 +1592,18 @@ module RDF::SAK
     # find the "best" (relative) URL for the UUID and map the pair
     # together
     def generate_uuid_redirect_map published: false, docs: nil
-      docs ||= reachable published: published
+      docs ||= @graph.all_documents external: false, fragments: true,
+        published: published
+      base = @resolver.base
 
-      base = URI(@base.to_s)
-
-      # keys are /uuid, values are ?
+      # keys are /uuid, values are
       out = {}
       docs.each do |doc|
+        next unless doc.uri?
         tu = URI(doc.to_s)
-        cu = canonical_uri doc, rdf: false
+        cu = @resolver.uri_for doc, as: :uri
         next unless tu.respond_to?(:uuid) and cu.respond_to?(:request_uri)
+        next if tu.fragment
 
         # skip /uuid form
         cp = cu.request_uri.delete_prefix '/'
@@ -1686,8 +1618,9 @@ module RDF::SAK
     # find all URIs/slugs that are *not* canonical, map them to slugs
     # that *are* canonical
     def generate_slug_redirect_map published: false, docs: nil
-      docs ||= reachable published: published
-      base = URI(@base.to_s)
+      docs ||= @graph.all_documents external: false, fragments: true,
+        published: published
+      base = @resolver.base
 
       # for redirects we collect all the docs, plus all their URIs,
       # separate canonical from the rest
@@ -1701,34 +1634,41 @@ module RDF::SAK
       out = {}
 
       docs.each do |doc|
-        uris  = canonical_uri doc, unique: false, rdf: false
+        next unless doc.uri?
+        uris  = @resolver.uri_for doc, scalar: false, slugs: true, as: :uri
         canon = uris.shift
         next unless canon.respond_to? :request_uri
+        # XXX not sure i want to do this
+        # next if canon.fragment
 
         # cache the forward direction
         fwd[doc] = canon
 
-        unless uris.empty?
-          uris.each do |uri|
-            next unless uri.respond_to? :request_uri
-            next if canon == uri
-            next unless base.route_to(uri).relative?
+        uris.each do |uri|
+          next unless uri.respond_to? :request_uri
+          next if canon == uri
+          next unless base.route_to(uri).relative?
+          next if uri.fragment
 
-            # warn "#{canon} <=> #{uri}"
+          # warn "#{canon} <=> #{uri}"
 
-            requri = uri.request_uri.delete_prefix '/'
-            next if requri == '' ||
-              requri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
+          requri = uri.request_uri.delete_prefix '/'
+          next if requri.empty?
+          # XXX why would i want to eliminate UUIDs?
+          # next if requri == '' ||
+          #  requri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
 
-            # cache the reverse direction
-            rev[uri] = requri
-          end
+          # cache the reverse direction
+          rev[uri] = requri
         end
       end
 
+      # warn fwd, rev
+
       rev.each do |uri, requri|
-        if (doc = canonical_uuid(uri, published: published)) and
+        if (doc = @resolver.uuid_for(uri, published: published, as: :uri)) and
             fwd[doc] and fwd[doc] != uri
+          # warn "#{doc.inspect} -> #{fwd[doc]} (ex #{uri})"
           out[requri] = fwd[doc].to_s
         end
       end
@@ -1750,7 +1690,7 @@ module RDF::SAK
       # definition not published
       docs ||= reachable published: false
       p    = RDF::Vocab::BIBO.status
-      base = URI(@base.to_s)
+      base = @resolver.base
       out  = {}
       docs.select { |s|
         @graph.has_statement? RDF::Statement(s, p, CI.retired) }.each do |doc|
@@ -1804,7 +1744,8 @@ module RDF::SAK
     end
 
     def write_maps published: true, docs: nil
-      docs ||= reachable published: false
+      docs ||= @graph.all_documents external: false,
+        published: false, fragments: true
       # slug to uuid (internal)
       write_rewrite_map docs: docs
       # uuid/slug to canonical slug (308)
@@ -1814,19 +1755,28 @@ module RDF::SAK
       true
     end
 
-    def generate_xml_catalog published: false, docs: nil, base: ?., extra: {}
-      path = Pathname(base)
+    def generate_xml_catalog published: false, docs: nil, path: ?., extra: {}
+      path = Pathname(path)
+
+      # make a bunch of mappings
       data = generate_rewrite_map(
         published: published, docs: docs
       ).merge(extra).map do |uri, file|
         uri = self.base + uri
-        { nil => :uri, name: uri, uri: path + "#{file}.xml" }
+        file = Pathname(file)
+        file = Pathname("#{file}.xml") if file.extname.empty?
+        file = path + file if file == file.basename
+        { nil => :uri, name: uri, uri: file }
       end
+
+      # set up the markup spec
       spec = [
         { '#doctype' => ['catalog', "-//OASIS//DTD XML Catalogs V1.0//EN" ] },
         { '#catalog' => data,
          xmlns: 'urn:oasis:names:tc:entity:xmlns:xml:catalog' }
       ]
+
+      # out the door
       markup(spec: spec).document
     end
 
@@ -1870,20 +1820,19 @@ module RDF::SAK
           # make a dummy so as not to incur calling published? multiple times
           seen[n] = {}
           # now we set the real struct and get the label
-          st = seen[n] = struct_for n, uuids: true, inverses: true,
-            ucache: ucache, scache: scache
+          st = seen[n] = @graph.struct_for n, inverses: true
 
           # now check if it's published
           next if published and
-            rdf_type?(n, RDF::Vocab::FOAF.Document, struct: st) and
-            not published?(n)
+            @graph.rdf_type?(n, RDF::Vocab::FOAF.Document, struct: st) and
+            not @graph.published?(n)
 
           # now the relations to the subject
           rel.map { |r| r[n] ||= Set.new }
           rel.first[n] |= pfwd
           rel.last[n]  |= prev
 
-          lab = (label_for(n, candidates: st) || [nil, n]).last.value.strip
+          lab = (@graph.label_for(n, struct: st) || [nil, n]).last.value.strip
 
           lab.gsub!(/\A[[:punct:][:space:]]*(?:An?|The)[[:space:]]+/i, '')
 
@@ -1903,17 +1852,20 @@ module RDF::SAK
       end
 
       # up until now we didn't need this; also add it to seen
-      struct = seen[subject] ||= struct_for subject,
-        uuids: true, inverses: true, ucache: ucache, scache: scache
+      struct = seen[subject] ||= @graph.struct_for subject, inverses: true
 
       # obtain the base and prefixes and generate the node spec
-      base = canonical_uri subject, rdf: false
+      base = @resolver.uri_for subject, as: :rdf, slugs: true
       spec = alpha.sort { |a, b| a.first <=> b.first }.map do |key, structs|
         # sort these and run the block
+
         sections = structs.sort do |a, b|
-          al = label_for(a.first, candidates: a.last).last
-          bl = label_for(b.first, candidates: b.last).last
-          al <=> bl
+          if a.nil? or b.nil?
+            raise "#{key.inspect} => #{structs.inspect}"
+          end
+          al = @graph.label_for(a.first, noop: true, struct: a.last).last
+          bl = @graph.label_for(b.first, noop: true, struct: b.last).last
+          al.value.upcase <=> bl.value.upcase
         end.map do |s, st|
           # now we call the block
           fr = frels[s].to_a if frels[s] and !frels[s].empty?
@@ -1927,20 +1879,21 @@ module RDF::SAK
 
 
       # now we get the page metadata
-      pfx   = prefix_subset prefixes, seen
-      abs   = label_for(subject, candidates: struct, desc: true)
+      pfx   = @resolver.prefix_subset(seen).transform_values(&:to_s)
+      abs   = @graph.label_for(subject, struct: struct, desc: true)
       mn    = abs ? { abs.last => :description } : {} # not an element!
       meta  = head_meta(subject, struct: struct, meta_names: mn,
                         vocab: XHV) + generate_twitter_meta(subject)
       links = head_links subject, struct: struct, vocab: XHV,
         ignore: seen.keys, rev: RDF::SAK::CI.document
-      types = abbreviate asserted_types(subject, struct: struct)
-      title = if t = label_for(subject, candidates: struct)
-                [t[1].to_s, abbreviate(t[0])]
+      types = @resolver.abbreviate @graph.asserted_types(subject, struct: struct)
+      title = if t = @graph.label_for(subject, struct: struct)
+                [t[1].to_s, @resolver.abbreviate(t[0])]
               end
 
       if abs
-        para = { [abs.last.to_s] => :p, property: abbreviate(abs.first) }
+        para = { [abs.last.to_s] => :p,
+          property: @resolver.abbreviate(abs.first) }
         para['xml:lang'] = abs.last.language if abs.last.language?
         para[:datatype]  = abs.last.datatype if abs.last.datatype?
         spec.unshift para
@@ -1948,7 +1901,8 @@ module RDF::SAK
 
       xhtml_stub(base: base, title: title, transform: @config[:transform],
         prefix: pfx, vocab: XHV, link: links, meta: meta,
-        attr: { about: '', typeof: types }, content: spec
+        attr: { id: UUID::NCName.to_ncname_64(subject.to_s.dup),
+          about: '', typeof: types }, content: spec
       ).document
     end
 
@@ -2023,12 +1977,12 @@ module RDF::SAK
 
       # uggh put these somewhere
       preds = {
-        hp:    predicate_set(RDF::Vocab::DC.hasPart),
-        sa:    predicate_set(RDF::RDFS.seeAlso),
-        canon: predicate_set([RDF::OWL.sameAs, CI.canonical]),
-        ref:   predicate_set(RDF::Vocab::DC.references),
-        al:    predicate_set(RDF::Vocab::BIBO.contributorList),
-        cont:  predicate_set(RDF::Vocab::DC.contributor),
+        hp:    @graph.predicate_set(RDF::Vocab::DC.hasPart),
+        sa:    @graph.predicate_set(RDF::RDFS.seeAlso),
+        canon: @graph.predicate_set([RDF::OWL.sameAs, CI.canonical]),
+        ref:   @graph.predicate_set(RDF::Vocab::DC.references),
+        al:    @graph.predicate_set(RDF::Vocab::BIBO.contributorList),
+        cont:  @graph.predicate_set(RDF::Vocab::DC.contributor),
       }
 
       alphabetized_list subject, fwd: RDF::Vocab::DC.hasPart,
@@ -2052,7 +2006,7 @@ module RDF::SAK
         lh['xml:lang'] = lo.language if lo.language?
 
         # rdfs:seeAlso -> amazon (or whatever) link
-        sa = find_in_struct(struct, RDF::RDFS.seeAlso, invert: true)
+        sa = @graph.find_in_struct(struct, RDF::RDFS.seeAlso, invert: true)
         if sa and !sa.empty?
           sao, sap = sa.sort { |a, b| a.first <=> b.first }.first
           sap = abbreviate(sap, prefixes: prefixes)
@@ -2065,7 +2019,7 @@ module RDF::SAK
             sao = sao.dup
             sao.query_values = qv
           end
-            
+
           span = { [lo.value] => :span, about: s.value }.merge lh
           kids << {
             { span => :a, rel: abbreviate(sap), href: sao.value } => :h3 }
@@ -2079,7 +2033,7 @@ module RDF::SAK
           lseen = {}
 
           dd = ops.map do |p, op|
-            opmap = find_in_struct struct, p, invert: true
+            opmap = @graph.find_in_struct struct, p, invert: true
             instance_exec(opmap, lseen, published, &op)
           end.flatten(1)
 
@@ -2118,7 +2072,7 @@ module RDF::SAK
           lp, lo = (label_for(k, candidates: st) || [nil, k])
 
           if %w[http https].include? uri.scheme
-            span = if lp 
+            span = if lp
                      x = { [lo.to_s] => :span, property: abbreviate(lp) }
                      x[:datatype]  = lo.datatype if lo.datatype?
                      x['xml:lang'] = lo.language if lo.language?
@@ -2172,7 +2126,7 @@ module RDF::SAK
 
     DSD_SEQ = %i[characters words blocks sections
       min low-quartile median high-quartile max mean sd].freeze
-    TH_SEQ = %w[Document Abstract Created Modified Characters Words Blocks 
+    TH_SEQ = %w[Document Abstract Created Modified Characters Words Blocks
       Sections Min Q1 Median Q3 Max Mean SD].map { |t| { [t] => :th } }
 
     def generate_stats published: true
@@ -2235,7 +2189,7 @@ module RDF::SAK
                else
                  { [] => :th }
                end
-          
+
           td = [{ { { [tt.to_s] => :span, property: abbreviate(tp) } => :a,
             rel: 'ci:document', href: href } => :th },
             ab,
@@ -2251,8 +2205,8 @@ module RDF::SAK
             p = CI[f]
             if y = c[:struct][p] and !y.empty?
               h << y = y.first
-              x[:property] = abbreviate p
-              x[:datatype] = abbreviate y.datatype if y.datatype?
+              x[:property] = @resolver.abbreviate p
+              x[:datatype] = @resolver.abbreviate y.datatype if y.datatype?
             end
             x
           end
@@ -2264,7 +2218,8 @@ module RDF::SAK
         xf = config.dig(:stats, :transform) || config[:transform]
 
         out[s] = xhtml_stub(base: base, title: title,
-          transform: xf, attr: { about: '', typeof: types },
+          transform: xf, attr: {
+            id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
           prefix: prefixes, content: {
             [{ [{ [{ ['About'] => :th, colspan: 4 },
                 { ['Counts'] => :th, colspan: 4 },
@@ -2288,10 +2243,26 @@ module RDF::SAK
       end
     end
 
+    # XXX OKAY THESE ARE HELLA TEMPORARY; THEIR LAYOUTS SHOULD REALLY
+    # BE GOVERNED BY LOUPE OR SOMETHING
+
+    # person:
+    # * (nickname) name or otherwise firstname lastname
+    # * homepage, mbox, onlineaccount(s)
+    # * relationships
+
+    def generate_address_book subject
+      # get the members as a hash of { node => [predicates] }
+      members = @graph.objects_for(subject, RDF::Vocab::DC.hasPart) do |n, *ps|
+        [n, ps] # just cough the node and predicates back up
+      end.select { |m| @graph.type_is? m.first, RDF::Vocab::FOAF.Agent }.to_h
+
+      # sort the members [surname, name]
+    end
 
     # This will generate an (X)HTML+RDFa page containing either a
     # SKOS concept scheme or a collection, ordered or otherwise.
-    # 
+    #
     # XXX later on we should consider conneg for languages
     #
     #
@@ -2304,63 +2275,70 @@ module RDF::SAK
         broader: 'Has Broader',
         narrower: 'Has Narrower',
         related: 'Has Related' }.map do |k, v|
-        [predicate_set(RDF::Vocab::SKOS[k]), v]
+        [@graph.property_set(RDF::Vocab::SKOS[k]), v]
       end
+
+      skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }.freeze
 
       ucache = {}
       scache = {}
-      struct = struct_for subject, uuids: true, ucache: ucache, scache: scache
+      struct = @graph.struct_for subject
       neighbours = { subject => struct }
 
       types = asserted_types(subject, struct: struct)
 
-      if type_is?(types, RDF::Vocab::SKOS.OrderedCollection)
-        # sort 
+      if @graph.type_is?(types, RDF::Vocab::SKOS.OrderedCollection)
+        # sort
         list = if head = objects_for(subject, RDF::Vocab::SKOS.memberList,
                                      only: :blank).sort.first
                  RDF::List.new(subject: head, graph: @graph).to_a.map do |s|
-                   next if published and not published?(s)
+                   next if published and not @graph.published?(s)
                    neighbours[s] ||= {}
                    { [] => :script, type: 'application/xhtml+xml',
-                    src: canonical_uri(s) }
+                    src: @resolver.uri_for(s, slugs: true) }
                  end.compact
                end
 
         spec = [{ list => :article, inlist: '',
-                rel: abbreviate(RDF::Vocab::SKOS.memberList) }]
+                rel: @resolver.abbreviate(RDF::Vocab::SKOS.memberList) }]
 
-        abs   = label_for(subject, candidates: struct, desc: true)
+        abs   = @graph.label_for(subject, struct: struct, desc: true)
         mn    = abs ? { abs.last => :description } : {} # not an element!
         meta  = head_meta(subject, struct: struct, meta_names: mn,
                           vocab: XHV) + generate_twitter_meta(subject)
         links = head_links subject, struct: struct, vocab: XHV,
           ignore: neighbours.keys
-        title = if t = label_for(subject, candidates: struct)
-                  [t[1].to_s, abbreviate(t[0])]
+        title = if t = @graph.label_for(subject, struct: struct)
+                  [t[1].to_s, @resolver.abbreviate(t[0])]
                 end
         if abs
-          para = { [abs.last.to_s] => :p, property: abbreviate(abs.first) }
+          para = { [abs.last.to_s] => :p,
+                  property: @resolver.abbreviate(abs.first) }
           para['xml:lang'] = abs.last.language if abs.last.language?
           para[:datatype]  = abs.last.datatype if abs.last.datatype?
           spec.unshift para
         end
 
-        pfx = prefix_subset prefixes, neighbours
+        pfx = @resolver.prefix_subset neighbours
 
         xhtml_stub(base: base, title: title, transform: @config[:transform],
           prefix: pfx, vocab: XHV, link: links, meta: meta,
-          attr: { about: '', typeof: abbreviate(types) }, content: spec
-        ).document
-      elsif type_is?(types, RDF::Vocab::SKOS.Collection)
+          attr: { id: UUID::NCName.to_ncname_64(subject, version: 1),
+                 about: '', typeof: @resolver.abbreviate(types) },
+          content: spec).document
+      elsif @graph.type_is?(types, RDF::Vocab::SKOS.Collection)
         # make a flat list of just transclusions
         alphabetized_list subject, fwd: RDF::Vocab::SKOS.member,
           published: published,
           ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
             # just return the sections i guess lol
             { [''] => :script, type: 'application/xhtml+xml',
-              src: canonical_uri(s), rel: abbreviate(fp) }
+              src: @resolver.uri_for(s, slugs: true),
+              rel: @resolver.abbreviate(fp),
+              typeof: @resolver.abbreviate(
+                @graph.types_for(s, struct: struct)) }
         end
-      elsif type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
+      elsif @graph.type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
         # note i'm not sure about this whole 'seen' business
 
         # WOOF lol
@@ -2373,19 +2351,24 @@ module RDF::SAK
 
           # sequence of elements beginning with the heading
           el = begin
-                 lp, lo = label_for(s, candidates: struct)
-                 [literal_tag(lo, name: :h3, property: lp, prefixes: prefixes)]
+                 lp, lo = @graph.label_for(s, struct: struct)
+                 if lp
+                   [literal_tag(lo, name: :h3, property: lp, prefixes: prefixes)]
+                 else
+                   [{ [s.to_s] => :h3 }]
+                 end
                end
 
           # now we do definitions
-          el += find_in_struct(struct, RDF::Vocab::SKOS.definition,
+          cmp = @graph.cmp_term
+          el += @graph.find_in_struct(struct, RDF::Vocab::SKOS.definition,
                                entail: true, invert: true).sort do |a, b|
-              cmp_resource a.first, b.first
+              cmp.(a.first, b.first)
           end.map do |o, ps|
-            rel = abbreviate(ps)
+            rel = @resolver.abbreviate(ps)
             if o.uri?
               { { [''] => :script, type: 'application/xhtml+xml',
-                 src: canonical_uri(o) } => :p, rel: rel }
+                 src: @resolver.uri_for(o, slugs: true) } => :p, rel: rel }
             else
               para = { [o.value] => :p, property: rel }
               para['xml:lang'] = para[:lang] = o.language if o.language?
@@ -2395,13 +2378,13 @@ module RDF::SAK
           end
 
           # do alternate labels
-          dl = find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
+          dl = @graph.find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
                               entail: true, invert: true).sort do |a, b|
             a.first <=> b.first
           end.map do |o, ps|
             next unless o.literal?
 
-            dd = { [o.value] => :dd, property: abbreviate(ps) }
+            dd = { [o.value] => :dd, property: @resolver.abbreviate(ps) }
             dd[:'xml:lang'] = dd[:lang] = o.language if o.language?
             dd[:datatype] = o.datatype if o.datatype?
             dd
@@ -2412,31 +2395,39 @@ module RDF::SAK
           dl += rels.map do |pred, dt|
             # this will give us a map of neighbours to the predicates
             # actually used to relate them
-            objs = find_in_struct struct, pred, invert: true
+            objs = @graph.find_in_struct struct, pred, invert: true
             # plump up the structs
             objs.keys.each do |k|
-              neighbours[k] ||= struct_for(k,
-                uuids: true, inverses: true, ucache: ucache, scache: scache)
+              # neighbours[k] goes first or it is short circuited
+              neighbours[k] ||= seen[k] ||= @resolver.struct_for(k,
+                uuids: true, inverses: true)
+            end
+
+            # only show relations to concepts in this scheme
+            objs.select! do |k, _|
+              x = @graph.find_in_struct neighbours[k],
+                RDF::Vocab::SKOS.inScheme, entail: true, invert: true
+              x.key? subject
             end
 
             unless objs.empty?
               [{ [dt] => :dt }] + objs.sort do |a, b|
                 # XXX there is a cmp_label but it is dumb
-                al = (label_for(a.first, candidates: neighbours[a.first]) ||
+                al = (@graph.label_for(a.first, struct: neighbours[a.first]) ||
                       [nil, a.first]).last
-                bl = (label_for(b.first, candidates: neighbours[b.first]) ||
+                bl = (@graph.label_for(b.first, struct: neighbours[b.first]) ||
                       [nil, b.first]).last
-                al.value <=> bl.value
+                al.value.upcase <=> bl.value.upcase
               end.map do |o, ps|
                 # XXX this is where i would like canonical_uri to
                 # just "know" to do this (also this will fail if
                 # this is not a uuid)
                 id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
-                olp, olo = label_for(o, candidates: neighbours[o])
+                olp, olo = @graph.label_for(o, struct: neighbours[o])
                 href = base.dup
                 href.fragment = id
                 { link_tag(href, rel: ps, base: base,
-                  typeof: asserted_types(o, struct: struct),
+                  typeof: @graph.asserted_types(o, struct: struct),
                   property: olp, label: olo, prefixes: prefixes ) => :dd }
               end
             end
@@ -2446,14 +2437,30 @@ module RDF::SAK
 
           op = graph.query([nil, nil, s]).to_a.select do |stmt|
             sj = stmt.subject
-            sj.uri? and !neighbours[sj] and (!published or published?(sj))
+
+            if sj.uri? and sj != subject
+              # XXX there is probably a better way to do this
+              ref_ok = if neighbours[sj]
+                         np = neighbours[sj].keys.to_set - skospreds -
+                           [RDF::Vocab::SKOS.member,
+                            RDF::Vocab::SKOS.hasTopConcept]
+                         no = neighbours[sj].values_at(*np.to_a).flatten.uniq
+                         !np.empty? and no.include? s
+                       else
+                         true
+                       end
+              ref_ok and (!published or published?(sj))
+            end
           end.reduce({}) do |hash, stmt|
             sj = stmt.subject
-            neighbours[sj] ||= struct_for(sj,
-              uuids: true, inverses: true, ucache: ucache, scache: scache)
-            (hash[sj] ||= []) << stmt.predicate
+            seen[sj] ||= neighbours[sj] ||= @graph.struct_for(sj, inverses: true)
+            unless skospreds.include? stmt.predicate
+              (hash[sj] ||= []) << stmt.predicate
+            end
             hash
           end
+
+          # warn s, op
 
           unless op.empty?
             dl << { ['Referenced By'] => :dt }
@@ -2465,12 +2472,34 @@ module RDF::SAK
               al.value.upcase <=> bl.value.upcase
             end.each do |sj, ps|
               st   = neighbours[sj]
-              href = canonical_uri sj
-              olp, olo = label_for(sj, candidates: st)
+              href = @resolver.uri_for sj, slugs: true
+              olp, olo = @graph.label_for(sj, struct: st)
 
               dl << { link_tag(href, rev: ps, base: base,
-                typeof: asserted_types(sj, struct: st),
+                typeof: @graph.asserted_types(sj, struct: st),
                 property: olp, label: olo, prefixes: prefixes) => :dd }
+            end
+          end
+
+          # add see also
+          sa = @graph.find_in_struct(
+            struct, RDF::RDFS.seeAlso, invert: true).each do |o, _|
+            seen[o] ||= neighbours[o] ||= @graph.struct_for(o, inverses: true)
+          end
+
+          unless sa.empty?
+            dl << { ['See Also'] => :dt }
+            cmp = @graph.cmp_label cache: neighbours
+            sa.keys.sort(&cmp).each do |o|
+              href = @resolver.uri_for o, slugs: true
+              if st = neighbours[o]
+                olp, olo = @graph.label_for(o, struct: st)
+                dl << { link_tag(href, rel: sa[o], base: base,
+                  typeof: @graph.types_for(o, struct: st),
+                  property: olp, label: olo, prefixes: prefixes) => :dd }
+              else
+                dl << { link_tag(href, rel: ps, base: base) => :dd }
+              end
             end
           end
 
@@ -2478,14 +2507,14 @@ module RDF::SAK
           el << { dl => :dl } unless dl.empty?
 
           # id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
-          id = canonical_uri(s)
+          id = @resolver.uri_for s, slugs: true
           id = id.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
           sec = { el => :section, id: id, resource: "##{id}" }
-          if typ = asserted_types(s, struct: struct)
-            sec[:typeof] = abbreviate(typ)
+          if typ = @graph.asserted_types(s, struct: struct)
+            sec[:typeof] = @resolver.abbreviate typ
           end
-          sec[:rel] = abbreviate(fp) if rp
-          sec[:rev] = abbreviate(rp) if rp
+          sec[:rel] = @resolver.abbreviate(fp) if rp
+          sec[:rev] = @resolver.abbreviate(rp) if rp
           sec
         end
       else
@@ -2517,17 +2546,17 @@ module RDF::SAK
     # Locate the file in the source directory associated with the given URI.
     #
     # @param [RDF::URI, URI, :to_s] the URI requested
-    # 
+    #
     # @return [Pathname] of the corresponding file or nil if no file was found.
     #
     def locate uri
-      uri = coerce_resource uri
+      uri  = @resolver.coerce_resource uri
+      base = @resolver.base
 
-      base = URI(@base.to_s)
-
-      tu = URI(uri) # copy of uri for testing content
+      tu = URI(uri.to_s) # copy of uri for testing content
       unless tu.scheme == 'urn' and tu.nid == 'uuid'
-        raise "could not find UUID for #{uri}" unless uuid = canonical_uuid(uri)
+        raise "could not find UUID for #{uri}" unless
+          uuid = @resolver.uuid_for(uri)
         tu = URI(uri = uuid)
       end
 
@@ -2536,23 +2565,25 @@ module RDF::SAK
       candidates = [@config[:source] + tu.uuid]
 
       # try all canonical URIs
-      (canonical_uri uri, unique: false, slugs: true).each do |u|
+      (@resolver.uri_for uri, scalar: false, slugs: true).each do |u|
+        # warn u.inspect
         u = URI(u.to_s)
+        # warn "#{u.hostname} #{base.hostname}".inspect
         next unless u.hostname == base.hostname
         p = CGI.unescape u.path[/^\/*(.*?)$/, 1]
         candidates.push(@config[:source] + p)
       end
 
-      # warn candidates
+      # warn "candidates: #{candidates.inspect}"
 
       files = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).reject do |x|
-        x.directory? or RDF::SAK::MimeMagic.by_path(x).to_s !~ 
-          /.*(?:markdown|(?:x?ht|x)ml).*/i
+        x.directory? or /.*(?:markdown|(?:x?ht|x)ml).*/i !~
+          RDF::SAK::MimeMagic.by_path(x).to_s
       end.uniq
 
-      #warn files
+      # warn files.inspect
 
       # XXX implement negotiation algorithm
       return files.first
@@ -2562,16 +2593,16 @@ module RDF::SAK
     end
 
     # Visit (open) the document at the given URI.
-    # 
+    #
     # @param uri [RDF::URI, URI, :to_s]
-    # 
+    #
     # @return [RDF::SAK::Context::Document] or nil
 
     def visit uri
-      uri  = canonical_uuid(uri) or return
+      uri  = @resolver.uuid_for(uri) or return
       path = locate uri
       return unless path
-      Document.new self, uri, uri: canonical_uri(uri), doc: path
+      Document.new self, uri, uri: @resolver.uri_for(uri), doc: path
     end
 
     # resolve documents from source
@@ -2621,23 +2652,27 @@ module RDF::SAK
     end
 
     # Determine whether the URI represents a published document.
-    # 
+    #
     # @param uri
-    # 
+    #
     # @return [true, false]
-    def published? uri, circulated: false
-      RDF::SAK::Util.published? @graph, uri,
-        circulated: circulated, base: @base
+    #
+    def published? uri, circulated: false, retired: false, indexed: false
+      if uuid = @resolver.uuid_for(uri)
+        @graph.published? uuid, circulated: circulated,
+          retired: retired, indexed: indexed
+      end
     end
 
     # Find a destination pathname for the document
     #
     # @param uri
     # @param published
-    # 
+    #
     # @return [Pathname]
+    #
     def target_for uri, published: false
-      uri = coerce_resource uri
+      uri = @resolver.coerce_resource uri
       uri = canonical_uuid uri
       target = @config[published?(uri) && published ? :target : :private]
 
@@ -2842,7 +2877,7 @@ module RDF::SAK
 
             # get the subject for this node
             if s = doc.subject_for(elem, coerce: :rdf)
-              s = canonical_uuid(s, verify: false) || s 
+              s = canonical_uuid(s, verify: false) || s
               res[:refs] << s
             end
           end
@@ -2909,7 +2944,7 @@ module RDF::SAK
         c = a[:type] <=> b[:type]
         c == 0 ? a[:pref].downcase <=> b[:pref].downcase : c
       end.each do |term|
-        out << [term[:id].to_s, abbreviate(term[:type]), term[:pref].to_s]
+        out << [term[:id].to_s, @resolver.abbreviate(term[:type]), term[:pref].to_s]
         %i[alt hidden refs].each do |sym|
           out << (term[sym].empty? ? [] :
                   ([nil] + term[sym].to_a.map(&:to_s).sort))
@@ -2949,7 +2984,7 @@ module RDF::SAK
             desc = RDF::Literal(row[3], language: 'en')
             out << [subject, RDF::Vocab::SKOS.definition, desc]
           end
-          # 
+          #
           row.drop(4).compact.each do |c|
             c = RDF::URI(c)
             out << [subject, RDF::RDFS.seeAlso, c]
@@ -2988,10 +3023,6 @@ module RDF::SAK
 
     # fetch references for people/companies/concepts/etc from dbpedia/wikidata
 
-
-
-
-
     # - document context class -
 
     class Document
@@ -3005,7 +3036,7 @@ module RDF::SAK
 
       public
 
-      attr_reader :doc, :uuid, :uri
+      attr_reader :context, :doc, :uuid, :uri
 
       def initialize context, uuid, doc: nil, uri: nil, mtime: nil
         raise 'context must be a RDF::SAK::Context' unless
@@ -3138,25 +3169,36 @@ module RDF::SAK
       end
 
       # notice these are only RDFa attributes that take URIs
-      RDFA_ATTR  = [:about, :resource, :typeof].freeze
-      LINK_ATTR  = [:href, :src, :data, :action, :longdesc].freeze
+      RDFA_ATTR  = %i[about resource typeof].freeze
+      LINK_ATTR  = %i[href src data action longdesc].freeze
       LINK_XPATH = ('.//html:*[not(self::html:base)][%s]' %
         (LINK_ATTR + RDFA_ATTR).map { |a| "@#{a.to_s}" }.join('|')).freeze
 
       def rewrite_links node = @doc, uuids: {}, uris: {}, rdfa: true, &block
+        res   = @context.resolver
         base  = base_for node
-        count = 0
+        out   = []
         cache = {}
-        names = rdfa ? LINK_ATTR + RDFA_ATTR : LINK_ATTR 
-        node.xpath(LINK_XPATH, { html: XHTMLNS }).each do |elem|
-          names.each do |attr|
+        names = rdfa ? LINK_ATTR + RDFA_ATTR : LINK_ATTR
+        xpath = ('.//html:*[not(self::html:base)][%s]' %
+          names.map { |a| "@#{a.to_s}" }.join(?|))
+        node.xpath(xpath, { html: XHTMLNS }).each do |elem|
+          (names - [:typeof]).each do |attr|
             attr = attr.to_s
             next unless elem.has_attribute? attr
 
             # XXX grr bnodes
             next if elem[attr].strip.start_with? '_:'
 
-            abs = base.merge uri_pp(elem[attr].strip)
+            # warn "trying raw #{elem[attr].strip}"
+
+            # GRRRR URI::URN (or rather URI) is way way too anal
+            begin
+              tmp = uri_pp(elem[attr].strip)
+              abs = base.merge tmp
+            rescue URI::InvalidComponentError
+              next
+            end
 
             # fix e.g. http->https
             if abs.host == @uri.host and abs.scheme != @uri.scheme
@@ -3172,29 +3214,38 @@ module RDF::SAK
 
             abs = RDF::URI(abs.to_s)
 
+            # warn "first #{abs.inspect}"
+
             # round-trip to uuid and back if we can
-            if uuid = uuids[abs] ||= @context.canonical_uuid(abs)
-              abs = cache[abs] ||= @context.canonical_uri(uuid, to_uuid: true)
+            #if uuid = uuids[abs] ||= res.uuid_for(abs, verify: false)
+            if uuid = res.uuid_for(abs, verify: false)
+              abs = cache[abs] ||= res.uri_for(uuid, roundtrip: true)
             else
-              abs = cache[abs] ||= @context.canonical_uri(abs, to_uuid: true)
+              abs = cache[abs] ||= res.uri_for(abs, roundtrip: true)
             end
+
+            # warn "then #{abs.inspect}"
 
             # reinstate the path parameters
             if !pp.empty? && split_pp(abs, only: true).empty?
               abs = abs.dup
-              abs.path = ([abs.path] + pp).join(';')
+              abs.path = ([abs.path] + pp).join(?;)
             end
-            
 
+            # warn "trying #{abs}"
             elem[attr] = @uri.host == abs.host ?
               @uri.route_to(abs.to_s).to_s : abs.to_s
-            count += 1
+            # warn "that (#{abs} -> #{elem[attr]}) worked lol"
+            out << abs
           end
 
+          # warn "now trying block"
           block.call elem if block
+          # warn "block worked"
         end
 
-        count
+        # uhh is there any better return value here?
+        out.uniq
       end
 
       # sponge the document for rdfa
@@ -3202,7 +3253,7 @@ module RDF::SAK
       end
 
       OBJS = [:href, :src].freeze
-      
+
       # ancestor node always with (@property and not @content) and
       # not @resource|@href|@src unless @rel|@rev
       LITXP = ['(ancestor::*[@property][not(@content)]',
@@ -3229,14 +3280,13 @@ module RDF::SAK
         end.transform_keys do |k|
           k.delete_prefix('xmlns:').to_sym
         end
-
         # then add @prefix overtop of the namespaces
         if node[:prefix]
           x = node[:prefix].strip.split(/\s+/)
           a = []
           b = []
           x.each_index { |i| (i % 2 == 0 ? a : b).push x[i] }
-          a.map!(&:to_sym)
+          a.map! { |x| x.gsub(/:.*/, '').to_sym }
           # if the size is uneven the values will be nil, so w drop em
           pfx.merge! a.zip(b).to_h.reject { |_, v| v.nil? }
         end
@@ -3246,7 +3296,7 @@ module RDF::SAK
           v = RDF::URI(v)
           RDF::Vocabulary.find_term(v) rescue v
         end.merge prefixes
-      
+
         if node.parent and node.parent.element?
           prefixes_for node.parent, prefixes
         else
@@ -3264,21 +3314,30 @@ module RDF::SAK
         @context.generate_twitter_meta @uuid
       end
 
-      def transform_xhtml published: true, rehydrate: false
+      def transform_xhtml published: true, rehydrate: false, rescan: false, sponge: false
         # before we do any more work make sure this is html
         doc  = @doc.dup 1
         body = doc.at_xpath(
           '/html:body|/html:html/html:body[1]', { html: XHTMLNS }) or return
 
-        RDF::SAK::Util.rehydrate body, @context.graph do |cands|
-          unless cands.empty?
-            cands = cands.select do |k, v|
-              type_is?(v[:types],
-                [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent]) 
+        resolver = @context.resolver
+        repo     = @context.graph
+
+        # sponge initially
+        sponge doc, repo: repo if sponge
+
+        # XXX KILL THIS
+        RDF::SAK::Util::Messy.rehydrate body, resolver, rescan: rescan do |cs|
+          # warn cs.inspect
+          unless cs.empty?
+            cs.select! do |k, v|
+              repo.type_is?(v[:types],
+                [RDF::Vocab::SKOS.Concept, RDF::Vocab::FOAF.Agent
+                ])
             end
             # XXX TODO make this logic better: if there are still
             # candidates, sort by preferred predicate for given type
-            cands.keys.sort.first
+            cs.keys.sort.first
           end
         end if rehydrate
 
@@ -3287,7 +3346,7 @@ module RDF::SAK
           { html: XHTMLNS }).each(&:unlink)
 
         # initial stuff
-        struct    = @context.struct_for @uuid, uuids: true, canon: true
+        struct    = resolver.struct_for @uuid, uuids: true, canon: true
         # rstruct   = @context.struct_for @uuid, uuids: true, rev: true
         resources = {}
         literals  = {}
@@ -3295,9 +3354,9 @@ module RDF::SAK
         urev      = {} # uri  -> uuid
         datatypes = Set.new
         types     = Set.new
-        authors   = @context.authors_for(@uuid)
-        title     = @context.label_for @uuid, candidates: struct
-        desc      = @context.label_for @uuid, candidates: struct, desc: true
+        authors   = repo.authors_for @uuid
+        title     = repo.label_for @uuid, struct: struct
+        desc      = repo.label_for @uuid, struct: struct, desc: true
 
         # rewrite content
         title = title[1] if title
@@ -3308,37 +3367,36 @@ module RDF::SAK
         # which we need to mine (predicates, classes, datatypes) for
         # prefixes among other things.
 
-        struct.each do |p, v|
-          v.each do |o|
-            if o.literal?
-              literals[o] ||= Set.new
-              literals[o].add p
+        inv = @context.invert_struct struct do |p, o|
+          if o.literal?
+            literals[o] ||= Set.new
+            literals[o] << p
 
-              # collect the datatype
-              datatypes.add o.datatype if o.has_datatype?
-            else
-              # normalize URIs
-              if o.to_s.start_with? 'urn:uuid:'
-                ufwd[o] ||= @context.canonical_uri o
-              elsif cu = @context.canonical_uuid(o)
-                o = urev[o] ||= cu
-              end
-
-
-              # collect the resource
-              resources[o] ||= Set.new
-              resources[o].add p
-
-              # add to type
-              types.add o if p == RDF::RDFV.type
+            # collect the datatype
+            datatypes << o.datatype if o.has_datatype?
+          else
+            # normalize URIs
+            if o.to_s.downcase.start_with? 'urn:uuid:'
+              ufwd[o] ||= resolver.uri_for o
+            elsif cu = resolver.uuid_for(o)
+              o = urev[o] ||= cu
             end
+
+            # collect the resource
+            resources[o] ||= Set.new
+            resources[o] << p
+
+            # add to type
+            types << o if p == RDF::RDFV.type
           end
+
+          nil # so we don't accidentally pollute the output
         end
         urev.merge! ufwd.invert
 
         labels = resources.keys.map do |k|
           # turn this into a pair which subsequently gets turned into a hash
-          [k, @context.label_for(k) ]
+          [k, repo.label_for(k) ]
         end.to_h
 
         #warn labels
@@ -3346,28 +3404,29 @@ module RDF::SAK
         # handle the title
         title ||= RDF::Literal('')
         tm = { '#title' => title,
-          property: @context.abbreviate(literals[title].to_a, vocab: XHV) }
+          property: resolver.abbreviate(literals[title].to_a, vocab: XHV) }
         if tl = title.language
           tm['xml:lang'] = tl # if xmlns
           tm['lang'] = tl
         elsif tdt = title.datatype and tdt != RDF::XSD.string
-          tm[:datatype] = @context.abbreviate(tdt)
+          tm[:datatype] = resolver.abbreviate(tdt)
         end
 
         # we accumulate a record of the links in the body so we know
         # which ones to skip in the head
-        bodylinks = {}
-        rewrite_links body, uuids: ufwd, uris: urev do |elem|
+        bodylinks = rewrite_links body do |elem|
           vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
           vocab = uri_pp(vocab.to_s) if vocab
 
           if elem.key?('href') or elem.key?('src')
+            # warn [@uri, elem['href'] || elem['src']].inspect
             vu = uri_pp(elem['href'] || elem['src'])
             ru = RDF::URI(@uri.merge(vu))
-            bodylinks[urev[ru] || ru] = true
+            # bodylinks[urev[ru] || ru] = true
 
             if rel = resources[urev[ru] || ru]
-              elem['rel'] = (@context.abbreviate rel, vocab: vocab).join ' '
+              elem['rel'] =
+                (resolver.abbreviate rel, vocab: vocab, scalar: false).join ' '
             end
 
             label = labels[urev[ru] || ru]
@@ -3377,9 +3436,10 @@ module RDF::SAK
           end
         end
 
+
         # and now we do the head
         links = @context.head_links @uuid, struct: struct, nodes: resources,
-          prefixes: @context.prefixes, ignore: bodylinks.keys, labels: labels,
+          prefixes: @context.prefixes, ignore: bodylinks, labels: labels,
           vocab: XHV, rev: RDF::SAK::CI.document
 
         # we want to duplicate links from particular subjects (eg the root)
@@ -3388,8 +3448,8 @@ module RDF::SAK
         end.each do |s, preds|
 
           o = {}
-          u = ufwd[s] ||= @context.canonical_uuid s
-          s = urev[u] ||= @context.canonical_uri u if u
+          u = ufwd[s] ||= resolver.uuid_for s
+          s = urev[u] ||= resolver.uri_for u if u
           f = {}
 
           # do not include this subject as these links are already included!
@@ -3397,13 +3457,13 @@ module RDF::SAK
 
           # gather up the objects, then gather up the predicates
 
-          @context.objects_for u || s, preds, only: :resource do |obj, rel|
+          repo.objects_for u || s, preds, only: :resource do |obj, rel|
             # XXX do not know why += |= etc does not work
-            x = @context.canonical_uuid(obj) || obj
-            urev[x] ||= @context.canonical_uri x
+            x = resolver.uuid_for(obj) || obj
+            urev[x] ||= resolver.uri_for x
             y = o[x] ||= Set.new
             o[x] = y | rel
-            f[x] = @context.formats_for x
+            f[x] = repo.formats_for x
           end
 
           srel = @uri.route_to((u ? urev[u] || s : s).to_s)
@@ -3411,8 +3471,8 @@ module RDF::SAK
           # now collect all the other predicates
           o.keys.each do |obj|
             hrel = @uri.route_to((urev[obj] || obj).to_s)
-            o[obj] |= @context.graph.query([u || s, nil, obj]).predicates.to_set
-            rels = @context.abbreviate o[obj].to_a, vocab: XHV
+            o[obj] |= repo.query([u || s, nil, obj]).predicates.to_set
+            rels = resolver.abbreviate o[obj].to_a, vocab: XHV
             ln = { nil => :link, about: srel, rel: rels, href: hrel }
             ln[:type] = f[obj].first if f[obj]
 
@@ -3427,14 +3487,14 @@ module RDF::SAK
         authors.each do |a|
           name  = labels[urev[a] || a] or next
           datatypes.add name[0] # a convenient place to chuck this
-          prop  = @context.abbreviate(name[0])
+          prop  = resolver.abbreviate(name[0])
           name  = name[1]
           about = @uri.route_to((ufwd[a] || a).to_s)
           tag   = { nil => :meta, about: about.to_s, name: :author,
                    property: prop, content: name.to_s }
 
           if name.has_datatype? and name.datatype != RDF::XSD.string
-            tag[:datatype] = @context.abbreviate(name.datatype)
+            tag[:datatype] = resolver.abbreviate(name.datatype)
           elsif name.has_language?
             tag['xml:lang'] = tag[:lang] = name.language
           end
@@ -3443,13 +3503,13 @@ module RDF::SAK
 
         literals.each do |k, v|
           next if k == title
-          rel = @context.abbreviate v.to_a, vocab: XHV
+          rel = resolver.abbreviate v.to_a, vocab: XHV
           elem = { nil => :meta, property: rel, content: k.to_s }
           elem[:name] = :description if k == desc
 
           if k.has_datatype?
             datatypes.add k.datatype # so we get the prefix
-            elem[:datatype] = @context.abbreviate k.datatype, vocab: XHV
+            elem[:datatype] = resolver.abbreviate k.datatype, vocab: XHV
           end
 
           meta.push(elem)
@@ -3468,30 +3528,45 @@ module RDF::SAK
         # don't forget style tag
         style = doc.xpath('/html:html/html:head/html:style', { html: XHTMLNS })
 
+        # prepare only the prefixes we need to resolve the data we need
+        rsc = resolver.abbreviate(
+          (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
+          noop: false, scalar: false).map do |x|
+          next if x.nil?
+          x.split(?:).first.to_sym
+        end.compact.to_set
+
+        # XXX we need to also capture prefixes that were in the markup
+        # but had the prefix removed or otherwise no prefix expansion given
+
+        # XXX do this better
+        rdfa = %w[about resource typeof rel rev property datatype]
+        # rxp = ".//*[%s]/@*" % rdfa.map { |a| "@#{a}" }.join(?|)
+        rxp = rdfa.map { |a| ".//*/@%s" % a }.join(?|)
+
+        rsc += doc.xpath(rxp).map do |a|
+          # get rid of safe-curies
+          a.value.strip.gsub(/^\[([^\]]+)\]$/, '\1').split.map do |s|
+            s.split(?:).first.to_sym
+          end
+        end.compact.flatten.to_set
+
+        pfx = resolver.prefixes.select do |k, _|
+          rsc.include? k
+        end.transform_values { |v| v.to_s }
+
         body = body.dup 1
         body = { id: UUID::NCName.to_ncname_64(@uuid.to_s.dup, version: 1),
           about: '', '#body' => body.children.to_a }
-        body[:typeof] = @context.abbreviate(types.to_a, vocab: XHV) unless
+        body[:typeof] = resolver.abbreviate(types.to_a, vocab: XHV) unless
           types.empty?
-
-        # prepare only the prefixes we need to resolve the data we need
-        rsc = @context.abbreviate(
-          (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
-          noop: false).map do |x|
-          next if x.nil?
-          x.split(?:)[0].to_sym
-        end.select { |x| not x.nil? }.to_set
-
-        pfx = @context.prefixes.select do |k, _|
-          rsc.include? k
-        end.transform_values { |v| v.to_s }
 
         # XXX deal with the qb:Observation separately (just nuke it for now)
         extra = generate_twitter_meta || []
         if bl = generate_backlinks(published: published)#,
           # ignore: @context.graph.query(
           # [nil, CI.document, @uuid]).subjects.to_set)
-          extra << { [bl] => :object }
+          extra << { [bl] => :template }
         end
 
         # and now for the document
@@ -3507,16 +3582,19 @@ module RDF::SAK
           script << doc.create_text_node('')
         end
 
+        # sponge the generated data back lol
+        sponge doc, repo: repo if sponge
+
         doc
       end
 
       # Actually write the transformed document to the target
       #
-      # @param published [true, false] 
-      # @param rehydrate 
+      # @param published [true, false]
+      # @param rehydrate
       #
       # @return [Array] pathname(s) written
-      def write_to_target published: true, rehydrate: false
+      def write_to_target published: true, rehydrate: false, rescan: false, sponge: false
 
         # in all cases we write to private target
         states = [false]
@@ -3529,7 +3607,8 @@ module RDF::SAK
 
           # XXX this is dumb; it should do something more robust if it
           # fails
-          doc = transform_xhtml(published: state, rehydrate: rehydrate) or next
+          doc = transform_xhtml(published: state, rehydrate: rehydrate,
+                                rescan: rescan, sponge: sponge) or next
 
           begin
             fh   = Tempfile.create('xml-', target)
@@ -3556,36 +3635,83 @@ module RDF::SAK
         ok
       end
 
+      CURIES     = %w[about resource typeof rel rev property datatype].freeze
+      CURIE_TAGS = ('//*[%s][not(ancestor::*[@property and not(@content)])]' %
+        CURIES.map { |a| "@#{a}" }.join(?|)).freeze
+
       # Sponge the RDFa out of the document.
-      # 
+      #
       # @return [RDF::Repository] the statements found in the document.
-      def sponge
-        out = RDF::Repository.new
+      #
+      def sponge doc = @doc, uri = @uri, repo: nil, overwrite: false
+        repo ||= RDF::Repository.new
 
         # remove garbage from the <head> from the working version; it
         # was thrown in there ad-hoc
         html = doc.dup 1
-        html.xpath(
-          '/html:html/html:head/*[not(self::html:title|self::html:base)]',
-          RDF::SAK::Util::XPATHNS).each(&:unlink)
+
+        # XXX maybe get rid of this?
+        # html.xpath(
+        #   '/html:html/html:head/*[not(self::html:title|self::html:base)]',
+        #   RDF::SAK::Util::XPATHNS).each(&:unlink)
+
+        res = @context.resolver
+
+        # gather up all of the values of the rdfa attributes
+        prefixes = {}
+        found = html.xpath(CURIE_TAGS, RDF::SAK::Util::XPATHNS).map do |elem|
+          prefixes = RDF::SAK::Util::Messy.get_prefixes(elem).merge prefixes
+          CURIES.map { |a| elem[a].to_s.strip.split }
+        end.flatten.reject { |c| /:(?=\/\/)/.match? c }.map do |c|
+          c = /^(?:([^:]+):)?/.match(c).captures.first
+          c ? c.to_sym : c
+        end.to_set
+
+        # merge any found prefixes with our prefixes
+        prefixes = res.prefixes.merge(prefixes).select do |k, _|
+          found.include? k and not k.nil?
+        end
+
+        # warn found.inspect
+        # warn prefixes.inspect
+
+        # warn prefixes.sort.inspect
+
+        # warn found.inspect, res.prefixes.keys.to_set.inspect, prefixes.inspect
+
+        html.root[:prefix] = flatten_attr prefixes.transform_values(&:to_s)
+
+        # this prevents what i think was causing the first section to
+        # be incorrectly identified with the document
+        if body = html.at_xpath('/html:html/html:body', XPATHNS)
+          body[:about] = '' unless %w[about resource typeof].any? do |a|
+            body.key? a
+          end
+        end
+
+        # warn html.root[:prefix]
+
+        # warn html.to_s
+
+        # if the document has no rdfa
 
         # slurp up any rdfa, swapping in canonical uuids; note that if
         # we're doing this here then we assume they are authoritative
         # and don't check them against the graph
-        RDF::RDFa::Reader.new(html).each do |stmt|
-          if stmt.subject.iri? and
-              su = @context.canonical_uuid(stmt.subject, verify: false)
-            stmt.subject = su
-          end
-          if stmt.object.iri? and
-              ou = @context.canonical_uuid(stmt.object, verify: false)
-            stmt.object = ou
-          end
+        RDF::RDFa::Reader.new(html, base_uri: @uri.to_s).each do |stmt|
+          s, o = stmt.subject, stmt.object
 
-          out << stmt
+          stmt.subject = res.uuid_for s, verify: false, noop: true if s.iri?
+          stmt.object  = res.uuid_for o, verify: false, noop: true if o.iri?
+
+          # warn stmt
+
+          # warn o if stmt.object.nil?
+
+          repo << stmt
         end
 
-        out
+        repo
       end
 
       def scan_inlines &block
