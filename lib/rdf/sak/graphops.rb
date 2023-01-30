@@ -553,7 +553,7 @@ module RDF::SAK
     def types_for subject, graph: nil, entail: false, struct: nil
       if struct
         assert_struct struct
-        return struct[RDF.type].select(&:uri?)
+        return (struct[RDF.type] || []).select(&:uri?)
       end
 
       objects_for subject, RDF.type, graph: graph, entail: entail, only: :uri
@@ -1961,15 +1961,21 @@ module RDF::SAK
       cmp = cmp_literal reverse: reverse, datatype: datatype,
         language: language, nocase: nocase, longer: longer
 
-      cache ||= {}
+      cache ||= {} # structs
+      lcache = {} # separate label cache
+
+      # XXX 2022-12-01 ADD RANKING FOR PREDICATES TOO: maybe do some
+      # kinda scoring thing? language tag, predicate, string length,
+      # lexical...
 
       lambda do |a, b|
         # obtain and cache the labels
-        cache[a] ||= (label_for(a) || [nil, a]).last
-        cache[b] ||= (label_for(b) || [nil, b]).last
+        [a, b].each do |x|
+          lcache[x] ||= (label_for(x, struct: cache[x]) || [nil, x]).last
+        end
 
         # now run the label cmp
-        cmp.(cache[a], cache[b])
+        cmp.(lcache[a], lcache[b])
       end
     end
 

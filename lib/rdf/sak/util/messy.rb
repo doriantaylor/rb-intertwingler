@@ -84,6 +84,31 @@ module RDF::SAK::Util::Messy
   # rehydrate boilerplate
   RH_BP = '[not(@rel|@rev|@property|@about|@resource|@typeof)]'.freeze
 
+  # scraped from https://html.spec.whatwg.org/multipage/indices.html
+  #
+  # Array.from(document.getElementById('attributes-1').rows).filter(
+  #  (r) => r.cells[r.cells.length-1].textContent.indexOf('URL') > -1).reduce(
+  #  (a, r) => { let x = r.cells[1].textContent.trim().split(/\s*;\s*/);
+  #  let y = r.cells[0].textContent.trim();
+  #  x.forEach(k => (a[y] ||= []).push(k)); return a }, {})
+
+  URL_ATTRS =  {
+    action:     %i[form],
+    cite:       %i[blockquote del ins q],
+    data:       %i[object],
+    formaction: %i[button input],
+    href:       %i[a area link base],
+    ping:       %i[a area],
+    poster:     %i[video],
+    src:        %i[audio embed iframe img input script source track video],
+  }.freeze
+
+  URL_ELEMS = URL_ATTRS.reduce({}) do |hash, pair|
+    attr, elems = pair
+    elems.each { |e| (hash[e] ||= []) << attr }
+    hash
+  end.freeze
+
   XPATH = {
     htmlbase: proc {
       x = ['ancestor-or-self::html:html[1]/' \
@@ -109,7 +134,13 @@ module RDF::SAK::Util::Messy
             "normalize-space(@class), ' '), ' #{cl} ')]"
         end
       end.flatten).join(?|),
-    dehydrate: './/html:a[count(*)=1][html:dfn|html:abbr|html:span]',
+    # sanitize: './/html:*[%s]' %
+    #   %w[a area img iframe script form object].map do |x|
+    #     'self::html:%s' % x
+    #   end.join(?|),
+    sanitize: ".//html:*[%s][not(self::html:base)]" %
+      (%i[about resource] + URL_ATTRS.keys).map { |x| ?@ + x.to_s }.join(?|),
+    dehydrate: './/html:a[count(*|text())=1][html:dfn|html:abbr|html:span]',
     rehydrate: (
       %w[abbr[not(ancestor::html:dfn)]] + (INLINES - %w[a abbr])).map { |e|
       ".//html:#{e}#{RH_BP}" }.join(?|).freeze,
@@ -481,7 +512,7 @@ module RDF::SAK::Util::Messy
   def type_strata rdftype, descend: false
     # first we coerce this to an array if it isn't already
     rdftype = rdftype.respond_to?(:to_a) ? rdftype.to_a : [rdftype]
-      
+
     # now squash and coerce
     rdftype = rdftype.uniq.map do |t|
       RDF::Vocabulary.find_term t rescue t
@@ -1732,7 +1763,7 @@ module RDF::SAK::Util::Messy
       end
     end
 
-    # smush the result 
+    # smush the result
     c.keys
   end
 
@@ -2377,6 +2408,38 @@ module RDF::SAK::Util::Messy
         [subject, text, attrs, e.name.to_sym]
       end
     end.compact.uniq
+  end
+
+  # Remove all `<head>` content aside from `<title>` and `<base>`;
+  # revert all links to their canonical UUIDs (where applicable).
+  #
+  # @param doc [RDF::SAK::Context::Document]
+  #
+  # @return [Nokogiri::XML::Document]
+  #
+  def sanitize doc
+    # get the uri resolver
+    resolver = doc.context.resolver
+
+    # and away we go
+    out = doc.doc.dup
+
+    out.xpath(XPATH[:sanitize], XPATHNS).each do |e|
+      # XXX this shouldn ot be a problem post-refactor
+      base  = RDF::SAK::Util::Messy.base_for e, doc.uri
+      attrs = %i[about resource] + URL_ELEMS.fetch(e.name.to_sym, [])
+
+      attrs.each do |a|
+        next unless e.key? a.to_s
+        uri = base + e[a].strip
+
+        # warn "#{e.name} #{a} #{uri}"
+
+        e[a] = resolver.uuid_for uri, noop: true, as: :str
+      end
+    end
+
+    out
   end
 
   # Strip all the links surrounding and RDFa attributes off

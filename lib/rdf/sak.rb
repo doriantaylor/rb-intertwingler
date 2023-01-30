@@ -1283,6 +1283,16 @@ module RDF::SAK
       fh.close
     end
 
+    def reload_graph
+      resolver.flush
+      graph.clear
+      graph.flush_cache
+
+      @config[:graph].each { |f| graph.load f }
+
+      graph
+    end
+
     def write_turtle file
       file = Pathname(file).expand_path.open('wb') unless file.is_a? IO
       # warn file
@@ -1634,29 +1644,31 @@ module RDF::SAK
         # cache the forward direction
         fwd[doc] = canon
 
-        unless uris.empty?
-          uris.each do |uri|
-            next unless uri.respond_to? :request_uri
-            next if canon == uri
-            next unless base.route_to(uri).relative?
+        uris.each do |uri|
+          next unless uri.respond_to? :request_uri
+          next if canon == uri
+          next unless base.route_to(uri).relative?
+          next if uri.fragment
 
-            # warn "#{canon} <=> #{uri}"
+          # warn "#{canon} <=> #{uri}"
 
-            requri = uri.request_uri.delete_prefix '/'
-            next if requri.empty?
-            # XXX why would i want to eliminate UUIDs?
-            # next if requri == '' ||
-            #  requri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
+          requri = uri.request_uri.delete_prefix '/'
+          next if requri.empty?
+          # XXX why would i want to eliminate UUIDs?
+          # next if requri == '' ||
+          #  requri =~ /^[0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8}$/
 
-            # cache the reverse direction
-            rev[uri] = requri
-          end
+          # cache the reverse direction
+          rev[uri] = requri
         end
       end
 
+      # warn fwd, rev
+
       rev.each do |uri, requri|
-        if (doc = @resolver.uuid_for(uri, published: published)) and
+        if (doc = @resolver.uuid_for(uri, published: published, as: :uri)) and
             fwd[doc] and fwd[doc] != uri
+          # warn "#{doc.inspect} -> #{fwd[doc]} (ex #{uri})"
           out[requri] = fwd[doc].to_s
         end
       end
@@ -1880,7 +1892,8 @@ module RDF::SAK
               end
 
       if abs
-        para = { [abs.last.to_s] => :p, property: @graph.abbreviate(abs.first) }
+        para = { [abs.last.to_s] => :p,
+          property: @resolver.abbreviate(abs.first) }
         para['xml:lang'] = abs.last.language if abs.last.language?
         para[:datatype]  = abs.last.datatype if abs.last.datatype?
         spec.unshift para
@@ -2468,6 +2481,28 @@ module RDF::SAK
             end
           end
 
+          # add see also
+          sa = @graph.find_in_struct(
+            struct, RDF::RDFS.seeAlso, invert: true).each do |o, _|
+            seen[o] ||= neighbours[o] ||= @graph.struct_for(o, inverses: true)
+          end
+
+          unless sa.empty?
+            dl << { ['See Also'] => :dt }
+            cmp = @graph.cmp_label cache: neighbours
+            sa.keys.sort(&cmp).each do |o|
+              href = @resolver.uri_for o, slugs: true
+              if st = neighbours[o]
+                olp, olo = @graph.label_for(o, struct: st)
+                dl << { link_tag(href, rel: sa[o], base: base,
+                  typeof: @graph.types_for(o, struct: st),
+                  property: olp, label: olo, prefixes: prefixes) => :dd }
+              else
+                dl << { link_tag(href, rel: ps, base: base) => :dd }
+              end
+            end
+          end
+
           # add to set
           el << { dl => :dl } unless dl.empty?
 
@@ -3001,7 +3036,7 @@ module RDF::SAK
 
       public
 
-      attr_reader :doc, :uuid, :uri
+      attr_reader :context, :doc, :uuid, :uri
 
       def initialize context, uuid, doc: nil, uri: nil, mtime: nil
         raise 'context must be a RDF::SAK::Context' unless
@@ -3182,7 +3217,8 @@ module RDF::SAK
             # warn "first #{abs.inspect}"
 
             # round-trip to uuid and back if we can
-            if uuid = uuids[abs] ||= res.uuid_for(abs, verify: false)
+            #if uuid = uuids[abs] ||= res.uuid_for(abs, verify: false)
+            if uuid = res.uuid_for(abs, verify: false)
               abs = cache[abs] ||= res.uri_for(uuid, roundtrip: true)
             else
               abs = cache[abs] ||= res.uri_for(abs, roundtrip: true)
@@ -3378,7 +3414,7 @@ module RDF::SAK
 
         # we accumulate a record of the links in the body so we know
         # which ones to skip in the head
-        bodylinks = rewrite_links body, uuids: ufwd, uris: urev do |elem|
+        bodylinks = rewrite_links body do |elem|
           vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
           vocab = uri_pp(vocab.to_s) if vocab
 
@@ -3492,12 +3528,6 @@ module RDF::SAK
         # don't forget style tag
         style = doc.xpath('/html:html/html:head/html:style', { html: XHTMLNS })
 
-        body = body.dup 1
-        body = { id: UUID::NCName.to_ncname_64(@uuid.to_s.dup, version: 1),
-          about: '', '#body' => body.children.to_a }
-        body[:typeof] = resolver.abbreviate(types.to_a, vocab: XHV) unless
-          types.empty?
-
         # prepare only the prefixes we need to resolve the data we need
         rsc = resolver.abbreviate(
           (struct.keys + resources.keys + datatypes.to_a + types.to_a).uniq,
@@ -3506,16 +3536,37 @@ module RDF::SAK
           x.split(?:).first.to_sym
         end.compact.to_set
 
+        # XXX we need to also capture prefixes that were in the markup
+        # but had the prefix removed or otherwise no prefix expansion given
+
+        # XXX do this better
+        rdfa = %w[about resource typeof rel rev property datatype]
+        # rxp = ".//*[%s]/@*" % rdfa.map { |a| "@#{a}" }.join(?|)
+        rxp = rdfa.map { |a| ".//*/@%s" % a }.join(?|)
+
+        rsc += doc.xpath(rxp).map do |a|
+          # get rid of safe-curies
+          a.value.strip.gsub(/^\[([^\]]+)\]$/, '\1').split.map do |s|
+            s.split(?:).first.to_sym
+          end
+        end.compact.flatten.to_set
+
         pfx = resolver.prefixes.select do |k, _|
           rsc.include? k
         end.transform_values { |v| v.to_s }
+
+        body = body.dup 1
+        body = { id: UUID::NCName.to_ncname_64(@uuid.to_s.dup, version: 1),
+          about: '', '#body' => body.children.to_a }
+        body[:typeof] = resolver.abbreviate(types.to_a, vocab: XHV) unless
+          types.empty?
 
         # XXX deal with the qb:Observation separately (just nuke it for now)
         extra = generate_twitter_meta || []
         if bl = generate_backlinks(published: published)#,
           # ignore: @context.graph.query(
           # [nil, CI.document, @uuid]).subjects.to_set)
-          extra << { [bl] => :object }
+          extra << { [bl] => :template }
         end
 
         # and now for the document
@@ -3639,6 +3690,8 @@ module RDF::SAK
         end
 
         # warn html.root[:prefix]
+
+        # warn html.to_s
 
         # if the document has no rdfa
 

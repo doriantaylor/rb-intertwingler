@@ -31,6 +31,10 @@ module RDF::SAK
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Audience
   #
+  #     # This is intended to represent a generic block-level segment, such as a paragraph, list, figure, or table.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Block
+  #
   #     # In order to merge a document, we must define the target to which it ought to be merged. This class is identical to an Action, save for such a property.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Merge
@@ -90,6 +94,10 @@ module RDF::SAK
   #     # The document evokes the given concept without mentioning it explicitly.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :evokes
+  #
+  #     # This property relates an Audience to a specific foaf:Person who is an exemplar of the audience.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :exemplar
   #
   #     # This property specifies form target, which may or may not be visible to the user.
   #     # @return [RDF::Vocabulary::Term]
@@ -327,6 +335,12 @@ module RDF::SAK
       label: "Audience",
       subClassOf: ["http://purl.org/dc/terms/AgentClass", "http://www.w3.org/2004/02/skos/core#Concept"],
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :Block,
+      comment: {en: "This is intended to represent a generic block-level segment, such as a paragraph, list, figure, or table."},
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "Block",
+      subClassOf: "http://purl.org/ontology/bibo/DocumentPart",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Merge,
       comment: {en: "In order to merge a document, we must define the target to which it ought to be merged. This class is identical to an Action, save for such a property."},
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
@@ -470,6 +484,14 @@ module RDF::SAK
       label: "evokes",
       range: "http://www.w3.org/2004/02/skos/core#Concept",
       subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#assumes",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :exemplar,
+      comment: {en: "This property relates an Audience to a specific foaf:Person who is an exemplar of the audience."},
+      domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "exemplar",
+      range: "http://xmlns.com/foaf/0.1/Person",
+      subPropertyOf: "http://www.w3.org/2004/02/skos/core#example",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :form,
       comment: {en: "This property specifies form target, which may or may not be visible to the user."},
@@ -868,8 +890,5 @@ module RDF::SAK
         )],
       label: "words-and-blocks",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
-
-    RDF::Vocabulary.register :ci, self if
-      RDF::Vocabulary.respond_to? :register
   end
 end
