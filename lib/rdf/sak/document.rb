@@ -26,6 +26,12 @@ class RDF::SAK::Document
   def backlinks
   end
 
+  def add_rdfa
+  end
+
+  def add_section_ids
+  end
+
   # STATIC METHODS THAT ONLY TOUCH MARKUP
 
   def self.reindent elem

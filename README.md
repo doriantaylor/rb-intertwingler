@@ -278,7 +278,7 @@ Bug reports and pull requests are welcome at
 
 ## Copyright & License
 
-©2018 [Dorian Taylor](https://doriantaylor.com/)
+©2018-2023 [Dorian Taylor](https://doriantaylor.com/)
 
 This software is provided under
 the [Apache License, 2.0](https://www.apache.org/licenses/LICENSE-2.0).
