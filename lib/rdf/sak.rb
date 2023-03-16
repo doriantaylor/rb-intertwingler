@@ -272,12 +272,6 @@ module RDF::SAK
       pair[0].to_s <=> pair[1].to_s
     end
 
-    def term_list terms
-      return [] if terms.nil?
-      terms = terms.respond_to?(:to_a) ? terms.to_a : [terms]
-      terms.uniq.map { |t| RDF::Vocabulary.find_term t }.compact
-    end
-
     public
 
     attr_reader :config, :graph, :resolver
@@ -536,93 +530,6 @@ module RDF::SAK
         unique: unique, lang: lang, desc: desc, alt: alt, struct: candidates
     end
 
-    SKOS_HIER = [
-      {
-        element: :subject,
-        pattern: -> c, p { [nil, p, c] },
-        preds: [RDF::Vocab::SKOS.broader,  RDF::Vocab::SKOS.broaderTransitive],
-      },
-      {
-        element: :object,
-        pattern: -> c, p { [c, p, nil] },
-        preds: [RDF::Vocab::SKOS.narrower, RDF::Vocab::SKOS.narrowerTransitive],
-      }
-    ]
-    SKOS_HIER.each do |struct|
-      # lol how many times are we gonna cart this thing around
-      preds = struct[:preds]
-      i = 0
-      loop do
-        equiv = preds[i].entail(:equivalentProperty) - preds
-        preds.insert(i + 1, *equiv) unless equiv.empty?
-        i += equiv.length + 1;
-        break if i >= preds.length
-      end
-    end
-
-    def sub_concepts concept, extra: []
-      raise 'Concept must be exactly one concept' unless
-        concept.is_a? RDF::Resource
-      extra = term_list extra
-
-      # we need an array for a queue, and a set to accumulate the
-      # output as well as a separate 'seen' set
-      queue = [concept]
-      seen  = Set.new queue.dup
-      out   = seen.dup
-
-      # it turns out that the main SKOS hierarchy terms, while not
-      # being transitive themselves, are subproperties of transitive
-      # relations which means they are as good as being transitive.
-
-      while c = queue.shift
-        SKOS_HIER.each do |struct|
-          elem, pat, preds = struct.values_at(:element, :pattern, :preds)
-          preds.each do |p|
-            @graph.query(pat.call c, p).each do |stmt|
-              # obtain hierarchical element
-              hierc = stmt.send elem
-
-              # skip any further processing if we have seen this concept
-              next if seen.include? hierc
-              seen << hierc
-
-              next if !extra.empty? and !extra.any? do |t|
-                @graph.has_statement? RDF::Statement.new(hierc, RDF.type, t)
-              end
-
-              queue << hierc
-              out   << hierc
-            end
-          end
-        end
-      end
-
-      out.to_a.sort
-    end
-
-    def audiences_for uuid, proximate: false, invert: false
-      p = invert ? CI['non-audience'] : RDF::Vocab::DC.audience
-      return @graph.query([uuid, p, nil]).objects if proximate
-
-      out = []
-      @graph.query([uuid, p, nil]).objects.each do |o|
-        out += sub_concepts o
-      end
-
-      out.uniq
-    end
-
-    # Get all "reachable" UUID-identified entities (subjects which are
-    # also objects)
-    def reachable published: false
-      p = published ? -> x { published?(x) } : -> x { true }
-      # now get the subjects which are also objects
-      @graph.subjects.select do |s|
-        s.uri? && s =~ /^urn:uuid:/ && @graph.has_object?(s) && p.call(s)
-      end
-    end
-
     # holy cow this is actually a lot of stuff:
 
     # turn markdown into xhtml (via md-noko)
@@ -665,19 +572,19 @@ module RDF::SAK
 
       rev = rev.respond_to?(:to_a) ? rev.to_a : [rev]
 
-      struct ||= struct_for subject
-      nodes  ||= invert_struct struct
+      struct ||= @graph.struct_for subject
+      nodes  ||= @graph.invert_struct struct
 
       # XXX is this smart?
       revs = {}
-      subjects_for(rev, subject, only: :resource) do |s, ps|
+      @graph.subjects_for(rev, subject, only: :resource) do |s, ps|
           revs[s] ||= Set.new
           revs[s] |= ps
       end
 
       # make sure these are actually URI objects not RDF::URI
       uris = uris.transform_values { |v| URI(@resolver.preproc v.to_s) }
-      uri  = uris[subject] || canonical_uri(subject, rdf: false, slugs: true)
+      uri  = uris[subject] || @resolver.uri_for(subject, as: :uri, slugs: true)
 
       # make ignore more robust
       ignore = ignore.uniq.select(&:iri?).map do |i|
@@ -696,7 +603,7 @@ module RDF::SAK
           next if v.empty?
 
           unless uris[k]
-            cu = canonical_uri k, slugs: true
+            cu = @resolver.uri_for k, slugs: true
             uris[k] = URI(@resolver.preproc(cu || k.to_s))
           end
 
@@ -751,14 +658,14 @@ module RDF::SAK
       raise 'ignore must be Array or Set' unless
         [Array, Set].any? { |c| ignore.is_a? c }
 
-      struct ||= struct_for subject
-      nodes  ||= invert_struct struct
+      struct ||= @graph.struct_for subject
+      nodes  ||= @graph.invert_struct struct
 
       ignore = ignore.to_set
 
       meta = []
       nodes.select { |n| n.literal? && !ignore.include?(n) }.each do |k, v|
-        rel  = abbreviate v.to_a, vocab: vocab
+        rel  = @resolver.abbreviate v.to_a, vocab: vocab
         tag  = { nil => :meta, property: rel, content: k.to_s }
 
         lang = (k.language? && k.language != lang ? k.language : nil) ||
@@ -768,7 +675,8 @@ module RDF::SAK
           tag[:lang] = lang
         end
 
-        tag[:datatype] = abbreviate k.datatype, vocab: XHV if k.datatype?
+        tag[:datatype] =
+          @resolver.abbreviate k.datatype, vocab: XHV if k.datatype?
         tag[:name] = meta_names[k] if meta_names[k]
 
         meta << tag
@@ -788,8 +696,8 @@ module RDF::SAK
     end
 
     def generate_backlinks subject, published: true, ignore: nil
-      uri = canonical_uri(
-        subject, rdf: false, slugs: true) || URI(@resolver.preproc subject)
+      uri = @resolver.uri_for(
+        subject, as: :uri, slugs: true) || URI(@resolver.preproc subject)
 
       ignore ||= Set.new
       raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
@@ -801,26 +709,27 @@ module RDF::SAK
         next if ignore.include?(sj = stmt.subject)
         preds = nodes[sj] ||= Set.new
         preds << (pr = stmt.predicate)
-        types[sj]  ||= asserted_types sj
-        labels[sj] ||= label_for sj
-        labels[pr] ||= label_for pr
+        types[sj]  ||= @graph.asserted_types sj
+        labels[sj] ||= @graph.label_for sj
+        labels[pr] ||= @graph.label_for pr
       end
 
       # prune out
-      nodes.select! { |k, _| published? k } if published
+      nodes.select! { |k, _| @graph.published? k } if published
 
       return if nodes.empty?
 
       li = nodes.sort do |a, b|
         cmp_label a[0], b[0], labels: labels
       end.map do |rsrc, preds|
-        cu  = canonical_uri(rsrc, rdf: false) or next
+        cu  = @resolver.uri_for(rsrc, as: :uri) or next
         lab = labels[rsrc] || [nil, rsrc]
-        lp  = abbreviate(lab[0]) if lab[0]
-        ty  = abbreviate(types[rsrc]) if types[rsrc]
+        lp  = @resolver.abbreviate(lab[0]) if lab[0]
+        ty  = @resolver.abbreviate(types[rsrc]) if types[rsrc]
 
         { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
-          href: uri.route_to(cu), typeof: ty, rev: abbreviate(preds) }] => :li }
+          href: uri.route_to(cu), typeof: ty,
+          rev: @resolver.abbreviate(preds) }] => :li }
       end.compact
 
       { [{ li => :ul }] => :nav }
@@ -828,17 +737,17 @@ module RDF::SAK
 
     def generate_twitter_meta subject
       # get author
-      author = authors_for(subject, unique: true) or return []
+      author = @graph.authors_for(subject, unique: true) or return []
 
       # get author's twitter account
-      twitter = objects_for(author, RDF::Vocab::FOAF.account,
+      twitter = @graph.objects_for(author, RDF::Vocab::FOAF.account,
         only: :resource).select { |t| t.to_s =~ /twitter\.com/
       }.sort.first or return []
       twitter = URI(twitter.to_s).path.split(/\/+/)[1]
       twitter = ?@ + twitter unless twitter.start_with? ?@
 
       # get title
-      title = label_for(subject) or return []
+      title = @graph.label_for(subject) or return []
 
       out = [
         { nil => :meta, name: 'twitter:card', content: :summary },
@@ -853,9 +762,10 @@ module RDF::SAK
       end
 
       # get image (foaf:depiction)
-      img = objects_for(subject, RDF::Vocab::FOAF.depiction, only: :resource)
+      img = @graph.objects_for(
+        subject, RDF::Vocab::FOAF.depiction, only: :resource)
       unless img.empty?
-        img = canonical_uri img.first
+        img = @resolver.uri_for img.first
         out.push({ nil => :meta, name: 'twitter:image', content: img })
         out.first[:content] = :summary_large_image
       end
@@ -872,14 +782,14 @@ module RDF::SAK
     ].freeze
 
     def generate_bibliography id, published: true
-      id  = canonical_uuid id
-      uri = canonical_uri id
-      struct = struct_for id
-      nodes     = Set[id] + smush_struct(struct)
+      id  = @resolver.uuid_for id
+      uri = @resolver.uri_for id
+      struct = @graph.struct_for id
+      nodes     = Set[id] + @graph.smush_struct(struct)
       bodynodes = Set.new
       parts     = {}
       referents = {}
-      labels    = { id => label_for(id, candidates: struct) }
+      labels    = { id => @graph.label_for(id, struct: struct) }
       canon     = {}
 
       # uggh put these somewhere
@@ -893,19 +803,21 @@ module RDF::SAK
       }
 
       # collect up all the parts (as in dct:hasPart)
-      objects_for(id, preds[:hp], entail: false, only: :resource).each do |part|
+      @graph.objects_for(
+        id, preds[:hp], entail: false, only: :resource).each do |part|
         bodynodes << part
 
         # gather up all the possible alias urls this thing can have
-        sa = ([part] + objects_for(part,
+        sa = ([part] + @graph.objects_for(part,
           preds[:sa], only: :uri, entail: false)).map do |x|
-          [x] + subjects_for(preds[:canon], x, only: :uri, entail: false)
+          [x] + @graph.subjects_for(preds[:canon], x, only: :uri, entail: false)
         end.flatten.uniq
 
         # collect all the referents
         reftmp = {}
         sa.each do |u|
-          subjects_for preds[:ref], u, only: :uri, entail: false do |s, *p|
+          @graph.subjects_for preds[:ref], u, only: :uri,
+            entail: false do |s, *p|
             reftmp[s] ||= Set.new
             reftmp[s] += p.first.to_set
           end
@@ -913,7 +825,7 @@ module RDF::SAK
 
         # if we are producing a list of references identified by only
         # published resources, prune out all the unpublished referents
-        reftmp.select! { |x, _| published? x } if published
+        reftmp.select! { |x, _| @graph.published? x } if published
 
         # unconditionally skip this item if nothing references it
         next if reftmp.empty?
@@ -921,48 +833,50 @@ module RDF::SAK
         referents[part] = reftmp
 
         reftmp.each do |r, _|
-          labels[r] ||= label_for r
-          canon[r]  ||= canonical_uri r
+          labels[r] ||= @graph.label_for r
+          canon[r]  ||= @resolver.uri_for r
         end
 
         # collect all the authors and author lists
 
-        objects_for(part, preds[:al], only: :resource, entail: false) do |o|
+        @graph.objects_for(
+          part, preds[:al], only: :resource, entail: false) do |o|
           RDF::List.new(subject: o, graph: @graph).each do |a|
-            labels[a] ||= label_for a
+            labels[a] ||= @graph.label_for a
           end
         end
 
-        objects_for(part, preds[:cont], only: :uri, entail: false) do |a|
-          labels[a] ||= label_for a
+        @graph.objects_for(part, preds[:cont], only: :uri, entail: false) do |a|
+          labels[a] ||= @graph.label_for a
         end
 
-        ps = struct_for part
-        labels[part] = label_for part, candidates: ps
-        nodes |= smush_struct ps
+        ps = @graph.struct_for part
+        labels[part] = @graph.label_for part, struct: ps
+        nodes |= @graph.smush_struct ps
 
         parts[part] = ps
       end
 
-      bmap = prepare_collation struct
-      pf = -> x { abbreviate bmap[x.literal? ? :literals : :resources][x] }
+      bmap = @graph.prepare_collation struct
+      pf = -> x {
+        @resolver.abbreviate bmap[x.literal? ? :literals : :resources][x] }
 
       body = []
       parts.sort { |a, b| cmp_label a[0], b[0], labels: labels }.each do |k, v|
-        mapping = prepare_collation v
+        mapping = @graph.prepare_collation v
         p = -> x {
-          abbreviate mapping[x.literal? ? :literals : :resources][x] }
-        t = abbreviate mapping[:types]
+          @resolver.abbreviate mapping[x.literal? ? :literals : :resources][x] }
+        t = @resolver.abbreviate mapping[:types]
 
-        lp = label_for k, candidates: v
+        lp = @graph.label_for k, struct: v
         h2c = [lp[1].to_s]
         h2  = { h2c => :h2 }
-        cu  = canonical_uri k
+        cu  = @resolver.uri_for k
         rel = nil
         unless cu.scheme.downcase.start_with? 'http'
           if sa = v[RDF::RDFS.seeAlso]
             rel = p.call sa[0]
-            cu = canonical_uri sa[0]
+            cu = @resolver.uri_for sa[0]
           else
             cu = nil
           end
@@ -985,14 +899,14 @@ module RDF::SAK
             # first check if the struct has the predicate
             next unless v[pred]
             li = []
-            ul = { li => :ul, rel: abbreviate(pred) }
+            ul = { li => :ul, rel: @resolver.abbreviate(pred) }
             v[pred].sort { |a, b| cmp_label a, b, labels: labels }.each do |o|
               # check if this is a list
               tl = RDF::List.new subject: o, graph: @graph
               if tl.empty? and !seen.include? o
                 seen << o
                 lab = labels[o] ? { [labels[o][1]] => :span,
-                  property: abbreviate(labels[o][0]) } : o
+                  property: @resolver.abbreviate(labels[o][0]) } : o
                 li << { [lab] => :li, resource: o }
               else
                 # XXX this will actually not be right if there are
@@ -1001,7 +915,7 @@ module RDF::SAK
                 tl.each do |a|
                   seen << a
                   lab = labels[a] ? { [labels[a][1]] => :span,
-                    property: abbreviate(labels[a][0]) } : a
+                    property: @resolver.abbreviate(labels[a][0]) } : a
                   li << { [lab] => :li, resource: a }
                 end
               end
@@ -1016,9 +930,10 @@ module RDF::SAK
           cmp_label a[0], b[0], labels: labels
         end.map do |ref, pset|
           lab = labels[ref] ? { [labels[ref][1]] => :span,
-            property: abbreviate(labels[ref][0]) } : ref
+            property: @resolver.abbreviate(labels[ref][0]) } : ref
 
-          { [{ [lab] => :a, rev: abbreviate(pset), href: canon[ref] }] => :li }
+          { [{ [lab] => :a, rev: @resolver.abbreviate(pset),
+              href: canon[ref] }] => :li }
         end
 
         contents = [h2, {
@@ -1030,14 +945,14 @@ module RDF::SAK
       end
 
       # prepend abstract to body if it exists
-      abs = label_for id, candidates: struct, desc: true
+      abs = @graph.label_for id, struct: struct, desc: true
       if abs
-        tag = { '#p' => abs[1], property: abbreviate(abs[0]) }
+        tag = { '#p' => abs[1], property: @resolver.abbreviate(abs[0]) }
         body.unshift tag
       end
 
       # add labels to nodes
-      nodes += smush_struct labels
+      nodes += @graph.smush_struct labels
 
       # get prefixes
       pfx = @resolver.prefix_subset nodes
@@ -1076,13 +991,13 @@ module RDF::SAK
 
       @concepts ||= @graph.all_related(RDF::Vocab::SKOS.Concept).to_set
 
-      out = all_internal_docs(published: published,
-                              exclude: RDF::Vocab::FOAF.Image).map do |s|
-        u = canonical_uri s
-        x = struct_for s
+      out = @graph.all_documents(published: published, external: false,
+                                 exclude: RDF::Vocab::FOAF.Image).map do |s|
+        u = @resolver.uri_for s
+        x = @graph.struct_for s
         c = x[RDF::Vocab::DC.created] ? x[RDF::Vocab::DC.created][0] : nil
-        _, t = label_for s, candidates: x
-        _, d = label_for s, candidates: x, desc: true
+        _, t = @graph.label_for s, struct: x
+        _, d = @graph.label_for s, struct: x, desc: true
 
         # # audience(s)
         # a = objects_for(s, RDF::Vocab::DC.audience).map do |au|
@@ -1100,7 +1015,7 @@ module RDF::SAK
 
         # audience and non-audience
         a, n = [RDF::Vocab::DC.audience, CI['non-audience']].map do |ap|
-          objects_for(s, ap).map do |au|
+          @graph.objects_for(s, ap).map do |au|
             next lab[au] if lab[au]
             _, al = label_for au
             lab[au] = al
@@ -1110,8 +1025,8 @@ module RDF::SAK
         # concepts???
         concepts = [RDF::Vocab::DC.subject, CI.introduces,
                     CI.assumes, CI.mentions].map do |pred|
-          objects_for(s, pred, only: :resource).map do |o|
-            con = self.objects_for(o, RDF.type).to_set & @concepts
+          @graph.objects_for(s, pred, only: :resource).map do |o|
+            con = @graph.objects_for(o, RDF.type).to_set & @concepts
             next if con.empty?
             next lab[o] if lab[o]
             _, ol = label_for o
@@ -1163,7 +1078,7 @@ module RDF::SAK
 
         # homogenize the labels
         lab = [false, true].map do |b|
-          label_for(c, candidates: s, unique: false, alt: b).map { |x| x[1] }
+          @graph.label_for(c, struct: s, unique: false, alt: b).map { |x| x[1] }
         end.flatten.map { |x| x.to_s.strip.downcase }
 
         # we want all the keys to share the same set
@@ -1178,7 +1093,7 @@ module RDF::SAK
 
         # homogenize the labels
         lab = [false, true].map do |b|
-          label_for(c, candidates: s, unique: false, alt: b).map { |x| x[1] }
+          @graph.label_for(c, struct: s, unique: false, alt: b).map { |x| x[1] }
         end.flatten.map { |x| x.to_s.strip.downcase }
 
         # we want all the keys to share the same set
@@ -1344,14 +1259,15 @@ module RDF::SAK
       related -= [id]
 
       # feed audiences
-      faudy = audiences_for id
-      faudn = audiences_for id, invert: true
+      faudy = @graph.audiences_for id
+      faudn = @graph.audiences_for id, invert: true
       faudy -= faudn
 
       warn 'feed %s has audiences %s and non-audiences %s' %
         [id, faudy.inspect, faudn.inspect]
 
       docs = all_internal_docs published: published
+      #
 
       # now we create a hash keyed by uuid containing the metadata
       authors = {}
@@ -1364,11 +1280,11 @@ module RDF::SAK
         #rsrc = struct_for uu
 
         # skip unless the entry is indexed
-        next unless indexed? uu
+        next unless @graph.indexed? uu
 
         # get audiences
-        audy = audiences_for uu, proximate: true
-        audn = audiences_for uu, proximate: true, invert: true
+        audy = @graph.audiences_for uu, proximate: true
+        audn = @graph.audiences_for uu, proximate: true, invert: true
         audy -= audn
 
         warn 'doc %s has audiences %s and non-audiences %s' %
@@ -1694,7 +1610,7 @@ module RDF::SAK
     def generate_gone_map published: false, docs: nil
       # published is a no-op for this one because these docs are by
       # definition not published
-      docs ||= reachable published: false
+      docs ||= @graph.reachable published: false
       p    = RDF::Vocab::BIBO.status
       base = @resolver.base
       out  = {}
@@ -3373,7 +3289,7 @@ module RDF::SAK
         # which we need to mine (predicates, classes, datatypes) for
         # prefixes among other things.
 
-        inv = @context.invert_struct struct do |p, o|
+        inv = repo.invert_struct struct do |p, o|
           if o.literal?
             literals[o] ||= Set.new
             literals[o] << p

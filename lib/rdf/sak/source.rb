@@ -23,7 +23,7 @@ require 'store-digest'
 # Other sources may elect to include other metadata.
 #
 class RDF::SAK::Source
-  # A `NotAcceptable` error is intended to be raised when content
+  # A {NotAcceptable} error is intended to be raised when content
   # negotiation fails, i.e., when at least one variant is found in the
   # source but the rules preclude selecting any one of them. This is
   # to distinguish from the variant not being found at all. This error
@@ -48,14 +48,14 @@ class RDF::SAK::Source
   # set. Returns `nil` if a URI can't be found. Otherwise, it will
   # return either the internal URI that positively identifies the
   # representation, or the pair of this plus the content-type. Raises
-  # `NotAcceptable` if variants are found but not selected.
+  # {NotAcceptable} if variants are found but not selected.
   #
   # @param uri [URI, RDF::URI, #to_s] the URI (will be coerced)
   # @param headers [Hash, Rack::Request, #env, #to_h] a header set
   # @param pair [false, true] whether to return a pair including the
   #  content-type of the selected variant or just the variant itself.
   #
-  # @raise [NotAcceptable] the operation may fail to select a variant
+  # @raise [NotAcceptable] The operation may fail to select a variant.
   #
   # @note There is currently no concept of access control in sources;
   #  the requestor is assumed to be permitted to retrieve the content.
@@ -66,6 +66,29 @@ class RDF::SAK::Source
     raise NotImplementedError
   end
 
+  # Return a minimalist structure containing information suitable for
+  # downstream processing, including the modification time, the
+  # content type, and the content {IO} object itself. Keys include but
+  # are not limited to:
+  #
+  # * `:content` — an {IO} object containing the payload,
+  # * `:mtime` — the modification time (as a {Time} object),
+  # * `:type` — the content-type, as a string.
+  #
+  # Other drivers may include other metadata in their results, like
+  # the (natural) language, the encoding (compression), and character
+  # set (where applicable; not to be confused with encoding).
+  #
+  # @param uri [URI, RDF::URI, #to_s] the URI (will be coerced)
+  # @param headers [Hash, Rack::Request, #env, #to_h] a header set
+  #
+  # @raise [NotAcceptable] The operation may fail to select a variant.
+  #
+  # @note We may eventually move to something like {Dry::Types} for
+  #  the return value to impose some validation on it, but not quite yet.
+  #
+  # @return [Hash] a hash containing the information described above.
+  #
   def visit uri, headers: {}
     raise NotImplementedError
   end

@@ -1192,12 +1192,13 @@ module RDF::SAK
     # @param external [true, false] whether to include external documents
     # @param published [true, false] whether to limit to published documents
     # @param fragments [false, true] whether to include document fragments
+    # @param exclude [Array<RDF::Resource>] RDF types to exclude from selection
     #
     # @return [Array] the documents
     #
     def all_documents internal: true, external: true,
-        published: false, fragments: false
-      docs = all_of_type(document_types)
+        published: false, fragments: false, exclude: []
+      docs = all_of_type document_types, exclude: exclude
       docs.reject! do |d|
         d.to_s.downcase.start_with? 'urn:uuid:'
       end unless internal
@@ -2078,6 +2079,50 @@ module RDF::SAK
       invert ? invert_struct(struct) : struct
     end
 
+    # Given a structure of the form +{ predicate => [objects] }+,
+    # rearrange the structure into one more amenable to rendering
+    # RDFa. Returns a hash of the form +{ resources: { r1 => Set[p1, pn]
+    # }, literals: { l1 => Set[p2, pm] }, types: Set[t1, tn], datatypes:
+    # Set[d1, dn] }+. This inverted structure can then be conveniently
+    # traversed to generate the RDFa. An optional block lets us examine
+    # the predicate-object pairs as they go by.
+    #
+    # @param struct [Hash] The struct of the designated form
+    # @yield [p, o] An optional block is given the predicate-object pair
+    # @return [Hash] The inverted structure, as described.
+    #
+    def prepare_collation struct, &block
+      resources = {}
+      literals  = {}
+      datatypes = Set.new
+      types     = Set.new
+
+      struct.each do |p, v|
+        v.each do |o|
+          block.call p, o if block
+
+          if o.literal?
+            literals[o] ||= Set.new
+            literals[o].add p
+            # collect the datatype
+            datatypes.add o.datatype if o.has_datatype?
+          else
+            if  p == RDF::RDFV.type
+              # separate the type
+              types.add o
+            else
+              # collect the resource
+              resources[o] ||= Set.new
+              resources[o].add p
+            end
+          end
+        end
+      end
+
+      { resources: resources, literals: literals,
+       datatypes: datatypes, types: types }
+    end
+
     # Instantiate a Resource on the given term. It is up to you to
     # ensure that `term` is actually in the graph.
     #
@@ -2099,6 +2144,121 @@ module RDF::SAK
     #
     # def properties predicate
     # end
+
+    private
+
+    SKOS_HIER = [
+      {
+        element: :subject,
+        pattern: -> c, p { [nil, p, c] },
+        preds: [RDF::Vocab::SKOS.broader,  RDF::Vocab::SKOS.broaderTransitive],
+      },
+      {
+        element: :object,
+        pattern: -> c, p { [c, p, nil] },
+        preds: [RDF::Vocab::SKOS.narrower, RDF::Vocab::SKOS.narrowerTransitive],
+      }
+    ]
+    SKOS_HIER.each do |struct|
+      # lol how many times are we gonna cart this thing around
+      preds = struct[:preds]
+      i = 0
+      loop do
+        equiv = preds[i].entail(:equivalentProperty) - preds
+        preds.insert(i + 1, *equiv) unless equiv.empty?
+        i += equiv.length + 1;
+        break if i >= preds.length
+      end
+    end
+
+    public
+
+    # Obtain all the sub-concepts of  a given `skos:Concept`.
+    #
+    # @param concept [RDF::Resource] the `skos:Concept` in question
+    # @param extra [Array<RDF::Resource>] additional types for consideration
+    #
+    # @return [Array<RDF::Resource>] the sub-concepts.
+    #
+    # @note This method was imported from {RDF::SAK::Context} and may
+    #  predate the refactor that yielded this module.
+    #
+    def sub_concepts concept, extra: []
+      concept = assert_resource concept
+      extra   = assert_resources extra
+
+      # we need an array for a queue, and a set to accumulate the
+      # output as well as a separate 'seen' set
+      queue = [concept]
+      seen  = Set.new queue.dup
+      out   = seen.dup
+
+      # it turns out that the main SKOS hierarchy terms, while not
+      # being transitive themselves, are subproperties of transitive
+      # relations which means they are as good as being transitive.
+
+      while c = queue.shift
+        SKOS_HIER.each do |struct|
+          elem, pat, preds = struct.values_at(:element, :pattern, :preds)
+          preds.each do |p|
+            query(pat.call c, p).each do |stmt|
+              # obtain hierarchical element
+              hierc = stmt.send elem
+
+              # skip any further processing if we have seen this concept
+              next if seen.include? hierc
+              seen << hierc
+
+              next if !extra.empty? and !extra.any? do |t|
+                has_statement? RDF::Statement.new(hierc, RDF.type, t)
+              end
+
+              queue << hierc
+              out   << hierc
+            end
+          end
+        end
+      end
+
+      out.to_a.sort.uniq
+    end
+
+    # Obtain all the audiences (or non-audiences) for a given subject.
+    # By default entails sub-audiences
+    #
+    # @param subject [RDF::Resource] the subject to search
+    # @param proximate [false, true] whether to limit to immediate audiences
+    # @param invert [false, true] whether to search for "non-audiences"
+    #
+    # @return [Array<RDF::Resource>] the audiences for the subject.
+    #
+    def audiences_for subject, proximate: false, invert: false
+      p = invert ? RDF::SAK::CI['non-audience'] : RDF::Vocab::DC.audience
+
+      subject = assert_resource subject
+
+      objs = objects_for(subject, p, only: :resource)
+      return objs if proximate
+
+      # return the sub-concepts
+      objs.reduce([]) { |a, o| a + sub_concepts(o) }.uniq
+    end
+
+    # Get all "reachable" UUID-identified entities (subjects which are
+    # also objects)
+    #
+    # @param published [false, true] whether to limit to published resources
+    #
+    # @return [Array<RDF::Resource>] the resources in question
+    #
+    def reachable published: false
+      p = published ? -> x { published?(x) } : -> x { true }
+      # now get the subjects which are also objects
+      subjects.select do |s|
+        s.uri? && s =~ /^urn:uuid:/ && has_object?(s) && p.call(s)
+      end
+    end
+
   end
 
   # This class provides a resource-oriented view of the graph. When I
