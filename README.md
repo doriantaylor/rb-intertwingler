@@ -46,6 +46,33 @@ which have been in use with employers and clients for well over a decade.
 * [ ] command line (batch mode whatev)
   * [ ] actual shell
 
+## ARCHITECTURE
+
+maybe its own document? who knows!
+
+* [ ] [notion of "source" and "sink"](https://rdf-sak.ibis.makethingsmakesense.com/95bab4f0-5b0d-42b5-a39d-768d1d725234)
+  * [ ] we won't call it "origin" because that has special meaning
+    * [ ] a "source" *can* be an "origin" but not necessarily (e.g. reverse proxy)
+  * [ ] a source just has to take a URI and `Accept-*` header set (also `Authorization` if applicable) and return a representation
+  * [ ] a "sink" is not the best word because a sink will actually *request* resources
+  * [ ] [so we implement the existing file system source as a "source"](https://rdf-sak.ibis.makethingsmakesense.com/73409baf-2a94-4c6d-bbc9-54a7825009ab)
+  * [ ] we implement the existing file system target as a "sink"
+    * [ ] [we change `write_to_target` to be something that the "sink" *pulls* rather than *pushes*.](https://rdf-sak.ibis.makethingsmakesense.com/3d348205-3878-4c60-9aa4-d8f16cddae91)
+  * [ ] [we also implement the rack app as a sink](https://rdf-sak.ibis.makethingsmakesense.com/3cb7ab04-dd1a-443c-a5a3-8f43923ed0d7)
+  * [ ] implement generated representations as "sources"
+    * [ ] concept schemes (glossary/index/thesaurus)
+    * [ ] bibliographies/book lists
+    * [ ] rolodexes
+    * [ ] document stats
+    * [ ] rss/atom feeds
+    * [ ] google sitemaps
+    * [ ] arbitrary graph patches
+* [ ] make any operation that can be made a pure function, a pure function
+  * [ ] we want this because it's composable
+  * [ ] most if not all ordinary web pages will probably have a sequence of stock transforms
+* [ ] we want a command line shell
+  * [ ] start daemon from shell?
+
 ## Future Directions
 
 Ultimately, this implementation is disposable. What matter are the

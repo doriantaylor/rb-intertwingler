@@ -332,6 +332,8 @@ module RDF::SAK
       @resolver.prefixes
     end
 
+    # XXX KILL AFTER THIS LINE TO NEXT MARKER
+
     # Abbreviate a set of terms against the registered namespace
     # prefixes and optional default vocabulary, or otherwise return a
     # string representation of the original URI.
@@ -1558,31 +1560,35 @@ module RDF::SAK
       # ranking hash
       r = {}
 
+      pslug = @config[:private].basename
+
       rwm.transform_values do |uuids|
-        if uuids.size == 1
-          umap[uuids.first].uuid
-        else
-          # otherwise we need to figure out what the right one is
-          uuids.each do |u|
-            r[u] ||= @graph.ranking_data_for u, ints: true
-          end
+        uuid = if uuids.size == 1
+                 umap[uuids.first]
+               else
+                 # otherwise we need to figure out what the right one is
+                 uuids.each do |u|
+                   r[u] ||= @graph.ranking_data_for u, ints: true
+                 end
 
-          u = uuids.sort do |a, b|
-            c = r[a][:replaced]   <=> r[b][:replaced]
-            c = r[a][:retired]    <=> r[b][:retired]    if c == 0
-            c = r[b][:published]  <=> r[a][:published]  if c == 0
-            c = r[b][:circulated] <=> r[a][:circulated] if c == 0
-            c = r[b][:mtime]      <=> r[a][:mtime]      if c == 0
-            c = r[b][:ctime]      <=> r[a][:ctime]      if c == 0
+                 u = uuids.sort do |a, b|
+                   c = r[a][:replaced]   <=> r[b][:replaced]
+                   c = r[a][:retired]    <=> r[b][:retired]    if c == 0
+                   c = r[b][:published]  <=> r[a][:published]  if c == 0
+                   c = r[b][:circulated] <=> r[a][:circulated] if c == 0
+                   c = r[b][:mtime]      <=> r[a][:mtime]      if c == 0
+                   c = r[b][:ctime]      <=> r[a][:ctime]      if c == 0
 
-            # okay this is us giving up
-            c = a.to_s <=> b.to_s if c == 0
+                   # okay this is us giving up
+                   c = a.to_s <=> b.to_s if c == 0
 
-            c # finally
-          end.first
+                   c # finally
+                 end.first
 
-          umap[u].uuid
-        end
+                 umap[u]
+               end
+        # note this is a pathname
+        ((@graph.published?(RDF::URI(uuid.to_s)) ? '' : pslug) + uuid.uuid).to_s
       end
     end
 

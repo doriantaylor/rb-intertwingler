@@ -14,6 +14,8 @@ class RDF::SAK::Document
     @subject  = subject
   end
 
+  # these can all get converted into functions
+
   def head_links
   end
 
@@ -21,6 +23,14 @@ class RDF::SAK::Document
   end
 
   def twitter_meta
+  end
+
+  # transform non-ogp to ogp
+  def ogp
+  end
+
+  # transform non-sdo to sdo
+  def sdo
   end
 
   def backlinks
@@ -52,6 +62,7 @@ class RDF::SAK::Document
   def self.lang_for elem
   end
 
+  # this replaces divs and stuff with html5 elements
   def self.modernize elem
   end
 
@@ -64,10 +75,10 @@ class RDF::SAK::Document
   def self.rehydrate elem
   end
 
-  def self.rewrite_links elem
-  end
-
   # these all need the resolver
+
+  def self.rewrite_links resolver, elem, base: nil
+  end
 
   def self.prefix_subset resolver, nodes, prefixes: {}
   end

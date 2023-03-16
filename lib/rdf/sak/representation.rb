@@ -60,7 +60,9 @@ require 'rdf/sak/version'
 # and version. Preference for origin may vary depending on the
 # resource in question or any of the `Accept-*` headers. We could
 # imagine a successive process of elimination that tests each origin
-# for variants, to which they could return 401, 403, 404, 406
+# for variants, to which interesting return codes are 401, 403, 404,
+# 406, or of course 200. Ranged requests are probably not the best
+# idea, but they might be okay. Redirects are definitely off-limits.
 #
 # 1. use 
 #
