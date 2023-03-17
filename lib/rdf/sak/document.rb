@@ -110,7 +110,7 @@ class RDF::SAK::Document
 
   # This class encapsulates an (X)HTML document that comes from an
   # (X)HTML or Markdown source.
-  class Parsed
+  class Parsed < Document
 
     private
 
@@ -134,6 +134,9 @@ class RDF::SAK::Document
     def transform!
       @doc = transform
     end
+  end
+
+  class Generated
   end
 
   # This class is for things like SKOS concept schemes, rosters,

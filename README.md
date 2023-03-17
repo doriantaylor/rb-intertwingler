@@ -39,22 +39,45 @@ which have been in use with employers and clients for well over a decade.
   * [ ] nlp
   * [ ] metrics
   * [ ] pre-rdfa scan
+  * [ ] version control
 * [ ] source driver
-* [ ] target driver
-* [ ] web microservicey app thing
-  * [ ] caching proxy?
+* [ ] _surface_ driver
+  * [ ] web microservicey app thing
+    * [ ] caching proxy?
 * [ ] command line (batch mode whatev)
   * [ ] actual shell
+
+### TODO
+
+* [ ] empty out `RDF::SAK::Context`
+  * [ ] move source-fetching stuff to `RDF::SAK::Source`
+  * [ ] move target-writing stuff to `RDF::SAK::Surface::DocumentRoot`
+  * [ ] move document stuff to `RDF::SAK::Document`
+    * [ ] get rid of `write_to_target`
+  * [ ] overhaul the configuration/marshalling
+* [ ] empty out `RDF::SAK::Util::Messy`
+  * [ ] move everything in it to its respective more-sensible module
+  * [ ] merge `RDF::SAK::Util::Clean` back to `RDF::SAK::Util`
+
+### AFTER THAT
+
+* [ ] get rid of `RDF::SAK::Document` and everything under it
+  * [ ] replace it with `RDF::SAK::Representation` and friends
+* [ ] implement content transforms as pure functions
+  * [ ] break out the markup-generating and manipulating ones
+  * [ ] do some for images (scale/crop/etc)
+  * [ ] hook up the content-addressable store and [TFO ontology](https://vocab.methodandstructure.com/transformation#)
 
 ## ARCHITECTURE
 
 maybe its own document? who knows!
 
-* [ ] [notion of "source" and "sink"](https://rdf-sak.ibis.makethingsmakesense.com/95bab4f0-5b0d-42b5-a39d-768d1d725234)
+* [ ] [notion of "source" and "surface"](https://rdf-sak.ibis.makethingsmakesense.com/95bab4f0-5b0d-42b5-a39d-768d1d725234)
   * [ ] we won't call it "origin" because that has special meaning
     * [ ] a "source" *can* be an "origin" but not necessarily (e.g. reverse proxy)
   * [ ] a source just has to take a URI and `Accept-*` header set (also `Authorization` if applicable) and return a representation
   * [ ] a "sink" is not the best word because a sink will actually *request* resources
+    * [ ] instead we call it _Surface_
   * [ ] [so we implement the existing file system source as a "source"](https://rdf-sak.ibis.makethingsmakesense.com/73409baf-2a94-4c6d-bbc9-54a7825009ab)
   * [ ] we implement the existing file system target as a "sink"
     * [ ] [we change `write_to_target` to be something that the "sink" *pulls* rather than *pushes*.](https://rdf-sak.ibis.makethingsmakesense.com/3d348205-3878-4c60-9aa4-d8f16cddae91)
