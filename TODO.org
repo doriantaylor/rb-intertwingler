@@ -22,8 +22,8 @@
       - [ ] that applies transformation functions to whatever is
         thrown at it (modulo mime type compatibility)
 * TODO major refactor
-  - [ ] methods that are strictly extensions of RDF::Repository
-    - [ ] actually make these an extension of RDF::Repository
+  - [X] methods that are strictly extensions of RDF::Repository
+    - [X] actually make these an extension of RDF::Repository
   - [ ] the context that encapsulates configuration data
     - [ ] config parser, coercer, etc
     - [ ] methods that *would* be strict extensions of RDF::Repository
@@ -36,6 +36,8 @@
       - [ ] sioct:ReadingList
   - [ ] opaque data source providers
     - [ ] file system
+      - [ ] git
+      - [ ] hg
     - [ ] Store::Digest
   - [ ] opaque *target* providers
     - [ ] /also/ file system

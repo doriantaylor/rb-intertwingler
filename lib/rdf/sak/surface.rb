@@ -53,15 +53,75 @@ class RDF::SAK::Surface
       super
     end
 
-    # Write a single URI to the document root.
-    def write uri, published: true
-      begin
-        doc = @context.visit uri
-      rescue RDF::SAK::Source::NotAcceptable
-        return
+    # Write a single resource to the document root.
+    #
+    # @param resource [RDF::SAK::Document, RDF::URI, URI, #to_s] the resource we
+    #  want to write
+    # @param published [true, false] whether to write the published
+    #  version, if it exists
+    # @param rehydrate [false, true] whether to run the rehydrate operation
+    # @param rescan [false, true] whether to rescan the document
+    # @param sponge [false, true] whether to sponge the RDFa into the graph
+    #
+    # @return [Array] the path(s) written to disk.
+    #
+    # @note The `rehydrate`, `rescan` and `sponge` parameters are
+    #  probably unnecessary here.
+    #
+    # @note While we're at it, is that really the most sensible return value?
+    #
+    def write resource, published: true, rehydrate: false,
+        rescan: false, sponge: false
+      unless resource.is_a? RDF::SAK::Document
+        begin
+          resource = @context.visit resource
+        rescue RDF::SAK::Source::NotAcceptable
+          warn "No variant found for #{uri}"
+          return
+        end
+
+        return unless resource
       end
 
-      doc = doc.transform
+      states = [false]
+      states << true if published && resource.published?
+
+      ok = []
+      states.each do |state|
+        target = state ? @dir : @private
+
+        # XXX this only handles RDF::SAK::Document objects; we will
+        # need to rethink this for the move to the
+        # RDF::SAK::Representation regime (which should have a unified
+        # interface for serialization no matter what the payload is).
+        # This is fine for now though.
+
+        doc = resource.transform(published: state, rehydrate: rehydrate,
+          rescan: rescan, sponge: sponge) or next
+
+        begin
+          fh   = Tempfile.create('xml-', target)
+          path = Pathname(fh.path)
+
+          # write the doc to the target
+          doc.write_to fh
+          fh.close
+
+          uuid = URI(resource.uuid.to_s)
+          newpath = path.dirname + "#{uuid.uuid}.xml"
+          ok << newpath
+
+          # XXX do we wanna include umask??
+          File.chmod 0644, path
+          File.rename path, newpath
+          File.utime resource.mtime, resource.mtime, newpath
+        rescue Exception => e
+          # XXX this should only rescue a specific class of errors
+          # XXX ps do something more intelligent here
+          warn e.class, e
+          File.unlink path if path.exist?
+        end
+      end
     end
 
     def call *args, **options, &block

@@ -63,10 +63,13 @@ which have been in use with employers and clients for well over a decade.
 
 * [ ] get rid of `RDF::SAK::Document` and everything under it
   * [ ] replace it with `RDF::SAK::Representation` and friends
+    * [ ] generated markup should be a subclass of `RDF::SAK::Source`
 * [ ] implement content transforms as pure functions
   * [ ] break out the markup-generating and manipulating ones
   * [ ] do some for images (scale/crop/etc)
   * [ ] hook up the content-addressable store and [TFO ontology](https://vocab.methodandstructure.com/transformation#)
+    * [ ] use it for rudimentary caching
+* [ ] [Loupe](https://vocab.methodandstructure.com/loupe#)
 
 ## ARCHITECTURE
 
@@ -77,11 +80,11 @@ maybe its own document? who knows!
     * [ ] a "source" *can* be an "origin" but not necessarily (e.g. reverse proxy)
   * [ ] a source just has to take a URI and `Accept-*` header set (also `Authorization` if applicable) and return a representation
   * [ ] a "sink" is not the best word because a sink will actually *request* resources
-    * [ ] instead we call it _Surface_
-  * [ ] [so we implement the existing file system source as a "source"](https://rdf-sak.ibis.makethingsmakesense.com/73409baf-2a94-4c6d-bbc9-54a7825009ab)
-  * [ ] we implement the existing file system target as a "sink"
+    * [ ] instead we call it `Surface`
+  * [ ] [so we implement the existing file system source as a `Source`](https://rdf-sak.ibis.makethingsmakesense.com/73409baf-2a94-4c6d-bbc9-54a7825009ab)
+  * [ ] we implement the existing file system target as a `Surface`
     * [ ] [we change `write_to_target` to be something that the "sink" *pulls* rather than *pushes*.](https://rdf-sak.ibis.makethingsmakesense.com/3d348205-3878-4c60-9aa4-d8f16cddae91)
-  * [ ] [we also implement the rack app as a sink](https://rdf-sak.ibis.makethingsmakesense.com/3cb7ab04-dd1a-443c-a5a3-8f43923ed0d7)
+  * [ ] [we also implement the `Rack` app as a `Surface`](https://rdf-sak.ibis.makethingsmakesense.com/3cb7ab04-dd1a-443c-a5a3-8f43923ed0d7)
   * [ ] implement generated representations as "sources"
     * [ ] concept schemes (glossary/index/thesaurus)
     * [ ] bibliographies/book lists

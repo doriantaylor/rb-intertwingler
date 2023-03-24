@@ -1729,6 +1729,8 @@ module RDF::SAK::Util::Messy
     end.compact.sort.uniq
   end
 
+  # KILL OK
+
   # Obtain everything that is an owl:equivalentClass or
   # rdfs:subClassOf the given type.
   #
@@ -1771,6 +1773,8 @@ module RDF::SAK::Util::Messy
   ## RDF STOPS HERE
   ##
 
+  # KILL OK
+
   def self.base_for xmlnode, base
     base = URI(base.to_s) unless base.is_a? URI
     out  = base
@@ -1787,6 +1791,8 @@ module RDF::SAK::Util::Messy
     out
   end
 
+  # KILL OK
+
   # Traverse links based on content type.
   def self.traverse_links node, type: 'application/xhtml+xml', &block
     enum_for :traverse_links, node, type: type unless block
@@ -1796,6 +1802,8 @@ module RDF::SAK::Util::Messy
   end
 
   # XXX OTHER STUFF
+
+  # KILL OK
 
   # isolate an element into a new document
   def subtree doc, xpath = '/*', reindent: true, prefixes: {}
@@ -1817,6 +1825,8 @@ module RDF::SAK::Util::Messy
       return
     end
   end
+
+  # KILL OK
 
   # reindent text nodes
   def reindent node, depth = 0, indent = '  '
@@ -1902,6 +1912,8 @@ module RDF::SAK::Util::Messy
 
   ######## URI STUFF ########
 
+  # KILL OK
+
   # Preprocess a URI string so that it can be handed to +URI.parse+
   # without crashing.
   #
@@ -1930,6 +1942,8 @@ module RDF::SAK::Util::Messy
     out.gsub(/(%[0-9A-Fa-f]{2})/) { |x| x.upcase }
   end
 
+  # KILL OK
+
   # Given a URI as input, split any query parameters into an array of
   # key-value pairs. If +:only+ is true, this will just return the
   # pairs. Otherwise it will prepend the query-less URI to the array,
@@ -1946,6 +1960,8 @@ module RDF::SAK::Util::Messy
     uri.query = nil
     [uri] + qp
   end
+
+  # KILL OK
 
   # Given a URI as input, split any path parameters out of the last
   # path segment. Works the same way as #split_pp.
@@ -1983,18 +1999,7 @@ module RDF::SAK::Util::Messy
     [uri] + pp
   end
 
-  # NOT USED
-  #
-  # def split_pp2 path, only: false
-  #   # ugh apparently we need a special case for ''.split
-  #   return only ? [] : [''] if !path or path.empty?
-
-  #   ps = path.to_s.split ?/, -1    # path segments
-  #   pp = ps.pop.to_s.split ?;, -1  # path parameters
-  #   bp = (ps + [pp.shift]).join ?/ # base path
-
-  #   only ? pp : [bp] + pp
-  # end
+  # KILL OK
 
   # Coerce a stringlike argument into a URI. Raises an exception if
   # the string can't be turned into a valid URI. Optionally resolves
@@ -2031,6 +2036,8 @@ module RDF::SAK::Util::Messy
     URI_COERCIONS[as].call arg
   end
 
+  # KILL OK (never used)
+
   # Coerce a stringlike argument into a UUID URN. Will
   def coerce_uuid_urn arg, base = nil
     # if this is an ncname then change it
@@ -2054,6 +2061,8 @@ module RDF::SAK::Util::Messy
     arg = coerce_resource arg, base
   end
 
+  # KILL OK
+
   # Get the last non-empty path segment of the URI
   #
   # @param uri
@@ -2075,6 +2084,8 @@ module RDF::SAK::Util::Messy
     end
     ''
   end
+
+  # XXX NO KILL YET (figure out what that note means in RDF::SAK::Resolver)
 
   # Resolve a string or array or attribute node containing one or more
   # terms/CURIEs against a set of prefixes. The CURIE can be a string,
@@ -2156,6 +2167,8 @@ module RDF::SAK::Util::Messy
     scalar ? out.first : out
   end
 
+  # KILL OK
+
   # Abbreviate one or more URIs into one or more CURIEs if we
   # can. Will through if +noop:+ is true, or if false, return nil for
   # any URI that can't be abbreviated this way. Takes a hash of
@@ -2219,6 +2232,8 @@ module RDF::SAK::Util::Messy
 
   ######## RDFA/XML STUFF ########
 
+  # KILL OK
+
   # Returns the base URI from the perspective of the given element.
   # Can optionally be coerced into either a URI or RDF::URI. Also
   # takes a default value.
@@ -2252,6 +2267,8 @@ module RDF::SAK::Util::Messy
     # eh that's about all the input sanitation we're gonna get
     base && coerce ? URI_COERCIONS[coerce].call(base) : base
   end
+
+  # KILL OK
 
   # Given an X(HT)ML element, returns a hash of prefixes of the form
   # +{ prefix: "vocab" }+, where the current +@vocab+ is represented
@@ -2317,6 +2334,8 @@ module RDF::SAK::Util::Messy
     prefix
   end
 
+  # KILL OK
+
   # Given an X(HT)ML element, return the nearest RDFa _subject_.
   # Optionally takes +:prefix+ and +:base+ parameters which override
   # anything found in the document tree.
@@ -2340,6 +2359,8 @@ module RDF::SAK::Util::Messy
     internal_subject_for node, prefixes: prefixes, base: base, coerce: coerce
   end
 
+  # KILL OK
+
   # Return the language in scope for the current (X|HT)ML element.
   #
   # @param node [Nokogiri::XML::Element]
@@ -2355,13 +2376,17 @@ module RDF::SAK::Util::Messy
       node.element? and node.parent and node.parent.element?
   end
 
-  # 
+  # KILL OK
+
+  #
   def modernize doc
     doc.xpath(XPATH[:modernize], XPATHNS).each do |e|
       # gotta instance_exec because `markup` is otherwise unbound
       instance_exec e, &MODERNIZE[e.name.to_sym]
     end
   end
+
+  # KILL OK
 
   # Recurse into an X(HT?)ML document, harvesting inline elements that
   # may contain terminology. Returns an array of arrays of the form
@@ -2410,6 +2435,8 @@ module RDF::SAK::Util::Messy
     end.compact.uniq
   end
 
+  # KILL OK
+
   # Remove all `<head>` content aside from `<title>` and `<base>`;
   # revert all links to their canonical UUIDs (where applicable).
   #
@@ -2442,6 +2469,8 @@ module RDF::SAK::Util::Messy
     out
   end
 
+  # KILL OK
+
   # Strip all the links surrounding and RDFa attributes off
   # +dfn+/+abbr+/+span+ tags. Assuming a construct like +<a
   # rel="some:relation" href="#..." typeof="skos:Concept"><dfn
@@ -2457,6 +2486,8 @@ module RDF::SAK::Util::Messy
       end
     end
   end
+
+  # KILL OK
 
   # Scan all the +dfn+/+abbr+/+span+ tags in the document that are not
   # already wrapped in a link, or already RDFa. This method scans the
@@ -2588,7 +2619,7 @@ module RDF::SAK::Util::Messy
     # return maybe the elements that did/didn't get changed?
   end
 
-  # XXX MOVE THIS
+  # XXX MOVE THIS (NEVER USED??)
 
   private
 
@@ -2618,6 +2649,8 @@ module RDF::SAK::Util::Messy
   end
 
   ######## RENDERING STUFF ########
+
+  # KILL OK
 
   # Given a structure of the form +{ predicate => [objects] }+,
   # rearrange the structure into one more amenable to rendering
@@ -2662,6 +2695,8 @@ module RDF::SAK::Util::Messy
     { resources: resources, literals: literals,
       datatypes: datatypes, types: types }
   end
+
+  # KILL OK
 
   # Given a hash of prefixes and an array of nodes, obtain the the
   # subset of prefixes that abbreviate the nodes. Scans RDF URIs as
@@ -2712,6 +2747,8 @@ module RDF::SAK::Util::Messy
     tag
   end
 
+  # KILL OK
+
   # Generate a tag in the XML::Mixup spec format that contains a
   # single literal. Defaults to `:span`.
   #
@@ -2746,6 +2783,8 @@ module RDF::SAK::Util::Messy
     # note you can do surgery to this otherwise
     out
   end
+
+  # KILL OK
 
   # Generate a tag in the XML::Mixup spec format that contains a
   # single text link. Defaults to `:a`. Provides the means to include
@@ -2793,6 +2832,8 @@ module RDF::SAK::Util::Messy
 
     out
   end
+
+  # KILL OK
 
   # Generate an (X)HTML+RDFa list from what is assumed to be a bnode
   #
@@ -2861,6 +2902,8 @@ module RDF::SAK::Util::Messy
     # now finish off with the tag name and don't forget the meta
     [ol.merge({ "##{ordered ? ?o : ?u}l" => li }), strings.join(' ').strip]
   end
+
+  # KILL OK
 
   # Generate an (X)HTML fragment in XML::Mixup spec format. The
   # fragment takes the form of a root node which is intended to
@@ -3016,6 +3059,8 @@ module RDF::SAK::Util::Messy
 
     [out, strings.join(' ').strip]
   end
+
+  # KILL OK
 
   # Generate a rudimentary (X)HTML document based on a subject node.
   #

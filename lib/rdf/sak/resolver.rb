@@ -86,7 +86,7 @@ module RDF::SAK
     # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
     #
     def initialize repo, base, aliases: [], prefixes: {}
-      @repo = repo
+      @repo = repovbv
       raise ArgumentError, 'repo must be RDF::Queryable' unless
         repo.is_a? RDF::Queryable
 
@@ -859,7 +859,7 @@ module RDF::SAK
     # @return [false, true] whether or not the subject is "published"
     #
     def published? subject, circulated: false, retired: false, indexed: false
-
+      raise NotImplementedError
     end
 
     # Generate a random (version 4 in RFC 4122) UUID URN.
