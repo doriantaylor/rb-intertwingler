@@ -333,6 +333,8 @@ module RDF::SAK::Util::Messy
     preds.freeze
   end
 
+  # KILL OK
+
   def sanitize_prefixes prefixes, nonnil: false
     raise ArgumentError, 'prefixes must be a hash' unless
       prefixes.is_a? Hash or prefixes.respond_to? :to_h
@@ -344,6 +346,8 @@ module RDF::SAK::Util::Messy
     prefixes
   end
 
+  # KILL OK
+
   def assert_uri_coercion coerce
     if coerce
       coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
@@ -353,11 +357,15 @@ module RDF::SAK::Util::Messy
     coerce
   end
 
+  # KILL OK
+
   def assert_xml_node node
     raise 'Argument must be a Nokogiri::XML::Element' unless
       node.is_a? Nokogiri::XML::Element
     node
   end
+
+  # KILL OK
 
   def internal_subject_for node, prefixes: nil, base: nil, coerce: nil,
       is_ancestor: false
@@ -497,6 +505,8 @@ module RDF::SAK::Util::Messy
 
   public
 
+  # KILL OK
+
   # Obtain a stack of types for an asserted initial type or set
   # thereof. Returns an array of arrays, where the first is the
   # asserted types and their inferred equivalents, and subsequent
@@ -550,7 +560,7 @@ module RDF::SAK::Util::Messy
 
       # push current layer out
       strata.push qwork.dup unless qwork.empty?
-     
+
       # now deal with subClassOf
       qnext = []
       qwork.each { |q| qnext += q.send(qmeth) if q.respond_to? qmeth }
@@ -572,12 +582,16 @@ module RDF::SAK::Util::Messy
     descend ? strata.flatten : strata
   end
 
+  # KILL OK
+
   # XXX this should really go in RDF::Reasoner
   def symmetric? property
     property = RDF::Vocabulary.find_term property rescue return false
     type = type_strata(property.type).flatten
     type.include? RDF::OWL.SymmetricProperty
   end
+
+  # KILL OK
 
   # Determine whether one or more `rdf:Class` entities is transitively
   # an `rdfs:subClassOf` or `owl:equivalentClass` of one or more
@@ -611,6 +625,8 @@ module RDF::SAK::Util::Messy
     types.find_index { |ts| !(ts & reftype).empty? }
   end
 
+  # KILL OK
+
   # Determine whether a subject is a given `rdf:type`.
   #
   # @param repo [RDF::Queryable] the repository
@@ -626,6 +642,8 @@ module RDF::SAK::Util::Messy
     # this is handy
     !!type_is?(asserted, type)
   end
+
+  # KILL OK
 
   # Obtain the head of a list for a given list subject.
   #
@@ -646,6 +664,8 @@ module RDF::SAK::Util::Messy
     # the last one is the head of the list
     nodes.last
   end
+
+  # KILL OK
 
   # Obtain all the predicates that are equivalent to the given predicate(s).
   #
@@ -683,6 +703,8 @@ module RDF::SAK::Util::Messy
     # uhh this whole "seen" business might not be necessary
     predicates + predicate_set(subp - predicates - seen, seen: predicates)
   end
+
+  # KILL OK
 
   # Returns subjects from the graph with entailment.
   #
@@ -741,6 +763,8 @@ module RDF::SAK::Util::Messy
 
     out.keys
   end
+
+  # KILL OK
 
   # Returns objects from the graph with entailment.
   #
@@ -816,6 +840,8 @@ module RDF::SAK::Util::Messy
 
     out.keys
   end
+
+  # KILL OK
 
   # Obtain the canonical UUID for the given URI
   #
@@ -1043,6 +1069,8 @@ module RDF::SAK::Util::Messy
     # unpublished and an unpublished document replaces a published one
   end
 
+  # KILL OK
+
   SCHEME_RANK = { https: 0, http: 1 }
 
   def cmp_resource a, b, www: nil
@@ -1098,9 +1126,7 @@ module RDF::SAK::Util::Messy
     end
   end
 
-  # XXX MAKE THIS LOL
-  def self.cmp_literal a, b
-  end
+  # KILL OK
 
   def self.cmp_label repo, a, b, labels: nil, supplant: true, reverse: false
     labels ||= {}
@@ -1121,6 +1147,8 @@ module RDF::SAK::Util::Messy
     # warn "#{pair[0]} <=> #{pair[1]}"
     pair[0].to_s <=> pair[1].to_s
   end
+
+  # KILL OK
 
   # Obtain the "host" document for a fragment
   #
@@ -1266,6 +1294,8 @@ module RDF::SAK::Util::Messy
     host
   end
 
+  # KILL OK
+
   # Obtain the "best" dereferenceable URI for the subject. Optionally
   # returns all candidates. Pass in a fragment map of the following
   # form:
@@ -1403,6 +1433,8 @@ module RDF::SAK::Util::Messy
     unique ? out.first : out.uniq
   end
 
+  # KILL OK
+
   # Determine whether the URI represents a published document.
   # 
   # @param repo
@@ -1437,6 +1469,8 @@ module RDF::SAK::Util::Messy
 
     !(candidates & test).empty?
   end
+
+  # KILL OK
 
   # Obtain a key-value structure for the given subject, optionally
   # constraining the result by node type (:resource, :uri/:iri,
@@ -1520,8 +1554,7 @@ module RDF::SAK::Util::Messy
     rsrc
   end
 
-  def label_props repo, type, alt: false, desc: false, &block
-  end
+  # KILL OK
 
   # Obtain the most appropriate label(s) for the subject's type(s).
   # Returns one or more (depending on the `unique` flag)
@@ -1586,6 +1619,8 @@ module RDF::SAK::Util::Messy
     # XXX note we will probably want to return the predicate as well
   end
 
+  # KILL OK
+
   # Assuming the subject is a thing that has authors, return the
   # list of authors. Try bibo:authorList first for an explicit
   # ordering, then continue to the various other predicates.
@@ -1624,6 +1659,8 @@ module RDF::SAK::Util::Messy
 
     unique ? authors.first : authors.uniq
   end
+
+  # KILL OK
 
   # Find the terminal replacements for the given subject, if any exist.
   #
@@ -1692,6 +1729,8 @@ module RDF::SAK::Util::Messy
     out
   end
 
+  # KILL OK
+
   # Obtain dates for the subject as instances of Date(Time). This is
   # just shorthand for a common application of `objects_for`.
   #
@@ -1709,6 +1748,8 @@ module RDF::SAK::Util::Messy
       o.object
     end.sort.uniq
   end
+
+  # KILL OK
 
   # Obtain any specified MIME types for the subject. Just shorthand
   # for a common application of `objects_for`.

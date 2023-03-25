@@ -28,16 +28,17 @@
     - [ ] config parser, coercer, etc
     - [ ] methods that *would* be strict extensions of RDF::Repository
       if not for the fact that they require some of this configuration
-  - [ ] summary/collection generators
+  - [-] summary/collection generators
     - [ ] atom feeds
     - [ ] google sitemaps
-    - [ ] rdf collections of various kinds (temporary)
-      - [ ] SKOS concept schemes
+    - [-] rdf collections of various kinds (temporary)
+      - [X] SKOS concept schemes
       - [ ] sioct:ReadingList
+      - [ ] sioct:AddressBook
   - [ ] opaque data source providers
     - [ ] file system
       - [ ] git
-      - [ ] hg
+      - [ ] hg (ugh that will have to
     - [ ] Store::Digest
   - [ ] opaque *target* providers
     - [ ] /also/ file system
