@@ -40,7 +40,7 @@
       - [ ] git
       - [ ] hg (ugh that will have to
     - [ ] Store::Digest
-  - [ ] opaque *target* providers
+  - [ ] opaque *Surface* providers
     - [ ] /also/ file system
       - [ ] including rewrite maps
     - [ ] /also/ Store::Digest
@@ -62,7 +62,7 @@
       - [ ] inline markup (dfn/abbr/span, also em/strong etc) treatment
     - [ ] n-gram match (to skos concepts etc)
     - [ ] inline markup generation
-* TODO loupe processor <https://privatealpha.com/ontology/loupe/1#>
+* TODO loupe processor <https://vocab.methodandstructure.com/loupe#>
   - [ ] aw yiss
   - [ ] predicate order
   - [ ] predicate show/hide

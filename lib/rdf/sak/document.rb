@@ -2,6 +2,7 @@ require 'rdf'
 require 'rdf/sak/util'
 require 'time'
 require 'nokogiri'
+require 'md-noko'
 require 'xml-mixup'
 
 # This is the base class for (X)HTML+RDFa documents. It is a temporary
@@ -17,10 +18,14 @@ class RDF::SAK::Document
 
   private
 
-  # this grabs a subset of 
+  # this grabs a subset of the class methods defined herein and turns
+  # 'em into instance methods, based on their argument signature
   def self.bind_instance_methods
+    # `false` here gives us only the defined methods, not the inherited ones
     methods(false).each do |m|
+      # obtain the method code itself
       proc = method m
+      # get the argspec
       params = proc.parameters
       # a lot of methods use the resolver
       if params.first == [:req, :resolver]
@@ -47,12 +52,299 @@ class RDF::SAK::Document
   public
 
   class Feed < RDF::SAK::Document
+    def generate published: true
+      # get related feeds
+      related = @repo.objects_for(
+        @subject, RDF::RDFS.seeAlso, only: :uri) - [@subject]
+
+      # feed audiences
+      faudy = @repo.audiences_for @subject
+      faudn = @repo.audiences_for @subject, invert: true
+      faudy -= faudn
+
+      warn 'feed %s has audiences %s and non-audiences %s' %
+        [@subject, faudy.inspect, faudn.inspect]
+
+      docs = @repo.all_documents external: false, published: published
+
+      # now we create a hash keyed by uuid containing the metadata
+      authors = {}
+      titles  = {}
+      dates   = {}
+      entries = {}
+      latest  = nil
+      docs.each do |uu|
+        # basically make a jsonld-like structure
+        #rsrc = struct_for uu
+
+        # skip unless the entry is indexed
+        next unless @repo.indexed? uu
+
+        # get audiences
+        audy = @repo.audiences_for uu, proximate: true
+        audn = @repo.audiences_for uu, proximate: true, invert: true
+        audy -= audn
+
+        warn 'doc %s has audiences %s and non-audiences %s' %
+          [uu, audy.inspect, audn.inspect]
+
+        # we begin by assuming the document is *not* included in the
+        # feed, and then we try to prove otherwise
+        skip = true
+        if audy.empty?
+          # if both the feed and the document audiences are
+          # unspecified, then include it, as both are for "everybody"
+          skip = false if faudy.empty?
+        elsif faudy.empty?
+          # if the feed is for everybody but the document is for
+          # somebody in particular, only include it if its audience is
+          # in the list of the feed's non-audiences
+          skip = false unless (audy - faudn).empty?
+        else
+          # now we deal with the case where both the feed and the
+          # document have explicit audiences
+
+          # if the document hasn't been explicitly excluded by the
+          # feed, then include it if it has explicitly been included
+          skip = false if !(audy - faudn).empty? && !(faudy & audy).empty?
+        end
+
+        next if skip
+
+        canon = @resolver.uri_for uu, as: :uri
+
+        xml = { '#entry' => [
+          { '#link' => nil, rel: :alternate, href: canon, type: 'text/html' },
+          { '#id' => uu.to_s }
+        ] }
+
+        # get published date first
+        published = (objects_for uu,
+                     [RDF::Vocab::DC.issued, RDF::Vocab::DC.created],
+                     datatype: RDF::XSD.dateTime)[0]
+
+        # get latest updated date
+        updated = (objects_for uu, RDF::Vocab::DC.modified,
+                   datatype: RDF::XSD.dateTime).sort[-1]
+        updated ||= published || RDF::Literal::DateTime.new(DateTime.now)
+        updated = Time.parse(updated.to_s).utc
+        latest = updated if !latest or latest < updated
+
+        xml['#entry'].push({ '#updated' => updated.iso8601 })
+
+        if published
+          published = Time.parse(published.to_s).utc
+          xml['#entry'].push({ '#published' => published.iso8601 })
+          dates[uu] = [published, updated]
+        else
+          dates[uu] = [updated, updated]
+        end
+
+        # get author(s)
+        al = []
+        @repo.authors_for(uu).each do |a|
+          unless authors[a]
+            n = @repo.label_for a
+            x = authors[a] = { '#author' => [{ '#name' => n[1].to_s }] }
+
+            if hp = @repo.objects_for(
+              a, RDF::Vocab::FOAF.homepage, only: :resource).sort.first
+              hp = @resolver.uri_for hp
+            end
+
+            hp ||= @resolver.uri_for a
+
+            x['#author'].push({ '#uri' => hp.to_s }) if hp
+          end
+
+          al.push authors[a]
+        end
+
+        xml['#entry'] += al unless al.empty?
+
+        # get title (note unshift)
+        if (t = @repo.label_for uu)
+          titles[uu] = t[1].to_s
+          xml['#entry'].unshift({ '#title' => t[1].to_s })
+        else
+          titles[uu] = uu.to_s
+        end
+
+        # get abstract
+        if (d = @repo.label_for uu, desc: true)
+          xml['#entry'].push({ '#summary' => d[1].to_s })
+        end
+
+        entries[uu] = xml
+      end
+
+      # note we overwrite the entries hash here with a sorted array
+      entrycmp = -> a, b {
+        # first we sort by published date
+        p = dates[a][0] <=> dates[b][0]
+        # if the published dates are the same, sort by updated date
+        u = dates[a][1] <=> dates[b][1]
+        # to break any ties, finally sort by title
+        p == 0 ? u == 0 ? titles[a] <=> titles[b] : u : p }
+      entries = entries.values_at(
+        *entries.keys.sort { |a, b| entrycmp.call(a, b) })
+      # ugggh god forgot the asterisk and lost an hour
+
+      # now we punt out the doc
+
+      preamble = [
+        { '#id' => @subject.to_s },
+        { '#updated' => latest.iso8601 },
+        { '#generator' => 'RDF::SAK', version: RDF::SAK::VERSION,
+          uri: "https://github.com/doriantaylor/rb-rdf-sak" },
+        { nil => :link, rel: :self, type: 'application/atom+xml',
+          href: @resolver.uri_for(@subject) },
+        { nil => :link, rel: :alternate, type: 'text/html',
+          href: @resolver.base },
+      ] + related.map do |r|
+        { nil => :link, rel: :related, type: 'application/atom+xml',
+         href: @resolver.uri_for(r) }
+      end
+
+      if (t = @repo.label_for @subject)
+        preamble.unshift({ '#title' => t.last.to_s })
+      end
+
+      if (r = @repo.first_literal [@subject, RDF::Vocab::DC.rights, nil])
+        rh = { '#rights' => r.to_s, type: :text }
+        rh['xml:lang'] = r.language if r.has_language?
+        preamble.push rh
+      end
+
+      markup(spec: { '#feed' => preamble + entries,
+        xmlns: 'http://www.w3.org/2005/Atom' }).document
+    end
   end
 
   class SiteMap < RDF::SAK::Document
+
+    def generate published: true
+      base = resolver.base
+      urls = {}
+
+      @graph.all_documents(external: false, published: published).each do |doc|
+        next if @graph.rdf_type? doc, RDF::Vocab::FOAF.Image
+        uri = @resolver.uri_for doc
+        next unless uri.authority && base && uri.authority == base.authority
+        mtime = @graph.dates_for(doc).last
+        nodes = [{ [uri.to_s] => :loc }]
+        nodes << { [mtime.to_s] => :lastmod } if mtime
+        urls[uri] = { nodes => :url }
+      end
+
+      urls = urls.sort.map { |_, v| v }
+
+      markup(spec: { urls => :urlset,
+        xmlns: 'http://www.sitemaps.org/schemas/sitemap/0.9' }).document
+    end
   end
 
   class Stats < RDF::SAK::Document
+    out = {}
+    all_of_type(QB.DataSet).map do |s|
+      base  = @resolver.uri_for s, as: :uri
+      types = @resolver.abbreviate @graph.asserted_types(s)
+      title = if t = @graph.label_for(s)
+                [t[1].to_s, @resolver.abbreviate(t[0])]
+              end
+      cache = {}
+      @repo.subjects_for(RDF::SAK::QB.dataSet, s, only: :resource).each do |o|
+        if d = @repo.objects_for(o, RDF::SAK::CI.document, only: :resource).first
+          if !published or @repo.published?(d)
+              # include a "sort" time that defaults to epoch zero
+              c = cache[o] ||= {
+                doc: d, stime: Time.at(0).getgm, struct: struct_for(o) }
+
+              if t = @repo.label_for(d)
+                c[:title] = t
+              end
+              if a = @repo.label_for(d, desc: true)
+                c[:abstract] = a
+              end
+              if ct = @repo.objects_for(d,
+                RDF::Vocab::DC.created, datatype: RDF::XSD.dateTime).first
+                c[:stime] = c[:ctime] = ct.object.to_time.getgm
+              end
+              if mt = @repo.objects_for(d,
+                RDF::Vocab::DC.modified, datatype:RDF::XSD.dateTime)
+                c[:mtime] = mt.map { |m| m.object.to_time.getgm }.sort
+                c[:stime] = c[:mtime].last unless mt.empty?
+              end
+            end
+          end
+        end
+
+        # sort lambda closure
+        sl = -> a, b do
+          x = cache[b][:stime] <=> cache[a][:stime]
+          return x unless x == 0
+          x = cache[b][:ctime] <=> cache[a][:ctime]
+          return x unless x == 0
+          ta = cache[a][:title] || Array.new(2, cache[a][:uri])
+          tb = cache[b][:title] || Array.new(2, cache[b][:uri])
+          ta[1].to_s <=> tb[1].to_s
+        end
+
+        rows = []
+        cache.keys.sort(&sl).each do |k|
+          c = cache[k]
+          href = base.route_to @resolver.uri_for(c[:doc], as: :uri)
+          dt = @resolver.abbreviate @graph.asserted_types(c[:doc])
+          uu = URI(k.to_s).uuid
+          nc = UUID::NCName.to_ncname uu, version: 1
+          tp, tt = c[:title] || []
+          ab = if c[:abstract]
+                 { [c[:abstract][1].to_s] => :th, about: href,
+                  property: @resolver.abbreviate(c[:abstract].first) }
+               else
+                 { [] => :th }
+               end
+
+          td = [{ { { [tt.to_s] => :span,
+                     property: @resolver.abbreviate(tp) } => :a,
+                   rel: 'ci:document', href: href } => :th },
+                ab,
+                { [c[:ctime].iso8601] => :th, property: 'dct:created',
+                 datatype: 'xsd:dateTime', about: href, typeof: dt },
+                { c[:mtime].reverse.map { |m| { [m.iso8601] => :span,
+                   property: 'dct:modified', datatype: 'xsd:dateTime' } } => :th,
+              about: href
+            },
+          ] + DSD_SEQ.map do |f|
+            h = []
+            x = { h => :td }
+            p = CI[f]
+            if y = c[:struct][p] and !y.empty?
+              h << y = y.first
+              x[:property] = @resolver.abbreviate p
+              x[:datatype] = @resolver.abbreviate y.datatype if y.datatype?
+            end
+            x
+          end
+          rows << { td => :tr, id: nc, about: "##{nc}",
+            typeof: 'qb:Observation' }
+        end
+
+        # XXX add something to the vocab so this can be controlled in the data
+        xf = config.dig(:stats, :transform) || config[:transform]
+
+        out[s] = xhtml_stub(base: base, title: title,
+          transform: xf, attr: {
+            id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
+          prefix: @resolver.prefixes, content: {
+            [{ [{ [{ ['About'] => :th, colspan: 4 },
+                { ['Counts'] => :th, colspan: 4 },
+                { ['Words per Block'] => :th, colspan: 7 }] => :tr },
+              { TH_SEQ => :tr } ] => :thead },
+             { rows => :tbody, rev: 'qb:dataSet' }] => :table }).document
+      end
+
+      out
   end
 
   # This class is for things like SKOS concept schemes, rosters,
@@ -186,10 +478,269 @@ class RDF::SAK::Document
     CLASSES = [RDF::Vocab::SiocTypes.AddressBook]
 
     def generate published: true
-      alphabetized_list
+      # stick some logic here to sort out what kind of thing it is
+      # (concept scheme, collection, ordered collection)
+
+      # run this once
+      rels = {
+        broader: 'Has Broader',
+        narrower: 'Has Narrower',
+        related: 'Has Related' }.map do |k, v|
+        [@repo.property_set(RDF::Vocab::SKOS[k]), v]
+      end
+
+      skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }.freeze
+
+      ucache = {}
+      scache = {}
+      struct = @repo.struct_for subject
+      neighbours = { subject => struct }
+
+      types = @repo.types_for(subject, struct: struct)
+
+      if @graph.type_is?(types, RDF::Vocab::SKOS.OrderedCollection)
+        # sort
+        list = if head = @repo.objects_for(
+                 subject, RDF::Vocab::SKOS.memberList, only: :blank).sort.first
+                 RDF::List.new(subject: head, graph: @repo).to_a.map do |s|
+                   next if published and not @repo.published?(s)
+                   neighbours[s] ||= {}
+                   { [] => :script, type: 'application/xhtml+xml',
+                    src: @resolver.uri_for(s, slugs: true) }
+                 end.compact
+               end
+
+        spec = [{ list => :article, inlist: '',
+                rel: @resolver.abbreviate(RDF::Vocab::SKOS.memberList) }]
+
+        abs   = @repo.label_for(subject, struct: struct, desc: true)
+        mn    = abs ? { abs.last => :description } : {} # not an element!
+        meta  = head_meta(subject, struct: struct, meta_names: mn,
+                          vocab: XHV) + twitter_meta(subject)
+        links = head_links subject, struct: struct, vocab: XHV,
+          ignore: neighbours.keys
+        title = if t = @graph.label_for(subject, struct: struct)
+                  [t.last.to_s, @resolver.abbreviate(t.first)]
+                end
+        if abs
+          para = { [abs.last.to_s] => :p,
+                  property: @resolver.abbreviate(abs.first) }
+          para['xml:lang'] = abs.last.language if abs.last.language?
+          para[:datatype]  = abs.last.datatype if abs.last.datatype?
+          spec.unshift para
+        end
+
+        pfx = @resolver.prefix_subset neighbours
+
+        xhtml_stub(base: base, title: title, transform: @transform,
+          prefix: pfx, vocab: XHV, link: links, meta: meta,
+          attr: { id: UUID::NCName.to_ncname_64(subject, version: 1),
+                 about: '', typeof: @resolver.abbreviate(types) },
+          content: spec).document
+      elsif @graph.type_is?(types, RDF::Vocab::SKOS.Collection)
+        # make a flat list of just transclusions
+        alphabetized_list subject, fwd: RDF::Vocab::SKOS.member,
+          published: published,
+          ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
+            # just return the sections i guess lol
+            { [''] => :script, type: 'application/xhtml+xml',
+              src: @resolver.uri_for(s, slugs: true),
+              rel: @resolver.abbreviate(fp),
+              typeof: @resolver.abbreviate(
+                @graph.types_for(s, struct: struct)) }
+        end
+      elsif @graph.type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
+        # note i'm not sure about this whole 'seen' business
+
+        # WOOF lol
+        alphabetized_list subject, rev: RDF::Vocab::SKOS.inScheme,
+          published: published,
+          ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
+
+          # may as well bag this while we're at it
+          neighbours[s] ||= struct
+
+          # sequence of elements beginning with the heading
+          el = begin
+                 lp, lo = @graph.label_for(s, struct: struct)
+                 if lp
+                   [literal_tag(lo, name: :h3, property: lp,
+                                prefixes: @resolver.prefixes)]
+                 else
+                   [{ [s.to_s] => :h3 }]
+                 end
+               end
+
+          # now we do definitions
+          cmp = @graph.cmp_term
+          el += @graph.find_in_struct(struct, RDF::Vocab::SKOS.definition,
+                               entail: true, invert: true).sort do |a, b|
+              cmp.(a.first, b.first)
+          end.map do |o, ps|
+            rel = @resolver.abbreviate(ps)
+            if o.uri?
+              { { [''] => :script, type: 'application/xhtml+xml',
+                 src: @resolver.uri_for(o, slugs: true) } => :p, rel: rel }
+            else
+              para = { [o.value] => :p, property: rel }
+              para['xml:lang'] = para[:lang] = o.language if o.language?
+              para[:datatype] = o.datatype if o.datatype?
+              para
+            end.compact
+          end
+
+          # do alternate labels
+          dl = @graph.find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
+                              entail: true, invert: true).sort do |a, b|
+            a.first <=> b.first
+          end.map do |o, ps|
+            next unless o.literal?
+
+            dd = { [o.value] => :dd, property: @resolver.abbreviate(ps) }
+            dd[:'xml:lang'] = dd[:lang] = o.language if o.language?
+            dd[:datatype] = o.datatype if o.datatype?
+            dd
+          end.compact
+          dl.unshift({ ['Also known as'] => :dt }) unless dl.empty?
+
+          # do relations
+          dl += rels.map do |pred, dt|
+            # this will give us a map of neighbours to the predicates
+            # actually used to relate them
+            objs = @graph.find_in_struct struct, pred, invert: true
+            # plump up the structs
+            objs.keys.each do |k|
+              # neighbours[k] goes first or it is short circuited
+              neighbours[k] ||= seen[k] ||= @resolver.struct_for(k,
+                uuids: true, inverses: true)
+            end
+
+            # only show relations to concepts in this scheme
+            objs.select! do |k, _|
+              x = @graph.find_in_struct neighbours[k],
+                RDF::Vocab::SKOS.inScheme, entail: true, invert: true
+              x.key? subject
+            end
+
+            unless objs.empty?
+              lcmp = @graph.cmp_label
+              [{ [dt] => :dt }] + objs.sort do |a, b|
+                lcmp.(a.first, b.first)
+              end.map do |o, ps|
+                # XXX this is where i would like canonical_uri to
+                # just "know" to do this (also this will fail if
+                # this is not a uuid)
+                id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
+                olp, olo = @graph.label_for(o, struct: neighbours[o])
+                href = base.dup
+                href.fragment = id
+                { link_tag(href, rel: ps, base: base,
+                  typeof: @graph.asserted_types(o, struct: struct),
+                  property: olp, label: olo,
+                  prefixes: @resolver.prefixes ) => :dd }
+              end
+            end
+          end.compact
+
+          # do backreferences
+
+          op = @graph.query([nil, nil, s]).to_a.select do |stmt|
+            sj = stmt.subject
+
+            if sj.uri? and sj != subject
+              # XXX there is probably a better way to do this
+              ref_ok = if neighbours[sj]
+                         np = neighbours[sj].keys.to_set - skospreds -
+                           [RDF::Vocab::SKOS.member,
+                            RDF::Vocab::SKOS.hasTopConcept]
+                         no = neighbours[sj].values_at(*np.to_a).flatten.uniq
+                         !np.empty? and no.include? s
+                       else
+                         true
+                       end
+              ref_ok and (!published or published?(sj))
+            end
+          end.reduce({}) do |hash, stmt|
+            sj = stmt.subject
+            seen[sj] ||= neighbours[sj] ||= @graph.struct_for(sj, inverses: true)
+            unless skospreds.include? stmt.predicate
+              (hash[sj] ||= []) << stmt.predicate
+            end
+            hash
+          end
+
+          # warn s, op
+
+          unless op.empty?
+            dl << { ['Referenced By'] => :dt }
+            op.sort do |a, b|
+              al = (label_for(a.first,
+                candidates: neighbours[a.first]) || [a.first]).last
+              bl = (label_for(b.first,
+                candidates: neighbours[b.first]) || [b.first]).last
+              al.value.upcase <=> bl.value.upcase
+            end.each do |sj, ps|
+              st   = neighbours[sj]
+              href = @resolver.uri_for sj, slugs: true
+              olp, olo = @graph.label_for(sj, struct: st)
+
+              dl << { link_tag(href, rev: ps, base: base,
+                typeof: @graph.asserted_types(sj, struct: st),
+                property: olp, label: olo,
+                prefixes: @resolver.prefixes) => :dd }
+            end
+          end
+
+          # add see also
+          sa = @graph.find_in_struct(
+            struct, RDF::RDFS.seeAlso, invert: true).each do |o, _|
+            seen[o] ||= neighbours[o] ||= @graph.struct_for(o, inverses: true)
+          end
+
+          unless sa.empty?
+            dl << { ['See Also'] => :dt }
+            lcmp = @graph.cmp_label cache: neighbours
+            sa.keys.sort(&lcmp).each do |o|
+              href = @resolver.uri_for o, slugs: true
+              if st = neighbours[o]
+                olp, olo = @graph.label_for(o, struct: st)
+                dl << { link_tag(href, rel: sa[o], base: base,
+                  typeof: @graph.types_for(o, struct: st),
+                  property: olp, label: olo,
+                  prefixes: @resolver.prefixes) => :dd }
+              else
+                dl << { link_tag(href, rel: ps, base: base) => :dd }
+              end
+            end
+          end
+
+          # add to set
+          el << { dl => :dl } unless dl.empty?
+
+          # id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
+          id = @resolver.uri_for s, slugs: true
+          id = id.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
+          sec = { el => :section, id: id, resource: "##{id}" }
+          if typ = @graph.asserted_types(s, struct: struct)
+            sec[:typeof] = @resolver.abbreviate typ
+          end
+          sec[:rel] = @resolver.abbreviate(fp) if rp
+          sec[:rev] = @resolver.abbreviate(rp) if rp
+          sec
+        end
+      else
+        raise ArgumentError,
+          "Subject #{subject} must be some kind of SKOS entity"
+      end
     end
   end
 
+  # This will generate an (X)HTML+RDFa page containing either a
+  # SKOS concept scheme or a collection, ordered or otherwise.
+  #
+  # XXX later on we should consider conneg for languages
+  #
+  #
   class ConceptScheme < Index
     CLASSES = [RDF::Vocab::SKOS.ConceptScheme, RDF::Vocab::SKOS.Collection]
   end
@@ -198,6 +749,66 @@ class RDF::SAK::Document
     CLASSES = [RDF::Vocab::SiocTypes.ReadingList]
 
     private
+
+    # XXX THIS LOOKS SUSPECT. yeah. like does this predate `generate_list`?
+
+    LISTOP = -> opmap, seen, published do
+      # we just sort this so it's consistent
+      opmap.sort { |a, b| a.first <=> b.first }.map do |o, preds|
+        li = RDF::List.new(subject: o, graph: @repo).to_a.map do |item|
+          next if seen[item] or (published and @repo.published?(item))
+          st = seen[item] = @repo.struct_for item
+          lp, lo = (@repo.label_for(item, struct: st) || [nil, item])
+          typ = @repo.types_for item, struct: st
+          #a = { [lab.last] => :span, about: item, typeof: abbreviate(typ),
+          #  property: abbreviate(lab.first) }
+          a = [lo.value]
+          dd = { a => :li, about: item }
+          dd[:typeof] = @resolver.abbreviate(typ) if typ
+          # literal stuff
+          dd[:property]  = @resolver.abbreviate(lp) if lp
+          dd[:datatype]  = @resolver.abbreviate(lo.datatype) if lo.datatype?
+          dd['xml:lang'] = lo.language if lo.language?
+          dd
+        end.compact
+        { { li => :ul, rel: @resolver.abbreviate(preds), inlist: '' } => :dd }
+      end.compact
+    end
+
+    REGOP  = -> opmap, seen, published do
+      opmap.map { |x| x + [struct_for(x.first, uuids: true)] }.sort do |a, b|
+        al = (@repo.label_for(a.first, struct: a.last) || [nil, a.first])
+        bl = (@repo.label_for(b.first, struct: b.last) || [nil, b.first])
+        al.last.value <=> bl.last.value
+      end.map do |item, preds, struct|
+        next if seen[item] or (published and @repo.published?(item))
+        st = seen[item] = @repo.struct_for item
+        lab = @repo.label_for item, struct: st
+        typ = @repo.types_for item, struct: st
+        a = { [lab.last] => :span, about: item,
+             typeof: @respolver.abbreviate(typ),
+             property: @resolver.abbreviate(lab.first) }
+        { a => :dd, rel: @resolver.abbreviate(preds) }
+      end.compact
+    end
+
+    DLSPEC = {
+      'By:' => {
+        RDF::Vocab::BIBO.authorList      => LISTOP,
+        RDF::Vocab::DC.creator           => REGOP,
+      },
+      'With:' => {
+        RDF::Vocab::BIBO.contributorList => LISTOP,
+        RDF::Vocab::DC.contributor       => REGOP,
+      },
+      'Edited by:' => {
+        RDF::Vocab::BIBO.editorList      => LISTOP,
+        RDF::Vocab::BIBO.editor          => REGOP,
+      },
+      'Translated by:' => {
+        RDF::Vocab::BIBO.translator      => REGOP,
+      },
+    }
 
     AUTHOR_SPEC = [
       ['By:', [RDF::Vocab::BIBO.authorList, RDF::Vocab::DC.creator]],
@@ -209,202 +820,143 @@ class RDF::SAK::Document
     public
 
     def generate published: true
-      id  = @subject # XXX this is too hard to change, lol
-      uri = @uri || @resolver.uri_for(id)
-      struct = @repo.struct_for id
-      nodes     = Set[id] + @repo.smush_struct(struct)
-      bodynodes = Set.new
-      parts     = {}
-      referents = {}
-      labels    = { id => @repo.label_for(id, struct: struct) }
-      canon     = {}
+
+      here = Set[@subject]
 
       # uggh put these somewhere
       preds = {
-        hp:    @repo.predicate_set(RDF::Vocab::DC.hasPart),
-        sa:    @repo.predicate_set(RDF::RDFS.seeAlso),
-        canon: @repo.predicate_set([RDF::OWL.sameAs, CI.canonical]),
-        ref:   @repo.predicate_set(RDF::Vocab::DC.references),
-        al:    @repo.predicate_set(RDF::Vocab::BIBO.contributorList),
-        cont:  @repo.predicate_set(RDF::Vocab::DC.contributor),
+        hp:    @graph.predicate_set(RDF::Vocab::DC.hasPart),
+        sa:    @graph.predicate_set(RDF::RDFS.seeAlso),
+        canon: @graph.predicate_set([RDF::OWL.sameAs, CI.canonical]),
+        ref:   @graph.predicate_set(RDF::Vocab::DC.references),
+        al:    @graph.predicate_set(RDF::Vocab::BIBO.contributorList),
+        cont:  @graph.predicate_set(RDF::Vocab::DC.contributor),
       }
 
-      # collect up all the parts (as in dct:hasPart)
-      @repo.objects_for(
-        id, preds[:hp], entail: false, only: :resource).each do |part|
-        bodynodes << part
+      alphabetized_list fwd: RDF::Vocab::DC.hasPart,
+        published: published do |s, fp, rp, struct, base, seen|
 
-        # gather up all the possible alias urls this thing can have
-        sa = ([part] + @repo.objects_for(part,
-          preds[:sa], only: :uri, entail: false)).map do |x|
-          [x] + @repo.subjects_for(preds[:canon], x, only: :uri, entail: false)
-        end.flatten.uniq
+        here << s
 
-        # collect all the referents
-        reftmp = {}
-        sa.each do |u|
-          @repo.subjects_for preds[:ref], u, only: :uri,
-            entail: false do |s, *p|
-            reftmp[s] ||= Set.new
-            reftmp[s] += p.first.to_set
-          end
+        # let's just do this first
+        kids = []
+        sec  = { kids => :section, resource: s.value }
+        if types = @repo.types_for(s, struct: struct)
+          sec[:typeof] = @resolver.abbreviate(types)
         end
+        sec[:rel] = @resolver.abbreviate(fp) if fp
+        sec[:rev] = @resolver.abbreviate(rp) if rp
 
-        # if we are producing a list of references identified by only
-        # published resources, prune out all the unpublished referents
-        reftmp.select! { |x, _| @repo.published? x } if published
+        lp, lo = @repo.label_for(s, struct: struct)
+        lh = { property: @resolver.abbreviate(lp) }
+        lh[:datatype]  = lo.datatype if lo.datatype?
+        lh['xml:lang'] = lo.language if lo.language?
 
-        # unconditionally skip this item if nothing references it
-        next if reftmp.empty?
+        # rdfs:seeAlso -> amazon (or whatever) link
+        sa = @repo.find_in_struct(struct, RDF::RDFS.seeAlso, invert: true)
+        if sa and !sa.empty?
+          sao, sap = sa.sort { |a, b| a.first <=> b.first }.first
+          sap = @resolver.abbreviate sap
 
-        referents[part] = reftmp
+          # lol add amazon affil tag
+          # if /^(www\.)?amazon\./i.match? sao.host and
+          #     amzn = @config.dig(:plugin, :amazon)
+          #   qv = (sao.query_values(Array) || []).reject { |x| x.first == 'tag' }
+          #   qv << ['tag', amzn]
+          #   sao = sao.dup
+          #   sao.query_values = qv
+          # end
 
-        reftmp.each do |r, _|
-          labels[r] ||= @repo.label_for r
-          canon[r]  ||= @resolver.uri_for r
-        end
-
-        # collect all the authors and author lists
-
-        @repo.objects_for(
-          part, preds[:al], only: :resource, entail: false) do |o|
-          RDF::List.new(subject: o, graph: @repo).each do |a|
-            labels[a] ||= @repo.label_for a
-          end
-        end
-
-        @repo.objects_for(part, preds[:cont], only: :uri, entail: false) do |a|
-          labels[a] ||= @repo.label_for a
-        end
-
-        ps = @repo.struct_for part
-        labels[part] = @repo.label_for part, struct: ps
-        nodes |= @repo.smush_struct ps
-
-        parts[part] = ps
-      end
-
-      bmap = @repo.prepare_collation struct
-      pf = -> x {
-        @resolver.abbreviate bmap[x.literal? ? :literals : :resources][x] }
-
-      lcmp = @repo.cmp_label
-      body = []
-      parts.sort(&lcmp).each do |k, v|
-        mapping = @repo.prepare_collation v
-        p = -> x {
-          @resolver.abbreviate mapping[x.literal? ? :literals : :resources][x] }
-        t = @resolver.abbreviate mapping[:types]
-
-        lp = @repo.label_for k, struct: v
-        h2c = [lp[1].to_s]
-        h2  = { h2c => :h2 }
-        cu  = @resolver.uri_for k
-        rel = nil
-        unless cu.scheme.downcase.start_with? 'http'
-          if sa = v[RDF::RDFS.seeAlso]
-            rel = p.call sa.first
-            cu = @resolver.uri_for sa.first
-          else
-            cu = nil
-          end
-        end
-
-        if cu
-          h2c[0] = { [lp[1].to_s] => :a, rel: rel,
-            property: p.call(lp[1]), href: cu.to_s }
+          span = { [lo.value] => :span, about: s.value }.merge lh
+          kids << { { span => :a,
+            rel: @resolver.abbreviate(sap), href: sao.value } => :h3 }
         else
-          h2[:property] = p.call(lp[1])
+          kids << { [lo.value] => :h3 }.merge(lh)
         end
 
-        # authors &c
-        # authors contributors editors translators
-        al = []
-        AUTHOR_SPEC.each do |label, pl|
-          dd = []
-          seen = Set.new
-          pl.each do |pred|
-            # first check if the struct has the predicate
-            next unless v[pred]
-            li = []
-            ul = { li => :ul, rel: @resolver.abbreviate(pred) }
-            v[pred].sort(&lcmp).each do |o|
-              # check if this is a list
-              tl = RDF::List.new subject: o, graph: @repo
-              if tl.empty? and !seen.include? o
-                seen << o
-                lab = labels[o] ? { [labels[o][1]] => :span,
-                  property: @resolver.abbreviate(labels[o][0]) } : o
-                li << { [lab] => :li, resource: o }
-              else
-                # XXX this will actually not be right if there are
-                # multiple lists but FINE FOR NOW
-                ul[:inlist] ||= ''
-                tl.each do |a|
-                  seen << a
-                  lab = labels[a] ? { [labels[a][1]] => :span,
-                    property: @resolver.abbreviate(labels[a][0]) } : a
-                  li << { [lab] => :li, resource: a }
-                end
-              end
+
+        # now
+        dli = DLSPEC.map do |dtl, ops|
+          lseen = {}
+
+          dd = ops.map do |p, op|
+            opmap = @repo.find_in_struct struct, p, invert: true
+            instance_exec(opmap, lseen, published, &op)
+          end.flatten(1)
+
+          seen.merge! lseen
+
+          [{ [dtl] => :dt }] + dd unless dd.empty?
+        end.compact.flatten(1)
+
+        # now do references
+
+        # everything that references either the subject or one of its seeAlsos
+        # XXX think of a better way to accumulate
+        structs = {}
+        refs = ([s] + sa.keys + sa.keys.map { |k|
+            @repo.subjects_for(preds[:canon], k, only: :uri, entail: false)
+          }).flatten.uniq.map do |u|
+          # get the subjects that point
+          @repo.subjects_for(preds[:ref], u, only: :uri) do |rs, pfwd, prev|
+            # maybe this structure will correctly communicate upstream
+            unless structs[rs] or (published and !@repo.published?(rs))
+              structs[rs] = @repo.struct_for(rs)
+              [rs, [pfwd, prev]]
             end
-            dd << ul unless li.empty?
+          end.compact.to_h
+        end.reduce({}) { |hout, hin| hout.merge! hin }.to_a.sort do |a, b|
+          sa = structs[a.first]
+          sb = structs[b.first]
+          al = (@repo.label_for(a.first, struct: sa) || [nil, a.first])
+          bl = (@repo.label_for(a.first, struct: sb) || [nil, b.first])
+        #   warn [al.last.to_s.upcase, bl.last.to_s.upcase].inspect
+          al.last.to_s.upcase <=> bl.last.to_s.upcase
+        end.map do |k, v|
+          st = structs[k]
+          pfwd, prev = *v
+          uri = @resolver.uri_for k, as: :uri
+          lp, lo = (@repo.label_for(k, candidates: st) || [nil, k])
+
+          if %w[http https].include? uri.scheme
+            span = if lp
+                     x = { [lo.to_s] => :span,
+                          property: @resolver.abbreviate(lp) }
+                     x[:datatype]  = lo.datatype if lo.datatype?
+                     x['xml:lang'] = lo.language if lo.language?
+                     x
+                   else
+                     [lo.to_s]
+                   end
+            x = { span => :a, href: base.route_to(uri) }
+            if typ = @repo.types_for(k, struct: st)
+              x[:typeof] = @resolver.abbreviate(typ)
+            end
+            x[:rev] = @resolver.abbreviate(pfwd) unless pfwd.empty?
+            x[:rel] = @resolver.abbreviate(prev) unless prev.empty?
+            { x => :dd }
+          else
+            x = { [lo.to_s] => :dd, resource: uri }
+            if typ = @repo.types_for(k, struct: st)
+              x[:typeof] = @resolver.abbreviate(typ)
+            end
+            x[:rev] = @resolver.abbreviate(pfwd) unless pfwd.empty?
+            x[:rel] = @resolver.abbreviate(prev) unless prev.empty?
+            x
           end
-          al += [{ [label] => :dt }, { dd => :dd }] unless dd.empty?
         end
 
-        # ref list
-        rl = referents[k].sort(&lcmp).map do |ref, pset|
-          lab = labels[ref] ? { [labels[ref][1]] => :span,
-            property: @resolver.abbreviate(labels[ref][0]) } : ref
+        # warn refs.inspect
 
-          { [{ [lab] => :a, rev: @resolver.abbreviate(pset),
-              href: canon[ref] }] => :li }
+        unless refs.empty?
+          refs.unshift({ ['Referenced by:'] => :dt })
+          dli += refs
         end
 
-        contents = [h2, {
-          al + [{ ['Referenced in:'] => :dt },
-            { [{ rl => :ul }] => :dd }] => :dl }]
+        kids << { dli => :dl } unless dli.empty?
 
-        body << { contents => :section,
-          rel: pf.call(k), resource: k.to_s, typeof: t }
+        sec
       end
-
-      # prepend abstract to body if it exists
-      abs = @repo.label_for id, struct: struct, desc: true
-      if abs
-        tag = { '#p' => abs[1], property: @resolver.abbreviate(abs[0]) }
-        body.unshift tag
-      end
-
-      # add labels to nodes
-      nodes += @repo.smush_struct labels
-
-      # get prefixes
-      pfx = @resolver.prefix_subset nodes
-
-      # get title tag
-      title = title_tag labels[id][0], labels[id][1],
-        prefixes: @resolver.prefixes, lang: 'en'
-
-      # get links
-      link = head_links id, struct: struct, ignore: bodynodes,
-        labels: labels, vocab: XHV, rev: RDF::SAK::CI.document
-
-      # get metas
-      mn = {}
-      mn[abs[1]] = :description if abs
-      mi = Set.new
-      mi << labels[id][1] if labels[id]
-      meta = head_meta id,
-        struct: struct, lang: 'en', ignore: mi, meta_names: mn, vocab: XHV
-
-      meta += twitter_meta(id) || []
-
-      xhtml_stub(base: uri, prefix: pfx, lang: 'en', title: title, vocab: XHV,
-        link: link, meta: meta, transform: @transform,
-        body: { body => :body, about: '',
-          typeof: @resolver.abbreviate(struct[RDF::RDFV.type] || []) }).document
     end
   end
 
@@ -560,6 +1112,9 @@ class RDF::SAK::Document
 
   # Transform the document and return it.
   def transform
+    root = doc.root
+    ns   = root.namespace && root.namespace.href
+    return doc.dup unless root.name == 'html' or ns == XHTMLNS
     # we strip off the <head> and generate a new one
   end
 
@@ -626,7 +1181,7 @@ class RDF::SAK::Document
         end
 
         # add type attribute
-        unless (mts = formats_for k).empty?
+        unless (mts = @repo.formats_for k).empty?
           ln[:type] = mts.first.to_s
 
           if ln[:type] =~ /(java|ecma)script/i ||
@@ -801,6 +1356,19 @@ class RDF::SAK::Document
   end
 
   # METHODS THAT ONLY TOUCH MARKUP
+
+  # Return true if the element is (X)HTML.
+  #
+  # @param elem [Nokogiri::XML::Node] the node/element to test
+  #
+  # @return [false, true]
+  #
+  def html? elem
+    # make sure we find an element
+    elem = elem.document? ? elem.root : elem.element? ? elem : elem.parent
+    ns = elem.namespace && elem.namespace.href
+    ns == XHTMLNS or !ns && elem.name.downcase == 'html'
+  end
 
   # Normalize the indentation of the document.
   #
@@ -1569,15 +2137,6 @@ class RDF::SAK::Document
   # node ID, unless there is a cycle, in which case the cycle is
   # broken.
   #
-  # Note: Collating properties might actually turn out to be dumb, and
-  # instead what I should be doing is grouping by property (and an
-  # intermediate sort by property label), but that will result in
-  # redundancies in the meat of the markup. The goal with this
-  # generator is really just to get the data onto the page where it
-  # can be picked up and manipulated by some downstream processor. Any
-  # more sophisticated markup generation on this side is going to have
-  # to be controlled by something like Loupe.
-  #
   # ```
   # <name about="#subject" typeof="my:Type">
   #   <member rel="some:resource other:predicate">
@@ -1595,6 +2154,15 @@ class RDF::SAK::Document
   #   </ol>
   # </name>
   # ```
+  #
+  # @note Collating properties might actually turn out to be dumb, and
+  #  instead what I should be doing is grouping by property (and an
+  #  intermediate sort by property label), but that will result in
+  #  redundancies in the meat of the markup. The goal with this
+  #  generator is really just to get the data onto the page where it
+  #  can be picked up and manipulated by some downstream
+  #  processor. Any more sophisticated markup generation on this side
+  #  is going to have to be controlled by something like Loupe.
   #
   # @param repo [RDF::Repository]
   # @param subject [RDF::Resource, RDF::Node]

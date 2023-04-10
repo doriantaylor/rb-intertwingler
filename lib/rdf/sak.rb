@@ -512,7 +512,7 @@ module RDF::SAK
 
     # generate indexes of books, not-books, and other external links
 
-    # KILL
+    # KILL OK
     def head_links subject, struct: nil, nodes: nil, prefixes: {},
         ignore: [], uris: {}, labels: {}, vocab: nil, rev: []
 
@@ -601,7 +601,7 @@ module RDF::SAK
       links
     end
 
-    # KILL
+    # KILL OK
     def head_meta subject, struct: nil, nodes: nil, prefixes: {},
         ignore: [], meta_names: {}, vocab: nil, lang: nil, xhtml: true
 
@@ -645,7 +645,7 @@ module RDF::SAK
       meta
     end
 
-    # KILL
+    # KILL OK
     def generate_backlinks subject, published: true, ignore: nil
       uri = @resolver.uri_for(
         subject, as: :uri, slugs: true) || URI(@resolver.preproc subject)
@@ -686,6 +686,7 @@ module RDF::SAK
       { [{ li => :ul }] => :nav }
     end
 
+    # KILL OK
     def generate_twitter_meta subject
       # get author
       author = @graph.authors_for(subject, unique: true) or return []
@@ -725,6 +726,7 @@ module RDF::SAK
       out
     end
 
+    # KILL OK
     AUTHOR_SPEC = [
       ['By:', [RDF::Vocab::BIBO.authorList, RDF::Vocab::DC.creator]],
       ['With:', [RDF::Vocab::BIBO.contributorList, RDF::Vocab::DC.contributor]],
@@ -732,6 +734,7 @@ module RDF::SAK
       ['Translated by:', [RDF::Vocab::BIBO.translator]],
     ].freeze
 
+    # KILL OK
     def generate_bibliography id, published: true
       id  = @resolver.uuid_for id
       uri = @resolver.uri_for id
@@ -1103,6 +1106,7 @@ module RDF::SAK
       data
     end
 
+    # KILL OK
     def generate_sitemap published: true
       urls = {}
 
@@ -1172,7 +1176,7 @@ module RDF::SAK
 
     # generate atom feed
 
-    #
+    # KILL OK
     def all_internal_docs published: true, exclude: []
       # find all UUIDs that are documents
       docs = all_of_type(RDF::Vocab::FOAF.Document,
@@ -1191,6 +1195,7 @@ module RDF::SAK
       docs
     end
 
+    # KILL OK
     def indexed? subject
       subject = @resolver.coerce_resource subject
       indexed = objects_for subject, RDF::SAK::CI.indexed,
@@ -1201,6 +1206,7 @@ module RDF::SAK
       indexed.empty? or indexed.none? { |f| f.object == false }
     end
 
+    # KILL OK
     def generate_atom_feed id, published: true, related: []
       raise 'ID must be a resource' unless id.is_a? RDF::Resource
 
@@ -1372,6 +1378,7 @@ module RDF::SAK
         xmlns: 'http://www.w3.org/2005/Atom' }).document
     end
 
+    # MOVE TO Surface::DocumentRoot
     def write_feeds type: RDF::Vocab::DCAT.Distribution, published: true
       feeds = all_of_type type
       target = @config[published ? :target : :private]
@@ -1385,6 +1392,8 @@ module RDF::SAK
     end
 
     # generate sass palettes
+
+    # MOVE TO Surface::DocumentRoot
 
     # generate rewrite map(s)
     def generate_rewrite_map published: false, docs: nil
@@ -1627,6 +1636,7 @@ module RDF::SAK
       true
     end
 
+    # MOVE TO Surface::DocumentRoot
     def generate_xml_catalog published: false, docs: nil, path: ?., extra: {}
       path = Pathname(path)
 
@@ -1651,6 +1661,8 @@ module RDF::SAK
       # out the door
       markup(spec: spec).document
     end
+
+    # KILL OK
 
     # generate an alphabetized list as an xhtml document with metadata
     #
