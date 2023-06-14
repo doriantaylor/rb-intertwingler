@@ -1,8 +1,12 @@
 require 'rdf'
-require 'rdf/sak/util'
+require 'rdf/sak/util/clean'
+require 'rdf/sak/nlp'
+require 'rdf/sak/ci'
+require 'rdf/sak/qb'
 require 'time'
 require 'nokogiri'
 require 'md-noko'
+require 'uuid-ncname'
 require 'xml-mixup'
 
 # This is the base class for (X)HTML+RDFa documents. It is a temporary
@@ -245,106 +249,104 @@ class RDF::SAK::Document
   end
 
   class Stats < RDF::SAK::Document
-    out = {}
-    all_of_type(QB.DataSet).map do |s|
-      base  = @resolver.uri_for s, as: :uri
-      types = @resolver.abbreviate @graph.asserted_types(s)
-      title = if t = @graph.label_for(s)
+
+    def generate published: true
+      base  = @resolver.uri_for @subject, as: :uri
+      types = @resolver.abbreviate @graph.asserted_types(@subject)
+      title = if t = @graph.label_for(@subject)
                 [t[1].to_s, @resolver.abbreviate(t[0])]
               end
       cache = {}
-      @repo.subjects_for(RDF::SAK::QB.dataSet, s, only: :resource).each do |o|
+      @repo.subjects_for(
+        RDF::SAK::QB.dataSet, @subject, only: :resource).each do |o|
         if d = @repo.objects_for(o, RDF::SAK::CI.document, only: :resource).first
           if !published or @repo.published?(d)
-              # include a "sort" time that defaults to epoch zero
-              c = cache[o] ||= {
-                doc: d, stime: Time.at(0).getgm, struct: struct_for(o) }
+            # include a "sort" time that defaults to epoch zero
+            c = cache[o] ||= {
+              doc: d, stime: Time.at(0).getgm, struct: @repo.struct_for(o) }
 
-              if t = @repo.label_for(d)
-                c[:title] = t
-              end
-              if a = @repo.label_for(d, desc: true)
-                c[:abstract] = a
-              end
-              if ct = @repo.objects_for(d,
-                RDF::Vocab::DC.created, datatype: RDF::XSD.dateTime).first
-                c[:stime] = c[:ctime] = ct.object.to_time.getgm
-              end
-              if mt = @repo.objects_for(d,
-                RDF::Vocab::DC.modified, datatype:RDF::XSD.dateTime)
-                c[:mtime] = mt.map { |m| m.object.to_time.getgm }.sort
-                c[:stime] = c[:mtime].last unless mt.empty?
-              end
+            if t = @repo.label_for(d)
+              c[:title] = t
+            end
+            if a = @repo.label_for(d, desc: true)
+              c[:abstract] = a
+            end
+            if ct = @repo.objects_for(d,
+              RDF::Vocab::DC.created, datatype: RDF::XSD.dateTime).first
+              c[:stime] = c[:ctime] = ct.object.to_time.getgm
+            end
+            if mt = @repo.objects_for(d,
+              RDF::Vocab::DC.modified, datatype:RDF::XSD.dateTime)
+              c[:mtime] = mt.map { |m| m.object.to_time.getgm }.sort
+              c[:stime] = c[:mtime].last unless mt.empty?
             end
           end
         end
-
-        # sort lambda closure
-        sl = -> a, b do
-          x = cache[b][:stime] <=> cache[a][:stime]
-          return x unless x == 0
-          x = cache[b][:ctime] <=> cache[a][:ctime]
-          return x unless x == 0
-          ta = cache[a][:title] || Array.new(2, cache[a][:uri])
-          tb = cache[b][:title] || Array.new(2, cache[b][:uri])
-          ta[1].to_s <=> tb[1].to_s
-        end
-
-        rows = []
-        cache.keys.sort(&sl).each do |k|
-          c = cache[k]
-          href = base.route_to @resolver.uri_for(c[:doc], as: :uri)
-          dt = @resolver.abbreviate @graph.asserted_types(c[:doc])
-          uu = URI(k.to_s).uuid
-          nc = UUID::NCName.to_ncname uu, version: 1
-          tp, tt = c[:title] || []
-          ab = if c[:abstract]
-                 { [c[:abstract][1].to_s] => :th, about: href,
-                  property: @resolver.abbreviate(c[:abstract].first) }
-               else
-                 { [] => :th }
-               end
-
-          td = [{ { { [tt.to_s] => :span,
-                     property: @resolver.abbreviate(tp) } => :a,
-                   rel: 'ci:document', href: href } => :th },
-                ab,
-                { [c[:ctime].iso8601] => :th, property: 'dct:created',
-                 datatype: 'xsd:dateTime', about: href, typeof: dt },
-                { c[:mtime].reverse.map { |m| { [m.iso8601] => :span,
-                   property: 'dct:modified', datatype: 'xsd:dateTime' } } => :th,
-              about: href
-            },
-          ] + DSD_SEQ.map do |f|
-            h = []
-            x = { h => :td }
-            p = CI[f]
-            if y = c[:struct][p] and !y.empty?
-              h << y = y.first
-              x[:property] = @resolver.abbreviate p
-              x[:datatype] = @resolver.abbreviate y.datatype if y.datatype?
-            end
-            x
-          end
-          rows << { td => :tr, id: nc, about: "##{nc}",
-            typeof: 'qb:Observation' }
-        end
-
-        # XXX add something to the vocab so this can be controlled in the data
-        xf = config.dig(:stats, :transform) || config[:transform]
-
-        out[s] = xhtml_stub(base: base, title: title,
-          transform: xf, attr: {
-            id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
-          prefix: @resolver.prefixes, content: {
-            [{ [{ [{ ['About'] => :th, colspan: 4 },
-                { ['Counts'] => :th, colspan: 4 },
-                { ['Words per Block'] => :th, colspan: 7 }] => :tr },
-              { TH_SEQ => :tr } ] => :thead },
-             { rows => :tbody, rev: 'qb:dataSet' }] => :table }).document
       end
 
-      out
+      # sort lambda closure
+      sl = -> a, b do
+        x = cache[b][:stime] <=> cache[a][:stime]
+        return x unless x == 0
+        x = cache[b][:ctime] <=> cache[a][:ctime]
+        return x unless x == 0
+        ta = cache[a][:title] || Array.new(2, cache[a][:uri])
+        tb = cache[b][:title] || Array.new(2, cache[b][:uri])
+        ta[1].to_s <=> tb[1].to_s
+      end
+
+      rows = []
+      cache.keys.sort(&sl).each do |k|
+        c = cache[k]
+        href = base.route_to @resolver.uri_for(c[:doc], as: :uri)
+        dt = @resolver.abbreviate @graph.asserted_types(c[:doc])
+        uu = URI(k.to_s).uuid
+        nc = UUID::NCName.to_ncname uu, version: 1
+        tp, tt = c[:title] || []
+        ab = if c[:abstract]
+               { [c[:abstract][1].to_s] => :th, about: href,
+                property: @resolver.abbreviate(c[:abstract].first) }
+             else
+               { [] => :th }
+             end
+
+        td = [{ { { [tt.to_s] => :span,
+                   property: @resolver.abbreviate(tp) } => :a,
+                 rel: 'ci:document', href: href } => :th },
+              ab,
+              { [c[:ctime].iso8601] => :th, property: 'dct:created',
+               datatype: 'xsd:dateTime', about: href, typeof: dt },
+              { c[:mtime].reverse.map { |m| { [m.iso8601] => :span,
+                 property: 'dct:modified', datatype: 'xsd:dateTime' } } => :th,
+               about: href
+              },
+             ] + DSD_SEQ.map do |f|
+          h = []
+          x = { h => :td }
+          p = RDF::SAK::CI[f]
+          if y = c[:struct][p] and !y.empty?
+            h << y = y.first
+            x[:property] = @resolver.abbreviate p
+            x[:datatype] = @resolver.abbreviate y.datatype if y.datatype?
+          end
+          x
+        end
+        rows << { td => :tr, id: nc, about: "##{nc}", typeof: 'qb:Observation' }
+      end
+
+      # XXX add something to the vocab so this can be controlled in the data
+      xf = config.dig(:stats, :transform) || config[:transform]
+
+      xhtml_stub(base: base, title: title, transform: xf, attr: {
+        id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
+                 prefix: @resolver.prefixes, content: {
+                   [{ [{ [{ ['About'] => :th, colspan: 4 },
+                          { ['Counts'] => :th, colspan: 4 },
+                          { ['Words per Block'] => :th, colspan: 7 }] => :tr },
+                       { TH_SEQ => :tr } ] => :thead },
+                    { rows => :tbody, rev: 'qb:dataSet' }] => :table }).document
+    end
+
   end
 
   # This class is for things like SKOS concept schemes, rosters,

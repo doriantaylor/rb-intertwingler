@@ -30,9 +30,9 @@ class RDF::SAK::MimeMagic < ::MimeMagic
     # consider this to be 'binary' if empty
     return true if sample.length == 0
     # control codes minus ordinary whitespace
-    sample.b =~ /[\x0-\x8\xe-\x1f\x7f]/ ? true : false
+    /[\x0-\x8\xe-\x1f\x7f]/.match? sample.b
   end
-  
+
   def self.default_type thing
     new(self.binary?(thing) ? 'application/octet-stream' : 'text/plain')
   end
@@ -54,15 +54,35 @@ class RDF::SAK::MimeMagic < ::MimeMagic
     out.empty? ? [default_type(io)] : out
   end
 
+  def initialize string
+    # XXX in some formulations (quoted strings) this will be wrong obvs
+    string, *params = string.split(/\s*;+\s*/)
+    @params = params.map { |x| x.split(/\s*=\s*/, 2) } unless params.empty?
+    super string
+  end
+
+  def inspect
+    out = @type
+    out = [out, @params.map { |x| x.join ?= }].join ?; if
+      @params and !@params.empty?
+    %q[<%s "%s">] % [self.class, out]
+  end
+
   # fetches immediate parent types
   def parents
-    ::MimeMagic::TYPES.fetch(@type, [nil, []])[1].map { |x| self.class.new x }
+    out = ::MimeMagic::TYPES.fetch(type, [nil, []])[1].map { |x| self.class.new x }
+    # add this unless we're it
+    out << self.class.new('application/octet-stream') unless
+      type.downcase == 'application/octet-stream'
+    out
   end
 
   # fetches all supertypes
   def lineage
     ([self] + parents.map { |t| t.lineage }.flatten).uniq
   end
+
+  alias_method :ancestor_types, :lineage
 
   private
 

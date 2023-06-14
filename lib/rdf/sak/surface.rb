@@ -43,12 +43,13 @@ class RDF::SAK::Surface
 
     public
 
-    def initialize context, dir: nil, private_dir: PRIVATE, **options
+    def initialize context, dir: nil, private: PRIVATE, **options
       raise ArgumentError, 'dir must be string or Pathname' unless dir
       @dir = (dir.is_a? Pathname ? dir : Pathname(dir)).expand_path
       raise ArgumentError, "#{dir} must be a readable directory" unless
         @dir.directory? and dir.readable?
-      @private = @dir + private_dir
+      # we deal with it this way because `private` is a keyword
+      @private = @dir + binding.local_variable_get(:private)
 
       super
     end

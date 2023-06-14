@@ -17,6 +17,34 @@ module RDF::SAK
     # we make this a lambda so we can implicitly pass in the cache in
     # the instance method but also have it as a static method too;
     # also `self.class.whatever` is *insanely* slow
+    SANITIZE_VOCAB = -> vocab, cache: nil do
+      cache = {} unless cache.is_a? Hash
+      # 2022-05-18 XXX THIS IS A CLUSTERFUCK
+      #
+      # what we want is the official vocab if it exists, an
+      # on-the-fly vocab if it doesn't, and to use RDF::RDFV
+      # instead of RDF if it shows up
+      #
+      # we notice that bibo:status/ resolves to bibo: with .find
+      # so we need to check if the uri is the same before accepting it
+      vocab = RDF::URI(vocab) unless vocab.is_a? RDF::URI
+      vocab = if cache[vocab.to_s]
+                cache[vocab.to_s]
+              elsif vocab.is_a?(Class) and
+                  vocab.ancestors.include?(RDF::Vocabulary)
+                vocab # arrrrghhh
+              elsif vv = RDF::Vocabulary.find(vocab) # XXX SLOW AF hence cache
+                vv.to_uri == vocab ? vv : Class.new(RDF::Vocabulary(vocab))
+              else
+                Class.new(RDF::Vocabulary(vocab))
+              end
+      # GRRRR
+      vocab = RDF::RDFV if vocab == RDF
+
+      cache[vocab.to_s] = vocab
+    end
+    # XXX uhh maybe coalesce this with `coerce_resource`?
+
     SANITIZE_PREFIXES = -> prefixes, nonnil: false, cache: nil do
       prefixes = {} unless prefixes         # noop prefixes
       cache    = {} unless cache.is_a? Hash # noop cache
@@ -24,28 +52,7 @@ module RDF::SAK
         prefixes.is_a? Hash or prefixes.respond_to? :to_h
       prefixes = prefixes.to_h.map do |k, v|
         k = k.to_s.to_sym unless k.nil?
-        if v
-          # 2022-05-18 XXX THIS IS A CLUSTERFUCK
-          #
-          # what we want is the official vocab if it exists, an
-          # on-the-fly vocab if it doesn't, and to use RDF::RDFV
-          # instead of RDF if it shows up
-          #
-          # we notice that bibo:status/ resolves to bibo: with .find
-          # so we need to check if the uri is the same before accepting it
-          v = RDF::URI(v) unless v.is_a? RDF::URI
-          v = if cache[v.to_s]
-                cache[v.to_s]
-              elsif v.is_a?(Class) and v.ancestors.include?(RDF::Vocabulary)
-                v # arrrrghhh
-              elsif vv = RDF::Vocabulary.find(v) # XXX SLOW AF hence cache
-                vv.to_uri == v ? vv : Class.new(RDF::Vocabulary(v))
-              else
-                Class.new(RDF::Vocabulary(v))
-              end
-          v = RDF::RDFV if v == RDF
-          [k, cache[v.to_s] = v]
-        end
+        [k, SANITIZE_VOCAB.(v, cache: cache)] if v
       end.compact.to_h
 
       prefixes.reject! { |k, _| k.nil? } if nonnil
@@ -53,6 +60,15 @@ module RDF::SAK
     end
 
     public
+
+    # Sanitize a term as an {RDF::Vocabulary}.
+    #
+    # @param term [#to_s,RDF::URI,URI] the term to sanitize.
+    # @param cache [Hash] an optional cache.
+    #
+    # @return [RDF::Vocabulary]
+    #
+    define_singleton_method :sanitize_vocab, SANITIZE_VOCAB
 
     # Return a hash mapping a set of RDF prefixes to their vocabularies.
     #
@@ -86,7 +102,7 @@ module RDF::SAK
     # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
     #
     def initialize repo, base, aliases: [], prefixes: {}
-      @repo = repovbv
+      @repo = repo
       raise ArgumentError, 'repo must be RDF::Queryable' unless
         repo.is_a? RDF::Queryable
 
@@ -730,19 +746,22 @@ module RDF::SAK
 
       # this returns a duplicate that we can mess with
       if vocab
-        vocab = coerce_resource vocab
+        vocab = coerce_resource vocab, as: :term
         prefixes[nil] = vocab
       elsif prefixes.key? nil
-        prefixes[nil] = coerce_resource prefixes[nil]
+        prefixes[nil] = coerce_resource prefixes[nil], as: :term
       end
 
       # only do this if there's something to do, cause it's expensive
       # XXX also figure out a sensible way to cache this move
       prefixes = sanitize_prefixes prefixes unless
         prefixes.empty? or (prefixes.size == 1 and prefixes.key? nil)
+
       # okay now merge
       prefixes = @prefixes.merge prefixes
 
+      # note since hash key order is preserved this will clobber any
+      # explicit namespace prefix for the vocab
       rev = prefixes.invert
 
       term.map! do |t|
@@ -753,6 +772,7 @@ module RDF::SAK
         rev.sort do |a, b|
           b.first.to_uri.to_s.length <=> a.first.to_uri.to_s.length
         end.each do |vocab, pfx|
+          # this will start us off with the terminating slug
           slug = t.delete_prefix vocab.to_s
           # warn [slug, pfx].inspect
           # this is saying the URI either doesn't match or abbreviates to ""

@@ -20,9 +20,21 @@ module RDF::SAK::Util::Clean
       t.start_with?('_:') ? RDF::Node(t.delete_prefix '_:') : RDF::URI(t)
     },
     term:   -> t {
-      # noop if it's a vocab term
-      return t if [RDF::Vocabulary::Term, RDF::Vocabulary].any? do |c|
-        t.is_a? c
+      # if it's a vocab term check if it's also a vocab, otherwise noop
+      if t.is_a? RDF::Vocabulary::Term
+        tt = RDF::Vocabulary.find t
+        t = tt if tt and tt.to_uri == t.to_uri
+        # skull emoji
+        t = RDF::RDFV if t == RDF
+
+        return t
+      end
+
+      # noop if it's a vocab
+      if t.is_a? RDF::Vocabulary
+        # not taking any chances
+        t = RDF::RDFV if t == RDF
+        return t
       end
 
       # turn to uri or bnode if neither
@@ -34,9 +46,9 @@ module RDF::SAK::Util::Clean
       # try to resolve it to a vocab term
       if t.uri?
         t = (RDF::Vocabulary.find_term(t) rescue t) || t
-        if !t.is_a?(RDF::Vocabulary::Term) and tt = RDF::Vocabulary.find(t)
-          t = tt if tt.to_uri == t
-        end
+        tt = RDF::Vocabulary.find t
+        t = tt if tt and tt.to_uri == t.to_uri
+
         # ugh this thing
         t = RDF::RDFV if t == RDF
       end

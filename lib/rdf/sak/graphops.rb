@@ -1701,10 +1701,13 @@ module RDF::SAK
     #  that are relative to these will be put in front of other URIs.
     # @param blankfirst [false, true] whether blank nodes should
     #  always go before proper URIs, or after them.
+    # @yieldparam comparand [Object] the comparand to be transformed
+    # @yieldreturn cleaned [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
-    def cmp_resource reverse: false, www: nil, prioritize: [], blankfirst: false
+    def cmp_resource reverse: false, www: nil, prioritize: [],
+        blankfirst: false, &block
       # index tables for 'www' and blank-first preferences
       wpref = [false, true].zip(www ? [1, -1] : [-1, 1]).to_h
       bpref = [false, true].zip(blankfirst ? [1, 0] : [0, 1]).to_h
@@ -1780,6 +1783,9 @@ module RDF::SAK
         a, b = [a, b].map do |x|
           # this will return the cache entry or otherwise create it
           cache[x] ||= begin
+                         # preprocess if necessary
+                         x = block.call x if block
+
                          o = { id: x }
                          if x.uri?
                            # get version as URI object
@@ -1860,16 +1866,19 @@ module RDF::SAK
     # @param reverse [false, true] whether to reverse the sort
     # @param datatype [RDF::URI, Array<RDF::URI>] preference for datatype(s)
     # @param language [String, Symbol, Array<String, Symbol>]
-    #  preference for language(s)
+    #  `Accept-Language`/RFC5456 language tag(s)
     # @param nocase [true, false] whether to sort case-sensitive
     # @param longer [false, true] whether to sort longer strings
     #  before shorter strings where the longer string begins with the
     #  shorter string
+    # @yieldparam comparand [Object] the comparand to be transformed
+    # @yieldreturn cleaned [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
     def cmp_literal reverse: false, datatype: nil, language: nil,
-        nocase: true, longer: false, longer_raw: nil, resources_first: false
+        nocase: true, longer: false, longer_raw: nil,
+        resources_first: false, &block
       datatype = assert_resources datatype, blank: false
       language = coerce_languages language
 
@@ -1877,6 +1886,8 @@ module RDF::SAK
       cmp_rsrc = [false, true].zip(resources_first ? [0, 1] : [1, 0]).to_h
 
       lambda do |a, b|
+        # step zero: preprocess comparands
+        a, b = [a, b].map(&block) if block
         # first flip if reverse
         a, b = b, a if reverse
         # then detect if both are literal
@@ -1952,11 +1963,13 @@ module RDF::SAK
     # @param longer [false, true] whether to sort longer strings
     #  before shorter strings where the longer string begins with the
     #  shorter string
+    # @yieldparam comparand [Object] the comparand to be transformed
+    # @yieldreturn cleaned [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
     def cmp_label reverse: false, cache: nil, datatype: nil, language: nil,
-        nocase: false, longer: false, desc: false, alt: false
+        nocase: false, longer: false, desc: false, alt: false, &block
 
       # obtain label cmp
       cmp = cmp_literal reverse: reverse, datatype: datatype,
@@ -1970,6 +1983,9 @@ module RDF::SAK
       # lexical...
 
       lambda do |a, b|
+        # optional preprocess
+        a, b = [a, b].map(&block) if block
+
         # obtain and cache the labels
         [a, b].each do |x|
           lcache[x] ||= (label_for(x, struct: cache[x]) || [nil, x]).last
@@ -1993,12 +2009,14 @@ module RDF::SAK
     # @param longer [false, true] whether to sort longer strings
     #  before shorter strings where the longer string begins with the
     #  shorter string
+    # @yieldparam comparand [Object] the comparand to be transformed
+    # @yieldreturn cleaned [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
     def cmp_term reverse: false, labels: true, cache: nil, datatype: nil,
         language: nil, nocase: false, longer: false, desc: false, alt: false,
-        www: false, prioritize: [], order: [:uri, :blank, :literal]
+        www: false, prioritize: [], order: [:uri, :blank, :literal], &block
 
       # deal with node order
       order = coerce_node_spec order
@@ -2007,10 +2025,10 @@ module RDF::SAK
       end.to_h
 
       labcmp = cmp_label cache: cache, datatype: datatype, language: language,
-        nocase: nocase, longer: longer, desc: desc, alt: alt
+        nocase: nocase, longer: longer, desc: desc, alt: alt, &block
 
       uricmp = cmp_resource www: www, prioritize: prioritize,
-        blankfirst: ospec[:blank] < ospec[:uri]
+        blankfirst: ospec[:blank] < ospec[:uri], &block
 
       lambda do |a, b|
         # note we do the reverse here so the whole comparison is reversed

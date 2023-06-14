@@ -71,6 +71,16 @@ require 'rdf/sak/adms'
 
 module RDF::SAK
 
+  # The context class parses the configuration and yokes together the
+  # {RDF::SAK::Resolver} (which itself depends on an {RDF::Repository}
+  # augmented by {RDF::SAK::GraphOps}), plus the {RDF::SAK::Source}
+  # and {RDF::SAK::Surface} instances specified in the configuration.
+  # We (potentially via a `Surface`) query {RDF::SAK::Context} to get
+  # {RDF::SAK::Document} objects to be rendered to the surface.
+  #
+  # @note The {RDF::SAK::Document} infrastructure is pending an
+  #  overhaul to the {RDF::SAK::Representation} and
+  #  {RDF::SAK::Transformation} pipeline.
   class Context
     include XML::Mixup
     include Util
@@ -670,7 +680,8 @@ module RDF::SAK
 
       return if nodes.empty?
 
-      lcmp = @graph.cmp_label
+      # the block gets propagated to the comparands
+      lcmp = @graph.cmp_label &:first
 
       li = nodes.sort(&lcmp).map do |rsrc, preds|
         cu  = @resolver.uri_for(rsrc, as: :uri) or next
@@ -1462,6 +1473,7 @@ module RDF::SAK
 
                  umap[u]
                end
+
         # note this is a pathname
         ((@graph.published?(RDF::URI(uuid.to_s)) ? '' : pslug) + uuid.uuid).to_s
       end
@@ -1575,7 +1587,7 @@ module RDF::SAK
       out  = {}
       docs.select { |s|
         @graph.has_statement? RDF::Statement(s, p, CI.retired) }.each do |doc|
-        canon = @resolver.uri_for doc, rdf: false
+        canon = @resolver.uri_for doc, as: :uri
         next unless base.route_to(canon).relative?
         canon = canon.request_uri.delete_prefix '/'
         # value of the gone map doesn't matter
@@ -2407,21 +2419,26 @@ module RDF::SAK
       end
     end
 
+    def write_concept_scheme subject, published: true
+      return if published and !@graph.published?(subject)
+      subject = @resolver.uuid_for(subject) or return
+
+      uuid = URI(subject.to_s)
+      states = [true]
+      states << false unless published
+      states.each do |state|
+        doc = generate_concept_scheme subject, published: state
+        dir = @config[state ? :target : :private]
+        dir.mkdir unless dir.exist?
+        (dir + "#{uuid.uuid}.xml").open('wb') { |fh| doc.write_to fh }
+      end
+    end
+
     def write_concept_schemes published: true
       # XXX i should really standardize these `write_whatever` thingies
       schemes = [RDF::Vocab::SKOS.ConceptScheme, RDF::Vocab::SKOS.Collection]
       all_of_type(schemes).each do |list|
-        next if published and !@graph.published?(list)
-        list = @resolver.uuid_for(list) or next
-        uuid = URI(list.to_s)
-        states = [true]
-        states << false unless published
-        states.each do |state|
-          doc = generate_concept_scheme list, published: state
-          dir = @config[state ? :target : :private]
-          dir.mkdir unless dir.exist?
-          (dir + "#{uuid.uuid}.xml").open('wb') { |fh| doc.write_to fh }
-        end
+        write_concept_scheme list, published: published
       end
     end
 
@@ -3454,7 +3471,7 @@ module RDF::SAK
         if bl = generate_backlinks(published: published)#,
           # ignore: @context.graph.query(
           # [nil, CI.document, @uuid]).subjects.to_set)
-          extra << { [bl] => :template }
+          extra << { [bl] => :object }
         end
 
         # and now for the document
