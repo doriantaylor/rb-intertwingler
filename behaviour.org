@@ -6,86 +6,101 @@
       - [ ] <<P003>> authorities dispatched by ~Host:~ request header
       - [ ] <<P004>> we should be able to alias authorities
   - [ ] <<I002>> we need a way for the static site generator to know in advance the files it has to write out.
-    - [ ] <<P006>> engine responds with manifest of available URIs
-      - [ ] <<P007>> manifest can be narrowed per site
-      - [ ] <<P008>> manifest should be since whenever
+    - [ ] <<P005>> engine responds with manifest of available URIs
+      - [ ] <<P006>> manifest can be narrowed per site
+      - [ ] <<P007>> manifest should be since whenever
   - [ ] <<I003>> we want the engine to have a standard interface.
-    - [ ] <<P009>> engine main operation receives HTTP /request/ object
-      - [ ] <<P010>> engine transforms request
-        - [ ] <<P011>> rewrite headers
+    - [ ] <<P008>> engine main operation receives HTTP /request/ object
+      - [ ] <<P009>> engine transforms request
+        - [ ] <<P010>> rewrite headers
           - e.g. rewrite accept headers based on user-agent header
           - e.g. rewrite accept headers based on query parameter
-        - [ ] <<P012>> rewrite request-URI (path + query parameters + /path/ parameters)
+        - [ ] <<P011>> rewrite request-URI (path + query parameters + /path/ parameters)
           - note: path parameters are UI/designators for response transforms
-        - [ ] <<P013>> rewrite request method
-        - [ ] <<P014>> rewrite request body
-        - [ ] <<P015>> manipulate request transform stack
+        - [ ] <<P012>> rewrite request method
+        - [ ] <<P013>> rewrite request body
+        - [ ] <<P014>> manipulate request transform stack
           - note: static configuration of response transforms will need to manipulate the request transform stack
-            - e.g. markdown to (x)html transform: presencqe in the stack should insert a request transform that adds text/markdown to the request's accept header
-        - [ ] <<P016>> manipulate source polling sequence
-        - [ ] <<P017>> manipulate response transform stack 
-      - [ ] <<P018>> engine transforms response
-  - [ ] <<P019>> engine main operation returns HTTP /response/ object
-  - [ ] <<P020>> transforms must  have access to graph
+            - e.g. markdown to (x)html transform: presence in the stack should insert a request transform that adds text/markdown to the request's accept header
+        - [ ] <<P015>> manipulate source polling sequence
+        - [ ] <<P016>> manipulate response transform stack
+      - [ ] <<P017>> engine transforms response
+  - [ ] <<P018>> engine main operation returns HTTP /response/ object
+  - [ ] <<P019>> transforms must have access to graph
+** source modules
+   - [ ] <<I004>> how are we going to negotiate which source handles a request?
+     - [ ] <<P020>> have the resolver append alternate URLs to the request object.
+       - [ ] <<I005>> this entails subclassing the Rack request objects.
+     - [ ] <<P021>> have the source modules register one or more URI schemes.
+*** filesystem source
+    - [ ] <<P022>> handle ~file:~ URIs
+      - [ ] <<I006>> what about content negotiation?
+        - [ ] <<P023>> we can just say that the filesystem has additional properties that cause it to respond to ~Accept-*~ headers.
+        - [ ] <<P024>> implement 
+*** content-addressable store
+    - [[P021]]
+      - [ ] <<P025>> handle ~ni:~ URIs
+    - [ ] <<I007>> Store::Digest implements a ~/.well-known/ni/~ root and index pages that could/should be exposed
+*** reverse proxy
+    - [ ] 
+*** RDF-based
 ** URI resolver
-   - [ ] <<I004>> 
+   - [ ] <<I008>> 
 ** transforms in general
-   - [ ] <<I005>> how do we ensure transforms get executed in the right order?
-     - [ ] <<P021>> create rankings 
+   - [ ] <<I009>> how do we ensure transforms get executed in the right order?
+     - [ ] <<P026>> create execution phases like apache
 *** request transforms
-    - [ ] <<I006>> Certain request transforms will elicit erroneous responses (ie they will return something other than what the client asked for) if they do not have a concomitant response transform.
-      - [ ] <<P022>> make it so request transforms can conditionally push a response transform onto the stack.
-        - [[I006]]
+    - [ ] <<I010>> Certain request transforms will elicit erroneous responses (ie they will return something other than what the client asked for) if they do not have a concomitant response transform.
+      - [ ] <<P027>> make it so request transforms can conditionally push a response transform onto the stack.
+        - [[I009]]
 *** response transforms
-    - [ ] <<P023>> map response transforms to content types.
-    - [ ] <<I007>> certain response transforms will not make sense to run without a concomitant request transform having been run first.
-      - [ ] <<P024>> have a way to pair request transforms to response transforms.
-      - [ ] <<P025>> have a given response transform install its paired request transform?
+    - [ ] <<P028>> map response transforms to content types.
+    - [ ] <<I011>> certain response transforms will not make sense to run without a concomitant request transform having been run first.
+      - [ ] <<P029>> have a way to pair request transforms to response transforms.
+      - [ ] <<P030>> have a given response transform install its paired request transform?
 * static site generator behaviour
-  - [ ] <<P026>> generator initializes with configuration
-  - [ ] <<P027>> 
+  - [ ] <<P031>> generator initializes with configuration
 ** generator main function
-   - [ ] <<I008>> we need a way for the static site generator to know in advance the files it has to write out.
-    - [ ] <<P027>> generator receives manifest from engine
-    - [ ] <<P028>> generator writes resources to disk
-      - [ ] <<P029>> generator examines target mtimes
-        - [ ] <<P030>> generator only overwrites files changed since last write
-    - [ ] <<P031>> generator writes rewrite maps
-    - [ ] <<P032>> generator writes site map
+   - [ ] <<I012>> we need a way for the static site generator to know in advance the files it has to write out.
+    - [ ] <<P032>> generator receives manifest from engine
+    - [ ] <<P033>> generator writes resources to disk
+      - [ ] <<P034>> generator examines target mtimes
+        - [ ] <<P035>> generator only overwrites files changed since last write
+    - [ ] <<P036>> generator writes rewrite maps
+    - [ ] <<P037>> generator writes site map
 * "live" engine adapter behaviour
-  - [ ] <<P033>> adapter initializes with configuration
-  - [ ] <<P034>> adapter spawns daemon
-    - [ ] <<P035>> daemon forks/threads as necessary (tunable in config)
-    - [ ] <<P036>> daemon listens on a socket
+  - [ ] <<P038>> adapter initializes with configuration
+  - [ ] <<P039>> adapter spawns daemon
+    - [ ] <<P040>> daemon forks/threads as necessary (tunable in config)
+    - [ ] <<P041>> daemon listens on a socket
 * async daemon behaviour
-  - [ ] <<P037>> async daemon initializes with configuration
-  - [ ] <<P038>> async daemon runs plain command queue
-    - [ ] <<P039>> queue has persistent state/resumes when interrupted
-    - [ ] <<I009>> AMQP node?
-  - [ ] <<P040>> async daemon behaves like ~at(1)~ (scheduled one-off commands)
-  - [ ] <<P041>> async daemon behaves like ~cron(1)~ (scheduled repeating commands)
+  - [ ] <<P042>> async daemon initializes with configuration
+  - [ ] <<P043>> async daemon runs plain command queue
+    - [ ] <<P044>> queue has persistent state/resumes when interrupted
+    - [ ] <<I013>> AMQP node?
+  - [ ] <<P045>> async daemon behaves like ~at(1)~ (scheduled one-off commands)
+  - [ ] <<P046>> async daemon behaves like ~cron(1)~ (scheduled repeating commands)
 ** pluggable operations
-   - [ ] <<P042>> external link crawler
-   - [ ] <<P043>> RSS/Atom feed poller
-     - [ ] <<I010>> PSHB event handler via webhook?
-     - [ ] <<I011>> polling cues from statistics/feed payload? (yeah right)
-   - [ ] <<P044>> content-addressable store bulk scanner/compressor
+   - [ ] <<P047>> external link crawler
+   - [ ] <<P048>> RSS/Atom feed poller
+     - [ ] <<I014>> PSHB event handler via webhook?
+     - [ ] <<I015>> polling cues from statistics/feed payload? (yeah right)
+   - [ ] <<P049>> content-addressable store bulk scanner/compressor
 * CLI behaviour
-  - [ ] <<P045>> spawn daemon from CLI
-  - [ ] <<P046>> run static site generator from CLI
+  - [ ] <<P050>> spawn daemon from CLI
+  - [ ] <<P051>> run static site generator from CLI
 ** interactive shell
-   - [ ] <<P047>> query and manipulate graph
-     - [ ] <<P048>> shell interprets basic graph manipulation commands (as Turtle/SPARQL syntax)
-       - [ ] <<P049>> autocomplete symbols
-         - [ ] <<P050>> autocomplete all syntax
-       - [ ] <<P051>> set prefix mappings
-     - [ ] <<P052>> shell interprets SPARQL commands
-   - [ ] <<P053>> load graph from file
-     - [ ] <<P054>> auto-detect syntax
-     - [ ] <<P055>> set default graph context (?)
-   - [ ] <<P056>> dump graph to file
-     - [ ] <<P057>> Turtle and others
-   - [ ] <<P058>> find and tag jargon
-     - [ ] <<P059>> must attempt to resolve to existing SKOS concepts or provide UI to create new ones
-     - [ ] <<P060>> must write back to source
-     - [ ] 
+   - [ ] <<P052>> query and manipulate graph
+     - [ ] <<P053>> shell interprets basic graph manipulation commands (as Turtle/SPARQL syntax)
+       - [ ] <<P054>> autocomplete symbols
+         - [ ] <<P055>> autocomplete all syntax
+       - [ ] <<P056>> set prefix mappings
+     - [ ] <<P057>> shell interprets SPARQL commands
+   - [ ] <<P058>> load graph from file
+     - [ ] <<P059>> auto-detect syntax
+     - [ ] <<P060>> set default graph context (?)
+   - [ ] <<P061>> dump graph to file
+     - [ ] <<P062>> Turtle and others
+   - [ ] <<P063>> find and tag jargon
+     - [ ] <<P064>> must attempt to resolve to existing SKOS concepts or provide UI to create new ones
+     - [ ] <<P065>> must write back to source
