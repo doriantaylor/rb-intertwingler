@@ -10,6 +10,9 @@ require 'uri'
 require 'rdf/sak/mimemagic'
 require 'http-negotiate'
 
+# for cas
+require 'store/digest/http'
+
 class RDF::SAK::Handler
   def initialize resolver, **args
     @resolver = resolver
@@ -86,15 +89,6 @@ class RDF::SAK::Handler
   #
   class FileSystem < self
 
-    private
-
-    # XXX copied from Util::Messy; maybe we should write a thing
-    UUID_ONLY = /\b([0-9a-f]{8}(?:-[0-9a-f]{4}){4}[0-9a-f]{8})\b/i
-    UUID_RE   = /^(?:urn:uuid:)?#{UUID_ONLY}$/i
-    UUID_PATH = /^\/+#{UUID_ONLY}/
-
-    public
-
     # Initialize a handler with parameters.
     #
     # @param resolver [RDF::SAK::Resolver] the URI resolver
@@ -130,6 +124,18 @@ class RDF::SAK::Handler
       return Rack::Response[405, {}, []] unless
         %w[HEAD GET].include? req.request_method
 
+      # basically what we want is this thing to do as little work as
+      # it can get away with since most of the URI resolution will be
+      # done upstream, but still be robust enough to run as a
+      # standalone content-negotiating static filesystem handler, but
+      # also not heavily duplicate any redirection or access control
+      # behaviour. that said, it should not follow symlinks outside
+      # the document root, or try to serve raw directories, or things
+      # like dotfiles that would otherwise be readable.
+
+      # general strategy is to build up a list of candidates and then
+      # eliminate them
+
       # * we start with the actual URI that was requested, which may
       #   also be the UUID (or at least *a* UUID)
       # * then we get the UUID (if we didn't have it already)
@@ -162,7 +168,8 @@ class RDF::SAK::Handler
         paths << root + path
       end
 
-      # pass through this once to build up the hash
+      # we'll just make a big chonkin' hash of variants which we can
+      # use for the negotiation and afterwards
       variants = paths.reduce({}) do |h, p|
         re = /^#{Regexp.quote root.to_s}\//o
 
@@ -191,89 +198,55 @@ class RDF::SAK::Handler
         h
       end
 
+      # if there are no variants then this is a genuine 404
+      return Rack::Response[404, {}, []] if variants.empty?
+
       # okay now subsequently process the variants
       variants.transform_values! do |val|
         stat = val[:stat]
         qs = 1.0
 
-        if slash
+        # the perl CatalystX::Action::Negotiate one does some
+        # twiddling here; not sure if i wanna copy it
+        if val[:dir]
         else
         end
 
-        ok = val[:included?] and stat.readable?
-
+        # this i thought was clever: you demote the variant to
+        # oblivion so if it gets selected anyway you know to return a
+        # 403 rather than eliminating it and having to return 404
+        ok = stat.file? and stat.readable? and val[:included?]
         qs /= 100.0 unless ok
 
-        val.merge({ weight: qs, size: stat.size, ok: ok })
+        val.merge({ weight: qs, size: stat.size, mtime: stat.mtime, ok: ok })
       end
 
-      if candidate = HTTP::Negotiate.negotiate(req, variants)
+      # now we actually perform the negotiation and get our selected variant
+      if selected = HTTP::Negotiate.negotiate(req, variants)
+        var = variants[selected]
+
+        warn paths.inspect
+        warn selected
+
         # test if readable
-        return Rack::Response[403, {}, []] unless variants[candidate][:ok]
+        return Rack::Response[403, {}, []] unless var[:ok]
+
+        # test if uri matches requested
+        # redirect if requested uri was not just a uuid
 
         # test mtime
 
-
-        return Rack::Response[200, {}, candidate.open]
+        return Rack::Response[200, {
+          'Content-Type'   => var[:type],
+          'Content-Length' => var[:size].to_s, # rack should do this
+          'Last-Modified'  => var[:mtime].mtime.httpdate,
+        }, selected.open]
       end
 
-      return Rack::Response[404, {}, []]
-
-      # otherwise we do uuid_for
-
-      # basically what we want is this thing to do as little work as
-      # it can get away with since most of the URI resolution will be
-      # done upstream, but still be robust enough to run as a
-      # standalone content-negotiating static filesystem handler, but
-      # also not heavily duplicate any redirection or access control
-      # behaviour. that said, it should not follow symlinks outside
-      # the document root, or try to serve raw directories, or things
-      # like dotfiles that would otherwise be readable.
-
-      # general strategy is to build up a list of candidates and then
-      # eliminate them
-
-      # we have the uri as it was explicitly requested, then we have
-      # the /<uuid> form, then we have whatever other URIs may be
-      # associated with the subject (and importantly, this authority)
-
-      # we should make two separate lists to check: one bare and one
-      # with /index (plus whatever other specified file slug)
-      # appended, *except* for the raw uuid, cause /{uuid}/index is
-      # not allowed (why not? just don't)
-
-      # we should redirect to the canonical uri if different from the
-      # requested uri, unless /{uuid} was requested (unless /{uuid}/
-      # was requested, then we redirect to the same with no slash)
-
-      # if uri path is /{uuid} get `uri_for`
-
-      # otherwise get `uuid_for`
-
-      # if the path terminates with a slash add indices
-
-      # this should give us a set of file globs to test
-
-      # expand file globs into actual files
-
-      # if there are none return 404
-
-      # if there are more than one eliminate the ones that can't be read
-
-      # if you do this and there are none left then return 403
-
-      # if you do this and only one is left and it's a directory, return 308
-
-      # okay now we test with the negotiator
-
-      # if negotiator returns nothing return 406
-
-      # check chosen variant against If-Modified-Since, possibly return 304
-
-      # if method is HEAD then just return metadata
-
-      # otherwise return the variant
+      # there were variants but none were chosen so 406
+      Rack::Response[406, {}, []]
     end
+
   end
 
   class Generated < self
