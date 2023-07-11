@@ -118,7 +118,7 @@ module RDF::SAK::Util::Clean
   # will be wrapped in one. Returns an array of whatever type `as:` is
   # set to return.
   #
-  # @param arg [#to_a, #to_s, URI, RDF::URI, RDF::Node] the thing(s)
+  # @param arg [#to_a, #to_s, UbRI, RDF::URI, RDF::Node] the thing(s)
   #  to coerce
   # @param as [:rdf, :uri, :term, false, nil] how to coerce the
   #  result(s)

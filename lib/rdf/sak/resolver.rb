@@ -354,12 +354,14 @@ module RDF::SAK
           # this is the special case that the fragment is a compact uuid
           uu = RDF::URI("urn:uuid:#{uu}")
           if !verify or @subjects[uu] ||= @repo.has_subject?(uu)
+            uu = coerce_resource uu, as: as
             return scalar ? uu : [uu]
           end
         elsif tu.respond_to? :uuid
           # in this case the URI is already a UUID, so now we check
           # if it's a subject
           if !verify or @subjects[uri] ||= @repo.has_subject?(uri)
+            uu = coerce_resource uu, as: as
             return scalar ? uri : [uri]
           end
         end
@@ -367,6 +369,7 @@ module RDF::SAK
 
       # return our result from cache if present
       if out = @uuids[orig]
+        out = coerce_resources out, as: as
         return scalar ? out.first : out
       end
 
@@ -529,6 +532,9 @@ module RDF::SAK
         @uuids[orig] = out
       end
 
+      # make these into uri objects if requested
+      out = coerce_resources out, as: as
+
       # return the first (ie most preferred) UUID
       scalar ? out.first : out
     end
@@ -551,11 +557,13 @@ module RDF::SAK
     # @param roundtrip [false, true] resolve UUID first
     # @param slugs [false, true] attempt to resolve from slugs as well
     # @param fragments [true, false] resolve fragment URIs
+    # @param local [false, true] only return URIs with the same
+    #  authority as the base
     #
     # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
     #
     def uri_for term, scalar: true, as: :rdf, relative: false,
-        roundtrip: false, slugs: false, fragments: true
+        roundtrip: false, slugs: false, fragments: true, local: false
       term = coerce_resource term
 
       # harvest uuid out of term if present
@@ -572,7 +580,8 @@ module RDF::SAK
       if tmp = roundtrip ? uuid_for(uuid || term) : uuid
         term = tmp
       else
-        return term
+        term = coerce_resource term, as: as
+        return scalar ? term : [term]
       end
 
       # give us the host uri if available
@@ -642,6 +651,11 @@ module RDF::SAK
         tmp = out.reject(&:fragment)
         out = tmp unless tmp.empty?
       end
+
+      # eliminate non-local URIs
+      out.select! do |u|
+        /^https?$/i.match? u.scheme and u.authority == base.authority
+      end if local
 
       # turn these into URIs if the thing says so
       out.map! { |u| URI(preproc u.to_s) } if as == :uri
@@ -827,6 +841,79 @@ module RDF::SAK
       @prefixes.select { |k, _| pfx.include? k }
     end
 
+    # Determine if a path ends with a slash (modulo path parameters).
+    #
+    # @param uri [#to_s] the URI path
+    #
+    # @return [false, true] whether the path ends with a slash.
+    #
+    def slash? uri
+      uri = coerce_resource uri, as: :uri
+      uri.respond_to?(:path) and /\/(?:;[^\/]*)?$/.match? uri.path
+    end
+
+    # Clean any dodginess (`//`, `.`, `..`) out of the path, including
+    # path parameters. Unlike {Pathname#cleanpath} it preserves the
+    # trailing slash if one is present. Returns either the cleaned
+    # path or an array of segments. Returns nil (or empty array) if
+    # the URI does not respond to `#path`.
+    #
+    # @param uri [URI, RDF::URI, #to_s] the URI
+    # @param scalar [true, false] whether to return a string or array
+    # @param slash [true, false] whether to preserve a trailing slash
+    #
+    # @return [String, Array<String>, nil] the cleaned path
+    #
+    def clean_path uri, scalar: true, slash: true
+      uri = coerce_resource uri, as: :uri
+
+      # bail out if this isn't the kind of uri that has a path
+      return scalar ? nil : [] unless uri.respond_to? :path
+
+      orig = uri.path
+
+      ps = orig.split(/\/+/).map do |x|
+        /^([^;]*)(?:;.*)?$/.match x
+      end.compact.reduce([]) do |a, x|
+        x = x.captures.first
+        case x
+        when ''   then nil
+        when ?.   then nil
+        when '..' then a.pop
+        else a << x
+        end
+        a
+      end
+
+      return ps unless scalar
+
+      path = ps.join ?/
+      path << ?/ if slash and slash? orig
+      path
+    end
+
+    # Test if a URI path contains a UUID in its first (and only)
+    # segment and return it as a UUID URN.
+    #
+    # @param uri [URI, RDF::URI, #to_s] the URI
+    # @param as [:rdf, :uri, false, nil] how to coerce the result
+    #
+    # @return [nil, URI, RDF::URI, String] the UUID, possibly coerced.
+    #
+    def uuid_path uri, as: :rdf
+      uri = coerce_resource uri, as: :uri
+      if uri.respond_to?(:path) and m = UUID_PATH.match(uri.path)
+        uuid = m.captures.first.downcase
+
+        if as
+          uuid = "urn:uuid:#{uuid}"
+          return coerce_resource uuid, as: as
+        end
+
+        uuid
+      end
+    end
+
     # XXX 2022-03-16 A BUNCH OF THIS STUFF WE SHOULD IGNORE I THINK
 
     # this thing needs its own souped-up struct_for because of
@@ -880,6 +967,16 @@ module RDF::SAK
     #
     def published? subject, circulated: false, retired: false, indexed: false
       raise NotImplementedError
+    end
+
+    # Detect if something is a UUID.
+    #
+    # @param uuid [#to_s] the thing you think is a uuid
+    #
+    # @return [false, true]
+    #
+    def uuid? uuid
+      UUID_ONLY.match? uuid.to_s
     end
 
     # Generate a random (version 4 in RFC 4122) UUID URN.

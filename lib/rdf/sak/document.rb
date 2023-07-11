@@ -1,4 +1,5 @@
 require 'rdf'
+require 'rdf/vocab'
 require 'rdf/sak/util/clean'
 require 'rdf/sak/nlp'
 require 'rdf/sak/ci'
@@ -2034,7 +2035,7 @@ class RDF::SAK::Document
 
     # construct the label tag/relation
     ltag = if property and label.is_a? RDF::Literal
-             literal_tag label, property: property,
+             literal_tag resolver, label, property: property,
                prefixes: prefixes, vocab: vocab
             else
               [label.to_s]
@@ -2089,7 +2090,7 @@ class RDF::SAK::Document
       case item
       when RDF::Literal
         strings << item.value.strip
-        literal_tag item, name: :li, prefixes: prefixes
+        literal_tag resolver, item, name: :li, prefixes: prefixes
       when RDF::Resource
         ts = repo.struct_for, item
         tt = repo.types_for item, struct: ts
@@ -2235,18 +2236,18 @@ class RDF::SAK::Document
       m = t = nil
       case o
       when RDF::Literal
-        m = literal_tag o, name: otag, prefixes: prefixes, property: ps
+        m = literal_tag resolver, o, name: otag, prefixes: prefixes, property: ps
         t = o.value.strip
       when RDF::Resource
-        ts = repo.struct_for, o
+        ts = repo.struct_for o
         tt = repo.types_for o, struct: ts
 
-        labp, labo = repo.label_for o, struct: ts, type: tt
+        labp, labo = repo.label_for o, struct: ts
 
-        href = resolver.uri_for(o, base: base) || o
+        href = resolver.uri_for(o) || o
 
-        m = { "##{otag}" => link_tag(href, base: base, prefixes: prefixes,
-          property: labp, label: labo, typeof: tt, rel: ps) }
+        m = { "##{otag}" => link_tag(resolver, href, base: base,
+          prefixes: prefixes, property: labp, label: labo, typeof: tt, rel: ps) }
 
         t = (labo || o).value.strip
 
@@ -2295,7 +2296,7 @@ class RDF::SAK::Document
   #
   # @return [Nokogiri::XML::Document] the document
   #
-  def self.generate_doc resolver, subject, struct: nil, base: nil, langs: [],
+  def self.generate_doc resolver, subject, struct: nil, langs: [],
       prefixes: {}, vocab: nil
 
     repo = resolver.repo
@@ -2305,7 +2306,7 @@ class RDF::SAK::Document
     # pcache = Set.new
 
     # compute the struct
-    struct = repo.struct_for subject, base: base, inverses: true
+    struct = repo.struct_for subject, inverses: true
 
     # get the content of the title
     labp, labo = repo.label_for subject, struct: struct
@@ -2319,7 +2320,7 @@ class RDF::SAK::Document
     oskip = [labo.dup]
 
     # generate what should be the request-uri
-    uri = resolver.uri_for subject, base: base
+    uri = resolver.uri_for subject
 
     # otherwise the body is just a special kind of fragment
     body, _ = generate_fragment resolver, subject, struct: struct, base: uri,
@@ -2331,9 +2332,9 @@ class RDF::SAK::Document
     pfx = resolver.prefix_subset ncache
 
     # generate the title
-    title = title_tag labp, labo, prefixes: prefixes if labo
+    title = title_tag resolver, labp, labo, prefixes: prefixes if labo
 
-    xhtml_stub(
+    XML::Mixup.xhtml_stub(
       base: uri, prefix: pfx, vocab: vocab, title: title, body: body
     ).document
   end

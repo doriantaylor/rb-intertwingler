@@ -214,7 +214,7 @@ module RDF::SAK::Util::Messy
   # think about dcterms:title is a subproperty of dc11:title even
   # though they are actually more like equivalent properties;
   # owl:equivalentProperty is not as big a conundrum as
-  # rdfs:subPropertyOf. 
+  # rdfs:subPropertyOf.
 
   # if Q rdfs:subPropertyOf P then S Q O implies S P O. this is
   # great but property Q may not be desirable to display.

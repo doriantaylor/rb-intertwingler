@@ -27,80 +27,127 @@
       - [ ] <<P017>> engine transforms response
   - [ ] <<P018>> engine main operation returns HTTP /response/ object
   - [ ] <<P019>> transforms must have access to graph
+  - [ ] <<P020>> transforms must have access to subrequests
+     - (eg GETing linked resources, POSTing to content-addressable store…)
 ** source modules
+   - [ ] <<P020>> a source module *should* be serviceable as a stand-alone Web app.
    - [ ] <<I004>> how are we going to negotiate which source handles a request?
-     - [ ] <<P020>> have the resolver append alternate URLs to the request object.
+     - [ ] <<P021>> have the resolver append alternate URLs to the request object.
        - [ ] <<I005>> this entails subclassing the Rack request objects.
-     - [ ] <<P021>> have the source modules register one or more URI schemes.
+     - [ ] <<P022>> have the source modules register one or more URI schemes.
 *** filesystem source
-    - [ ] <<P022>> handle ~file:~ URIs
+    - mainly intended to be for transitional (eg to straight CAS + graph)
+    - want it to JFW with existing content
+    - [ ] <<P023>> handle ~file:~ URIs
+      - [ ] <<A000>> no don't do this actually, we'll treat content handlers as microservices that handle their own URI resolution (with some constraints)
       - [ ] <<I006>> what about content negotiation?
-        - [ ] <<P023>> we can just say that the filesystem has additional properties that cause it to respond to ~Accept-*~ headers.
-        - [ ] <<P024>> implement 
+        - [ ] <<P024>> we can just say that the filesystem has additional properties that cause it to respond to ~Accept-*~ headers.
+    - [ ] <<P000>> behave like [[https://github.com/doriantaylor/p5-catalystx-action-negotiate/blob/master/lib/CatalystX/Action/Negotiate.pm][~CatalystX::Action::Negotiate~]]
+
 *** content-addressable store
-    - [[P021]]
+    - [[P022]]
       - [ ] <<P025>> handle ~ni:~ URIs
-    - [ ] <<I007>> Store::Digest implements a ~/.well-known/ni/~ root and index pages that could/should be exposed
+    - [ ] <<I007>> ~Store::Digest~ implements a ~/.well-known/ni/~ root and index pages that could/should be exposed
 *** reverse proxy
-    - [ ] 
-*** RDF-based
+    - [ ] <<I008>> it is not safe to proxy just any old URL.
+      - [ ] <<P026>> institute a default-deny policy for reverse proxying.
+        - [ ] <<P027>> require explicit domains
+          - [ ] <<I009>> do we need more granular than domains?
+            - [ ] <<P028>> probably not. domains should be good enough.
+          - [ ] <<P029>> allow any subdomain of a specified domain; if you need to block a sub-subdomain then add a block; make block take precedence over allow.
+*** fully graph-sourced (ie transparent; no opaque representation)
+    - [ ] <<I010>> how do we get the request to the right handler?
+      - [ ] <<P030>> route handlers by subject URI
+        - [ ] <<P031>> subject URI should take precedence
+      - [ ] <<P032>> route handlers by ~rdf:type~
+        - [ ] <<P033>> resources with type assertions that are "closer" topologically (via ~rdfs:subClassOf~ or ~owl:equivalentClass~) to the handler's configured types get a higher score
+      - [ ] <<P034>> route handlers by ~Accept-*~ headers
+        - [ ] <<I011>> really only ~Accept~ and ~Accept-Language~ because ~Accept-Charset~ and ~Accept-Encoding~ are moot (via transforms)
+          - note: what about those other dimensions recently added (~Prefer~ etc)?
+          - [ ] <<P035>> make request transforms strip off ~Accept-Charset~ and ~Accept-Encoding~
+**** indexes (skos concept schemes/collections, sioc containers, etc)
+     - [ ] <<P036>> paginate (?)
+**** document stats
+     - [ ] <<P037>> respond to ~qb:DataSet~, ~qb:Slice~, and ~qb:ObservationGroup~.
+**** generic
+     - [ ] <<P038>> make this thing powered by [[https://vocab.methodandstructure.com/loupe#][Loupe]]
+**** other generated/non-(x)html
+***** feeds
+      - [ ] <<P039>> respond to ~dcat:Catalog~ and others
+      - [ ] <<P040>> compute feed for audience
+***** google site map
+      - [ ] <<I012>> google prefers big sites split up their sitemap
+        - [ ] <<P041>> split up the sitemap according to some manageable scheme and link to it from the root
+      - [ ] <<I013>> let's not pollute the root shall we
+        - [ ] <<P042>> place sitemap at ~/.well-known/sitemap.xml~ with a permanent redirect
+***** ~robots.txt~
+      - one might also imagine ~humans.txt~, ~ads.txt~, ~credits.txt~ and so on
+      - [ ] <<P043>> make whatever happens here actually use the graph data so it stays up to date
+***** json-ld?
+      - more generally a ~;meta~ pseudo-transform that could be polymorphic, rdfa/turtle/json-ld/whatever
+        - would it really be a /pseudo/-transform though?
 ** URI resolver
-   - [ ] <<I008>> 
+   - [ ] <<I014>> 
 ** transforms in general
-   - [ ] <<I009>> how do we ensure transforms get executed in the right order?
-     - [ ] <<P026>> create execution phases like apache
+   - [ ] <<P044>> transforms should be microservices with their own URLs that you can POST to directly.
+     - [ ] <<A001>> this facilitates [[https://doriantaylor.com/intelligent-heterogeneity][intelligent heterogeneity]] by making it possible for transforms to be stand-alone microservices
+   - [ ] <<I015>> how do we ensure transforms get executed in the right order?
+     - [ ] <<P045>> create execution phases like apache
 *** request transforms
-    - [ ] <<I010>> Certain request transforms will elicit erroneous responses (ie they will return something other than what the client asked for) if they do not have a concomitant response transform.
-      - [ ] <<P027>> make it so request transforms can conditionally push a response transform onto the stack.
-        - [[I009]]
+    - [ ] <<I016>> Certain request transforms will elicit erroneous responses (ie they will return something other than what the client asked for) if they do not have a concomitant response transform.
+      - [ ] <<P046>> make it so request transforms can conditionally push a response transform onto the stack.
+        - [[I015]]
 *** response transforms
-    - [ ] <<P028>> map response transforms to content types.
-    - [ ] <<I011>> certain response transforms will not make sense to run without a concomitant request transform having been run first.
-      - [ ] <<P029>> have a way to pair request transforms to response transforms.
-      - [ ] <<P030>> have a given response transform install its paired request transform?
+    - [ ] <<P047>> map response transforms to content types.
+    - [ ] <<I017>> certain response transforms will not make sense to run without a concomitant request transform having been run first.
+      - [ ] <<P048>> have a way to pair request transforms to response transforms.
+      - [ ] <<P049>> have a given response transform install its paired request transform?
 * static site generator behaviour
-  - [ ] <<P031>> generator initializes with configuration
+  - [ ] <<P050>> generator initializes with configuration
 ** generator main function
-   - [ ] <<I012>> we need a way for the static site generator to know in advance the files it has to write out.
-    - [ ] <<P032>> generator receives manifest from engine
-    - [ ] <<P033>> generator writes resources to disk
-      - [ ] <<P034>> generator examines target mtimes
-        - [ ] <<P035>> generator only overwrites files changed since last write
-    - [ ] <<P036>> generator writes rewrite maps
-    - [ ] <<P037>> generator writes site map
+   - [ ] <<I018>> we need a way for the static site generator to know in advance the files it has to write out.
+    - [ ] <<P051>> generator receives manifest from engine
+    - [ ] <<P052>> generator writes resources to disk
+      - [ ] <<P053>> generator examines target mtimes
+        - [ ] <<P054>> generator only overwrites files changed since last write
+    - [ ] <<P055>> generator writes rewrite maps
+    - [ ] <<P056>> generator writes site map
 * "live" engine adapter behaviour
-  - [ ] <<P038>> adapter initializes with configuration
-  - [ ] <<P039>> adapter spawns daemon
-    - [ ] <<P040>> daemon forks/threads as necessary (tunable in config)
-    - [ ] <<P041>> daemon listens on a socket
+  - [ ] <<P057>> adapter initializes with configuration
+  - [ ] <<P058>> adapter spawns daemon
+    - [ ] <<P059>> daemon forks/threads as necessary (tunable in config)
+    - [ ] <<P060>> daemon listens on a socket
 * async daemon behaviour
-  - [ ] <<P042>> async daemon initializes with configuration
-  - [ ] <<P043>> async daemon runs plain command queue
-    - [ ] <<P044>> queue has persistent state/resumes when interrupted
-    - [ ] <<I013>> AMQP node?
-  - [ ] <<P045>> async daemon behaves like ~at(1)~ (scheduled one-off commands)
-  - [ ] <<P046>> async daemon behaves like ~cron(1)~ (scheduled repeating commands)
+  - [ ] <<P061>> async daemon initializes with configuration
+  - [ ] <<P062>> async daemon runs plain command queue
+    - [ ] <<P063>> queue has persistent state/resumes when interrupted
+    - [ ] <<I019>> AMQP node?
+  - [ ] <<P064>> async daemon behaves like ~at(1)~ (scheduled one-off commands)
+  - [ ] <<P065>> async daemon behaves like ~cron(1)~ (scheduled repeating commands)
 ** pluggable operations
-   - [ ] <<P047>> external link crawler
-   - [ ] <<P048>> RSS/Atom feed poller
-     - [ ] <<I014>> PSHB event handler via webhook?
-     - [ ] <<I015>> polling cues from statistics/feed payload? (yeah right)
-   - [ ] <<P049>> content-addressable store bulk scanner/compressor
+   - [ ] <<P066>> external link crawler
+   - [ ] <<P067>> RSS/Atom feed poller
+     - [ ] <<I020>> PSHB event handler via webhook?
+     - [ ] <<I021>> polling cues from statistics/feed payload? (yeah right)
+   - [ ] <<P068>> content-addressable store bulk scanner/compressor
 * CLI behaviour
-  - [ ] <<P050>> spawn daemon from CLI
-  - [ ] <<P051>> run static site generator from CLI
+  - [ ] <<P069>> spawn daemon from CLI
+  - [ ] <<P070>> run static site generator from CLI
 ** interactive shell
-   - [ ] <<P052>> query and manipulate graph
-     - [ ] <<P053>> shell interprets basic graph manipulation commands (as Turtle/SPARQL syntax)
-       - [ ] <<P054>> autocomplete symbols
-         - [ ] <<P055>> autocomplete all syntax
-       - [ ] <<P056>> set prefix mappings
-     - [ ] <<P057>> shell interprets SPARQL commands
-   - [ ] <<P058>> load graph from file
-     - [ ] <<P059>> auto-detect syntax
-     - [ ] <<P060>> set default graph context (?)
-   - [ ] <<P061>> dump graph to file
-     - [ ] <<P062>> Turtle and others
-   - [ ] <<P063>> find and tag jargon
-     - [ ] <<P064>> must attempt to resolve to existing SKOS concepts or provide UI to create new ones
-     - [ ] <<P065>> must write back to source
+   - [ ] <<I022>> tooling for RDF sucks in general
+     - [ ] <<P071>> query and manipulate graph
+       - [ ] <<P072>> shell interprets basic graph manipulation commands (as Turtle/SPARQL syntax)
+         - [ ] <<P073>> autocomplete symbols
+           - [ ] <<P074>> autocomplete all syntax
+         - [ ] <<P075>> set prefix mappings
+       - [ ] <<P076>> shell interprets SPARQL commands
+         - [ ] <<P077>> pipe sparql output to targets
+           - [ ] <<P078>> provide alternative syntaxes
+   - [ ] <<P079>> load graph from file
+     - [ ] <<P080>> auto-detect syntax
+     - [ ] <<P081>> set default graph context (?)
+   - [ ] <<P082>> dump graph to file
+     - [ ] <<P083>> Turtle and others
+   - [ ] <<P084>> find and tag jargon
+     - [ ] <<P085>> must attempt to resolve to existing SKOS concepts or provide UI to create new ones
+     - [ ] <<P086>> must write back to source
