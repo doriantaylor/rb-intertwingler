@@ -1,4 +1,4 @@
-# Intertwingler — Swiss Army Knife for Semantic Web Content
+# Intertwingler — An Engine for Dense Hypermedia
 
 This library can be understood as something of a workbench for the
 development of a set of patterns and protocols for Web content—a
