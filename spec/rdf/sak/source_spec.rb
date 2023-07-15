@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-require 'rdf/sak/source'
+require 'intertwingler/source'
 
-RSpec.describe RDF::SAK::Source do
+RSpec.describe Intertwingler::Source do
 end

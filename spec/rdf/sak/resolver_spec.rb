@@ -1,8 +1,8 @@
 require 'spec_helper'
 
-require 'rdf/sak/resolver'
+require 'intertwingler/resolver'
 
-RSpec.describe RDF::SAK::Resolver do
+RSpec.describe Intertwingler::Resolver do
 
   context 'stateless methods' do
     # preproc

@@ -1,9 +1,9 @@
-require 'rdf/sak/version'
+require 'intertwingler/version'
 require 'set'
 require 'descriptive_statistics'
 require 'nokogiri'
 
-class RDF::SAK::DocStats < Nokogiri::XML::SAX::Document
+class Intertwingler::DocStats < Nokogiri::XML::SAX::Document
   private
 
   MAYBE  = %i[dt dd li td th caption figcaption]

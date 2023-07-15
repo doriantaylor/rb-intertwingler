@@ -1,9 +1,9 @@
 require 'spec_helper'
 
-require 'rdf/sak/document'
+require 'intertwingler/document'
 
-RSpec.describe RDF::SAK::Document do
+RSpec.describe Intertwingler::Document do
 end
 
-RSpec.describe RDF::SAK::Document::Parsed do
+RSpec.describe Intertwingler::Document::Parsed do
 end

@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 # This file generated automatically using rdf vocabulary format from http://purl.org/linked-data/cube#
 require 'rdf'
-module RDF::SAK
+module Intertwingler
   # @!parse
   #   # Vocabulary for <http://purl.org/linked-data/cube#>
   #   class QB < RDF::StrictVocabulary

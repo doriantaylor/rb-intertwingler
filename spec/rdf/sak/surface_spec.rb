@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-require 'rdf/sak/surface'
+require 'intertwingler/surface'
 
-RSpec.describe RDF::SAK::Surface do
+RSpec.describe Intertwingler::Surface do
 end

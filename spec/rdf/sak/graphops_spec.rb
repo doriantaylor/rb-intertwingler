@@ -1,9 +1,9 @@
 require 'spec_helper'
 
 require 'rdf'
-require 'rdf/sak/graphops'
+require 'intertwingler/graphops'
 
-RSpec.describe RDF::SAK::GraphOps do
+RSpec.describe Intertwingler::GraphOps do
   context 'stateless behaviour' do
     # type_strata
     # all_related (basically a shorthand for type_strata descend: true)

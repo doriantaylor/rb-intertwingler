@@ -2,18 +2,18 @@ require 'rack/request'
 require 'rack/response'
 
 # for generated
-require 'rdf/sak/document'
+require 'intertwingler/document'
 require 'stringio'
 require 'uri'
 
 # for filesystem
-require 'rdf/sak/mimemagic'
+require 'intertwingler/mimemagic'
 require 'http-negotiate'
 
 # for cas
 require 'store/digest/http'
 
-class RDF::SAK::Handler
+class Intertwingler::Handler
   def initialize resolver, **args
     @resolver = resolver
   end
@@ -91,7 +91,7 @@ class RDF::SAK::Handler
 
     # Initialize a handler with parameters.
     #
-    # @param resolver [RDF::SAK::Resolver] the URI resolver
+    # @param resolver [Intertwingler::Resolver] the URI resolver
     # @param root [Pathname, #to_s] the document root
     # @param indices [Array<#to_s>] slugs to use for directory index
     #
@@ -178,7 +178,7 @@ class RDF::SAK::Handler
           dn, bn = p.split
           dn.glob("#{bn}{,.*}").each do |x|
             if stat = x.stat rescue nil
-              type = RDF::SAK::MimeMagic.by_path(x).to_s
+              type = Intertwingler::MimeMagic.by_path(x).to_s
               incl = re.match? x.realpath.to_s
               h[x] = { dir: false, stat: stat, type: type, included?: incl }
             end
@@ -188,7 +188,7 @@ class RDF::SAK::Handler
         @indices.each do |i|
           p.glob("#{i}{,.*}").each do |x|
             if stat = x.stat rescue nil
-              type = RDF::SAK::MimeMagic.by_path(x).to_s
+              type = Intertwingler::MimeMagic.by_path(x).to_s
               incl = re.match? x.realpath.to_s
               h[x] = { dir: true, stat: stat, type: type, included?: incl }
             end
@@ -283,7 +283,7 @@ class RDF::SAK::Handler
 
       # otherwise we fall back to the main handler
 
-      doc = RDF::SAK::Document.generate_doc resolver, subject
+      doc = Intertwingler::Document.generate_doc resolver, subject
 
       # XXX nuke this later
       if base = doc.at_xpath('/html:html/html:head/html:base',

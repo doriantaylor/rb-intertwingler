@@ -1,8 +1,8 @@
-require 'rdf/sak/version'
+require 'intertwingler/version'
 require 'mimemagic'
 
 # janky bolt-on MimeMagic
-class RDF::SAK::MimeMagic < ::MimeMagic
+class Intertwingler::MimeMagic < ::MimeMagic
 
   # XXX this is not strictly correct but good enough for now
   [

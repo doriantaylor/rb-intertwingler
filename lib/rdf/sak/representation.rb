@@ -1,4 +1,4 @@
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
 # This is a base class for what are called "representations" in [the
 # Fielding dissertation](https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm).
@@ -66,7 +66,7 @@ require 'rdf/sak/version'
 #
 # 1. use 
 #
-class RDF::SAK::Representation
+class Intertwingler::Representation
   include Enumerable
 
   private
@@ -81,8 +81,8 @@ class RDF::SAK::Representation
   end
 
   def coerce_type type
-    return type if type.is_a? RDF::SAK::MimeMagic
-    RDF::SAK::MimeMagic.new type.to_s
+    return type if type.is_a? Intertwingler::MimeMagic
+    Intertwingler::MimeMagic.new type.to_s
   end
 
   def coerce_rfc5646 language

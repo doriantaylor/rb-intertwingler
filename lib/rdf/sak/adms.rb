@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 # This file generated automatically using rdf vocabulary format from http://www.w3.org/ns/adms#
 require 'rdf'
-module RDF::SAK
+module Intertwingler
   # @!parse
   #   # Vocabulary for <http://www.w3.org/ns/adms#>
   #   #

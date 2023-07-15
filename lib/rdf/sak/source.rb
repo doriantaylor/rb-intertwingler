@@ -1,4 +1,4 @@
-require 'rdf/sak/mimemagic'
+require 'intertwingler/mimemagic'
 
 require 'http-negotiate'
 #
@@ -22,7 +22,7 @@ require 'store-digest'
 #
 # Other sources may elect to include other metadata.
 #
-class RDF::SAK::Source
+class Intertwingler::Source
   # A {NotAcceptable} error is intended to be raised when content
   # negotiation fails, i.e., when at least one variant is found in the
   # source but the rules preclude selecting any one of them. This is
@@ -37,7 +37,7 @@ class RDF::SAK::Source
 
   # Initialize the source.
   #
-  # @param resolver [RDF::SAK::Resolver] the URI resolver
+  # @param resolver [Intertwingler::Resolver] the URI resolver
   # @param options [Hash] catch-all for keyword options
   #
   def initialize resolver, **options
@@ -93,7 +93,7 @@ class RDF::SAK::Source
     raise NotImplementedError
   end
 
-  class FileSystem < RDF::SAK::Source
+  class FileSystem < Intertwingler::Source
     # XXX THIS MIGHT NEED TO BE TUNED
     HEADERS = {
       'Accept' => %w[
@@ -141,7 +141,7 @@ class RDF::SAK::Source
       variants = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).select { |x| x.file? && x.readable? }.map do |x|
-        [x, { type: RDF::SAK::MimeMagic.by_path(x).to_s, size: x.size }]
+        [x, { type: Intertwingler::MimeMagic.by_path(x).to_s, size: x.size }]
       end.to_h
 
       # XXX in some future we can imagine telling the difference
@@ -177,7 +177,7 @@ class RDF::SAK::Source
   end
 
   # XXX break this out
-  class ContentAddressable < RDF::SAK::Source
+  class ContentAddressable < Intertwingler::Source
     def initialize resolver, store: nil, **options
       @store = store || Store::Digest.new(**options)
 
@@ -186,7 +186,7 @@ class RDF::SAK::Source
   end
 
   # XXX TODO LOL
-  class VersionControl < RDF::SAK::Source
+  class VersionControl < Intertwingler::Source
     # URI could have branch and version parameters?
 
     # struct returned from visit could have vcs-specific metadata

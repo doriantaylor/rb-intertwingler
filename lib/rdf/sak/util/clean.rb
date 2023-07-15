@@ -1,13 +1,13 @@
 # bring in the namespace
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
 require 'rdf'
 require 'uri'
 
 # do this so we don't have to indent all to hell
-module RDF::SAK::Util; end
+module Intertwingler::Util; end
 
-module RDF::SAK::Util::Clean
+module Intertwingler::Util::Clean
   private
 
   URI_COERCIONS = {

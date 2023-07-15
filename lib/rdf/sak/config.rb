@@ -1,11 +1,11 @@
-require 'rdf/sak/resolver'
-require 'rdf/sak/mimemagic'
+require 'intertwingler/resolver'
+require 'intertwingler/mimemagic'
 
 require 'dry-schema'
 require 'uri'
 require 'pathname'
 
-module RDF::SAK
+module Intertwingler
   # XXX pop this out into its own module when we're ready
   module Types
     include Dry::Types()
@@ -99,7 +99,7 @@ module RDF::SAK
     end
 
     # A media type, e.g. `text/plain`.
-    MediaType = Types::Constructor(RDF::SAK::MimeMagic).constrained(
+    MediaType = Types::Constructor(Intertwingler::MimeMagic).constrained(
       format: /^[^\/]+\/[^\/]+$/)
 
     # An unprocessed CURIE or IRI, i.e. prior to prefix expansion.
@@ -117,7 +117,7 @@ module RDF::SAK
 
     # A single RDF vocabulary
     Vocab = Types::Constructor(RDF::Vocabulary) do |vocab|
-      RDF::SAK::Resolver.sanitize_vocab vocab
+      Intertwingler::Resolver.sanitize_vocab vocab
     end
 
     # @!group Molecules
@@ -139,7 +139,7 @@ module RDF::SAK
 
     # RDF vocabularies
     Vocabs = SymbolHash.constructor do |x|
-      RDF::SAK::Resolver.sanitize_prefixes x, nonnil: true
+      Intertwingler::Resolver.sanitize_prefixes x, nonnil: true
     end
 
     # A sequence of RDF types that are always directly addressable via HTTP

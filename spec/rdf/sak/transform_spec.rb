@@ -2,9 +2,9 @@ require 'spec_helper'
 
 require 'rdf'
 require 'rdf/turtle'
-require 'rdf/sak/transform'
+require 'intertwingler/transform'
 
-RSpec.describe RDF::SAK::Transform do
+RSpec.describe Intertwingler::Transform do
 
   root = Pathname(Dir.getwd)
 
@@ -16,11 +16,11 @@ RSpec.describe RDF::SAK::Transform do
   TRANSFORMS = %w[subtree cleanup].map { |t| VOCAB[t].to_uri }
   PARAMS = [VOCAB.prefix, VOCAB.reindent, VOCAB.xpath]
 
-  let(:harness) { RDF::SAK::Transform::Harness.load repo, root }
+  let(:harness) { Intertwingler::Transform::Harness.load repo, root }
 
   context 'harness behaviour' do
     it 'initializes' do
-      expect(harness).to be_a RDF::SAK::Transform::Harness
+      expect(harness).to be_a Intertwingler::Transform::Harness
     end
 
     it 'loads all transforms' do
@@ -31,23 +31,23 @@ RSpec.describe RDF::SAK::Transform do
 
     it 'loads partials' do
       partials = harness.partials
-      expect(partials).to be_a RDF::SAK::Transform::PartialCache
+      expect(partials).to be_a Intertwingler::Transform::PartialCache
     end
   end
 
   context 'resolving transforms' do
     it 'finds a transform in the graph' do
       transform = harness.resolve VOCAB.subtree
-      expect(transform).to be_a RDF::SAK::Transform
+      expect(transform).to be_a Intertwingler::Transform
       expect(transform.keys.sort).to eql PARAMS
-      impl = RDF::URI('urn:x-ruby:RDF::SAK::Transform::XPath')
+      impl = RDF::URI('urn:x-ruby:Intertwingler::Transform::XPath')
       expect(transform.implementation).to eql impl
       expect(transform.accepts? 'application/xhtml+xml').to be true
     end
 
     it 'resolves an XSLT implementation' do
-      transform = RDF::SAK::Transform.resolve harness, VOCAB.cleanup
-      expect(transform).to be_a RDF::SAK::Transform::XSLT
+      transform = Intertwingler::Transform.resolve harness, VOCAB.cleanup
+      expect(transform).to be_a Intertwingler::Transform::XSLT
     end
 
   end
@@ -57,7 +57,7 @@ RSpec.describe RDF::SAK::Transform do
       partial = harness.resolve_partial transform: VOCAB.subtree,
         params: { xpath: '//html:main[1]',
                   prefix: 'html:http://www.w3.org/1999/xhtml' }
-      expect(partial).to be_a RDF::SAK::Transform::Partial
+      expect(partial).to be_a Intertwingler::Transform::Partial
     end
 
     it 'should not find the partial if only some of the parameters are given' do
@@ -78,8 +78,8 @@ RSpec.describe RDF::SAK::Transform do
     it 'resolves an application' do
       application = harness.resolve_application transform: VOCAB.subtree,
         input: input, params: params
-      expect(application).to be_a RDF::SAK::Transform::Application
-      expect(application.transform).to be_a RDF::SAK::Transform
+      expect(application).to be_a Intertwingler::Transform::Application
+      expect(application.transform).to be_a Intertwingler::Transform
     end
 
     it 'creates a new application from scratch' do
@@ -89,7 +89,7 @@ RSpec.describe RDF::SAK::Transform do
 
       transform = harness.resolve VOCAB.subtree
       me  = RDF::URI('urn:x-dummy:function-application')
-      app = RDF::SAK::Transform::Application.new me,
+      app = Intertwingler::Transform::Application.new me,
         transform, input, output, params, start: start, stop: stop
       app.to_triples.each { |stmt| repo2 << stmt }
       # warn repo2.dump :ntriples

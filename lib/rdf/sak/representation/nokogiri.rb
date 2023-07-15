@@ -1,8 +1,8 @@
-require 'rdf/sak/representation'
-require 'rdf/sak/document'
+require 'intertwingler/representation'
+require 'intertwingler/document'
 require 'stringio'
 
-class RDF::SAK::Representation::Nokogiri < RDF::SAK::Representation
+class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
   private
 
   OBJECT_CLASS = Nokogiri::XML::Node
@@ -21,7 +21,7 @@ class RDF::SAK::Representation::Nokogiri < RDF::SAK::Representation
 
   def object
     unless @object
-      @object = RDF::SAK::Document.coerce_doc io
+      @object = Intertwingler::Document.coerce_doc io
     end
 
     @object

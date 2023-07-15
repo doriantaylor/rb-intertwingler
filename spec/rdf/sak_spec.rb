@@ -9,7 +9,7 @@ require 'spec_helper'
 #
 # 2. test the URI resolver
 #
-# 3. test the document parser (RDF::SAK::Document::Parsed)
+# 3. test the document parser (Intertwingler::Document::Parsed)
 #
 # 4. test the markup analysis/surgery
 #
@@ -53,9 +53,9 @@ require 'spec_helper'
 #
 ###
 
-describe RDF::SAK do
+describe Intertwingler do
   it 'has a version number' do
-    expect(RDF::SAK::VERSION).not_to be nil
+    expect(Intertwingler::VERSION).not_to be nil
   end
 
   it 'does something useful' do

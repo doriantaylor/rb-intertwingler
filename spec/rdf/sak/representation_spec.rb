@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-require 'rdf/sak/representation'
+require 'intertwingler/representation'
 
-RSpec.describe RDF::SAK::Representation do
+RSpec.describe Intertwingler::Representation do
 end

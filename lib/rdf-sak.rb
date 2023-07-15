@@ -1,1 +1,1 @@
-require 'rdf/sak'
+require 'intertwingler'

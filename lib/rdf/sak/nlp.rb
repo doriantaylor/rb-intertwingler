@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-require 'rdf/sak/version' # initialize the symbols
+require 'intertwingler/version' # initialize the symbols
 
 require 'lemmatizer'
 require 'engtagger'
@@ -103,7 +103,7 @@ public
 # OK so other stuff: say we have a set of extracted terms and we want
 # to compare it with a concept scheme w want to 
 #
-module RDF::SAK::NLP
+module Intertwingler::NLP
   # This class encapsulates a cache of SKOS concepts (either a concept
   # scheme, a collection, an ordered collection, or just a bundle of
   # concepts) and organizes them by label

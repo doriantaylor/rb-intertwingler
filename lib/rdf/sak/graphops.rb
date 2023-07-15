@@ -1,24 +1,24 @@
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
 require 'set'
 require 'rdf'
 require 'rdf/vocab'
 require 'rdf/reasoner'
-require 'rdf/sak/resolver'
-require 'rdf/sak/util/clean'
-require 'rdf/sak/mimemagic'
+require 'intertwingler/resolver'
+require 'intertwingler/util/clean'
+require 'intertwingler/mimemagic'
 
 # load up my vocabs before reasoner is applied
-require 'rdf/sak/ci'
-require 'rdf/sak/tfo'
-require 'rdf/sak/ibis'
+require 'intertwingler/ci'
+require 'intertwingler/tfo'
+require 'intertwingler/ibis'
 
 # also third-party vocabs not found in RDF::Vocab
-require 'rdf/sak/pav'
-require 'rdf/sak/qb'
-require 'rdf/sak/scovo'
+require 'intertwingler/pav'
+require 'intertwingler/qb'
+require 'intertwingler/scovo'
 
-module RDF::SAK
+module Intertwingler
 
   # gotta make sure this gets run
   RDF::Reasoner.apply(:rdfs, :owl)
@@ -29,7 +29,7 @@ module RDF::SAK
   # this module bolts functionality onto RDF::Repository
 
   module GraphOps
-    include RDF::SAK::Util::Clean
+    include Intertwingler::Util::Clean
 
     private
 
@@ -629,9 +629,9 @@ module RDF::SAK
 
     private
 
-    AUTHOR  = [RDF::SAK::PAV.authoredBy, RDF::Vocab::DC.creator,
+    AUTHOR  = [Intertwingler::PAV.authoredBy, RDF::Vocab::DC.creator,
       RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
-    CONTRIB = [RDF::SAK::PAV.contributedBy, RDF::Vocab::DC.contributor,
+    CONTRIB = [Intertwingler::PAV.contributedBy, RDF::Vocab::DC.contributor,
       RDF::Vocab::DC11.contributor]
     AUTHOR_LIST  = [RDF::Vocab::BIBO.authorList]
     CONTRIB_LIST = [RDF::Vocab::BIBO.contributorList]
@@ -805,7 +805,7 @@ module RDF::SAK
       objects_for(subject, predicate,
                   graph: graph, datatype: datatype, only: :literal) do |o|
         t = o.object.to_s.strip.downcase
-        /\//.match?(t) ? RDF::SAK::MimeMagic.new(t) : nil
+        /\//.match?(t) ? Intertwingler::MimeMagic.new(t) : nil
       end.compact.sort.uniq
     end
 
@@ -967,7 +967,7 @@ module RDF::SAK
       return hcache[key] if hcache.key? key
 
       # we begin by looking for an explicit designation
-      host = objects_for(subject, RDF::SAK::CI['fragment-of'],
+      host = objects_for(subject, Intertwingler::CI['fragment-of'],
         graph: graph, only: :resource).first
 
       # get all the classes but the two basic ones that will net everything
@@ -1049,47 +1049,47 @@ module RDF::SAK
 
     # host document cache
     def hcache
-      @hcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @hcache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # term cache
     def tcache
-      @tcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @tcache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # type strata cache
     def tscache
-      @tscache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @tscache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # type strata descending cache
     def tdcache
-      @tdcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @tdcache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # property set cache
     def pcache
-      @pcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @pcache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # inverseOf cache
     def icache
-      @icache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @icache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # equivalents cache
     def eqcache
-      @eqcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @eqcache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # subproperty/class cache
     def sbcache
-      @sbcache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @sbcache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     # superproperty/class cache
     def sucache
-      @sucache ||= RDF::SAK::Util::LRU.new capacity: cache_limit
+      @sucache ||= Intertwingler::Util::LRU.new capacity: cache_limit
     end
 
     public
@@ -1233,7 +1233,7 @@ module RDF::SAK
         noop: true if fragments
 
       # get the value of ci:indexed
-      ix = objects_for(subject, RDF::SAK::CI.indexed, graph: graph,
+      ix = objects_for(subject, Intertwingler::CI.indexed, graph: graph,
         only: :literal, datatype: RDF::XSD.boolean).first
 
       # if there was a value then return it, otherwise it's false if
@@ -1276,7 +1276,7 @@ module RDF::SAK
 
       #
       if indexed
-        ix = objects_for(subject, RDF::SAK::CI.indexed, graph: graph,
+        ix = objects_for(subject, Intertwingler::CI.indexed, graph: graph,
           only: :literal, datatype: RDF::XSD.boolean).first
         return false if ix and ix.object == false
       end
@@ -1286,11 +1286,11 @@ module RDF::SAK
         subject, RDF::Vocab::BIBO.status, only: :resource).to_set
 
       # bail out if the subject has been retired
-      return false if !retired and candidates.include? RDF::SAK::CI.retired
+      return false if !retired and candidates.include? Intertwingler::CI.retired
 
       # set up a test set of statuses
       test = Set[RDF::Vocab::BIBO['status/published']]
-      test << RDF::SAK::CI.circulated if circulated
+      test << Intertwingler::CI.circulated if circulated
 
       # if this isn't empty then we're "published"
       !(candidates & test).empty?
@@ -1306,7 +1306,7 @@ module RDF::SAK
     #
     def retired? subject, graph: nil
       objects_for(subject, RDF::Vocab::BIBO.status,
-        graph: graph, only: :resource).include?(RDF::SAK::CI.retired)
+        graph: graph, only: :resource).include?(Intertwingler::CI.retired)
     end
 
     # Returns whether the subject is dct:isReplacedBy some other node.
@@ -2145,10 +2145,10 @@ module RDF::SAK
     # ensure that `term` is actually in the graph.
     #
     # @param term [RDF::Resource] the term in question
-    # @param resolver [nil, RDF::SAK::Resolver] an optional `Resolver`
+    # @param resolver [nil, Intertwingler::Resolver] an optional `Resolver`
     #  instance
     #
-    # @return [RDF::SAK::Resource] a `Resource` bound to the term
+    # @return [Intertwingler::Resource] a `Resource` bound to the term
     #
     def resource term, resolver: nil
       term = assert_resource term
@@ -2198,7 +2198,7 @@ module RDF::SAK
     #
     # @return [Array<RDF::Resource>] the sub-concepts.
     #
-    # @note This method was imported from {RDF::SAK::Context} and may
+    # @note This method was imported from {Intertwingler::Context} and may
     #  predate the refactor that yielded this module.
     #
     def sub_concepts concept, extra: []
@@ -2251,7 +2251,7 @@ module RDF::SAK
     # @return [Array<RDF::Resource>] the audiences for the subject.
     #
     def audiences_for subject, proximate: false, invert: false
-      p = invert ? RDF::SAK::CI['non-audience'] : RDF::Vocab::DC.audience
+      p = invert ? Intertwingler::CI['non-audience'] : RDF::Vocab::DC.audience
 
       subject = assert_resource subject
 
@@ -2306,10 +2306,10 @@ end
 
 # sneak this bad boy into RDF::Queryable where it belongs
 module RDF::Queryable
-  include RDF::SAK::GraphOps
+  include Intertwingler::GraphOps
 end
 
 # also put it in RDF::Repository as a downstream module has a `method_missing`
 class RDF::Repository
-  include RDF::SAK::GraphOps
+  include Intertwingler::GraphOps
 end

@@ -11,17 +11,17 @@ require 'rdf/rdfa'
 #require 'rdf/vocab'
 require 'rdf/vocab/dc'
 require 'rdf/vocab/prov'
-require 'rdf/sak/ci'
-require 'rdf/sak/tfo'
+require 'intertwingler/ci'
+require 'intertwingler/tfo'
 require 'tidy_ffi'
 require 'uuidtools'
 require 'nokogiri'
 require 'crass'
 
-class RDF::SAK::URLRunner
+class Intertwingler::URLRunner
   private
 
-  UA = 'RDF::SAK::URLRunner/0.1'.freeze
+  UA = 'Intertwingler::URLRunner/0.1'.freeze
   TIDY_OPTS = {
     wrap:             0,
     numeric_entities: true,
@@ -224,7 +224,7 @@ class RDF::SAK::URLRunner
   #   dcat: RDF::Vocab::DCAT,
   #   so:   RDF::Vocab::SCHEMA,
   #   dct:  RDF::Vocab::DC,
-  #   ci:   RDF::SAK::CI,
+  #   ci:   Intertwingler::CI,
   #   ogp:  RDF::Vocab::OG,
   #   foaf: RDF::Vocab::FOAF,
   #   org:  RDF::Vocab::ORG,
@@ -316,7 +316,7 @@ class RDF::SAK::URLRunner
 
       dest = (url + dest).normalize
 
-      @repo << [ru, RDF::SAK::CI.canonical, RDF::URI(dest.to_s)]
+      @repo << [ru, Intertwingler::CI.canonical, RDF::URI(dest.to_s)]
 
       raise Net::HTTPClientException.new "Loop detected on #{url}",
         resp if url == dest
@@ -384,9 +384,9 @@ class RDF::SAK::URLRunner
 
       # first let's detect if this job has already been done
       RDF::Query.new do
-        pattern [:a, RDF::SAK::TFO.input, oldu]
-        pattern [:a, RDF::SAK::TFO.transform, TIDY_U]
-        pattern [:a, RDF::SAK::TFO.output, :n]
+        pattern [:a, Intertwingler::TFO.input, oldu]
+        pattern [:a, Intertwingler::TFO.transform, TIDY_U]
+        pattern [:a, Intertwingler::TFO.output, :n]
       end.execute(@repo).map do |s|
         # can't completely trust what's in the repo so check then convert
         URI(s[:n].to_s) if s[:n].uri? and s[:n].scheme.downcase == 'ni'
@@ -406,19 +406,19 @@ class RDF::SAK::URLRunner
         newu = RDF::URI(newobj[:"sha-256"].to_s)
 
         q = RDF::Query.new do
-          pattern [:a, RDF::SAK::TFO.input, oldu]
-          pattern [:a, RDF::SAK::TFO.output, newu]
+          pattern [:a, Intertwingler::TFO.input, oldu]
+          pattern [:a, Intertwingler::TFO.output, newu]
         end
 
         if q.execute(@repo).empty?
           s  = RDF::URI(UUIDTools::UUID.random_create.to_uri)
           cs = RDF::Changeset.new
-          cs << [s, RDF.type, RDF::SAK::TFO.Application]
+          cs << [s, RDF.type, Intertwingler::TFO.Application]
           cs << [s, RDF::Vocab::PROV.startedAtTime, start]
           cs << [s, RDF::Vocab::PROV.endedAtTime, stop]
-          cs << [s, RDF::SAK::TFO.transform, TIDY_U]
-          cs << [s, RDF::SAK::TFO.input, oldu]
-          cs << [s, RDF::SAK::TFO.output, newu]
+          cs << [s, Intertwingler::TFO.transform, TIDY_U]
+          cs << [s, Intertwingler::TFO.input, oldu]
+          cs << [s, Intertwingler::TFO.output, newu]
 
           cs.apply @repo
         end
@@ -435,9 +435,9 @@ class RDF::SAK::URLRunner
     # get rdf stuff
     ru  = RDF::URI(obj[:"sha-256"].to_s)
     uri = RDF::Query.new do
-      pattern [:b, RDF::SAK::TFO.output, ru]
-      pattern [:b, RDF::SAK::TFO.transform, TIDY_U]
-      pattern [:b, RDF::SAK::TFO.input, :a]
+      pattern [:b, Intertwingler::TFO.output, ru]
+      pattern [:b, Intertwingler::TFO.transform, TIDY_U]
+      pattern [:b, Intertwingler::TFO.input, :a]
       pattern [:s, RDF::Vocab::DC.hasVersion, :a]
     end.execute(@repo) + RDF::Query.new do
       pattern [:s, RDF::Vocab::DC.hasVersion, ru]
@@ -581,7 +581,7 @@ if __FILE__ == $0
           urls += CSV.read(csv).map(&:first).compact
         end
 
-        RDF::SAK::URLRunner.new(
+        Intertwingler::URLRunner.new(
           repo: repo, store: store, ua: options.user_agent,
           ignore: options.ignore, traverse: options.traverse
         ).run urls, shuffle: options.shuffle

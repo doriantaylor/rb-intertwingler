@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 # This file generated automatically using rdf vocabulary format from https://vocab.methodandstructure.com/ibis#
 require 'rdf'
-module RDF::SAK
+module Intertwingler
   # @!parse
   #   # Vocabulary for <https://vocab.methodandstructure.com/ibis#>
   #   #

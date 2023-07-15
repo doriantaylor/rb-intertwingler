@@ -1,7 +1,7 @@
 require 'rdf'
 require 'rdf/vocab'
-require 'rdf/sak/tfo'
-require 'rdf/sak/util'
+require 'intertwingler/tfo'
+require 'intertwingler/util'
 require 'set'
 require 'mimemagic'
 require 'http/negotiate'
@@ -11,7 +11,7 @@ require 'time'
 # transformation function, including its parameter spec, accepted and
 # returned types, identity, and implementation.
 #
-class RDF::SAK::Transform
+class Intertwingler::Transform
   # mkay basically this transformation function stuff got too hairy to
   # just do ad-hoc so i guess i'm doing this now
 
@@ -28,7 +28,7 @@ class RDF::SAK::Transform
 
   def self.gather_params repo, subject
     params = {}
-    repo.objects_for(subject, RDF::SAK::TFO.parameter,
+    repo.objects_for(subject, Intertwingler::TFO.parameter,
                      entail: false, only: :resource).each do |ps|
       param = params[ps] ||= {}
 
@@ -42,8 +42,8 @@ class RDF::SAK::Transform
       range = repo.objects_for(ps, RDF::RDFS.range, only: :resource)
       param[:range] = range.to_set unless range.empty?
 
-      # default = RDF::SAK::Util
-      param[:default] = repo.objects_for(ps, RDF::SAK::TFO.default)
+      # default = Intertwingler::Util
+      param[:default] = repo.objects_for(ps, Intertwingler::TFO.default)
 
       # cardinalities
       param[:minc] = 0
@@ -67,7 +67,7 @@ class RDF::SAK::Transform
   def self.gather_accepts_returns repo, subject, raw: false, returns: false
     literals = []
     lists    = []
-    pred     = RDF::SAK::TFO[returns ? 'returns' : 'accepts']
+    pred     = Intertwingler::TFO[returns ? 'returns' : 'accepts']
 
     repo.query([subject, pred, nil]).objects.each do |o|
       if o.literal?
@@ -87,7 +87,7 @@ class RDF::SAK::Transform
   # Initialize the implementation. Does nothing in the base
   # class. Return value is ignored.
   #
-  # @param harness [RDF::SAK::Transform::Harness] the harness
+  # @param harness [Intertwingler::Transform::Harness] the harness
   #
   def init_implementation harness
   end
@@ -97,7 +97,7 @@ class RDF::SAK::Transform
   # Resolve a transform out of the repository. Optionally supply a
   # block to resolve any implementation associated with the transform.
   #
-  # @param harness [RDF::SAK::Transform::Harness] the harness
+  # @param harness [Intertwingler::Transform::Harness] the harness
   # @param subject [RDF::Resource]
   def self.resolve harness, subject
     # noop
@@ -107,12 +107,12 @@ class RDF::SAK::Transform
 
     asserted = repo.objects_for subject, RDF.type, only: :resource
 
-    return if (asserted & repo.all_related(RDF::SAK::TFO.Transform)).empty?
+    return if (asserted & repo.all_related(Intertwingler::TFO.Transform)).empty?
 
     params = gather_params repo, subject
 
     plist = if pl = repo.objects_for(
-              subject, RDF::SAK::TFO['parameter-list'], only: :resource
+              subject, Intertwingler::TFO['parameter-list'], only: :resource
             ).sort.first
               RDF::List.from(repo, pl).to_a
             else
@@ -127,13 +127,13 @@ class RDF::SAK::Transform
     # XXX this is all dumb but it has to be this way for now
 
     if impl = repo.objects_for(
-      subject, RDF::SAK::TFO.implementation, only: :uri).sort.first
+      subject, Intertwingler::TFO.implementation, only: :uri).sort.first
 
       case impl.to_s
       when /^file:/i then
         # XXX redo this later
         if /xsl/i.match? MimeMagic.by_path(impl.path.to_s).to_s
-          tclass = RDF::SAK::Transform::XSLT
+          tclass = Intertwingler::Transform::XSLT
         end
       when /^urn:x-ruby:(.*)$/i then
         cn = $1
@@ -162,7 +162,7 @@ class RDF::SAK::Transform
 
   # Initialize a transform from data.
   # @param subject [RDF::Resource]
-  # @param harness [RDF::SAK::Transform::Harness]
+  # @param harness [Intertwingler::Transform::Harness]
   # @param params [Hash]
   # @param param_list [Array]
   # @param accepts [Array]
@@ -211,7 +211,7 @@ class RDF::SAK::Transform
     # value if the transform function can handle the type, even if it
     # does not explicitly mention it (e.g. if the transform specifies
     # it accepts application/xml and you hand it application/xhtml+xml)
-    variants = RDF::SAK::MimeMagic.new(type).lineage.map do |t|
+    variants = Intertwingler::MimeMagic.new(type).lineage.map do |t|
       # the key can be anything as long as it's unique since it ends
       # up as a hash
       [t.to_s, [1, t.to_s]]
@@ -336,7 +336,7 @@ class RDF::SAK::Transform
   # resolution, cardinality, range, and type.
   #
   # @param input [String,IO,#to_s,#read] Something bytelike
-  # @param params [Hash,RDF::SAK::Transform::Partial] the instance parameters
+  # @param params [Hash,Intertwingler::Transform::Partial] the instance parameters
   # @param parsed [Object] the already-parsed object, if applicable
   # @param type [String] the content-type of the input
   # @param accept [String] a string in the form of an Accept header
@@ -376,15 +376,15 @@ class RDF::SAK::Transform
     private
 
     def coerce_params params
-      RDF::SAK::Transform.coerce_params params
+      Intertwingler::Transform.coerce_params params
     end
 
     public
 
     # Initialize the cache with all partials pre-loaded.
     #
-    # @param harness [RDF::SAK::Transform::Harness] the transform harness
-    # @return [RDF::SAK::Transform::PartialCache] the instance
+    # @param harness [Intertwingler::Transform::Harness] the transform harness
+    # @return [Intertwingler::Transform::PartialCache] the instance
     #
     def self.load harness
       new(harness).load
@@ -393,7 +393,7 @@ class RDF::SAK::Transform
     attr_reader :harness
 
     # Initialize an empty cache.
-    # @param harness [RDF::SAK::Transform::Harness] the parent harness.
+    # @param harness [Intertwingler::Transform::Harness] the parent harness.
     #
     def initialize harness
       @harness    = harness
@@ -408,7 +408,7 @@ class RDF::SAK::Transform
     #
     def load
       repo.subjects_for(RDF.type,
-                                  RDF::SAK::TFO.Partial).each do |s|
+                                  Intertwingler::TFO.Partial).each do |s|
         resolve subject: s
       end
 
@@ -431,10 +431,10 @@ class RDF::SAK::Transform
     # Retrieve a Partial from the cache based on its
     def get transform, params
       ts = case transform
-           when RDF::SAK::Transform then transform.subject
+           when Intertwingler::Transform then transform.subject
            when RDF::URI
              # XXX transforms resolved here may not get implemented
-             transform = RDF::SAK::Transform.resolve @repo, transform
+             transform = Intertwingler::Transform.resolve @repo, transform
              transform.subject
            else
              raise ArgumentError, "Don't know what to do with #{transform}"
@@ -451,13 +451,13 @@ class RDF::SAK::Transform
     # set.
     #
     # @param subject [RDF::URI] The subject URI of the partial
-    # @param transform [RDF::URI,RDF::SAK::Transform] the transform
+    # @param transform [RDF::URI,Intertwingler::Transform] the transform
     # @param params [Hash] an instance of parameters
-    # @return [RDF::SAK::Transform::Partial]
+    # @return [Intertwingler::Transform::Partial]
     #
     def resolve subject: nil, transform: nil, params: {}
       if subject
-        if subject.is_a? RDF::SAK::Transform::Partial
+        if subject.is_a? Intertwingler::Transform::Partial
           # snag the transform
           transform = @harness.resolve(subject.transform) or
             raise 'Could not resolve the transform associated with ' +
@@ -468,7 +468,7 @@ class RDF::SAK::Transform
           @cache[subject.subject] ||= t[subject.params] ||= subject
         else
           # resolve the partial
-          partial = @cache[subject] || RDF::SAK::Transform::Partial.resolve(
+          partial = @cache[subject] || Intertwingler::Transform::Partial.resolve(
             @harness, subject: subject) or return
 
           # initialize the mapping if not present
@@ -479,7 +479,7 @@ class RDF::SAK::Transform
         end
       elsif transform
         transform = @harness.resolve transform unless
-          transform.is_a? RDF::SAK::Transform
+          transform.is_a? Intertwingler::Transform
 
         params = transform.validate params, defaults: false
 
@@ -489,7 +489,7 @@ class RDF::SAK::Transform
         return t[params] if t.key? params
 
         # try to resolve the partial
-        partial = RDF::SAK::Transform::Partial.resolve(@harness,
+        partial = Intertwingler::Transform::Partial.resolve(@harness,
           transform: transform, params: params) or return
 
         # update the caches
@@ -519,14 +519,14 @@ class RDF::SAK::Transform
       raise ArgumentError, "Root #{@root} does not exist" unless
         @root.directory? and @root.readable?
       @cache    = {}
-      @partials = RDF::SAK::Transform::PartialCache.new self
+      @partials = Intertwingler::Transform::PartialCache.new self
     end
 
     # Bootstrap all the transforms.
     #
     # @param repo [RDF::Repository] the repository to find RDF data
     # @param root [String,Pathname] the root directory for implementations
-    # @return [RDF::SAK::Transform::Harness] the harness instance
+    # @return [Intertwingler::Transform::Harness] the harness instance
     def self.load repo, root
       self.new(repo, root).load
     end
@@ -535,7 +535,7 @@ class RDF::SAK::Transform
     # @return [Array] the transforms
     def load
       @repo.subjects_for(
-        RDF.type, RDF::SAK::TFO.Transform, only: :resource
+        RDF.type, Intertwingler::TFO.Transform, only: :resource
       ).each do |subject|
         resolve subject
       end
@@ -555,13 +555,13 @@ class RDF::SAK::Transform
     # Resolve a Transform based on its URI.
     #
     # @param subject [RDF::Resource] the identifier for the transform.
-    # @return [RDF::SAK::Transform] the Transform, if present.
+    # @return [Intertwingler::Transform] the Transform, if present.
     #
     def resolve subject
       return @cache[subject] if @cache[subject]
       # XXX raise???
       transform =
-        RDF::SAK::Transform.resolve(self, subject) or return
+        Intertwingler::Transform.resolve(self, subject) or return
       @cache[subject] = transform
     end
 
@@ -569,9 +569,9 @@ class RDF::SAK::Transform
     # transform-params pair.
     #
     # @param subject [RDF::Resource] the Partial's subject
-    # @param transform [RDF::Resource,RDF::SAK::Transform] the transform
+    # @param transform [RDF::Resource,Intertwingler::Transform] the transform
     # @param params [Hash] an instance of parameters
-    # @return [RDF::SAK::Transform::Partial] the Partial, if present
+    # @return [Intertwingler::Transform::Partial] the Partial, if present
     #
     def resolve_partial subject: nil, transform: nil, params: nil
       partials.resolve subject: subject, transform: transform, params: params
@@ -581,14 +581,14 @@ class RDF::SAK::Transform
     # subject URI, a transform-params pair, or a Partial.
     #
     # @param subject [RDF::Resource] the Application's subject
-    # @param transform [RDF::Resource,RDF::SAK::Transform] the Transform
+    # @param transform [RDF::Resource,Intertwingler::Transform] the Transform
     # @param params [Hash] an instance of parameters
-    # @param partial [RDF::Resource,RDF::SAK::Transform::Partial] a Partial
-    # @return [RDF::SAK::Transform::Application] the Application, if present
+    # @param partial [RDF::Resource,Intertwingler::Transform::Partial] a Partial
+    # @return [Intertwingler::Transform::Application] the Application, if present
     #
     def resolve_application subject: nil, transform: nil, params: {},
         partial: nil, input: nil, output: nil
-      RDF::SAK::Transform::Application.resolve self, subject: subject,
+      Intertwingler::Transform::Application.resolve self, subject: subject,
         transform: transform, params: params, partial: partial,
         input: input, output: output
     end
@@ -596,11 +596,11 @@ class RDF::SAK::Transform
     # Returns true if the Application with the given subject URI
     # matches either the transform-params pair, or a partial.
     #
-    # @param subject [RDF::Resource,RDF::SAK::Transform::Application]
+    # @param subject [RDF::Resource,Intertwingler::Transform::Application]
     #   the application
-    # @param transform [RDF::Resource,RDF::SAK::Transform] the transform
+    # @param transform [RDF::Resource,Intertwingler::Transform] the transform
     # @param params [Hash] an instance of parameters
-    # @param partial [RDF::Resource,RDF::SAK::Transform::Partial] a partial
+    # @param partial [RDF::Resource,Intertwingler::Transform::Partial] a partial
     # @return [true, false] whether or not the application matches
     #
     def application_matches? subject, transform: nil, params: {}, partial: nil
@@ -608,16 +608,16 @@ class RDF::SAK::Transform
       # unbundle the params; partial overrides transform+params
       if partial
         partial   = resolve_partial partial unless
-          partial.is_a? RDF::SAK::Transform::Partial
+          partial.is_a? Intertwingler::Transform::Partial
         transform = partial.transform
         params    = partial.params
       else
         transform = resolve transform unless
-          transform.is_a? RDF::SAK::Transform
+          transform.is_a? Intertwingler::Transform
         params = transform.validate params
       end
 
-      if subject.is_a? RDF::SAK::Transform::Application
+      if subject.is_a? Intertwingler::Transform::Application
         return true if partial and subject.completes? partial
         return true if
           subject.transform == transform and subject.matches? params
@@ -625,10 +625,10 @@ class RDF::SAK::Transform
         # this should say, try matching the partial if there is one
         # to match, otherwise attempt to directly match the transform
         return true if partial and repo.has_statement?(
-          RDF::Statement(subject, RDF::SAK::TFO.completes, partial.subject))
+          RDF::Statement(subject, Intertwingler::TFO.completes, partial.subject))
 
         if repo.has_statement?(
-          RDF::Statement(subject, RDF::SAK::TFO.transform, transform.subject))
+          RDF::Statement(subject, Intertwingler::TFO.transform, transform.subject))
           testp = transform.keys.map do |p|
             o = repo.query([subject, p, nil]).objects.uniq.sort
             o.empty? ? nil : [p, o]
@@ -648,7 +648,7 @@ class RDF::SAK::Transform
   class Partial
     # Resolve a partial function application with the given parameters.
     #
-    # @param harness [RDF::SAK::Transform::Harness] the harness
+    # @param harness [Intertwingler::Transform::Harness] the harness
     # @param subject [RDF::Resource] the identity of the partial
     # @param transform [RDF::Resource] the identity of the transform
     # @param params [Hash] key-value pairs
@@ -661,11 +661,11 @@ class RDF::SAK::Transform
       # coerce the transform to a Transform object if it isn't already
       if transform
         transform = harness.resolve(transform) or
-          return unless transform.is_a?(RDF::SAK::Transform)
+          return unless transform.is_a?(Intertwingler::Transform)
       elsif subject.is_a? RDF::URI
         # locate the transform if given the subject
         transform = repo.objects_for(
-          subject, RDF::SAK::TFO.transform, only: :resource).first or return
+          subject, Intertwingler::TFO.transform, only: :resource).first or return
         transform = harness.resolve(transform) or return
         warn transform
       end
@@ -685,8 +685,8 @@ class RDF::SAK::Transform
           # longer values will probably be less common; anyway this is
           # gonna all need to be rethought
           params.each { |p, objs| objs.each { |o| pattern [:s, p, o] } }
-          pattern [:s, RDF.type, RDF::SAK::TFO.Partial]
-          pattern [:s, RDF::SAK::TFO.transform, transform.subject]
+          pattern [:s, RDF.type, Intertwingler::TFO.Partial]
+          pattern [:s, Intertwingler::TFO.transform, transform.subject]
 
           # add any remaining parameters
           # XXX this actually messes up; we don't want this
@@ -718,11 +718,11 @@ class RDF::SAK::Transform
 
     def initialize subject, transform, params = {}
       raise ArgumentError, 'transform must be a Transform' unless
-        transform.is_a? RDF::SAK::Transform
+        transform.is_a? Intertwingler::Transform
       @subject   = subject
       @transform = transform
       @params    = transform.validate params unless
-        params.is_a? RDF::SAK::Transform::Partial
+        params.is_a? Intertwingler::Transform::Partial
     end
 
     def [](key)
@@ -742,7 +742,7 @@ class RDF::SAK::Transform
     end
 
     def ===(other)
-      return false unless other.is_a? RDF::SAK::Transform::Partial
+      return false unless other.is_a? Intertwingler::Transform::Partial
       transform == other.transform and matches? other.params
     end
 
@@ -759,14 +759,14 @@ class RDF::SAK::Transform
     # + input set. Applications that complete Partials will be
     # automatically resolved.
     #
-    # @param harness [RDF::SAK::Transform::Harness] the harness
+    # @param harness [Intertwingler::Transform::Harness] the harness
     # @param subject [RDF::Resource] the subject
-    # @param transform [RDF::Resource,RDF::SAK::Transform] the transform
+    # @param transform [RDF::Resource,Intertwingler::Transform] the transform
     # @param params [Hash] an instance of parameters
     # @param input [RDF::Resource] the Application's input
     # @param output [RDF::Resource] the Application's output
     #
-    # @return [RDF::SAK::Transform::Application] the Application, if present
+    # @return [Intertwingler::Transform::Application] the Application, if present
     #
     def self.resolve harness, subject: nil, transform: nil, params: {},
         partial: nil, input: nil, output: nil
@@ -781,7 +781,7 @@ class RDF::SAK::Transform
 
         # okay partial
         partial = repo.objects_for(
-          subject, RDF::SAK::TFO.completes, only: :resource).sort.first
+          subject, Intertwingler::TFO.completes, only: :resource).sort.first
 
         if partial
           tmp = partials.resolve(subject: partial) or
@@ -790,7 +790,7 @@ class RDF::SAK::Transform
           transform = partial.transform
         else
           transform = repo.objects_for(
-            subject, RDF::SAK::TFO.transform, only: :resource).sort.first or
+            subject, Intertwingler::TFO.transform, only: :resource).sort.first or
             raise "Could not find a transform for #{subject}"
           tmp = harness.resolve(transform) or
             raise "Could not find transform #{transform}"
@@ -808,9 +808,9 @@ class RDF::SAK::Transform
 
         # get inputs and outputs
         input  = repo.objects_for(
-          subject, RDF::SAK::TFO.input,  only: :resource).sort.first
+          subject, Intertwingler::TFO.input,  only: :resource).sort.first
         output = repo.objects_for(
-          subject, RDF::SAK::TFO.output, only: :resource).sort.first
+          subject, Intertwingler::TFO.output, only: :resource).sort.first
 
         raise 'Data must have both input and output' unless input and output
       elsif input and ((transform and params) or partial)
@@ -836,16 +836,16 @@ class RDF::SAK::Transform
         candidates = RDF::Query.new do
           # note that there is no cost-based optimization so we write
           # these in the order of least to most cardinality
-          pattern [:t, RDF::SAK::TFO.output, output] if output
-          pattern [:t, RDF::SAK::TFO.input,  input]
+          pattern [:t, Intertwingler::TFO.output, output] if output
+          pattern [:t, Intertwingler::TFO.input,  input]
         end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
           # this should say, try matching the partial if there is one
           # to match, otherwise attempt to directly match the transform
           if partial and repo.has_statement?(
-            RDF::Statement(s, RDF::SAK::TFO.completes, partial.subject))
+            RDF::Statement(s, Intertwingler::TFO.completes, partial.subject))
             true
           elsif repo.has_statement?(
-            RDF::Statement(s, RDF::SAK::TFO.transform, transform.subject))
+            RDF::Statement(s, Intertwingler::TFO.transform, transform.subject))
             testp = transform.keys.map do |p|
               o = repo.query([s, p, nil]).objects.uniq.sort
               o.empty? ? nil : [p, o]
@@ -886,7 +886,7 @@ class RDF::SAK::Transform
 
       # don't forget the output
       output ||= repo.query(
-        [subject, RDF::SAK::TFO.output, nil]
+        [subject, Intertwingler::TFO.output, nil]
       ).objects.select(&:uri?).sort.first
 
       new subject, transform, input, output, partial || params
@@ -901,7 +901,7 @@ class RDF::SAK::Transform
     # @param transform [RDF::Resource] the identifier for the transform
     # @param input  [RDF::Resource] the identifier for the input
     # @param output [RDF::Resource] the identifier for the output
-    # @param params [Hash, RDF::SAK::Transform::Partial] the parameters
+    # @param params [Hash, Intertwingler::Transform::Partial] the parameters
     #   or partial application that is completed
     def initialize subject, transform, input, output, params = {},
         start: nil, stop: nil
@@ -910,7 +910,7 @@ class RDF::SAK::Transform
 
       @input     = input
       @output    = output
-      @completes = params if params.is_a? RDF::SAK::Transform::Partial
+      @completes = params if params.is_a? Intertwingler::Transform::Partial
       @start     = start
       @stop      = stop
     end
@@ -919,7 +919,7 @@ class RDF::SAK::Transform
     def to_triples
       out = [] # .extend RDF::Enumerable
       s = @subject
-      out << [s, RDF.type, RDF::SAK::TFO.Application]
+      out << [s, RDF.type, Intertwingler::TFO.Application]
 
       if @start
         start = @start.is_a?(RDF::Literal) ? @start : RDF::Literal(@start)
@@ -932,9 +932,9 @@ class RDF::SAK::Transform
       end
 
       if @completes
-        out << [s, RDF::SAK::TFO.completes, @completes.subject]
+        out << [s, Intertwingler::TFO.completes, @completes.subject]
       else
-        out << [s, RDF::SAK::TFO.transform, transform.subject]
+        out << [s, Intertwingler::TFO.transform, transform.subject]
         pdup = transform.validate params, defaults: false, silent: true
         pdup.each do |k, vals|
           vals.each { |v| out << [s, k, v] }
@@ -1033,13 +1033,13 @@ class RDF::SAK::Transform
     candidates = RDF::Query.new do
       # note that there is no cost-based optimization so we write
       # these in the order of least to most cardinality
-      pattern [:t, RDF::SAK::TFO.output, output]
-      pattern [:t, RDF::SAK::TFO.input,  input]
+      pattern [:t, Intertwingler::TFO.output, output]
+      pattern [:t, Intertwingler::TFO.input,  input]
     end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
       repo.has_statement?(
-        RDF::Statement(s, RDF::SAK::TFO.transform, transform)) or
+        RDF::Statement(s, Intertwingler::TFO.transform, transform)) or
         partial && repo.has_statement?(
-        RDF::Statement(s, RDF::SAK::TFO.completes, partial))
+        RDF::Statement(s, Intertwingler::TFO.completes, partial))
     end.compact.uniq
 
     # first will be nil if this is empty so voila
@@ -1070,8 +1070,8 @@ class RDF::SAK::Transform
   def get_partial_transform repo, function, params = {}
     temp = {}
     RDF::Query.new do
-      pattern [:s, RDF.type, RDF::SAK::TFO.Partial]
-      pattern [:s, RDF::SAK::TFO.transform, function]
+      pattern [:s, RDF.type, Intertwingler::TFO.Partial]
+      pattern [:s, Intertwingler::TFO.transform, function]
       params.keys.each { |k| pattern [:s, k, nil] }
     end.execute(repo).each do |sol|
       t = temp[sol[:s]] ||= {}
@@ -1101,7 +1101,7 @@ class RDF::SAK::Transform
     nil
   end
 
-  class XPath < RDF::SAK::Transform
+  class XPath < Intertwingler::Transform
     protected
 
     def execute input, parsed = nil, params
@@ -1118,7 +1118,7 @@ class RDF::SAK::Transform
         return
       end
 
-      doc = RDF::SAK::Util.subtree parsed,
+      doc = Intertwingler::Util.subtree parsed,
         xpath.value, prefixes: prefix, reindent: reindent
 
       return unless doc
@@ -1133,7 +1133,7 @@ class RDF::SAK::Transform
     end
   end
 
-  class XSLT < RDF::SAK::Transform
+  class XSLT < Intertwingler::Transform
     protected
 
     def init_implementation harness

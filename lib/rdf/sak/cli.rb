@@ -1,7 +1,7 @@
-require 'rdf/sak'
+require 'intertwingler'
 require 'commander'
 
-module RDF::SAK
+module Intertwingler
   class CLI
     # This is a command-line interface
 

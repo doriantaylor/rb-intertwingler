@@ -1,16 +1,16 @@
-require 'rdf/sak/graphops'
-require 'rdf/sak/util/clean'
+require 'intertwingler/graphops'
+require 'intertwingler/util/clean'
 
 require 'uri'
 require 'uuidtools'
 require 'uuid/ncname'
 
-module RDF::SAK
+module Intertwingler
   # This class is intended to be a caching URI (and URI-adjacent)
   # resolver, intended to persist only as long as it needs to, as the
   # cache is not very sophisticated.
   class Resolver
-    include RDF::SAK::Util::Clean
+    include Intertwingler::Util::Clean
 
     private
 
@@ -289,7 +289,7 @@ module RDF::SAK
     public
 
     define_singleton_method :coerce_resource,
-      RDF::SAK::Util::Clean.method(:coerce_resource).unbind
+      Intertwingler::Util::Clean.method(:coerce_resource).unbind
 
     # Coerce the argument into a resource, either {URI} or {RDF::URI}
     # (or {RDF::Node}). The type can be specified
@@ -302,7 +302,7 @@ module RDF::SAK
     #
     def coerce_resource arg, as: :rdf
       # again self.class is suuuuuuuuper slow
-      RDF::SAK::Util::Clean.coerce_resource arg, as: as do |arg|
+      Intertwingler::Util::Clean.coerce_resource arg, as: as do |arg|
         begin
           @base ? @base.merge(preproc arg.to_s.strip) : arg
         rescue URI::InvalidURIError => e
@@ -413,8 +413,8 @@ module RDF::SAK
 
       # obtain the raw candidates for our stack of URIs using the
       # ci:canonical/owl:sameAs mechanism, ie exact match
-      sa = @repo.property_set [RDF::SAK::CI.canonical,
-        RDF::SAK::CI.alias, RDF::OWL.sameAs]
+      sa = @repo.property_set [Intertwingler::CI.canonical,
+        Intertwingler::CI.alias, RDF::OWL.sameAs]
       candidates = nil
       uris.each do |u|
         # this will give us a hash where the keys are
@@ -423,7 +423,7 @@ module RDF::SAK
           next unless UUID_RE.match? s
           [s, {
             # we xor this because BITS[true] ^ 1 == 0, and 0 < 1
-            rank: BITS[f.include? RDF::SAK::CI.canonical] ^ 1,
+            rank: BITS[f.include? Intertwingler::CI.canonical] ^ 1,
             published: @repo.published?(s, circulated: circulated),
             ctime: @repo.dates_for(s,
               predicate: RDF::Vocab::DC.created).last || DateTime.new,
@@ -453,7 +453,7 @@ module RDF::SAK
       slug = terminal_slug uri
       if slug and slug != ''
         exact = uri == coerce_resource(slug)
-        sl = [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug]
+        sl = [Intertwingler::CI['canonical-slug'], Intertwingler::CI.slug]
         [RDF::XSD.string, RDF::XSD.token].each do |t|
           repo.subjects_for(sl, RDF::Literal(slug, datatype: t)) do |s, f|
             # skip non-uuid subjects
@@ -610,20 +610,20 @@ module RDF::SAK
       # obtain a sorted list of primary URIs (those identified by
       # ci:canonical and ci:canonical-slug)
       primary = @repo.objects_for(
-        term, RDF::SAK::CI.canonical, only: :resource).sort(&cmp)
+        term, Intertwingler::CI.canonical, only: :resource).sort(&cmp)
       if term.uri? and (host or slugs) and (primary.empty? or not scalar)
-        primary += @repo.objects_for(term, RDF::SAK::CI['canonical-slug'],
+        primary += @repo.objects_for(term, Intertwingler::CI['canonical-slug'],
           only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)
       end
 
       secondary = []
       if primary.empty? or not scalar
         secondary = @repo.objects_for(term,
-          [RDF::OWL.sameAs, RDF::SAK::CI['alias-for']],
+          [RDF::OWL.sameAs, Intertwingler::CI['alias-for']],
           entail: false, only: :resource).sort(&cmp)
         if term.uri? and (slugs or host)
           secondary += @repo.objects_for(
-            term, RDF::SAK::CI.slug, entail: false,
+            term, Intertwingler::CI.slug, entail: false,
             only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)
         end
       end
@@ -663,7 +663,7 @@ module RDF::SAK
       scalar ? out.first : out
     end
 
-    # XXX 2022-05-17 NOTE THAT RDF::SAK::Util::resolve_curie is more
+    # XXX 2022-05-17 NOTE THAT Intertwingler::Util::resolve_curie is more
     # complex than this; it assumes you can hand it stuff from
     # existing markup, so this is kinda the lite version
 
@@ -688,7 +688,7 @@ module RDF::SAK
       prefixes = { rdf: RDF::RDFV }.merge(sanitize_prefixes prefixes)
 
       out = (curie.respond_to?(:to_a) ? curie.to_a : [curie]).map do |c|
-        RDF::SAK::Util::Clean.normalize_space(c).split
+        Intertwingler::Util::Clean.normalize_space(c).split
       end.flatten.compact.map do |c|
         prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
         prefix = prefix.to_sym if prefix

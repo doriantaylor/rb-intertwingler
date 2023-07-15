@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
 # basic stuff
 require 'stringio'
@@ -19,21 +19,21 @@ require 'linkeddata'
 require 'xml-mixup'
 require 'md-noko'
 require 'uuid-ncname'
-require 'rdf/sak/graphops'
-require 'rdf/sak/resolver'
+require 'intertwingler/graphops'
+require 'intertwingler/resolver'
 
-require 'rdf/sak/mimemagic'
-require 'rdf/sak/util'
-require 'rdf/sak/nlp'
+require 'intertwingler/mimemagic'
+require 'intertwingler/util'
+require 'intertwingler/nlp'
 
 # ontologies, mine in particular
-require 'rdf/sak/ci'
-require 'rdf/sak/ibis'
+require 'intertwingler/ci'
+require 'intertwingler/ibis'
 # others not included in rdf.rb
-require 'rdf/sak/pav'
-require 'rdf/sak/scovo'
-require 'rdf/sak/qb'
-require 'rdf/sak/adms'
+require 'intertwingler/pav'
+require 'intertwingler/scovo'
+require 'intertwingler/qb'
+require 'intertwingler/adms'
 
 # 2021-12-09 REFACTORING NOTES: This thing is an utter mess and needs
 # a friggin overhaul. Here is the proposed new layout:
@@ -69,18 +69,18 @@ require 'rdf/sak/adms'
 #   should(?) eventually get kicked up to RDF.rb (subject_for,
 #   object_for, etc).
 
-module RDF::SAK
+module Intertwingler
 
   # The context class parses the configuration and yokes together the
-  # {RDF::SAK::Resolver} (which itself depends on an {RDF::Repository}
-  # augmented by {RDF::SAK::GraphOps}), plus the {RDF::SAK::Source}
-  # and {RDF::SAK::Surface} instances specified in the configuration.
-  # We (potentially via a `Surface`) query {RDF::SAK::Context} to get
-  # {RDF::SAK::Document} objects to be rendered to the surface.
+  # {Intertwingler::Resolver} (which itself depends on an {RDF::Repository}
+  # augmented by {Intertwingler::GraphOps}), plus the {Intertwingler::Source}
+  # and {Intertwingler::Surface} instances specified in the configuration.
+  # We (potentially via a `Surface`) query {Intertwingler::Context} to get
+  # {Intertwingler::Document} objects to be rendered to the surface.
   #
-  # @note The {RDF::SAK::Document} infrastructure is pending an
-  #  overhaul to the {RDF::SAK::Representation} and
-  #  {RDF::SAK::Transformation} pipeline.
+  # @note The {Intertwingler::Document} infrastructure is pending an
+  #  overhaul to the {Intertwingler::Representation} and
+  #  {Intertwingler::Transformation} pipeline.
   class Context
     include XML::Mixup
     include Util
@@ -209,7 +209,7 @@ module RDF::SAK
 
       # deal with prefix map
       config[:prefixes] =
-        RDF::SAK::Resolver.sanitize_prefixes config[:prefixes] if
+        Intertwingler::Resolver.sanitize_prefixes config[:prefixes] if
         config[:prefixes]
 
       # XXX 2022-03-17 gotta get rid of or otherwise resolve all these curie
@@ -219,12 +219,12 @@ module RDF::SAK
       # deal with duplicate map
       pfx = config[:prefixes] || {}
       if dups = config[:duplicate]
-        base = RDF::SAK::Resolver.coerce_resource config[:base], as: :uri
+        base = Intertwingler::Resolver.coerce_resource config[:base], as: :uri
         if dups.is_a? Hash
           config[:duplicate] = dups.map do |ruri, preds|
             preds = [preds] unless preds.is_a? Array
             preds.map! do |p|
-              RDF::SAK::Resolver.resolve_curie p, prefixes: pfx
+              Intertwingler::Resolver.resolve_curie p, prefixes: pfx
             end
             [RDF::URI((base + ruri.to_s).to_s), Set.new(preds)]
           end.to_h
@@ -240,7 +240,7 @@ module RDF::SAK
       # "document" maps, ie things that are never fragments
       config[:documents] = [] unless config[:documents].is_a? Array
       config[:documents].map! do |d|
-        RDF::SAK::Resolver.resolve_curie d, prefixes: pfx
+        Intertwingler::Resolver.resolve_curie d, prefixes: pfx
       end.compact
       config[:documents] << RDF::Vocab::FOAF.Document if
         config[:documents].empty?
@@ -248,12 +248,12 @@ module RDF::SAK
       # fragment maps
       config[:fragment] = {} unless config[:fragment].is_a? Hash
       config[:fragment] = config[:fragment].map do |k, v|
-        k = RDF::SAK::Resolver.resolve_curie k.to_s, prefixes: pfx
+        k = Intertwingler::Resolver.resolve_curie k.to_s, prefixes: pfx
         # warn "yo #{k.inspect}"
         v = v.respond_to?(:to_a) ? v.to_a : [v]
         v = v.reduce({}) do |a, x|
           x = x.to_s.split(/^\^+/).reverse
-          a[RDF::SAK::Resolver.resolve_curie(x.first, prefixes: pfx)] = !!x[1]
+          a[Intertwingler::Resolver.resolve_curie(x.first, prefixes: pfx)] = !!x[1]
           a
         end
         [k, v]
@@ -275,7 +275,7 @@ module RDF::SAK
     # @param config
     # @param type
     #
-    # @return [RDF::SAK::Context] the new context object.
+    # @return [Intertwingler::Context] the new context object.
 
     def initialize graph: nil, base: nil, config: nil, type: nil
       # RDF::Reasoner.apply(:rdfs, :owl)
@@ -288,7 +288,7 @@ module RDF::SAK
       # warn base.inspect
 
       @graph    = coerce_graph graph, type: type
-      @resolver = RDF::SAK::Resolver.new @graph, base,
+      @resolver = Intertwingler::Resolver.new @graph, base,
         prefixes: @config[:prefixes]
 
       # warn @config[:fragment]
@@ -927,7 +927,7 @@ module RDF::SAK
 
       # get links
       link = head_links id, struct: struct, ignore: bodynodes,
-        labels: labels, vocab: XHV, rev: RDF::SAK::CI.document
+        labels: labels, vocab: XHV, rev: Intertwingler::CI.document
 
       # get metas
       mn = {}
@@ -971,7 +971,7 @@ module RDF::SAK
         # end.map(&:to_s).sort.join '; '
 
         # # explicit non-audience(s)
-        # n = objects_for(s, RDF::SAK::CI['non-audience']).map do |au|
+        # n = objects_for(s, Intertwingler::CI['non-audience']).map do |au|
         #   next lab[au] if lab[au]
         #   _, al = label_for au
         #   lab[au] = al
@@ -1209,7 +1209,7 @@ module RDF::SAK
     # KILL OK
     def indexed? subject
       subject = @resolver.coerce_resource subject
-      indexed = objects_for subject, RDF::SAK::CI.indexed,
+      indexed = objects_for subject, Intertwingler::CI.indexed,
         only: :literal, datatype: RDF::XSD.boolean
       # assume the subject is indexed but we are looking for explicit
       # presence of `false` (ie explicit `false` overrides explicit
@@ -1364,7 +1364,7 @@ module RDF::SAK
       preamble = [
         { '#id' => id.to_s },
         { '#updated' => latest.iso8601 },
-        { '#generator' => 'RDF::SAK', version: RDF::SAK::VERSION,
+        { '#generator' => 'Intertwingler', version: Intertwingler::VERSION,
           uri: "https://github.com/doriantaylor/rb-rdf-sak" },
         { nil => :link, rel: :self, type: 'application/atom+xml',
           href: @resolver.uri_for(id) },
@@ -1781,7 +1781,7 @@ module RDF::SAK
       meta  = head_meta(subject, struct: struct, meta_names: mn,
                         vocab: XHV) + generate_twitter_meta(subject)
       links = head_links subject, struct: struct, vocab: XHV,
-        ignore: seen.keys, rev: RDF::SAK::CI.document
+        ignore: seen.keys, rev: Intertwingler::CI.document
       types = @resolver.abbreviate @graph.asserted_types(subject, struct: struct)
       title = if t = @graph.label_for(subject, struct: struct)
                 [t[1].to_s, @resolver.abbreviate(t[0])]
@@ -2481,7 +2481,7 @@ module RDF::SAK
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).reject do |x|
         x.directory? or /.*(?:markdown|(?:x?ht|x)ml).*/i !~
-          RDF::SAK::MimeMagic.by_path(x).to_s
+          Intertwingler::MimeMagic.by_path(x).to_s
       end.uniq
 
       # warn files.inspect
@@ -2497,7 +2497,7 @@ module RDF::SAK
     #
     # @param uri [RDF::URI, URI, :to_s]
     #
-    # @return [RDF::SAK::Context::Document] or nil
+    # @return [Intertwingler::Context::Document] or nil
 
     def visit uri
       uri  = @resolver.uuid_for(uri) or return
@@ -2636,7 +2636,7 @@ module RDF::SAK
         html = doc.doc.dup 1
         html.xpath(
           '/html:html/html:head/*[not(self::html:title|self::html:base)]',
-          RDF::SAK::Util::XPATHNS).each(&:unlink)
+          Intertwingler::Util::XPATHNS).each(&:unlink)
 
         # slurp up any rdfa, swapping in canonical uuids; note that if
         # we're doing this here then we assume they are authoritative
@@ -2938,8 +2938,8 @@ module RDF::SAK
       attr_reader :context, :doc, :uuid, :uri
 
       def initialize context, uuid, doc: nil, uri: nil, mtime: nil
-        raise 'context must be a RDF::SAK::Context' unless
-          context.is_a? RDF::SAK::Context
+        raise 'context must be a Intertwingler::Context' unless
+          context.is_a? Intertwingler::Context
         raise "uuid must be an RDF::URI, not #{uuid.class}" unless
           uuid.is_a? RDF::URI and uuid.to_s.start_with? 'urn:uuid:'
 
@@ -2968,7 +2968,7 @@ module RDF::SAK
 
           # pathnames turned into IO objects
           if doc.is_a? Pathname
-            type = RDF::SAK::MimeMagic.by_path doc
+            type = Intertwingler::MimeMagic.by_path doc
             doc  = doc.open # this may raise if the file isn't there
           end
 
@@ -2976,7 +2976,7 @@ module RDF::SAK
           doc = doc.to_s unless doc.is_a? IO
 
           # check type by content
-          type ||= RDF::SAK::MimeMagic.by_magic(doc)
+          type ||= Intertwingler::MimeMagic.by_magic(doc)
 
           # can you believe there is a special bookmarks mime type good grief
           type = 'text/html' if type == 'application/x-mozilla-bookmarks'
@@ -3043,7 +3043,7 @@ module RDF::SAK
         node ||= doc.root
         prefixes = @resolver.prefixes.merge(
           get_prefixes(node, coerce: :term).filter { |k, _| k })
-        RDF::SAK::Util.subject_for node,
+        Intertwingler::Util.subject_for node,
           prefixes: @resolver.prefixes, base: base, coerce: coerce
       end
 
@@ -3232,7 +3232,7 @@ module RDF::SAK
         sponge doc, repo: repo if sponge
 
         # XXX KILL THIS
-        RDF::SAK::Util::Messy.rehydrate body, resolver, rescan: rescan do |cs|
+        Intertwingler::Util::Messy.rehydrate body, resolver, rescan: rescan do |cs|
           # warn cs.inspect
           unless cs.empty?
             cs.select! do |k, v|
@@ -3345,7 +3345,7 @@ module RDF::SAK
         # and now we do the head
         links = @context.head_links @uuid, struct: struct, nodes: resources,
           prefixes: @context.prefixes, ignore: bodylinks, labels: labels,
-          vocab: XHV, rev: RDF::SAK::CI.document
+          vocab: XHV, rev: Intertwingler::CI.document
 
         # we want to duplicate links from particular subjects (eg the root)
         (@context.config[:duplicate] || {}).sort do |a, b|
@@ -3558,14 +3558,14 @@ module RDF::SAK
         # XXX maybe get rid of this?
         # html.xpath(
         #   '/html:html/html:head/*[not(self::html:title|self::html:base)]',
-        #   RDF::SAK::Util::XPATHNS).each(&:unlink)
+        #   Intertwingler::Util::XPATHNS).each(&:unlink)
 
         res = @context.resolver
 
         # gather up all of the values of the rdfa attributes
         prefixes = {}
-        found = html.xpath(CURIE_TAGS, RDF::SAK::Util::XPATHNS).map do |elem|
-          prefixes = RDF::SAK::Util::Messy.get_prefixes(elem).merge prefixes
+        found = html.xpath(CURIE_TAGS, Intertwingler::Util::XPATHNS).map do |elem|
+          prefixes = Intertwingler::Util::Messy.get_prefixes(elem).merge prefixes
           CURIES.map { |a| elem[a].to_s.strip.split }
         end.flatten.reject { |c| /:(?=\/\/)/.match? c }.map do |c|
           c = /^(?:([^:]+):)?/.match(c).captures.first
@@ -3621,7 +3621,7 @@ module RDF::SAK
 
       def scan_inlines &block
         # we're using the static method because it is stateless
-        RDF::SAK::Util.scan_inlines @doc, base: @uri, &block
+        Intertwingler::Util.scan_inlines @doc, base: @uri, &block
       end
 
     end

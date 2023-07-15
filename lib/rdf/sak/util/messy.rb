@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
 require 'uri'
 require 'uri/urn'
@@ -17,15 +17,15 @@ require 'rdf/vocab/bibo'
 require 'rdf/vocab/dc'
 require 'rdf/vocab/dc11'
 
-require 'rdf/sak/mimemagic'
-require 'rdf/sak/ci'
-require 'rdf/sak/tfo'
-require 'rdf/sak/ibis'
-require 'rdf/sak/pav'
-require 'rdf/sak/qb'
+require 'intertwingler/mimemagic'
+require 'intertwingler/ci'
+require 'intertwingler/tfo'
+require 'intertwingler/ibis'
+require 'intertwingler/pav'
+require 'intertwingler/qb'
 
 # this will set the namespaces but we also depend on stuff in here
-require 'rdf/sak/util/clean'
+require 'intertwingler/util/clean'
 
 unless RDF::List.respond_to? :from
   class RDF::List
@@ -53,8 +53,8 @@ unless RDF::List.respond_to? :from
   end
 end
 
-module RDF::SAK::Util::Messy
-  include RDF::SAK::Util::Clean
+module Intertwingler::Util::Messy
+  include Intertwingler::Util::Clean
   include XML::Mixup
 
   private
@@ -317,9 +317,9 @@ module RDF::SAK::Util::Messy
     # this framework; save it for the clojure version
   end
 
-  AUTHOR  = [RDF::SAK::PAV.authoredBy, RDF::Vocab::DC.creator,
+  AUTHOR  = [Intertwingler::PAV.authoredBy, RDF::Vocab::DC.creator,
     RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
-  CONTRIB = [RDF::SAK::PAV.contributedBy, RDF::Vocab::DC.contributor,
+  CONTRIB = [Intertwingler::PAV.contributedBy, RDF::Vocab::DC.contributor,
     RDF::Vocab::DC11.contributor]
   [AUTHOR, CONTRIB].each do |preds|
     i = 0
@@ -931,13 +931,13 @@ module RDF::SAK::Util::Messy
     # * (11) inexact == 3.
 
     # collect the candidates by URI
-    sa = predicate_set [RDF::SAK::CI.canonical,
-      RDF::SAK::CI.alias, RDF::OWL.sameAs]
+    sa = predicate_set [Intertwingler::CI.canonical,
+      Intertwingler::CI.alias, RDF::OWL.sameAs]
     candidates = nil
     uris.each do |u|
       candidates = subjects_for(repo, sa, u, entail: false) do |s, f|
         # there is no #to_i for booleans and also we xor this number
-        [s, { rank: BITS[f.include?(RDF::SAK::CI.canonical)] ^ 1,
+        [s, { rank: BITS[f.include?(Intertwingler::CI.canonical)] ^ 1,
           published: published?(repo, s),
           mtime: dates_for(repo, s).last || DateTime.new }]
       end.compact.to_h
@@ -964,7 +964,7 @@ module RDF::SAK::Util::Messy
     slug = terminal_slug uri, base: base
     if slug and !slug.empty?
       exact = uri == coerce_resource(slug, base) # slug represents exact match
-      sl = [RDF::SAK::CI['canonical-slug'], RDF::SAK::CI.slug]
+      sl = [Intertwingler::CI['canonical-slug'], Intertwingler::CI.slug]
       [RDF::XSD.string, RDF::XSD.token].each do |t|
         subjects_for(repo, sl, RDF::Literal(slug, datatype: t)) do |s, f|
           # default to lowest rank if this candidate is new
@@ -1217,7 +1217,7 @@ module RDF::SAK::Util::Messy
     # ###
 
     # determine if there is an explicit host document
-    host = objects_for(repo, subject, RDF::SAK::CI['fragment-of'],
+    host = objects_for(repo, subject, Intertwingler::CI['fragment-of'],
       only: :resource).sort { |a, b| cmp_resource a, b }.first
 
     # these classes will net everything so we get rid of them
@@ -1361,13 +1361,13 @@ module RDF::SAK::Util::Messy
     # warn hosturi
 
     # first thing: get ci:canonical
-    primary = objects_for(repo, subject, RDF::SAK::CI.canonical,
+    primary = objects_for(repo, subject, Intertwingler::CI.canonical,
                           only: :resource).sort { |a, b| cmp_resource a, b }
     # if that's empty then try ci:canonical-slug
     if subject.uri? and (host or slugs) and (primary.empty? or not unique)
       # warn subject
       primary += objects_for(repo, subject,
-        RDF::SAK::CI['canonical-slug'], only: :literal).map do |o|
+        Intertwingler::CI['canonical-slug'], only: :literal).map do |o|
         if hosturi
           h = hosturi.dup
           h.fragment = o.value
@@ -1388,7 +1388,7 @@ module RDF::SAK::Util::Messy
         entail: false, only: :resource).sort { |a, b| cmp_resource a, b }
 
       if subject.uri? and (slugs or host)
-        secondary += objects_for(repo, subject, RDF::SAK::CI.slug,
+        secondary += objects_for(repo, subject, Intertwingler::CI.slug,
           entail: false, only: :literal).map do |o|
           if hosturi
             h = hosturi.dup
@@ -1453,17 +1453,17 @@ module RDF::SAK::Util::Messy
     end
 
     if indexed
-      ix = objects_for(repo, uri, RDF::SAK::CI.indexed, only: :literal).first
+      ix = objects_for(repo, uri, Intertwingler::CI.indexed, only: :literal).first
       return false if ix and ix.object == false
     end
 
     candidates = objects_for(
       repo, uri, RDF::Vocab::BIBO.status, only: :resource).to_set
 
-    return false if !retired and candidates.include? RDF::SAK::CI.retired
+    return false if !retired and candidates.include? Intertwingler::CI.retired
 
     test = Set[RDF::Vocab::BIBO['status/published']]
-    test << RDF::SAK::CI.circulated if circulated
+    test << Intertwingler::CI.circulated if circulated
 
     # warn candidates, test, candidates & test
 
@@ -1766,7 +1766,7 @@ module RDF::SAK::Util::Messy
     objects_for(
       repo, subject, predicate, only: :literal, datatype: datatype) do |o|
       t = o.object
-      t =~ /\// ? RDF::SAK::MimeMagic.new(t.to_s.downcase) : nil
+      t =~ /\// ? Intertwingler::MimeMagic.new(t.to_s.downcase) : nil
     end.compact.sort.uniq
   end
 
@@ -2126,7 +2126,7 @@ module RDF::SAK::Util::Messy
     ''
   end
 
-  # XXX NO KILL YET (figure out what that note means in RDF::SAK::Resolver)
+  # XXX NO KILL YET (figure out what that note means in Intertwingler::Resolver)
 
   # Resolve a string or array or attribute node containing one or more
   # terms/CURIEs against a set of prefixes. The CURIE can be a string,
@@ -2481,7 +2481,7 @@ module RDF::SAK::Util::Messy
   # Remove all `<head>` content aside from `<title>` and `<base>`;
   # revert all links to their canonical UUIDs (where applicable).
   #
-  # @param doc [RDF::SAK::Context::Document]
+  # @param doc [Intertwingler::Context::Document]
   #
   # @return [Nokogiri::XML::Document]
   #
@@ -2494,7 +2494,7 @@ module RDF::SAK::Util::Messy
 
     out.xpath(XPATH[:sanitize], XPATHNS).each do |e|
       # XXX this shouldn ot be a problem post-refactor
-      base  = RDF::SAK::Util::Messy.base_for e, doc.uri
+      base  = Intertwingler::Util::Messy.base_for e, doc.uri
       attrs = %i[about resource] + URL_ELEMS.fetch(e.name.to_sym, [])
 
       attrs.each do |a|
@@ -2542,7 +2542,7 @@ module RDF::SAK::Util::Messy
   # (maybe add +code+/+kbd+/+samp+/+var+/+time+ one day too)
   #
   # @param node [Nokogiri::XML::Node] the root node
-  # @param resolver [RDF::SAK::Resolver] the URI resolver
+  # @param resolver [Intertwingler::Resolver] the URI resolver
   # @param base [nil, URI, RDF::URI]
   # @param cache [Hash]
   # @param rescan [false, true] dumb name for something that adds triples
@@ -2551,7 +2551,7 @@ module RDF::SAK::Util::Messy
     graph = resolver.repo
     # collect all the literals
     graph.each_object do |o|
-      lemma = RDF::SAK::NLP.lemmatize o.value
+      lemma = Intertwingler::NLP.lemmatize o.value
       (cache[lemma.downcase] ||= Set.new) << o if o.literal?
     end
 
@@ -2567,7 +2567,7 @@ module RDF::SAK::Util::Messy
               e['content'] || e.content).strip
 
       # now we have the literals actually in the graph
-      lit = cache[RDF::SAK::NLP.lemmatize(text).downcase] or next
+      lit = cache[Intertwingler::NLP.lemmatize(text).downcase] or next
       lit = lit.to_a.sort do |a, b|
         c = 0
         if lang
@@ -2633,7 +2633,7 @@ module RDF::SAK::Util::Messy
                   pp = graph.query([su, nil, chosen]).predicates.uniq
 
                   if pp.empty?
-                    pp << RDF::SAK::CI.mentions
+                    pp << Intertwingler::CI.mentions
                     pp.each { |p| graph << [su, p, chosen] } if rescan
                   end
 

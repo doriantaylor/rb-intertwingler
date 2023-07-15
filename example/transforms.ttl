@@ -32,7 +32,7 @@ xf:reindent a tfo:Parameter ;
 xf:subtree a tfo:Transform ;
   skos:prefLabel "Subtree"@en ;
   rdfs:comment "Isolate an X(HT)ML node using XPath."@en ;
-  tfo:implementation <urn:x-ruby:RDF::SAK::Transform::XPath> ;
+  tfo:implementation <urn:x-ruby:Intertwingler::Transform::XPath> ;
   tfo:accepts "application/xml"^^tfo:content-type ;
   tfo:returns "application/xml"^^tfo:content-type ;
   tfo:parameter xf:xpath, xf:prefix, xf:reindent ;

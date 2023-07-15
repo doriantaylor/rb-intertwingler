@@ -1,11 +1,11 @@
 # -*- mode: enh-ruby -*-
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
 Gem::Specification.new do |spec|
   spec.name          = 'rdf-sak'
-  spec.version       = RDF::SAK::VERSION
+  spec.version       = Intertwingler::VERSION
   spec.authors       = ['Dorian Taylor']
   spec.email         = ['code@doriantaylor.com']
   spec.license       = 'Apache-2.0'

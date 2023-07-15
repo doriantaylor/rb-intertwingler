@@ -1,6 +1,6 @@
 # rack? sure
 
-require 'rdf/sak/util'
+require 'intertwingler/util'
 
 require 'rack'
 require 'rack/request'
@@ -9,7 +9,7 @@ require 'http/negotiate'
 require 'uuidtools'
 require 'pathname'
 
-class RDF::SAK::Console
+class Intertwingler::Console
 
   class Request < Rack::Request
     # this should be in vanilla Rack::Request
@@ -86,10 +86,10 @@ class RDF::SAK::Console
   }
 
   DISPATCH = {
-    RDF::SAK::Util::UUID_PATH => {
+    Intertwingler::Util::UUID_PATH => {
       GET: -> req {
         uri   = req.full_uri
-        match = RDF::SAK::Util::UUID_PATH.match uri.request_uri
+        match = Intertwingler::Util::UUID_PATH.match uri.request_uri
 
         subject = context.canonical_uuid match.captures.first
 
@@ -105,7 +105,7 @@ class RDF::SAK::Console
         # without baking it into the quad store
 
         # generate the response (here is where loupe would be handy)
-        doc = RDF::SAK::Util.generate_doc graph, subject, base: base,
+        doc = Intertwingler::Util.generate_doc graph, subject, base: base,
          langs: req.accept_language.to_h, prefixes: context.prefixes
         
         # return 200
@@ -187,7 +187,7 @@ class RDF::SAK::Console
 
     if body.is_a? Nokogiri::XML::Document
       if btag = body.at_xpath(
-        '/html:html/html:head[1]/html:base[1]', RDF::SAK::Util::XPATHNS)
+        '/html:html/html:head[1]/html:base[1]', Intertwingler::Util::XPATHNS)
         buri = RDF::URI(btag['href'])
         if buri.authority == base.authority
           buri.scheme    = uri.scheme
@@ -210,7 +210,7 @@ class RDF::SAK::Console
 
   # Initialize a new Web console.
   #
-  # @param context [RDF::SAK::Context] let's just be lazy for now
+  # @param context [Intertwingler::Context] let's just be lazy for now
   #
   def initialize context
     @context = context

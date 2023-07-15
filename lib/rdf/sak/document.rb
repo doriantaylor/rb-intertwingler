@@ -1,9 +1,9 @@
 require 'rdf'
 require 'rdf/vocab'
-require 'rdf/sak/util/clean'
-require 'rdf/sak/nlp'
-require 'rdf/sak/ci'
-require 'rdf/sak/qb'
+require 'intertwingler/util/clean'
+require 'intertwingler/nlp'
+require 'intertwingler/ci'
+require 'intertwingler/qb'
 require 'time'
 require 'stringio'
 require 'nokogiri'
@@ -13,14 +13,14 @@ require 'xml-mixup'
 
 # This is the base class for (X)HTML+RDFa documents. It is a temporary
 # situation intended to absorb the dissolution of
-# {RDF::SAK::Context::Document} and {RDF::SAK::Util::Messy}. It will
+# {Intertwingler::Context::Document} and {Intertwingler::Util::Messy}. It will
 # eventually get replaced by the much more robust
-# {RDF::SAK::Representation} paradigm, which, among other things, will
+# {Intertwingler::Representation} paradigm, which, among other things, will
 # be able to handle _non_-markup resources like images and such.
-class RDF::SAK::Document
+class Intertwingler::Document
   include XML::Mixup
-  include RDF::SAK::NLP
-  include RDF::SAK::Util::Clean
+  include Intertwingler::NLP
+  include Intertwingler::Util::Clean
 
   private
 
@@ -57,7 +57,7 @@ class RDF::SAK::Document
 
   public
 
-  class Feed < RDF::SAK::Document
+  class Feed < Intertwingler::Document
     def generate published: true
       # get related feeds
       related = @repo.objects_for(
@@ -201,7 +201,7 @@ class RDF::SAK::Document
       preamble = [
         { '#id' => @subject.to_s },
         { '#updated' => latest.iso8601 },
-        { '#generator' => 'RDF::SAK', version: RDF::SAK::VERSION,
+        { '#generator' => 'Intertwingler', version: Intertwingler::VERSION,
           uri: "https://github.com/doriantaylor/rb-rdf-sak" },
         { nil => :link, rel: :self, type: 'application/atom+xml',
           href: @resolver.uri_for(@subject) },
@@ -227,7 +227,7 @@ class RDF::SAK::Document
     end
   end
 
-  class SiteMap < RDF::SAK::Document
+  class SiteMap < Intertwingler::Document
 
     def generate published: true
       base = resolver.base
@@ -250,7 +250,7 @@ class RDF::SAK::Document
     end
   end
 
-  class Stats < RDF::SAK::Document
+  class Stats < Intertwingler::Document
 
     def generate published: true
       base  = @resolver.uri_for @subject, as: :uri
@@ -260,8 +260,8 @@ class RDF::SAK::Document
               end
       cache = {}
       @repo.subjects_for(
-        RDF::SAK::QB.dataSet, @subject, only: :resource).each do |o|
-        if d = @repo.objects_for(o, RDF::SAK::CI.document, only: :resource).first
+        Intertwingler::QB.dataSet, @subject, only: :resource).each do |o|
+        if d = @repo.objects_for(o, Intertwingler::CI.document, only: :resource).first
           if !published or @repo.published?(d)
             # include a "sort" time that defaults to epoch zero
             c = cache[o] ||= {
@@ -325,7 +325,7 @@ class RDF::SAK::Document
              ] + DSD_SEQ.map do |f|
           h = []
           x = { h => :td }
-          p = RDF::SAK::CI[f]
+          p = Intertwingler::CI[f]
           if y = c[:struct][p] and !y.empty?
             h << y = y.first
             x[:property] = @resolver.abbreviate p
@@ -353,7 +353,7 @@ class RDF::SAK::Document
 
   # This class is for things like SKOS concept schemes, rosters,
   # reading lists, etc.
-  class Index < RDF::SAK::Document
+  class Index < Intertwingler::Document
 
     # we'll make this a class method
     def self.alphabetized_list resolver, subject, fwd: nil, rev: nil,
@@ -453,7 +453,7 @@ class RDF::SAK::Document
       meta  = head_meta(resolver, subject, struct: struct, meta_names: mn,
                         vocab: XHV) + twitter_meta(resolver, subject)
       links = head_links resolver, subject, struct: struct, vocab: XHV,
-        ignore: seen.keys, rev: RDF::SAK::CI.document
+        ignore: seen.keys, rev: Intertwingler::CI.document
       types = resolver.abbreviate repo.types_for(subject, struct: struct)
       title = if t = repo.label_for(subject, struct: struct)
                 [t.last.to_s, resolver.abbreviate(t.first)]
@@ -968,10 +968,10 @@ class RDF::SAK::Document
 
   # XXX DO SOMETHING COOLER HERE
   CLASS_MAP = {
-    RDF::Vocab::SiocTypes.AddressBook => RDF::SAK::Document::AddressBook,
-    RDF::Vocab::SKOS.ConceptScheme    => RDF::SAK::Document::ConceptScheme,
-    RDF::Vocab::SKOS.Collection       => RDF::SAK::Document::ConceptScheme,
-    RDF::Vocab::SiocTypes.ReadingList => RDF::SAK::Document::ReadingList,
+    RDF::Vocab::SiocTypes.AddressBook => Intertwingler::Document::AddressBook,
+    RDF::Vocab::SKOS.ConceptScheme    => Intertwingler::Document::ConceptScheme,
+    RDF::Vocab::SKOS.Collection       => Intertwingler::Document::ConceptScheme,
+    RDF::Vocab::SiocTypes.ReadingList => Intertwingler::Document::ReadingList,
   }
 
   # Default `generate` method generates the doc from triples
@@ -1001,7 +1001,7 @@ class RDF::SAK::Document
 
       # pathnames turned into IO objects
       if doc.is_a? Pathname
-        type = RDF::SAK::MimeMagic.by_path doc
+        type = Intertwingler::MimeMagic.by_path doc
         doc  = doc.open # this may raise if the file isn't there
       end
 
@@ -1009,7 +1009,7 @@ class RDF::SAK::Document
       doc = doc.to_s unless [IO, StringIO].any? { |c| doc_is_a? c }
 
       # check type by content
-      type ||= RDF::SAK::MimeMagic.by_magic(doc)
+      type ||= Intertwingler::MimeMagic.by_magic(doc)
 
       # can you believe there is a special bookmarks mime type good grief
       type = 'text/html' if type == 'application/x-mozilla-bookmarks'
@@ -1066,13 +1066,13 @@ class RDF::SAK::Document
 
   # Initialize the document, dispatching to the correct subclass.
   #
-  # @param resolver [RDF::SAK::Resolver] the resolver
+  # @param resolver [Intertwingler::Resolver] the resolver
   # @param subject [RDF::URI] the subject URI
   #
-  # @return [RDF::SAK::Document]
+  # @return [Intertwingler::Document]
   #
   def self.new resolver, subject, **args
-    if self == RDF::SAK::Document
+    if self == Intertwingler::Document
       # snag the graph
       repo = resolver.repo
 
@@ -1100,7 +1100,7 @@ class RDF::SAK::Document
 
   # Initialize the document.
   #
-  # @param resolver [RDF::SAK::Resolver] the resolver
+  # @param resolver [Intertwingler::Resolver] the resolver
   # @param subject [RDF::URI] the subject URI
   # @param uri [RDF::URI, URI] the routable URI
   # @param doc
@@ -1841,7 +1841,7 @@ class RDF::SAK::Document
   def rehydrate elem, base: nil, cache: {}, rescan: false, &block
     # collect all the literals
     @repo.each_object do |o|
-      lemma = RDF::SAK::NLP.lemmatize o.value
+      lemma = Intertwingler::NLP.lemmatize o.value
       (cache[lemma.downcase] ||= Set.new) << o if o.literal?
     end
 
@@ -1857,7 +1857,7 @@ class RDF::SAK::Document
               e['content'] || e.content).strip
 
       # now we have the literals actually in the graph
-      lit = cache[RDF::SAK::NLP.lemmatize(text).downcase] or next
+      lit = cache[Intertwingler::NLP.lemmatize(text).downcase] or next
       lit = lit.to_a.sort do |a, b|
         c = 0
         if lang
@@ -1923,7 +1923,7 @@ class RDF::SAK::Document
                   pp = @repo.query([su, nil, chosen]).predicates.uniq
 
                   if pp.empty?
-                    pp << RDF::SAK::CI.mentions
+                    pp << Intertwingler::CI.mentions
                     pp.each { |p| graph << [su, p, chosen] } if rescan
                   end
 
@@ -2301,7 +2301,7 @@ class RDF::SAK::Document
   # made to determine the `<title>` (using #label_for). What remains
   # is passed to #generate_fragment.
   #
-  # @param resolver [RDF::SAK::Resolver]
+  # @param resolver [Intertwingler::Resolver]
   # @param subject
   # @param struct
   # @param langes

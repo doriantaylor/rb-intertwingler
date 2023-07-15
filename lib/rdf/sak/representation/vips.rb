@@ -1,10 +1,10 @@
-require 'rdf/sak/representation'
+require 'intertwingler/representation'
 require 'vips'
 require 'vips/sourcecustom'
 require 'vips/targetcustom'
 require 'stringio'
 
-class RDF::SAK::Representation::Vips < RDF::SAK::Representation
+class Intertwingler::Representation::Vips < Intertwingler::Representation
   private
 
   OBJECT_CLASS = Vips::Image

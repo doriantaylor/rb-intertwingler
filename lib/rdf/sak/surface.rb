@@ -1,17 +1,17 @@
-require 'rdf/sak/version'
+require 'intertwingler/version'
 
-# A _surface_ is where {RDF::SAK::Representation representations} of
+# A _surface_ is where {Intertwingler::Representation representations} of
 # _information resources_ are _projected_. The behaviour of a surface
 # is intentionally opaque, and as such its main functionality is
 # accessed through the `call` method. Whatever is on the other side of
 # that is assumed to know what to do with it.
-class RDF::SAK::Surface
+class Intertwingler::Surface
 
   attr_reader context
 
   # Instantiate the surface.
   #
-  # @param context [RDF::SAK::Context] the configuration context
+  # @param context [Intertwingler::Context] the configuration context
   # @param options [Hash] dummy keyword options
   #
   def initialize context, **options
@@ -56,7 +56,7 @@ class RDF::SAK::Surface
 
     # Write a single resource to the document root.
     #
-    # @param resource [RDF::SAK::Document, RDF::URI, URI, #to_s] the resource we
+    # @param resource [Intertwingler::Document, RDF::URI, URI, #to_s] the resource we
     #  want to write
     # @param published [true, false] whether to write the published
     #  version, if it exists
@@ -73,10 +73,10 @@ class RDF::SAK::Surface
     #
     def write resource, published: true, rehydrate: false,
         rescan: false, sponge: false
-      unless resource.is_a? RDF::SAK::Document
+      unless resource.is_a? Intertwingler::Document
         begin
           resource = @context.visit resource
-        rescue RDF::SAK::Source::NotAcceptable
+        rescue Intertwingler::Source::NotAcceptable
           warn "No variant found for #{uri}"
           return
         end
@@ -91,9 +91,9 @@ class RDF::SAK::Surface
       states.each do |state|
         target = state ? @dir : @private
 
-        # XXX this only handles RDF::SAK::Document objects; we will
+        # XXX this only handles Intertwingler::Document objects; we will
         # need to rethink this for the move to the
-        # RDF::SAK::Representation regime (which should have a unified
+        # Intertwingler::Representation regime (which should have a unified
         # interface for serialization no matter what the payload is).
         # This is fine for now though.
 
