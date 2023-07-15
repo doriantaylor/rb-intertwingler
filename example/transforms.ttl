@@ -4,8 +4,8 @@
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix dct:  <http://purl.org/dc/terms/> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .
-@prefix tfo:  <https://privatealpha.com/ontology/transformation/1#> .
+@prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .
+@prefix tfo:  <https://vocab.methodandstructure.com/transformation#> .
 @prefix xf:   <tag:makethingsmakesense.com,2020:transform/> .
 
 xf:prefix a tfo:Parameter ;

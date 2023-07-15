@@ -12,7 +12,7 @@ RSpec.describe RDF::SAK::Transform do
 
   repo = RDF::Repository.new
   repo.load root + 'example/transforms.ttl'
-  
+
   TRANSFORMS = %w[subtree cleanup].map { |t| VOCAB[t].to_uri }
   PARAMS = [VOCAB.prefix, VOCAB.reindent, VOCAB.xpath]
 

@@ -67,12 +67,66 @@ require 'rdf/sak/version'
 # 1. use 
 #
 class RDF::SAK::Representation
+  include Enumerable
+
+  private
+
+  # subclasses should set this
+  OBJECT_CLASS = nil
+
+  def assert_io_like obj
+    raise ArgumentError, "object of #{obj.class} is not IO-ey enough" unless
+      IO === obj or obj.respond_to? :each
+    obj
+  end
+
+  def coerce_type type
+    return type if type.is_a? RDF::SAK::MimeMagic
+    RDF::SAK::MimeMagic.new type.to_s
+  end
+
+  def coerce_rfc5646 language
+    # i dunno i don't really feel like being smarter than this
+    language.to_s.downcase.strip.gsub(/[[:space:]_]/, ?-).tr_s(?-, ?-)
+  end
+
+  def coerce_charset charset
+    # i dunno right yet
+    charset.to_s.downcase.strip
+  end
+
+  DEFAULT_TYPE = 'application/octet-stream'.freeze
+
+  public
+
+  def self.default_type
+    DEFAULT_TYPE
+  end
+
+  attr_reader :io, :type, :language, :charset
+
+  def initialize io, type: DEFAULT_TYPE, language: nil, charset: nil, **options
+    raise NotImplementedError, 'Subclasses need an OBJECT_CLASS' unless OBJECT_CLASS
+    @io       = assert_io_like io
+    @type     = coerce_type(type || DEFAULT_TYPE)
+    @language = coerce_rfc5646 language if language
+    @charset  = coerce_charset charset  if charset
+  end
+
+  def each &block
+    raise NotImplementedError, 'subclasses must implement each'
+  end
+
+  # Return the in-memory representation of the object.
+  def object
+    raise NotImplementedError, 'subclasses must implement object'
+  end
 
   # Nokogiri is for HTML/XML.
-  class Nokogiri
+  class Nokogiri < self
   end
 
   # Vips is used for raster images.
-  class Vips
+  class Vips < self
   end
 end

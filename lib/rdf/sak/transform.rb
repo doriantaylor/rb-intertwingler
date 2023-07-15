@@ -18,30 +18,32 @@ class RDF::SAK::Transform
   private
 
   def self.numeric_objects repo, subject, predicate, entail: false
-    RDF::SAK::Util.objects_for(repo, subject, predicate, entail: entail,
-      only: :literal).map(&:object).select { |c| c.is_a? Numeric }.sort
+    repo.objects_for(
+      subject, predicate, entail: entail, only: :literal
+    ).reduce([]) do |a, o|
+      a << o.object if o.object.is_a? Numeric
+      a
+    end.sort
   end
 
   def self.gather_params repo, subject
     params = {}
-    RDF::SAK::Util.objects_for(repo, subject, RDF::SAK::TFO.parameter,
-                               entail: false, only: :resource).each do |ps|
+    repo.objects_for(subject, RDF::SAK::TFO.parameter,
+                     entail: false, only: :resource).each do |ps|
       param = params[ps] ||= {}
 
       # slug/identifier
-      if id = RDF::SAK::Util.objects_for(
-        repo, ps, RDF::Vocab::DC.identifier, only: :literal).sort.first
+      if id = repo.objects_for(
+        ps, RDF::Vocab::DC.identifier, only: :literal).sort.first
         param[:id] = id.value.to_sym
       end
 
       # rdfs:range
-      range = RDF::SAK::Util.objects_for(
-        repo, ps, RDF::RDFS.range, only: :resource)
+      range = repo.objects_for(ps, RDF::RDFS.range, only: :resource)
       param[:range] = range.to_set unless range.empty?
 
       # default = RDF::SAK::Util
-      param[:default] = RDF::SAK::Util.objects_for(
-        repo, ps, RDF::SAK::TFO.default)
+      param[:default] = repo.objects_for(ps, RDF::SAK::TFO.default)
 
       # cardinalities
       param[:minc] = 0
@@ -66,6 +68,7 @@ class RDF::SAK::Transform
     literals = []
     lists    = []
     pred     = RDF::SAK::TFO[returns ? 'returns' : 'accepts']
+
     repo.query([subject, pred, nil]).objects.each do |o|
       if o.literal?
         literals << o
@@ -83,7 +86,7 @@ class RDF::SAK::Transform
 
   # Initialize the implementation. Does nothing in the base
   # class. Return value is ignored.
-  # 
+  #
   # @param harness [RDF::SAK::Transform::Harness] the harness
   #
   def init_implementation harness
@@ -102,16 +105,15 @@ class RDF::SAK::Transform
 
     repo = harness.repo
 
-    asserted = RDF::SAK::Util.objects_for repo, subject,
-      RDF.type, only: :resource
+    asserted = repo.objects_for subject, RDF.type, only: :resource
 
-    return if
-      (asserted & RDF::SAK::Util.all_related(RDF::SAK::TFO.Transform)).empty?
+    return if (asserted & repo.all_related(RDF::SAK::TFO.Transform)).empty?
 
     params = gather_params repo, subject
 
-    plist = if pl = RDF::SAK::Util.objects_for(repo, subject,
-              RDF::SAK::TFO['parameter-list'], only: :resource).sort.first
+    plist = if pl = repo.objects_for(
+              subject, RDF::SAK::TFO['parameter-list'], only: :resource
+            ).sort.first
               RDF::List.from(repo, pl).to_a
             else
               params.keys.sort
@@ -124,8 +126,9 @@ class RDF::SAK::Transform
 
     # XXX this is all dumb but it has to be this way for now
 
-    if impl = RDF::SAK::Util.objects_for(repo, subject,
-      RDF::SAK::TFO.implementation, only: :uri).sort.first
+    if impl = repo.objects_for(
+      subject, RDF::SAK::TFO.implementation, only: :uri).sort.first
+
       case impl.to_s
       when /^file:/i then
         # XXX redo this later
@@ -216,13 +219,13 @@ class RDF::SAK::Transform
 
     # construct the pseudo-header
     accept = @accepts.dup
-    accept << '*/*;q=0' unless accept.include? '*/*'    
+    accept << '*/*;q=0' unless accept.include? '*/*'
     accept = { Accept: accept.join(', ') }
 
     # we only care *if* this returns something, not *what*
     !!HTTP::Negotiate.negotiate(accept, variants)
   end
-  
+
   # Return the parameter list, or a sorted list of parameter keys in lieu
   #
   # @return [Array]
@@ -296,7 +299,7 @@ class RDF::SAK::Transform
           end
         end
       end
-      
+
       # XXX one day we should check types but not today
 
       # give us the default(s) then
@@ -404,7 +407,7 @@ class RDF::SAK::Transform
     # @return [self] daisy-chainable self-reference
     #
     def load
-      RDF::SAK::Util.subjects_for(repo, RDF.type,
+      repo.subjects_for(RDF.type,
                                   RDF::SAK::TFO.Partial).each do |s|
         resolve subject: s
       end
@@ -425,7 +428,7 @@ class RDF::SAK::Transform
       @transforms.dup
     end
 
-    # Retrieve a Partial from the cache based on its 
+    # Retrieve a Partial from the cache based on its
     def get transform, params
       ts = case transform
            when RDF::SAK::Transform then transform.subject
@@ -438,7 +441,7 @@ class RDF::SAK::Transform
            end
 
       # return direct cache entry if transform is really the subject
-      return @cache[ts] if @cache.key? 
+      return @cache[ts] if @cache.key?
 
       # otherwise return the mapping
       @mapping[transform][coerce_params params]
@@ -456,8 +459,8 @@ class RDF::SAK::Transform
       if subject
         if subject.is_a? RDF::SAK::Transform::Partial
           # snag the transform
-          transform = @harness.resolve(subject.transform) or 
-            raise 'Could not resolve the transform associated with ' + 
+          transform = @harness.resolve(subject.transform) or
+            raise 'Could not resolve the transform associated with ' +
             subject.subject
 
           # mkay now add this to the cache
@@ -531,8 +534,9 @@ class RDF::SAK::Transform
     # Load transforms into an existing instance
     # @return [Array] the transforms
     def load
-      RDF::SAK::Util.subjects_for(@repo, RDF.type,
-        RDF::SAK::TFO.Transform, only: :resource).each do |subject|
+      @repo.subjects_for(
+        RDF.type, RDF::SAK::TFO.Transform, only: :resource
+      ).each do |subject|
         resolve subject
       end
 
@@ -581,7 +585,7 @@ class RDF::SAK::Transform
     # @param params [Hash] an instance of parameters
     # @param partial [RDF::Resource,RDF::SAK::Transform::Partial] a Partial
     # @return [RDF::SAK::Transform::Application] the Application, if present
-    # 
+    #
     def resolve_application subject: nil, transform: nil, params: {},
         partial: nil, input: nil, output: nil
       RDF::SAK::Transform::Application.resolve self, subject: subject,
@@ -646,8 +650,8 @@ class RDF::SAK::Transform
     #
     # @param harness [RDF::SAK::Transform::Harness] the harness
     # @param subject [RDF::Resource] the identity of the partial
-    # @param transform [RDF::Resource] the identity of the transform 
-    # @param params [Hash] key-value pairs 
+    # @param transform [RDF::Resource] the identity of the transform
+    # @param params [Hash] key-value pairs
     def self.resolve harness, subject: nil, transform: nil, params: {}
       raise ArgumentError, 'Must supply either a subject or a transform' unless
         subject or transform
@@ -660,8 +664,8 @@ class RDF::SAK::Transform
           return unless transform.is_a?(RDF::SAK::Transform)
       elsif subject.is_a? RDF::URI
         # locate the transform if given the subject
-        transform = RDF::SAK::Util.objects_for(repo, subject,
-          RDF::SAK::TFO.transform, only: :resource).first or return
+        transform = repo.objects_for(
+          subject, RDF::SAK::TFO.transform, only: :resource).first or return
         transform = harness.resolve(transform) or return
         warn transform
       end
@@ -761,8 +765,9 @@ class RDF::SAK::Transform
     # @param params [Hash] an instance of parameters
     # @param input [RDF::Resource] the Application's input
     # @param output [RDF::Resource] the Application's output
+    #
     # @return [RDF::SAK::Transform::Application] the Application, if present
-    # 
+    #
     def self.resolve harness, subject: nil, transform: nil, params: {},
         partial: nil, input: nil, output: nil
       # either a subject or transform + input + output? + params?
@@ -775,7 +780,7 @@ class RDF::SAK::Transform
         return subject if subject.is_a? self
 
         # okay partial
-        partial = RDF::SAK::Util.objects_for(
+        partial = repo.objects_for(
           subject, RDF::SAK::TFO.completes, only: :resource).sort.first
 
         if partial
@@ -784,14 +789,14 @@ class RDF::SAK::Transform
           partial   = tmp
           transform = partial.transform
         else
-          transform = RDF::SAK::Util.objects_for(
+          transform = repo.objects_for(
             subject, RDF::SAK::TFO.transform, only: :resource).sort.first or
             raise "Could not find a transform for #{subject}"
           tmp = harness.resolve(transform) or
             raise "Could not find transform #{transform}"
           transform = tmp
 
-          params = transform.validate 
+          params = transform.validate
 
           # get params
           params = {}
@@ -802,9 +807,9 @@ class RDF::SAK::Transform
         end
 
         # get inputs and outputs
-        input  = RDF::SAK::Util.objects_for(
+        input  = repo.objects_for(
           subject, RDF::SAK::TFO.input,  only: :resource).sort.first
-        output = RDF::SAK::Util.objects_for(
+        output = repo.objects_for(
           subject, RDF::SAK::TFO.output, only: :resource).sort.first
 
         raise 'Data must have both input and output' unless input and output
@@ -917,7 +922,7 @@ class RDF::SAK::Transform
       out << [s, RDF.type, RDF::SAK::TFO.Application]
 
       if @start
-        start = @start.is_a?(RDF::Literal) ? @start : RDF::Literal(@start) 
+        start = @start.is_a?(RDF::Literal) ? @start : RDF::Literal(@start)
         out << [s, RDF::Vocab::PROV.startedAtTime, start]
       end
 
@@ -1071,7 +1076,7 @@ class RDF::SAK::Transform
     end.execute(repo).each do |sol|
       t = temp[sol[:s]] ||= {}
       params.keys.each do |k|
-        # make these a set for now cause we don't care about the 
+        # make these a set for now cause we don't care about the
         t[k] = Set.new(repo.query([sol[:s], k, nil]).objects)
       end
     end
@@ -1089,7 +1094,7 @@ class RDF::SAK::Transform
     temp.keys.sort.each do |k|
       # do a cheaper comparison first
       next unless temp[k].keys.sort == params.keys.sort
-      # 
+      #
       return k if temp[k] == newp
     end
 
@@ -1142,7 +1147,7 @@ class RDF::SAK::Transform
       # XXX this assumes this is a file URI but so far that is the
       # only way we get here
       filename = root + implementation.path
-      raise ArgumentError, "#{filename} is not a readable file" unless 
+      raise ArgumentError, "#{filename} is not a readable file" unless
         filename.file? and filename.readable?
       @sheet = Nokogiri::XSLT(filename.read)
     end

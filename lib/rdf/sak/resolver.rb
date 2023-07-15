@@ -512,13 +512,13 @@ module RDF::SAK
 
       out = candidates.sort do |a, b|
         # we are mainly interested in the structs we generated
-        as, bs = [a, b].map(&:last)
+        ax, bx = [a, b].map(&:last)
 
         # check publication status (contingent), rank, then modification time
         c = published ? BITS[bs[:published]] <=> BITS[as[:published]] : 0
-        c = as[:rank]  <=> bs[:rank]  if c == 0
-        c = bs[:mtime] <=> as[:mtime] if c == 0
-        c = bs[:ctime] <=> as[:ctime] if c == 0
+        c = ax[:rank]  <=> bx[:rank]  if c == 0
+        c = bx[:mtime] <=> ax[:mtime] if c == 0
+        c = bx[:ctime] <=> ax[:ctime] if c == 0
 
         # finally compare lexically if none of the others resolve
         c == 0 ? a.first <=> b.first : c

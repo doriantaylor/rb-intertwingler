@@ -5,6 +5,7 @@ require 'rdf/sak/nlp'
 require 'rdf/sak/ci'
 require 'rdf/sak/qb'
 require 'time'
+require 'stringio'
 require 'nokogiri'
 require 'md-noko'
 require 'uuid-ncname'
@@ -973,7 +974,20 @@ class RDF::SAK::Document
     RDF::Vocab::SiocTypes.ReadingList => RDF::SAK::Document::ReadingList,
   }
 
-  def coerce_doc doc
+  # Default `generate` method generates the doc from triples
+  def generate published: true
+    generate_doc
+  end
+
+  public
+
+  # Coerce an input into a {Nokogiri::XML::Document}.
+  #
+  # @param [IO, Pathname, Nokogiri::XML::Node, #to_s] whatever this is
+  #
+  # @return [Nokogiri::XML::Document] the parsed document.
+  #
+  def self.coerce_doc doc
     # turn the document into an XML::Document
     if doc.is_a? Nokogiri::XML::Node
       # a node that is not a document should be wrapped with one
@@ -992,7 +1006,7 @@ class RDF::SAK::Document
       end
 
       # squash everything else to a string
-      doc = doc.to_s unless doc.is_a? IO
+      doc = doc.to_s unless [IO, StringIO].any? { |c| doc_is_a? c }
 
       # check type by content
       type ||= RDF::SAK::MimeMagic.by_magic(doc)
@@ -1050,13 +1064,6 @@ class RDF::SAK::Document
     doc
   end
 
-  # Default `generate` method generates the doc from triples
-  def generate published: true
-    generate_doc
-  end
-
-  public
-
   # Initialize the document, dispatching to the correct subclass.
   #
   # @param resolver [RDF::SAK::Resolver] the resolver
@@ -1089,7 +1096,7 @@ class RDF::SAK::Document
     end
   end
 
-  attr_reader :resolver, :subject, :repo, :uri
+  attr_reader :resolver, :subject, :repo, :uri, :doc
 
   # Initialize the document.
   #
@@ -1110,7 +1117,7 @@ class RDF::SAK::Document
     @types = type ? resolver.coerce_resources(type) : @repo.types_for(subject)
 
     # if a document is handed in, we read it, otherwise we generate it
-    @doc = doc ? coerce_doc(doc) : generate
+    @doc = doc ? self.class.coerce_doc(doc) : generate
   end
 
   # Transform the document and return it.
@@ -2294,10 +2301,18 @@ class RDF::SAK::Document
   # made to determine the `<title>` (using #label_for). What remains
   # is passed to #generate_fragment.
   #
+  # @param resolver [RDF::SAK::Resolver]
+  # @param subject
+  # @param struct
+  # @param langes
+  # @param prefixes
+  # @param vocab
+  # @param title
+  #
   # @return [Nokogiri::XML::Document] the document
   #
   def self.generate_doc resolver, subject, struct: nil, langs: [],
-      prefixes: {}, vocab: nil
+      prefixes: {}, vocab: nil, title: false
 
     repo = resolver.repo
 
@@ -2316,8 +2331,13 @@ class RDF::SAK::Document
     ncache << labo
 
     # initialize the skips
-    pskip = [RDF.type, labp].flatten
-    oskip = [labo.dup]
+    pskip = [RDF.type]
+    oskip = []
+
+    if title
+      pskip += labp
+      oskip << labo.dup
+    end
 
     # generate what should be the request-uri
     uri = resolver.uri_for subject
@@ -2332,10 +2352,10 @@ class RDF::SAK::Document
     pfx = resolver.prefix_subset ncache
 
     # generate the title
-    title = title_tag resolver, labp, labo, prefixes: prefixes if labo
+    ttag = title_tag resolver, labp, labo, prefixes: prefixes if labo
 
     XML::Mixup.xhtml_stub(
-      base: uri, prefix: pfx, vocab: vocab, title: title, body: body
+      base: uri, prefix: pfx, vocab: vocab, title: ttag, body: body
     ).document
   end
 
