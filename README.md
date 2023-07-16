@@ -133,323 +133,301 @@ programming languages, machines, and runtimes.
 > sub-protocol in the works for specific constraints on how these
 > components, particularly the transforms, are expected to behave.
 
-# (Original pre-refactor README; leaving it here until I broom it)
+# History
 
-This library can be understood as something of a workbench for the
-development of a set of patterns and protocols for Web content—a
-[content management
-_meta-system_](https://doriantaylor.com/content-management-meta-system).
-The proximate goals of this implementation are as follows:
+This module began life as a thing called `RDF::SAK`, or the Content
+Swiss Army Knife. After positing the notion of [content management
+_meta-system_](https://doriantaylor.com/content-management-meta-system),
+I made an initial cut in 2018, to support some work I was doing
+for a client. It quickly became a breadboard and/or test environment
+for developing what I just referred to as "good ideas about Web
+content", which I ultimately realized as a static website generator,
+in the same vein as [Jekyll](https://jekyllrb.com/) or
+[11ty](https://www.11ty.dev/). Since most of my work was around
+durable addressing and embedded metadata, a live engine was not a high
+priority. Priorities have since changed.
 
-* Durable addresses with fine-grained addressability of content,
-* Adherence to declarative content models mediated by open standards,
-* Easy content re-use, i.e., _transclusion_,
-* Rich embedded metadata for search, social media, and other purposes.
+Five years prior to creating `RDF::SAK`, in 2013, I designed a
+protocol to aid in the development of Semantic Web applications called
+[RDF-KV](https://doriantaylor.com/rdf-kv). It provides an
+extraordinarily simple mechanism for getting RDF statement deltas
+(i.e., commands to add and/or remove statements) from a Web client to
+a graph database on the server, with a minimum of moving parts (i.e.,
+no JavaScript). To test the implementation, I needed a complete
+vocabulary, so I used [the IBIS
+vocabulary](https://vocab.methodandstructure.com/ibis#) I had written
+a year earlier, and created a tool called
+[`App::IBIS`](https://github.com/doriantaylor/p5-app-ibis). This tool
+[turned out to be useful](https://ibis.makethingsmakesense.com/), but
+limited in its capacity for expansion, because it was written in Perl,
+which does not have an RDF reasoner, a piece of software that is both
+highly abstract and difficult to write (a rudimentary yet satisficing
+one of which Ruby happens to possess). Without a reasoner, `App::IBIS`
+was much too sclerotic to develop very far past the initial prototype.
 
-`Intertwingler` is also intended to serve as a substrate for:
+> `App::IBIS` is unambiguously a dense hypermedia application, and
+> developing it meant generating a lot of markup that was thick with
+> embedded RDFa metadata. This led me to create a family of terse
+> markup generators
+> ([Perl](https://metacpan.org/pod/Role::Markup::XML),
+> [Ruby](https://github.com/doriantaylor/rb-xml-mixup),
+> [JavaScript](https://github.com/doriantaylor/js-markup-mixup)) with
+> some nice advantages over their incumbents. Working extensively with
+> RDFa helped develop technique for reusing the embedded metadata for
+> directing presentation markup, as well as providing the basis for
+> CSS selectors in both HTML and SVG.
 
-* The maturation of a [content inventory
-  ontology](https://vocab.methodanstructure.com/content-inventory#),
-* The use of semantic metadata [for manipulating content
-  presentation](https://github.com/doriantaylor/rdfa-xslt),
-* Development of a deterministic, standards-compliant, [client-side
-  transclusion mechanism](https://github.com/doriantaylor/xslt-transclusion).
+The plan for `RDF::SAK` was always to turn it into a live engine that
+could be accessed and updated online. Nevertheless, due to its
+decidedly organic origins, it was (and still very much is) a huge mess
+that needed (and still needs) several rounds of intense refactoring. I
+began this work in December of 2021 but suspended it a few weeks later
+due to an injury, and this refactor had to take a back seat to other
+priorities for most of 2022. I decided early this year (2023) I was
+going to complete the overhaul no matter what, which, it later turned
+out, the [Summer of Protocols](https://summerofprotocols.com/)
+organizers have graciously elected to sponsor.
 
-Finally, this library is also intended to establish a set of hard
-requirements for the kind of RDF and Linked Data infrastructure that
-would be necessary to replicate its behaviour in a more comprehensive
-content management system.
+> I have also gotten some interest, beginning last year, in the use of
+> IBIS as a planning tool. Part of the impetus for getting `RDF::SAK`
+> to a state where it can take over from the torpid `App::IBIS` is
+> that I have an [entire project planning
+> framework](https://vocab.methodandstructure.com/process-model#)
+> based on
+> [IBIS](https://en.wikipedia.org/wiki/Issue-based_information_system)
+> for which any tooling will need a more flexible substrate. I am also
+> grateful for my clients who support this development.
 
-The only public website currently generated by `Intertwingler` is [my own
-personal site](https://doriantaylor.com/), which I use as a test
-corpus. However, this library draws together a number of techniques
-which have been in use with employers and clients for well over a decade.
+This project also represents a confluence of over two decades of work
+on the Web. What is now called `Intertwingler` closely tracks a design
+I sketched out back in 2006 for a "Web substrate", with the intent of
+decoupling functionality that generates _content_ from that which
+merely _manipulates_ it, noting that separating the two would result
+in both ending up markedly simpler. This design drew on technique I
+had developed at my first tech job back in 1999.
 
-## MAJOR REFACTOR/OVERHAUL LOL
+I had had a personal site from 1998 to about 2003, and by 2008 I was
+ready to put one up again. It was around this time I had realized that
+one could use XSLT (which I had picked up in 2001) to transform
+(X)HTML into _itself_, meaning it could be used _in the browser_ as an
+extremely lazy Web template engine that does its page composition at
+the _network_ level. This means you can mix content sources on the
+server side, which can be any mixture of static or dynamic content
+written in any programming language or framework you like, since all
+communication happens using standard protocols and data formats. This
+is a technique I have used and expanded on for the last 15 years.
 
-* [x] RDF::Repository extension (entailment, etc)
-* [x] URI resolver
-* [ ] generalized markup document interface
-* [ ] data forensics from docs
-  * [ ] nlp
-  * [ ] metrics
-  * [ ] pre-rdfa scan
-  * [ ] version control
-* [ ] source driver
-* [ ] _surface_ driver
-  * [ ] web microservicey app thing
-    * [ ] caching proxy?
-* [ ] command line (batch mode whatev)
-  * [ ] actual shell
+> Specifically, I have written [an RDFa query
+> engine](https://github.com/doriantaylor/xslt-rdfa) (2016) and
+> [seamless transclusion
+> mechanism](https://github.com/doriantaylor/xslt-transclusion)
+> (2018). While XSLT is still actively developed and used in
+> publishing _outside_ the Web, I am somewhat concerned about its
+> future as a native capability in the browser. XML is irredeemably
+> out of fashion in mainstream Web circles (despite ostensibly having
+> been reinvented as "custom elements"), but in my opinion XSLT is,
+> for reasons too numerous to articualate here, unparalleled in its
+> ability to manipulate markup — which is why I continue to use
+> it. Indeed, [a compact, easier-to-type XSLT
+> syntax](https://doriantaylor.com/file/xslt-mockup) similar to
+> [RelaxNG](https://www.oasis-open.org/committees/relax-ng/compact-20021121.html)
+> may be enough to renew interest in it. I should note that the use of
+> XSLT is not strictly necessary; you could probably acccomplish the
+> same effect using (a lot more) JavaScript.
 
-### TODO
+When I went to put the site up in 2008, I was keenly interested in
+creating _dense hypermedia_ (though I would coin that term much
+later). I wanted to convey information without forcing the audience to
+read any more than they had to. The constraints were:
 
-* [ ] empty out `Intertwingler::Context`
-  * [ ] move source-fetching stuff to `Intertwingler::Source`
-  * [ ] move target-writing stuff to `Intertwingler::Surface::DocumentRoot`
-  * [ ] move document stuff to `Intertwingler::Document`
-    * [ ] get rid of `write_to_target`
-  * [ ] overhaul the configuration/marshalling
-* [ ] empty out `Intertwingler::Util::Messy`
-  * [ ] move everything in it to its respective more-sensible module
-  * [ ] merge `Intertwingler::Util::Clean` back to `Intertwingler::Util`
+1. that no page should be so long that it scrolls (on an average
+   desktop monitor),
+2. any digressions, footnotes or parenthetical remarks would be
+   hived off to their own page and linked,
+3. no `404` errors — URLs do not get exposed to the wild until there
+   is something at that location.
 
-### AFTER THAT
+These constraints made it very difficult to operate. For one, having
+to stop and think up a URL for a page because you happened to digress
+a bit in the page you were just writing (which, since URLs tend to
+track with titles, ultimately meant coming up with a title) is a
+jarring context switch of considerable cognitive overhead. Moreover,
+this would an exponential jump in workload, because the digressions
+would invariably generate their own digressions, and since nothing
+could ship until all of it was complete (or at least roughed in), it
+would take forever to do anything. Notwithstanding, I got about 40
+pages into what I called a [Resource Handling and Representation
+Policy](https://doriantaylor.com/policy/resource-handling-and-representation)
+done in this style, before I gave up and decided to just write essays.
 
-* [ ] get rid of `Intertwingler::Document` and everything under it
-  * [ ] replace it with `Intertwingler::Representation` and friends
-    * [ ] generated markup should be a subclass of `Intertwingler::Source`
-* [ ] implement content transforms as pure functions
-  * [ ] break out the markup-generating and manipulating ones
-  * [ ] do some for images (scale/crop/etc)
-  * [ ] hook up the content-addressable store and [TFO ontology](https://vocab.methodandstructure.com/transformation#)
-    * [ ] use it for rudimentary caching
-* [ ] [Loupe](https://vocab.methodandstructure.com/loupe#)
+> This policy manual actually worked out a number of design decisions
+> that are still perfectly valid fifteen years later, and have made
+> their way into the `Intertwingler`.
 
-## ARCHITECTURE
+The experience of writing this policy promptly moved me to start
+thinking about a mechanism that would enable information resources to
+be stored under canonical identifiers (specifically
+[UUIDs](https://datatracker.ietf.org/doc/html/rfc4122) and
+[cryptographic hashes](https://datatracker.ietf.org/doc/html/rfc6920))
+that traded off legibility for being _durable_, and overlay
+human-friendly addresses on top. It would likewise track changes to
+these addresses, try to fix errors, and ensure _all_ URLs on a domain
+that have _ever_ been exposed to the wild route to _something_. I got
+this subsystem to finally work in `RDF::SAK` in 2019, and it remains
+present in `Intertwingler`.
 
-maybe its own document? who knows!
+> The need to solve the same problem for fragment identifiers led me
+> ([apparently back in
+> 2012](https://metacpan.org/pod/Data::UUID::NCName)) to invent [a
+> compact UUID
+> representation](https://datatracker.ietf.org/doc/html/draft-taylor-uuid-ncname)
+> which I am (slowly) trying to get graduated into an RFC.
 
-* [ ] [notion of "source" and "surface"](https://rdf-sak.ibis.makethingsmakesense.com/95bab4f0-5b0d-42b5-a39d-768d1d725234)
-  * [ ] we won't call it "origin" because that has special meaning
-    * [ ] a "source" *can* be an "origin" but not necessarily (e.g. reverse proxy)
-  * [ ] a source just has to take a URI and `Accept-*` header set (also `Authorization` if applicable) and return a representation
-  * [ ] a "sink" is not the best word because a sink will actually *request* resources
-    * [ ] instead we call it `Surface`
-  * [ ] [so we implement the existing file system source as a `Source`](https://rdf-sak.ibis.makethingsmakesense.com/73409baf-2a94-4c6d-bbc9-54a7825009ab)
-  * [ ] we implement the existing file system target as a `Surface`
-    * [ ] [we change `write_to_target` to be something that the "sink" *pulls* rather than *pushes*.](https://rdf-sak.ibis.makethingsmakesense.com/3d348205-3878-4c60-9aa4-d8f16cddae91)
-  * [ ] [we also implement the `Rack` app as a `Surface`](https://rdf-sak.ibis.makethingsmakesense.com/3cb7ab04-dd1a-443c-a5a3-8f43923ed0d7)
-  * [ ] implement generated representations as "sources"
-    * [ ] concept schemes (glossary/index/thesaurus)
-    * [ ] bibliographies/book lists
-    * [ ] rolodexes
-    * [ ] document stats
-    * [ ] rss/atom feeds
-    * [ ] google sitemaps
-    * [ ] arbitrary graph patches
-* [ ] make any operation that can be made a pure function, a pure function
-  * [ ] we want this because it's composable
-  * [ ] most if not all ordinary web pages will probably have a sequence of stock transforms
-* [ ] we want a command line shell
-  * [ ] start daemon from shell?
+The state mechanism for this URL naming history is a [content
+inventory
+vocabulary](https://vocab.methodandstructure.com/content-inventory#) I
+began roughing in around 2010. This was originally conceived as a data
+storage and exchange format for website content inventories, but has
+since become a catch-all, including a structure for holding
+quantitative metrics to help content strategists apprehend the
+contours of websites (developed in 2011), and a sophisticated
+set-theoretic mechanism for modeling audiences, and pairing (or
+_anti_-pairing) them with content (2019).
 
-## Future Directions
+As I mentioned above, the `Intertwingler` engenders an ultimately
+_simpler_ system by decoupling the _generation_ of content from its
+subsequent downstream _manipulation_. I had sketched out how this was
+going to work as far back as 2008, along with a couple ill-fated
+prototypes. It wasn't until a project in 2020 though that I completed
+a [Transformation Functions
+Ontology](https://vocab.methodandstructure.com/transformation#)
+(started in 2014) and concomitant infrastructure that would resolve
+transformation functions, apply them to content, and cache their
+results. This infrastructure depends on earlier work on
+content-addressable stores ([Perl in
+2013](https://github.com/doriantaylor/p5-store-digest), [Ruby in
+2019](https://github.com/doriantaylor/rb-store-digest)), that use
+[RFC6920](https://datatracker.ietf.org/doc/html/rfc6920) `ni:` URIs,
+making them compatible with RDF.
 
-Ultimately, this implementation is disposable. What matter are the
-patterns laid down in the program output. If these patterns can be
-sufficiently normalized, then the behaviour ought to at least be
-replicable in other content management systems. Failing that, the
-patterns will serve as a set of requirements for future systems. The
-ideal is that adherence to existing open standards plus a modest set
-of additional constraints could, at least from the perspective of the
-audience, make the CMS infrastructure disappear.
+> On a similar tack, I also explored [creating a registry for query
+> parameters](https://metacpan.org/pod/Params::Registry::Template)
+> (2015), with the triple purpose of parsing and validating input,
+> generating round-trip-stable query strings, and facilitating the
+> creation of organization-wide policy for the names, types, and
+> semantics of query parameters. I do not currently have a Ruby port
+> of this particular software, but I will probably eventually make
+> one, along with an RDF vocabulary as an extension to the
+> transformation one for expressing the configuration.
 
-As for the texture and topology of the content itself, squaring away
-the mundane problems of stable addressing, transclusion, and the
-product-agnostic separation of content from presentation, the emphasis
-on the _page_ as the basic unit of content can be subjected to further
-scrutiny. The long-term goal of this project is a structure with
-smaller nodes and many more links between them, something I am calling
-_dense hypermedia_.
+And so, the `Intertwingler` is an odyssey spanning over two decades,
+which is fitting, since its ultimate goal is to retrofit the Web with
+the capabilities of its hypermedia predecessors.
 
-## How it Works
+# Anatomy
 
-Because the focus of `Intertwingler` is a corpus of interrelated Web
-resources marked up just so, rather than presenting as an on-line Web
-application, it instead both consumes and emits a set of static
-files. It currently expects a directory of (X)HTML and/or Markdown as
-its document source, along with one or more serialized RDF graphs
-which house the metadata.
+As I have hopefully communicated, the `Intertwingler` is in a state of
+absolute disarray, still undergoing its metamorphosis from the
+less-ambitious and much more organic `RDF::SAK`. I have tried to
+outline some of the more important modules; those I have left out are
+either not very interesting (such as the generated vocabularies under
+[`Intertwingler::Vocab`](lib/intertwingler/vocab.rb) or slated for
+removal. Checkmarks on the bullet points indicate the modules are
+complete enough to use.
 
-### Inputs
+## Essential components
 
-The files in the source tree can be named in any way, however, in the
-metadata, they are expected to be primarily associated with UUIDs,
-like the following (complete) entry:
+* [X] [`Intertwingler::GraphOps`](lib/intertwingler/graphops.rb) is a
+      mix-in that extends `RDF::Queryable` with the all-important
+      inferencing operations.
+* [X] [`Intertwingler::Resolver`](lib/intertwingler/resolver.rb) is
+      the _also_-all-important URI resolver.
+* [ ] [`Intertwingler::Representation`](lib/intertwingler/representation.rb)
+      is a cheap knockoff of a
+      [monad](https://en.wikipedia.org/wiki/Monad_(functional_programming))-like
+      structure that enables parsed, in-memory representations of content to
+      persist across successive transformations, so they don't get
+      unnecessarily serialized and reparsed.
+* [ ] [`Intertwingler::Document`](lib/intertwingler/document.rb)
+      houses (mostly) context-free markup generation (though may be
+      dissipated into other modules).
 
-```turtle
-@prefix owl:  <http://www.w3.org/2002/07/owl#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
-@prefix xhv:  <http://www.w3.org/1999/xhtml/vocab#> .
-@prefix dct:  <http://purl.org/dc/terms/> .
-@prefix foaf: <http://xmlns.com/foaf/0.1/> .
-@prefix bibo: <http://purl.org/ontology/bibo/> .
-@prefix bs:   <http://purl.org/ontology/bibo/status/> .
-@prefix ci:   <https://privatealpha.com/ontology/content-inventory/1#> .
+## Engine components
 
-<urn:uuid:b5c16511-6904-4130-b4e4-dd553f31bdd8>
-    dct:abstract "Yet another slapdash about-me page."@en ;
-    dct:created "2019-03-11T08:14:10+00:00"^^xsd:dateTime ;
-    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
-    dct:hasPart <https://www.youtube.com/embed/eV84dXJUvY8> ;
-    dct:modified "2019-05-17T05:08:42+00:00"^^xsd:dateTime,
-        "2019-05-17T18:37:37+00:00"^^xsd:dateTime ;
-    dct:references <urn:uuid:01a1ad7d-8af0-4ad7-a8ec-ffaaa06bb6f1>,
-        <urn:uuid:0d97c820-8929-42a1-8aca-f9e165d8085e>,
-        <urn:uuid:1ae2942f-4ba6-4552-818d-0e6b91a4abee>,
-        <urn:uuid:97bd312d-267d-433b-afc7-c0e9ab3311ed>,
-        <urn:uuid:99cc7d73-4779-4a7c-82de-b9f08af85cf8>,
-        <urn:uuid:a03bf9b5-56e6-42c7-bcd9-37ea6ad6a3d1>,
-        <urn:uuid:afe5a68a-a224-4be9-9fec-071ab55aa70d>,
-        <urn:uuid:d74d7e24-a6d6-4f49-94e8-e905d317c988>,
-        <urn:uuid:ef4587cd-d8c6-4b3d-aa01-d07ab49eda4f> ;
-    dct:replaces <urn:uuid:1944f86f-cafb-42f7-bca3-ad518f9b6ec7>,
-        <urn:uuid:d30a49d7-71ed-4355-bc44-4bbe3d90e000> ;
-    dct:title "Hello, Internet"@en ;
-    bibo:status bs:published ;
-    a bibo:Note ;
-    xhv:alternate <urn:uuid:4a13ab5a-67a5-4e1a-970f-3425df7035bb>,
-        <urn:uuid:c2f57107-9f79-4f13-a83c-4c73448c1c0b> ;
-    xhv:bookmark <urn:uuid:c2f57107-9f79-4f13-a83c-4c73448c1c0b> ;
-    xhv:index <urn:uuid:4a13ab5a-67a5-4e1a-970f-3425df7035bb> ;
-    xhv:meta <urn:uuid:47d52b80-50df-4ac4-a3f3-941c95c1aa14> ;
-    owl:sameAs <https://doriantaylor.com/breaking-my-silence-on-twitter>,
-        <https://doriantaylor.com/person/dorian-taylor>,
-        <https://doriantaylor.com/what-i-do>,
-        <https://doriantaylor.com/what-i-do-for-money> ;
-    foaf:depiction <https://doriantaylor.com/file/form-content-masked;desaturate;scale=800,700> ;
-    ci:canonical <https://doriantaylor.com/hello-internet> ;
-    ci:canonical-slug "hello-internet"^^xsd:token ;
-    ci:indexed false .
-```
+Everything in the engine, including the engine itself, is an
+[`Intertwingler::Handler`](lib/intertwingler/handler.rb) that accepts
+a `Rack::Request` and returns a `Rack::Response`, plus an embedded
+adapter so it can be used directly as a stand-alone Rack application.
 
-> Another program generates these entries from version-controlled
-> source trees. It was written over a decade ago in Python, intended
-> to handle the Mercurial version control system. Eventually it will
-> be switched to Git, rewritten in Ruby, and made part of `Intertwingler`.
+### Handler
 
-### Outputs
+* [ ] [`Intertwingler::Handler::Generated`](lib/intertwingler/handler/generated.rb)
+* [ ] [`Intertwingler::Handler::FileSystem`](lib/intertwingler/handler/filesystem.rb)
+* [ ] [`Intertwingler::Handler::CAS`](lib/intertwingler/handler/cas.rb)
+* [ ] [`Intertwingler::Handler::Proxy`](lib/intertwingler/handler/proxy.rb)
 
-The library has methods to generate the following kinds of file:
+### Transforms
 
-* (X)HTML documents, where file inputs are married with metadata
-* Special indexes, generated completely from metadata
-* Atom feeds, with various partitioning criteria
-* Google site maps,
-* Apache rewrite maps.
+An [`Intertwingler::Transform`](lib/intertwingler/transform.rb) is a
+specialized [`Intertwingler::Handler`](lib/intertwingler/handler.rb)
+that responds to `POST` requests to a single URI. I am still working
+out the details of a protocol but the general sense is you `POST` a
+payload and it returns the transformed payload back. When a transform
+is in the engine, this happens automatically by subrequest. Shortcuts
+are in place (via
+[`Intertwingler::Representation`](lib/intertwingler/representation.rb))
+for transformations that happen in the same process space.
 
-All files are generated in the target directory as their canonical
-UUID and a representative extension,
-e.g. `b5c16511-6904-4130-b4e4-dd553f31bdd8.xml`. Human-readable URIs
-are then overlaid onto these canonical addresses using rewrite
-maps. This enables the system to retain a memory of address-to-UUID
-assignments over time, with the eventual goal to eliminate 404 errors.
+* [ ] [`Intertwingler::Transform`](lib/intertwingler/transform.rb) is
+      the base which also includes
+      `Intertwingler::Transform::Harness`, which probably needs some
+      to bring it up to par with the rest of the system.
+* [ ] `Intertwingler::Transform::Tidy` for sanitizing/normalizing HTML
+      via [`tidy`](https://www.html-tidy.org/).
+* [ ] `Intertwingler::Transform::Nokogiri` for transforming HTML/XML
+      via `Nokogiri`;
+  * [ ] Transform Markdown into HTML
+  * [ ] Turn HTML into XHTML and vice versa
+  * [ ] Strip comments
+  * [ ] Reindent markup
+  * [ ] Repair/"rehydrate" RDFa
+    * [ ] Normalize RDFa prefixes
+  * [ ] Mangle `mailto:` addresses (by whatever house style) to prevent spam
+  * [ ] Insert stylesheet references
+  * [ ] Rewrite links
+  * [ ] Add backlinks
+  * [ ] Add secondary links (e.g. glossary entries)
+  * [ ] Add (e.g.) Amazon affiliate codes to `amazon.com` links
+  * [ ] Add social media metadata (Google, Facebook, Twitter, whoever…)
+* [ ] `Intertwingler::Transform::Vips` for images via `Vips`.
+  * [ ] Crop images
+  * [ ] Resize (downward only due to potential denial of resources)
+  * [ ] Desaturate
+  * [ ] Posterize
+  * [ ] etc…
 
-Documents themselves are traversed and embedded with metadata.
-Wherever possible, links are given titles and semantic relations, and
-a list of backlinks from all other resources is constructed. There are
-modules for generating various elements in the `<head>` to accommodate
-the various search and social media platforms. The strategy is to hold
-the master data in the most appropriate RDF vocabularies, and then
-subsequently map those properties to their proprietary counterparts,
-e.g., Facebook OGP, Schema.org (Google), and Twitter Cards.
+## "Offline" components
 
-> The latter representations tend to cut corners with various
-> datatypes and properties; it's much easier to go from strict RDF to
-> a platform-specific schema than it is to go the other way around.
 
-#### Private content
+* [ ] [`Intertwingler::CLI`](lib/intertwingler/cli.rb) is the command
+      line harness.
+* [ ] `Intertwingler::Static` is (to be) an "end cap" on the engine
+      that performs the legacy static site generator function.
+* [ ] [`Intertwingler::DocStats`](lib/intertwingler/docstats.rb)
+      gathers statistics about a corpus of documents.
+* [ ] [`Intertwingler::NLP`](lib/intertwingler/nlp.rb) is a _very_
+      rudimentary natural language processor for extracting terminology
+      (jargon, acronyms, proper nouns etc.) from a corpus of documents.
+* [ ] [`Intertwingler::URLRunner`](lib/intertwingler/urlrunner.rb) is
+      planned as a generic crawler (eventually with some kind of
+      `Handler` interface) for resolving link previews.
 
-While a fine-grained access control subsystem is decidedly out of
-scope, `Intertwingler` has a rudimentary concept of _private_ resources. A
-resource is assumed to be "private" unless its `bibo:status` is set to
-`bibo:status/published`. A document may therefore have both a public
-and private version, as the private version may have links to and from
-other documents which themselves are not published. Links to private
-documents get pruned from published ones, so as not to leak their
-existence.
-
-### Running
-
-I endeavour to create a command-line interface but the _library_
-interface is currently not stable enough to warrant it. The best way
-to use `Intertwingler` for now is within an interactive `pry` session:
-
-```bash
-~$ cd rdf-sak
-~/rdf-sak$ pry -Ilib
-[1] pry(main)> require 'intertwingler'
-=> true
-[2] pry(main)> ctx = Intertwingler::Context.new config: '~/my.conf'
-=> <Intertwingler::Context ...>
-[3] pry(main)> doc = ctx.visit 'some-uri'
-=> <Intertwingler::Context::Document ...>
-[4] pry(main)> doc.write_to_target
-```
-
-A YAML configuration file can be supplied in lieu of individual
-parameters to the constructor:
-
-```yaml
-base: https://doriantaylor.com/
-graph: # RDF graphs
-  - ~/projects/active/doriantaylor.com/content-inventory.ttl
-  - ~/projects/active/doriantaylor.com/concept-scheme.ttl
-source: ~/projects/active/doriantaylor.com/source
-target: ~/projects/active/doriantaylor.com/target
-private: .private     # private content, relative to target
-transform: /transform # XSLT stylesheet attached to all documents
-```
-
-### Deployment
-
-Deploying the content can be done with `rsync`, although it requires
-certain configuration changes on the server in order to work properly.
-
-In Apache in particular, rewrite maps need to be defined in the main
-server configuration:
-
-```apache
-# one need not place these in the document root but it's handy for rsync
-RewriteEngine On
-RewriteMap rewrite  ${DOCUMENT_ROOT}/.rewrite.map
-RewriteMap redirect ${DOCUMENT_ROOT}/.redirect.map
-RewriteMap gone     ${DOCUMENT_ROOT}/.gone.map
-
-# then we just add something like this to prevent access to them
-<Files ".*.map">
-Require all denied
-</Files>
-```
-
-The rest of the configuration can go in an `.htaccess`:
-
-```apache
-# this redirects to canonical slugs
-RewriteCond "%{ENV:REDIRECT_SCRIPT_URL}" ^$
-RewriteCond %{REQUEST_URI} "^/*(.*?)(\.xml)?$"
-RewriteCond ${redirect:%1} ^.+$
-RewriteRule ^/*(.*?)(\.xml)?$ ${redirect:$1} [L,NS,R=308]
-
-# this takes care of terminated URIs
-RewriteCond %{REQUEST_URI} ^/*(.*?)(\..+?)?$
-RewriteCond ${gone:%1} ^.+$
-RewriteRule .* - [L,NS,G]
-
-# this internally rewrites slugs to UUIDs
-RewriteCond "%{ENV:REDIRECT_SCRIPT_URL}" ^$
-RewriteCond %{REQUEST_URI} ^/*(.*?)(\..+?)?$
-RewriteCond ${rewrite:%1} ^.+$
-RewriteRule ^/*(.*?)(\..+?)?$ /${rewrite:$1} [NS,PT]
-
-# we can do something perhaps more elaborate to route private content
-SetEnvIf Remote_Addr "31\.3\.3\.7" PRIVATE
-
-# this splices in the private content if it is present
-RewriteCond %{ENV:PRIVATE} !^$
-RewriteCond %{DOCUMENT_ROOT}/.private%{REQUEST_URI} -F
-RewriteRule ^/*(.*) /.private/$1 [NS,PT]
-```
-
-Configurations for other platforms can be figured out on request.
-
-## Documentation
+# Documentation
 
 API documentation, for what it's worth at the moment, can be found [in
 the usual place](https://rubydoc.info/github/doriantaylor/rb-intertwingler/main).
 
-## Installation
+# Installation
 
 For now I recommend just running the library out of its source tree:
 
@@ -459,12 +437,12 @@ For now I recommend just running the library out of its source tree:
 ~/intertwingler$ bundle install
 ```
 
-## Contributing
+# Contributing
 
 Bug reports and pull requests are welcome at
 [the GitHub repository](https://github.com/doriantaylor/rb-intertwingler).
 
-## Copyright & License
+# Copyright & License
 
 ©2018-2023 [Dorian Taylor](https://doriantaylor.com/)
 
