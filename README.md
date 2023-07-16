@@ -1,5 +1,136 @@
 # Intertwingler — An Engine for Dense Hypermedia
 
+This software is an _engine_ for creating _dense hypermedia_ networks.
+Dense hypermedia is what the Web, out of the box, _isn't_. The Web is
+_sparse_ hypermedia: big, long documents, with few links aside from
+things like navigation and footers. Dense hypermedia is all about
+_short_ resources connected by _lots_ of links. One example of dense
+hypermedia are the personal knowledge management systems, colloquially
+known as _tools for thought_. Another is _knowledge graphs_. The goal
+of this product is to support those categories of application, and
+others — perhaps even art or literature.
+
+> One important success criterion is to eliminate the mundane aspects
+> of "building a website", and otherwise get out of the way.
+
+This is very much a _speaking artifact_: Since the ultimate goal is to
+create better conditions for developing dense hypermedia on the Web by
+retrofitting it with the capabilities of systems that preceded it
+(real and imagined), there are a number of subsidiary problems that
+need to be solved, and this system implements concrete ways to solve them.
+
+## Links are first-class citizens
+
+Before we can do anything related to dense hypermedia, we have to
+solve for _link rot_. The median URL has a lifespan of about 90 days,
+and if you have orders of magnitude more addressable resources, that
+kind of performance is a non-starter. This doesn't need to happen, but
+what _does_ need to happen in order to fix it is a radical rethinking
+of how Web-based software is made. This system shows how to do it.
+
+> [My own site](https://doriantaylor.com/), which admittedly has only
+> been on this system since I made the latter in 2018, nevertheless
+> still serves every URL it has ever exposed, dating back to the
+> summer of 2008. I also use it for my client extranets, and my book
+> project, [The Nature of Software](https://the.natureof.software/).
+
+One ongoing criticism of the Web by Ted Nelson, the man who in 1960
+coined the term _hypertext_ (not to mention what it means to
+[_intertwingle_](https://en.wikipedia.org/wiki/Intertwingularity)), is
+that links only go in one direction: without extra apparatus, you
+can't see what links _to_ you. Well, turns out the apparatus to
+display backlinks is the same apparatus as the one for eliminating
+link rot.
+
+## Links (_and_ resources) have different species
+
+The Web has three kinds of links: the conventional arc that when
+activating it (typically) completely replaces the representational state
+(both `<a>` and forms), what I would characterize as a "naïve embed" —
+images, A/V, and `iframe` documents — and non-printing metadata.
+Earlier systems had all kinds of other links besides, like
+[stretchtext](https://en.wikipedia.org/wiki/StretchText), conditional
+display, and proper, seamless
+[transclusion](https://en.wikipedia.org/wiki/Transclusion). These of
+course can all be done on the Web, but the solutions are suboptimal.
+In particular, the embedded metadata that drives these capabilities
+tends to be ad-hoc and mutually incompatible, making it single-purpose
+for some particular UI framework or other. Many content management
+systems, moreover, have a concept of _content_ type, but few systems —
+even sophisticated PKM systems — have a concept of _link_ type (as in,
+precisely what the link _means_). It's the link types in
+conjunction with the content types that make it possible to _derive_
+how they ought to be rendered in the user interface.
+
+## Don't copy what you can reference
+
+One perennial problem of informational content, whether on the Web or
+even digital at all, is keeping it up to date. A necessary condition
+for keeping content up to date is ensuring that there is precisely
+_one_ authoritative copy of it.
+
+> The key word here of course is _authoritative_. We will invariably
+> need multiple copies for things like cache and backups, but having
+> exactly _one_ copy that drives all the others is absolutely
+> indispensable.
+
+This principle can be extended to resources which can be modeled as
+_functions_ of other resources, for example the HTML that corresponds
+to a Markdown document, or a cropped and/or resized image. Modeling
+these transformations shrinks the footprint of original content to be
+managed.
+
+Finally, for content to be reusable it must be finely _addressable_,
+with durable addresses at both the document and _sub_-document level.
+
+## Standard interfaces & Data transparency
+
+With this system we're trying to imagine what it means to be a "model
+citizen" on the Web: a reliable source of clear, actionable
+information. This is not only entails everything already discussed,
+but also:
+
+* structured, machine-actionable data is available for every resource,
+* interfaces are standard, so as not to require custom API adapters,
+* this includes data _semantics_ as well as syntax,
+* A user (with sufficient authority) should be able to export 100% of
+  the system's instance data, and furthermore that data should _mean
+  something_ to other systems.
+
+## Layered system, clear development targets
+
+This system anticipates being situated in a heterogeneous operating
+environment, sharing space with other programming languages and
+frameworks. Indeed, this engine can be thought of as a "language bus",
+that marshals all things Ruby. The design is intended to be copied to
+other programming languages, and these systems are expected to
+interoperate in a daisy chain-like configuration.
+
+Every component in this system, including the central piece that does
+the routing, is implemented as a
+[Rack](https://rubydoc.info/gems/rack/) handler, which ultimately
+could be run as a stand-alone microservice. The handlers subsequently
+subdivide into two subspecies:
+
+* **Content handlers** that either originate information resources or
+  proxy them from somewhere else,
+* **transforms** that manipulate HTTP requests or responses in transit.
+
+Since every building block in the system is a potentially stand-alone
+Rack component, the language spoken between them is nominally HTTP.
+This not only makes for _extremely_ well-defined development targets —
+you get a request and return a response — but the system anticipates
+future segmentation, including, as mentioned, across different
+programming languages, machines, and runtimes.
+
+> I should note that HTTP communication within the process space of a
+> particular runtime is simulated, so we don't waste resources
+> unnecessarily re-parsing and serializing. I also have a rudimentary
+> sub-protocol in the works for specific constraints on how these
+> components, particularly the transforms, are expected to behave.
+
+# (Original pre-refactor README; leaving it here until I broom it)
+
 This library can be understood as something of a workbench for the
 development of a set of patterns and protocols for Web content—a
 [content management
@@ -312,22 +443,22 @@ Configurations for other platforms can be figured out on request.
 ## Documentation
 
 API documentation, for what it's worth at the moment, can be found [in
-the usual place](https://rubydoc.info/github/doriantaylor/rb-rdf-sak/master).
+the usual place](https://rubydoc.info/github/doriantaylor/rb-intertwingler/main).
 
 ## Installation
 
 For now I recommend just running the library out of its source tree:
 
 ```bash
-~$ git clone git@github.com/doriantaylor/rb-rdf-sak.git
-~$ cd rb-rdf-sak
-~/rb-rdf-sak$ bundle install
+~$ git clone git@github.com/doriantaylor/rb-intertwingler.git intertwingler
+~$ cd intertwingler
+~/intertwingler$ bundle install
 ```
 
 ## Contributing
 
 Bug reports and pull requests are welcome at
-[the GitHub repository](https://github.com/doriantaylor/rb-rdf-sak).
+[the GitHub repository](https://github.com/doriantaylor/rb-intertwingler).
 
 ## Copyright & License
 
