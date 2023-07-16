@@ -22,11 +22,14 @@ need to be solved, and this system implements concrete ways to solve them.
 ## Links are first-class citizens
 
 Before we can do anything related to dense hypermedia, we have to
-solve for _link rot_. The median URL has a lifespan of about 90 days,
-and if you have orders of magnitude more addressable resources, that
-kind of performance is a non-starter. This doesn't need to happen, but
-what _does_ need to happen in order to fix it is a radical rethinking
-of how Web-based software is made. This system shows how to do it.
+solve for [_link rot_](https://en.wikipedia.org/wiki/Link_rot). The
+median URL has a lifespan that can be measured in weeks. If you have
+orders of magnitude more addressable resources under management than
+the median, this kind of performance is a non-starter. Link rot
+doesn't need to happen (at least, for now, up to keeping one's domain
+name bill paid), but what _does_ need to happen in order to fix it is
+a radical rethinking of how Web-based software is made. This system
+shows how to do it.
 
 > [My own site](https://doriantaylor.com/), which admittedly has only
 > been on this system since I made the latter in 2018, nevertheless
@@ -34,7 +37,8 @@ of how Web-based software is made. This system shows how to do it.
 > summer of 2008. I also use it for my client extranets, and my book
 > project, [The Nature of Software](https://the.natureof.software/).
 
-One ongoing criticism of the Web by Ted Nelson, the man who in 1960
+One ongoing criticism of the Web by [Ted
+Nelson](https://en.wikipedia.org/wiki/Ted_Nelson), the man who in 1960
 coined the term _hypertext_ (not to mention what it means to
 [_intertwingle_](https://en.wikipedia.org/wiki/Intertwingularity)), is
 that links only go in one direction: without extra apparatus, you
