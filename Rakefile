@@ -10,4 +10,16 @@ task :default => :spec
 
 # XXX turn this into a rake task at some point :P
 
-# rdf serialize --uri 'https://vocab.methodandstructure.com/content-inventory#' --output-format vocabulary --module-name Intertwingler --class-name CI -o lib/intertwingler/ci.rb --strict 'https://vocab.methodandstructure.com/content-inventory#'
+task :vocabs do
+  require 'rdf/vocab/writer'
+
+  vocabs = {
+    ADMS: 'http://www.w3.org/ns/adms#',
+    CI:   'https://vocab.methodandstructure.com/content-inventory#',
+    IBIS: 'https://vocab.methodandstructure.com/ibis#',
+    
+    TFO:  'https://vocab.methodandstructure.com/transformation#',
+  }
+end
+
+# rdf serialize --uri 'https://vocab.methodandstructure.com/content-inventory#' --output-format vocabulary --module-name Intertwingler::Vocab --class-name CI -o lib/intertwingler/vocab/ci.rb --strict 'https://vocab.methodandstructure.com/content-inventory#'

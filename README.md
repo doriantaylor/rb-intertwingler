@@ -80,9 +80,9 @@ _one_ authoritative copy of it.
 
 This principle can be extended to resources which can be modeled as
 _functions_ of other resources, for example the HTML that corresponds
-to a Markdown document, or a cropped and/or resized image. Modeling
-these transformations shrinks the footprint of original content to be
-managed.
+to a Markdown document, or a cropped and/or resized image. Explicitly
+modeling these as transformations shrinks the footprint of original
+content to be managed.
 
 Finally, for content to be reusable it must be finely _addressable_,
 with durable addresses at both the document and _sub_-document level.
