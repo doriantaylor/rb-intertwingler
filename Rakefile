@@ -13,11 +13,14 @@ task :default => :spec
 task :vocabs do
   require 'rdf/vocab/writer'
 
+  # ehh we can circle back on this one
   vocabs = {
     ADMS: 'http://www.w3.org/ns/adms#',
     CI:   'https://vocab.methodandstructure.com/content-inventory#',
     IBIS: 'https://vocab.methodandstructure.com/ibis#',
-    
+    PAV:  'http://purl.org/pav/',
+    QB:   'http://purl.org/linked-data/cube#',
+    # SCOVO: 'http://purl.org/NET/scovo#', # this one is dead
     TFO:  'https://vocab.methodandstructure.com/transformation#',
   }
 end

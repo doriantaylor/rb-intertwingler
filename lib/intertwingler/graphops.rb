@@ -629,9 +629,9 @@ module Intertwingler
 
     private
 
-    AUTHOR  = [Intertwingler::PAV.authoredBy, RDF::Vocab::DC.creator,
+    AUTHOR  = [Intertwingler::Vocab::PAV.authoredBy, RDF::Vocab::DC.creator,
       RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
-    CONTRIB = [Intertwingler::PAV.contributedBy, RDF::Vocab::DC.contributor,
+    CONTRIB = [Intertwingler::Vocab::PAV.contributedBy, RDF::Vocab::DC.contributor,
       RDF::Vocab::DC11.contributor]
     AUTHOR_LIST  = [RDF::Vocab::BIBO.authorList]
     CONTRIB_LIST = [RDF::Vocab::BIBO.contributorList]
@@ -967,7 +967,7 @@ module Intertwingler
       return hcache[key] if hcache.key? key
 
       # we begin by looking for an explicit designation
-      host = objects_for(subject, Intertwingler::CI['fragment-of'],
+      host = objects_for(subject, Intertwingler::Vocab::CI['fragment-of'],
         graph: graph, only: :resource).first
 
       # get all the classes but the two basic ones that will net everything
@@ -1233,7 +1233,7 @@ module Intertwingler
         noop: true if fragments
 
       # get the value of ci:indexed
-      ix = objects_for(subject, Intertwingler::CI.indexed, graph: graph,
+      ix = objects_for(subject, Intertwingler::Vocab::CI.indexed, graph: graph,
         only: :literal, datatype: RDF::XSD.boolean).first
 
       # if there was a value then return it, otherwise it's false if
@@ -1276,7 +1276,7 @@ module Intertwingler
 
       #
       if indexed
-        ix = objects_for(subject, Intertwingler::CI.indexed, graph: graph,
+        ix = objects_for(subject, Intertwingler::Vocab::CI.indexed, graph: graph,
           only: :literal, datatype: RDF::XSD.boolean).first
         return false if ix and ix.object == false
       end
@@ -1286,11 +1286,11 @@ module Intertwingler
         subject, RDF::Vocab::BIBO.status, only: :resource).to_set
 
       # bail out if the subject has been retired
-      return false if !retired and candidates.include? Intertwingler::CI.retired
+      return false if !retired and candidates.include? Intertwingler::Vocab::CI.retired
 
       # set up a test set of statuses
       test = Set[RDF::Vocab::BIBO['status/published']]
-      test << Intertwingler::CI.circulated if circulated
+      test << Intertwingler::Vocab::CI.circulated if circulated
 
       # if this isn't empty then we're "published"
       !(candidates & test).empty?
@@ -1306,7 +1306,7 @@ module Intertwingler
     #
     def retired? subject, graph: nil
       objects_for(subject, RDF::Vocab::BIBO.status,
-        graph: graph, only: :resource).include?(Intertwingler::CI.retired)
+        graph: graph, only: :resource).include?(Intertwingler::Vocab::CI.retired)
     end
 
     # Returns whether the subject is dct:isReplacedBy some other node.
@@ -2251,7 +2251,7 @@ module Intertwingler
     # @return [Array<RDF::Resource>] the audiences for the subject.
     #
     def audiences_for subject, proximate: false, invert: false
-      p = invert ? Intertwingler::CI['non-audience'] : RDF::Vocab::DC.audience
+      p = invert ? Intertwingler::Vocab::CI['non-audience'] : RDF::Vocab::DC.audience
 
       subject = assert_resource subject
 

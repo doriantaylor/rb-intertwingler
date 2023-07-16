@@ -1,8 +1,8 @@
 # -*- encoding: utf-8 -*-
 # frozen_string_literal: true
 # This file generated automatically using rdf vocabulary format from http://purl.org/linked-data/cube#
-require 'rdf'
-module Intertwingler
+require 'intertwingler/vocab'
+module Intertwingler::Vocab
   # @!parse
   #   # Vocabulary for <http://purl.org/linked-data/cube#>
   #   class QB < RDF::StrictVocabulary

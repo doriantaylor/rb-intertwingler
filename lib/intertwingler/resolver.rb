@@ -413,8 +413,8 @@ module Intertwingler
 
       # obtain the raw candidates for our stack of URIs using the
       # ci:canonical/owl:sameAs mechanism, ie exact match
-      sa = @repo.property_set [Intertwingler::CI.canonical,
-        Intertwingler::CI.alias, RDF::OWL.sameAs]
+      sa = @repo.property_set [Intertwingler::Vocab::CI.canonical,
+        Intertwingler::Vocab::CI.alias, RDF::OWL.sameAs]
       candidates = nil
       uris.each do |u|
         # this will give us a hash where the keys are
@@ -423,7 +423,7 @@ module Intertwingler
           next unless UUID_RE.match? s
           [s, {
             # we xor this because BITS[true] ^ 1 == 0, and 0 < 1
-            rank: BITS[f.include? Intertwingler::CI.canonical] ^ 1,
+            rank: BITS[f.include? Intertwingler::Vocab::CI.canonical] ^ 1,
             published: @repo.published?(s, circulated: circulated),
             ctime: @repo.dates_for(s,
               predicate: RDF::Vocab::DC.created).last || DateTime.new,
@@ -453,7 +453,7 @@ module Intertwingler
       slug = terminal_slug uri
       if slug and slug != ''
         exact = uri == coerce_resource(slug)
-        sl = [Intertwingler::CI['canonical-slug'], Intertwingler::CI.slug]
+        sl = [Intertwingler::Vocab::CI['canonical-slug'], Intertwingler::Vocab::CI.slug]
         [RDF::XSD.string, RDF::XSD.token].each do |t|
           repo.subjects_for(sl, RDF::Literal(slug, datatype: t)) do |s, f|
             # skip non-uuid subjects
@@ -610,20 +610,20 @@ module Intertwingler
       # obtain a sorted list of primary URIs (those identified by
       # ci:canonical and ci:canonical-slug)
       primary = @repo.objects_for(
-        term, Intertwingler::CI.canonical, only: :resource).sort(&cmp)
+        term, Intertwingler::Vocab::CI.canonical, only: :resource).sort(&cmp)
       if term.uri? and (host or slugs) and (primary.empty? or not scalar)
-        primary += @repo.objects_for(term, Intertwingler::CI['canonical-slug'],
+        primary += @repo.objects_for(term, Intertwingler::Vocab::CI['canonical-slug'],
           only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)
       end
 
       secondary = []
       if primary.empty? or not scalar
         secondary = @repo.objects_for(term,
-          [RDF::OWL.sameAs, Intertwingler::CI['alias-for']],
+          [RDF::OWL.sameAs, Intertwingler::Vocab::CI['alias-for']],
           entail: false, only: :resource).sort(&cmp)
         if term.uri? and (slugs or host)
           secondary += @repo.objects_for(
-            term, Intertwingler::CI.slug, entail: false,
+            term, Intertwingler::Vocab::CI.slug, entail: false,
             only: :literal, datatype: RDF::XSD.token).map(&umap).sort(&cmp)
         end
       end

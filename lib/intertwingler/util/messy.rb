@@ -317,9 +317,9 @@ module Intertwingler::Util::Messy
     # this framework; save it for the clojure version
   end
 
-  AUTHOR  = [Intertwingler::PAV.authoredBy, RDF::Vocab::DC.creator,
+  AUTHOR  = [Intertwingler::Vocab::PAV.authoredBy, RDF::Vocab::DC.creator,
     RDF::Vocab::DC11.creator, RDF::Vocab::PROV.wasAttributedTo]
-  CONTRIB = [Intertwingler::PAV.contributedBy, RDF::Vocab::DC.contributor,
+  CONTRIB = [Intertwingler::Vocab::PAV.contributedBy, RDF::Vocab::DC.contributor,
     RDF::Vocab::DC11.contributor]
   [AUTHOR, CONTRIB].each do |preds|
     i = 0
@@ -931,13 +931,13 @@ module Intertwingler::Util::Messy
     # * (11) inexact == 3.
 
     # collect the candidates by URI
-    sa = predicate_set [Intertwingler::CI.canonical,
-      Intertwingler::CI.alias, RDF::OWL.sameAs]
+    sa = predicate_set [Intertwingler::Vocab::CI.canonical,
+      Intertwingler::Vocab::CI.alias, RDF::OWL.sameAs]
     candidates = nil
     uris.each do |u|
       candidates = subjects_for(repo, sa, u, entail: false) do |s, f|
         # there is no #to_i for booleans and also we xor this number
-        [s, { rank: BITS[f.include?(Intertwingler::CI.canonical)] ^ 1,
+        [s, { rank: BITS[f.include?(Intertwingler::Vocab::CI.canonical)] ^ 1,
           published: published?(repo, s),
           mtime: dates_for(repo, s).last || DateTime.new }]
       end.compact.to_h
@@ -964,7 +964,7 @@ module Intertwingler::Util::Messy
     slug = terminal_slug uri, base: base
     if slug and !slug.empty?
       exact = uri == coerce_resource(slug, base) # slug represents exact match
-      sl = [Intertwingler::CI['canonical-slug'], Intertwingler::CI.slug]
+      sl = [Intertwingler::Vocab::CI['canonical-slug'], Intertwingler::Vocab::CI.slug]
       [RDF::XSD.string, RDF::XSD.token].each do |t|
         subjects_for(repo, sl, RDF::Literal(slug, datatype: t)) do |s, f|
           # default to lowest rank if this candidate is new
@@ -1217,7 +1217,7 @@ module Intertwingler::Util::Messy
     # ###
 
     # determine if there is an explicit host document
-    host = objects_for(repo, subject, Intertwingler::CI['fragment-of'],
+    host = objects_for(repo, subject, Intertwingler::Vocab::CI['fragment-of'],
       only: :resource).sort { |a, b| cmp_resource a, b }.first
 
     # these classes will net everything so we get rid of them
@@ -1361,13 +1361,13 @@ module Intertwingler::Util::Messy
     # warn hosturi
 
     # first thing: get ci:canonical
-    primary = objects_for(repo, subject, Intertwingler::CI.canonical,
+    primary = objects_for(repo, subject, Intertwingler::Vocab::CI.canonical,
                           only: :resource).sort { |a, b| cmp_resource a, b }
     # if that's empty then try ci:canonical-slug
     if subject.uri? and (host or slugs) and (primary.empty? or not unique)
       # warn subject
       primary += objects_for(repo, subject,
-        Intertwingler::CI['canonical-slug'], only: :literal).map do |o|
+        Intertwingler::Vocab::CI['canonical-slug'], only: :literal).map do |o|
         if hosturi
           h = hosturi.dup
           h.fragment = o.value
@@ -1388,7 +1388,7 @@ module Intertwingler::Util::Messy
         entail: false, only: :resource).sort { |a, b| cmp_resource a, b }
 
       if subject.uri? and (slugs or host)
-        secondary += objects_for(repo, subject, Intertwingler::CI.slug,
+        secondary += objects_for(repo, subject, Intertwingler::Vocab::CI.slug,
           entail: false, only: :literal).map do |o|
           if hosturi
             h = hosturi.dup
@@ -1453,17 +1453,17 @@ module Intertwingler::Util::Messy
     end
 
     if indexed
-      ix = objects_for(repo, uri, Intertwingler::CI.indexed, only: :literal).first
+      ix = objects_for(repo, uri, Intertwingler::Vocab::CI.indexed, only: :literal).first
       return false if ix and ix.object == false
     end
 
     candidates = objects_for(
       repo, uri, RDF::Vocab::BIBO.status, only: :resource).to_set
 
-    return false if !retired and candidates.include? Intertwingler::CI.retired
+    return false if !retired and candidates.include? Intertwingler::Vocab::CI.retired
 
     test = Set[RDF::Vocab::BIBO['status/published']]
-    test << Intertwingler::CI.circulated if circulated
+    test << Intertwingler::Vocab::CI.circulated if circulated
 
     # warn candidates, test, candidates & test
 
@@ -2633,7 +2633,7 @@ module Intertwingler::Util::Messy
                   pp = graph.query([su, nil, chosen]).predicates.uniq
 
                   if pp.empty?
-                    pp << Intertwingler::CI.mentions
+                    pp << Intertwingler::Vocab::CI.mentions
                     pp.each { |p| graph << [su, p, chosen] } if rescan
                   end
 

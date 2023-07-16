@@ -260,8 +260,8 @@ class Intertwingler::Document
               end
       cache = {}
       @repo.subjects_for(
-        Intertwingler::QB.dataSet, @subject, only: :resource).each do |o|
-        if d = @repo.objects_for(o, Intertwingler::CI.document, only: :resource).first
+        Intertwingler::Vocab::QB.dataSet, @subject, only: :resource).each do |o|
+        if d = @repo.objects_for(o, Intertwingler::Vocab::CI.document, only: :resource).first
           if !published or @repo.published?(d)
             # include a "sort" time that defaults to epoch zero
             c = cache[o] ||= {
@@ -325,7 +325,7 @@ class Intertwingler::Document
              ] + DSD_SEQ.map do |f|
           h = []
           x = { h => :td }
-          p = Intertwingler::CI[f]
+          p = Intertwingler::Vocab::CI[f]
           if y = c[:struct][p] and !y.empty?
             h << y = y.first
             x[:property] = @resolver.abbreviate p
@@ -453,7 +453,7 @@ class Intertwingler::Document
       meta  = head_meta(resolver, subject, struct: struct, meta_names: mn,
                         vocab: XHV) + twitter_meta(resolver, subject)
       links = head_links resolver, subject, struct: struct, vocab: XHV,
-        ignore: seen.keys, rev: Intertwingler::CI.document
+        ignore: seen.keys, rev: Intertwingler::Vocab::CI.document
       types = resolver.abbreviate repo.types_for(subject, struct: struct)
       title = if t = repo.label_for(subject, struct: struct)
                 [t.last.to_s, resolver.abbreviate(t.first)]
@@ -1923,7 +1923,7 @@ class Intertwingler::Document
                   pp = @repo.query([su, nil, chosen]).predicates.uniq
 
                   if pp.empty?
-                    pp << Intertwingler::CI.mentions
+                    pp << Intertwingler::Vocab::CI.mentions
                     pp.each { |p| graph << [su, p, chosen] } if rescan
                   end
 

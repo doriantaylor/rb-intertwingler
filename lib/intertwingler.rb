@@ -927,7 +927,7 @@ module Intertwingler
 
       # get links
       link = head_links id, struct: struct, ignore: bodynodes,
-        labels: labels, vocab: XHV, rev: Intertwingler::CI.document
+        labels: labels, vocab: XHV, rev: Intertwingler::Vocab::CI.document
 
       # get metas
       mn = {}
@@ -971,7 +971,7 @@ module Intertwingler
         # end.map(&:to_s).sort.join '; '
 
         # # explicit non-audience(s)
-        # n = objects_for(s, Intertwingler::CI['non-audience']).map do |au|
+        # n = objects_for(s, Intertwingler::Vocab::CI['non-audience']).map do |au|
         #   next lab[au] if lab[au]
         #   _, al = label_for au
         #   lab[au] = al
@@ -1209,7 +1209,7 @@ module Intertwingler
     # KILL OK
     def indexed? subject
       subject = @resolver.coerce_resource subject
-      indexed = objects_for subject, Intertwingler::CI.indexed,
+      indexed = objects_for subject, Intertwingler::Vocab::CI.indexed,
         only: :literal, datatype: RDF::XSD.boolean
       # assume the subject is indexed but we are looking for explicit
       # presence of `false` (ie explicit `false` overrides explicit
@@ -1781,7 +1781,7 @@ module Intertwingler
       meta  = head_meta(subject, struct: struct, meta_names: mn,
                         vocab: XHV) + generate_twitter_meta(subject)
       links = head_links subject, struct: struct, vocab: XHV,
-        ignore: seen.keys, rev: Intertwingler::CI.document
+        ignore: seen.keys, rev: Intertwingler::Vocab::CI.document
       types = @resolver.abbreviate @graph.asserted_types(subject, struct: struct)
       title = if t = @graph.label_for(subject, struct: struct)
                 [t[1].to_s, @resolver.abbreviate(t[0])]
@@ -3345,7 +3345,7 @@ module Intertwingler
         # and now we do the head
         links = @context.head_links @uuid, struct: struct, nodes: resources,
           prefixes: @context.prefixes, ignore: bodylinks, labels: labels,
-          vocab: XHV, rev: Intertwingler::CI.document
+          vocab: XHV, rev: Intertwingler::Vocab::CI.document
 
         # we want to duplicate links from particular subjects (eg the root)
         (@context.config[:duplicate] || {}).sort do |a, b|
