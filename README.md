@@ -14,7 +14,7 @@ The proximate goals of this implementation are as follows:
 `Intertwingler` is also intended to serve as a substrate for:
 
 * The maturation of a [content inventory
-  ontology](https://privatealpha.com/ontology/content-inventory/1#),
+  ontology](https://vocab.methodanstructure.com/content-inventory#),
 * The use of semantic metadata [for manipulating content
   presentation](https://github.com/doriantaylor/rdfa-xslt),
 * Development of a deterministic, standards-compliant, [client-side
