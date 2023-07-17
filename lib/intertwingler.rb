@@ -27,13 +27,13 @@ require 'intertwingler/util'
 require 'intertwingler/nlp'
 
 # ontologies, mine in particular
-require 'intertwingler/ci'
-require 'intertwingler/ibis'
+require 'intertwingler/vocab/ci'
+require 'intertwingler/vocab/ibis'
 # others not included in rdf.rb
-require 'intertwingler/pav'
-require 'intertwingler/scovo'
-require 'intertwingler/qb'
-require 'intertwingler/adms'
+require 'intertwingler/vocab/pav'
+require 'intertwingler/vocab/scovo'
+require 'intertwingler/vocab/qb'
+require 'intertwingler/vocab/adms'
 
 # 2021-12-09 REFACTORING NOTES: This thing is an utter mess and needs
 # a friggin overhaul. Here is the proposed new layout:

@@ -18,11 +18,11 @@ require 'rdf/vocab/dc'
 require 'rdf/vocab/dc11'
 
 require 'intertwingler/mimemagic'
-require 'intertwingler/ci'
-require 'intertwingler/tfo'
-require 'intertwingler/ibis'
-require 'intertwingler/pav'
-require 'intertwingler/qb'
+require 'intertwingler/vocab/ci'
+require 'intertwingler/vocab/tfo'
+require 'intertwingler/vocab/ibis'
+require 'intertwingler/vocab/pav'
+require 'intertwingler/vocab/qb'
 
 # this will set the namespaces but we also depend on stuff in here
 require 'intertwingler/util/clean'

@@ -9,14 +9,14 @@ require 'intertwingler/util/clean'
 require 'intertwingler/mimemagic'
 
 # load up my vocabs before reasoner is applied
-require 'intertwingler/ci'
-require 'intertwingler/tfo'
-require 'intertwingler/ibis'
+require 'intertwingler/vocab/ci'
+require 'intertwingler/vocab/tfo'
+require 'intertwingler/vocab/ibis'
 
 # also third-party vocabs not found in RDF::Vocab
-require 'intertwingler/pav'
-require 'intertwingler/qb'
-require 'intertwingler/scovo'
+require 'intertwingler/vocab/pav'
+require 'intertwingler/vocab/qb'
+require 'intertwingler/vocab/scovo'
 
 module Intertwingler
 

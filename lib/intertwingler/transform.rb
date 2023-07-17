@@ -1,6 +1,6 @@
 require 'rdf'
 require 'rdf/vocab'
-require 'intertwingler/tfo'
+require 'intertwingler/vocab/tfo'
 require 'intertwingler/util'
 require 'set'
 require 'mimemagic'
