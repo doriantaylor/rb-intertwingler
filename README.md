@@ -1,7 +1,7 @@
 # Intertwingler — An Engine for Dense Hypermedia
 
 This software is an _engine_ for creating _dense hypermedia_ networks.
-Dense hypermedia is what the Web, out of the box, _isn't_. The Web is
+Dense hypermedia is what the Web, out of the box, is _not_. The Web is
 _sparse_ hypermedia: big, long documents, with few links aside from
 things like navigation and footers. Dense hypermedia is all about
 _short_ resources connected by _lots_ of links. One example of dense
@@ -38,7 +38,7 @@ shows how to do it.
 > project, [The Nature of Software](https://the.natureof.software/).
 
 One ongoing criticism of the Web by [Ted
-Nelson](https://en.wikipedia.org/wiki/Ted_Nelson), the man who in 1960
+Nelson](https://en.wikipedia.org/wiki/Ted_Nelson), who in 1960
 coined the term _hypertext_ (not to mention what it means to
 [_intertwingle_](https://en.wikipedia.org/wiki/Intertwingularity)), is
 that links only go in one direction: without extra apparatus, you
@@ -201,10 +201,24 @@ organizers have graciously elected to sponsor.
 This project also represents a confluence of over two decades of work
 on the Web. What is now called `Intertwingler` closely tracks a design
 I sketched out back in 2006 for a "Web substrate", with the intent of
-decoupling functionality that generates _content_ from that which
-merely _manipulates_ it, noting that separating the two would result
+decoupling functionality that _generates_ content from that which
+_manipulates_ it, on the premise that separating the two would result
 in both ending up markedly simpler. This design drew on technique I
 had developed at my first tech job back in 1999.
+
+> During my night shifts in 1999-2000 as a baby system administrator,
+> I had a lot of time to mess around with
+> [`mod_perl`](https://perl.apache.org/), the Perl bindings for the
+> Apache API. One thing you learn when you work directly with a server
+> API is that almost all Web development happens in a tiny corner of
+> what _you_ are able to address (the _response handler_ or _content
+> handler_). It turns out there are many other places one can
+> manipulate both the request _and_ response (header twiddling, URL
+> rewriting, access control, filters — albeit filters came a couple
+> years later) that are agnostic to the application. Indeed, many Web
+> application frameworks recapitulate this structure within their own
+> confines, and the result is undoubtedly a whole lot of redundant
+> code.
 
 I had had a personal site from 1998 to about 2003, and by 2008 I was
 ready to put one up again. It was around this time I had realized that
