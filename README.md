@@ -87,7 +87,7 @@ content to be managed.
 Finally, for content to be reusable it must be finely _addressable_,
 with durable addresses at both the document and _sub_-document level.
 
-## Standard interfaces & Data transparency
+## Standard interfaces & data transparency
 
 With this system we're trying to imagine what it means to be a "model
 citizen" on the Web: a reliable source of clear, actionable
@@ -210,15 +210,15 @@ had developed at my first tech job back in 1999.
 > I had a lot of time to mess around with
 > [`mod_perl`](https://perl.apache.org/), the Perl bindings for the
 > Apache API. One thing you learn when you work directly with a server
-> API is that almost all Web development happens in a tiny corner of
-> what _you_ are able to address (the _response handler_ or _content
-> handler_). It turns out there are many other places one can
+> API is that almost all Web development happens in a tiny corner (the
+> _response handler_ or _content handler_) of what _you_ are able to
+> address. It turns out there are several other places one can
 > manipulate both the request _and_ response (header twiddling, URL
 > rewriting, access control, filters — albeit filters came a couple
-> years later) that are agnostic to the application. Indeed, many Web
-> application frameworks recapitulate this structure within their own
-> confines, and the result is undoubtedly a whole lot of redundant
-> code.
+> years later) that are orthogonal to the actual application. Indeed,
+> many Web application frameworks recapitulate this structure within
+> their own confines, and the result is undoubtedly a whole lot of
+> redundant code.
 
 I had had a personal site from 1998 to about 2003, and by 2008 I was
 ready to put one up again. It was around this time I had realized that
