@@ -1006,7 +1006,7 @@ class Intertwingler::Document
       end
 
       # squash everything else to a string
-      doc = doc.to_s unless [IO, StringIO].any? { |c| doc_is_a? c }
+      doc = doc.to_s unless [IO, StringIO].any? { |c| doc.is_a? c }
 
       # check type by content
       type ||= Intertwingler::MimeMagic.by_magic(doc)

@@ -4,6 +4,16 @@ require 'mimemagic'
 # janky bolt-on MimeMagic
 class Intertwingler::MimeMagic < ::MimeMagic
 
+  # we are overwriting the add
+  def self.add type, **options
+    extensions = [options[:extensions]].flatten.compact
+    TYPES[type] = [extensions,
+                   [options[:parents]].flatten.compact,
+                   options[:comment]]
+    extensions.each {|ext| EXTENSIONS[ext] = type }
+    MAGIC.unshift [type, options[:magic]] if options[:magic]
+  end
+
   # XXX this is not strictly correct but good enough for now
   [
     ['text/n3', %w(n3 ttl nt), %w(text/plain), [[0..256, '@prefix']]],

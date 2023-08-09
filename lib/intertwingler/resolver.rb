@@ -148,6 +148,18 @@ module Intertwingler
 
     public
 
+    # Return the set of URI authorities (host-port pairs) associated
+    # with this resolver, beginning with the base and following with
+    # the aliases.
+    #
+    # @return [Array<String>] the authorities
+    #
+    def authorities
+      ([@base] + @aliases).select { |u| u.respond_to? :authority }.map do |u|
+        u.authority.to_s.downcase
+      end.uniq
+    end
+
     # Preprocess a candidate (absolute or relative) URI to produce a
     # valid URI string with the minimally valid set of escaped
     # characters. That is, characters that are unnecessarily

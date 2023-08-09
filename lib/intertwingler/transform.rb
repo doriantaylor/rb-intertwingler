@@ -408,7 +408,7 @@ class Intertwingler::Transform
     #
     def load
       repo.subjects_for(RDF.type,
-                                  Intertwingler::Vocab::TFO.Partial).each do |s|
+                        Intertwingler::Vocab::TFO.Partial).each do |s|
         resolve subject: s
       end
 

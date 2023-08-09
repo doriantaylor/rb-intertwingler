@@ -14,20 +14,6 @@ require 'http-negotiate'
 require 'store/digest/http'
 
 class Intertwingler::Handler
-  def initialize resolver, **args
-    @resolver = resolver
-  end
-
-  attr_reader :resolver
-
-  # Get the resolver's graph
-  #
-  # @return [RDF::Repository] the graph.
-  #
-  def repo
-    @resolver.repo
-  end
-
   # Handle a {Rack::Request}. Return a {Rack::Response}.
   #
   # @param req [Rack::Request] the request.
@@ -51,6 +37,44 @@ class Intertwingler::Handler
     handle(req).finish
   end
 
+  # Initialize a handler.
+  #
+  # @param resolvers [Array<Intertwingler::Resolver>]
+  # @param args
+  #
+  def initialize resolvers, **args
+    # ensure resolvers are an array
+    resolvers = resolvers.respond_to?(:to_a) ? resolvers.to_a : [resolvers]
+    # set authority map
+    @authorities = (@resolvers = resolvers).reduce({}) do |h, r|
+      r.authorities.each { |a| h[a] = r }
+      h
+    end
+  end
+
+  attr_reader :resolvers
+
+  # Get the {Intertwingler::Resolver} for the given request.
+  #
+  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
+  #
+  # @return [Intertwingler::Resolver
+  #
+  def resolver_for req
+    req = req.url if req.respond_to? :url
+    @authorities[req.authority.downcase]
+  end
+
+  # Get the resolver's graph for the given request.
+  #
+  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
+  #
+  # @return [RDF::Repository] the graph.
+  #
+  def repo_for req
+    resolver = resolver_for(req) or return
+    resolver.repo
+  end
 
   # This is a toy content handler for serving content-negotiated files
   # directly from the file system. It is intended to be for residual
@@ -91,15 +115,15 @@ class Intertwingler::Handler
 
     # Initialize a handler with parameters.
     #
-    # @param resolver [Intertwingler::Resolver] the URI resolver
+    # @param resolvers [Array<Intertwingler::Resolver>] the URI resolver(s)
     # @param root [Pathname, #to_s] the document root
     # @param indices [Array<#to_s>] slugs to use for directory index
     #
-    def initialize resolver, root: nil, indices: %w[index].freeze
+    def initialize resolvers, root: nil, indices: %w[index].freeze
       @root    = Pathname(root).expand_path.realpath
       @indices = indices
 
-      super resolver
+      super resolvers
     end
 
     attr_reader :root, :indices
@@ -142,6 +166,8 @@ class Intertwingler::Handler
       # * then we get the subset of `uri_for` on this scheme/authority
       #   (that we don't already have)
 
+      resolver = resolver_for req
+
       # determine if the requested path terminates with a slash (~ parameters)
       slash = resolver.slash? req.path
 
@@ -157,7 +183,7 @@ class Intertwingler::Handler
         paths << root + uuid.uuid
         paths << root + path
         paths += resolver.uri_for(uuid, scalar: false, as: :uri,
-          slugs: true, fragments: false, local: true).reduce([]) do |a, u|
+                                  slugs: true, fragments: false, local: true).reduce([]) do |a, u|
           next a if resolver.uuid_path u
           a << root + resolver.clean_path(u, slash: false).delete_prefix(?/)
         end
@@ -253,6 +279,8 @@ class Intertwingler::Handler
 
     def handle req
 
+      resolver = resolver_for req
+
       # warn req.url.inspect
       # warn resolver.base.inspect
 
@@ -287,7 +315,7 @@ class Intertwingler::Handler
 
       # XXX nuke this later
       if base = doc.at_xpath('/html:html/html:head/html:base',
-        { html: 'http://www.w3.org/1999/xhtml' })
+                             { html: 'http://www.w3.org/1999/xhtml' })
         href = RDF::URI(base['href'])
         href.scheme = orig.scheme
         href.authority = orig.authority

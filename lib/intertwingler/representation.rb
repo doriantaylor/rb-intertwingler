@@ -99,16 +99,24 @@ class Intertwingler::Representation
 
   public
 
+  def self.object_class
+    const_get :OBJECT_CLASS
+  end
+
   def self.default_type
-    DEFAULT_TYPE
+    const_get :DEFAULT_TYPE
   end
 
   attr_reader :io, :type, :language, :charset
 
   def initialize io, type: DEFAULT_TYPE, language: nil, charset: nil, **options
-    raise NotImplementedError, 'Subclasses need an OBJECT_CLASS' unless OBJECT_CLASS
+    cl = self.class
+
+    raise NotImplementedError, 'Subclasses need an OBJECT_CLASS' unless
+      cl.object_class
+
     @io       = assert_io_like io
-    @type     = coerce_type(type || DEFAULT_TYPE)
+    @type     = coerce_type(type || cl.default_type)
     @language = coerce_rfc5646 language if language
     @charset  = coerce_charset charset  if charset
   end
@@ -122,11 +130,4 @@ class Intertwingler::Representation
     raise NotImplementedError, 'subclasses must implement object'
   end
 
-  # Nokogiri is for HTML/XML.
-  class Nokogiri < self
-  end
-
-  # Vips is used for raster images.
-  class Vips < self
-  end
 end

@@ -1,15 +1,21 @@
 require 'intertwingler/representation'
+
 require 'vips'
 require 'vips/sourcecustom'
 require 'vips/targetcustom'
+
 require 'stringio'
 
 class Intertwingler::Representation::Vips < Intertwingler::Representation
   private
 
-  OBJECT_CLASS = Vips::Image
+  OBJECT_CLASS = ::Vips::Image
 
   public
+
+  def each &block
+    io.each(&block)
+  end
 
   def io
     # just return the input unless something has been done to it
@@ -26,10 +32,6 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
     string = target.get 'blob'
 
     StringIO.new string
-  end
-
-  def each &block
-    io.each block
   end
 
   def object

@@ -87,6 +87,8 @@ module Intertwingler
 
     private
 
+    CI = Intertwingler::Vocab::CI
+
     # RDF::Reasoner.apply(:rdfs, :owl)
 
     G_OK = [RDF::Repository, RDF::Dataset, RDF::Graph].freeze
@@ -1254,8 +1256,8 @@ module Intertwingler
         audn = @graph.audiences_for uu, proximate: true, invert: true
         audy -= audn
 
-        warn 'doc %s has audiences %s and non-audiences %s' %
-          [uu, audy.inspect, audn.inspect]
+        # warn 'doc %s has audiences %s and non-audiences %s' %
+        #   [uu, audy.inspect, audn.inspect]
 
         # we begin by assuming the document is *not* included in the
         # feed, and then we try to prove otherwise
@@ -1298,6 +1300,8 @@ module Intertwingler
         updated ||= published || RDF::Literal::DateTime.new(DateTime.now)
         updated = Time.parse(updated.to_s).utc
         latest = updated if !latest or latest < updated
+
+        # warn ">>> #{uu} #{updated}"
 
         xml['#entry'].push({ '#updated' => updated.iso8601 })
 
@@ -1361,11 +1365,13 @@ module Intertwingler
 
       # now we punt out the doc
 
+      latest ||= Time.now
+
       preamble = [
         { '#id' => id.to_s },
         { '#updated' => latest.iso8601 },
         { '#generator' => 'Intertwingler', version: Intertwingler::VERSION,
-          uri: "https://github.com/doriantaylor/rb-rdf-sak" },
+          uri: "https://github.com/doriantaylor/rb-intertwingler" },
         { nil => :link, rel: :self, type: 'application/atom+xml',
           href: @resolver.uri_for(id) },
         { nil => :link, rel: :alternate, type: 'text/html',

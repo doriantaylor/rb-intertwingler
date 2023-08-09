@@ -6,6 +6,8 @@ require 'engtagger'
 
 private
 
+XHTMLNS = { html: 'http://www.w3.org/1999/xhtml'.freeze }.freeze
+
 # XXX why does this feel super familiar
 POS_MAP = {
   noun: %i[xnn nnp nnps nns],
@@ -180,6 +182,41 @@ module Intertwingler::NLP
   end
 
   def segment doc
+    warn 'wat'
+
+    # get the document body
+    body = doc.at_xpath('.//html:body[1]', XHTMLNS) or return []
+
+    # current and result
+    current = nil
+    blocks  = []
+
+    body.xpath('.//text()').each do |text|
+      ancestors = text.xpath(
+        'ancestor::*[ancestor-or-self::html:body]', XHTMLNS).select do |e|
+        # XXX pull this out and put it somewhere common
+        %w[body main header footer article nav section hgroup h1 h2 h3 h4 h5 h6
+           div p li dt dd th td caption blockquote aside figure figcaption
+           form fieldset pre].include? e.name
+      end
+
+      # warn ancestors.map { |e| e.name }.inspect
+
+      # if the current block is the same, append to last string
+      if current == ancestors.last
+        blocks.last << text.content
+      else
+        # otherwise set a new current block and add a new last string
+        current = ancestors.last
+        blocks << text.content
+      end
+    end
+
+    blocks.reduce([]) do |out, b|
+      b = b.gsub(/\u{2014}+/, ' - ').gsub(/[[:space:]]+/, ' ').strip
+      out << b unless b.empty?
+      out
+    end
   end
 
   # this is dumb but whatever
