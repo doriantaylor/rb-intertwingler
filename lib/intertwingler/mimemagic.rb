@@ -5,14 +5,14 @@ require 'mimemagic'
 class Intertwingler::MimeMagic < ::MimeMagic
 
   # we are overwriting the add
-  def self.add type, **options
-    extensions = [options[:extensions]].flatten.compact
-    TYPES[type] = [extensions,
-                   [options[:parents]].flatten.compact,
-                   options[:comment]]
-    extensions.each {|ext| EXTENSIONS[ext] = type }
-    MAGIC.unshift [type, options[:magic]] if options[:magic]
-  end
+  # def self.add type, **options
+  #   extensions = [options[:extensions]].flatten.compact
+  #   TYPES[type] = [extensions,
+  #                  [options[:parents]].flatten.compact,
+  #                  options[:comment]]
+  #   extensions.each {|ext| EXTENSIONS[ext] = type }
+  #   MAGIC.unshift [type, options[:magic]] if options[:magic]
+  # end
 
   # XXX this is not strictly correct but good enough for now
   [
@@ -28,7 +28,7 @@ class Intertwingler::MimeMagic < ::MimeMagic
     sample = nil
 
     # get some stuff out of the IO or get a substring
-    if thing.is_a? IO
+    if %i[seek tell read].all? { |m| thing.respond_to? m }
       pos = thing.tell
       thing.seek 0, 0
       sample = thing.read 100
@@ -47,13 +47,13 @@ class Intertwingler::MimeMagic < ::MimeMagic
     new(self.binary?(thing) ? 'application/octet-stream' : 'text/plain')
   end
 
-  def self.by_extension io
-    super(io) || default_type(io)
-  end
+  # def self.by_extension io
+  #   super(io) || default_type(io)
+  # end
 
-  def self.by_path io
-    super(io) || default_type(io)
-  end
+  # def self.by_path io
+  #   super(io) || default_type(io)
+  # end
 
   def self.by_magic io
     super(io) || default_type(io)
@@ -97,6 +97,7 @@ class Intertwingler::MimeMagic < ::MimeMagic
   private
 
   def method_missing id
+    raise NotImplementedError unless @type.respond_to? id
     @type.send id
   end
 
