@@ -24,6 +24,10 @@ class Intertwingler::MimeMagic < ::MimeMagic
       magic: magic[3]
   end
 
+  # Determine if an input is binary.
+  #
+  #
+  #
   def self.binary? thing
     sample = nil
 
@@ -42,6 +46,10 @@ class Intertwingler::MimeMagic < ::MimeMagic
     # control codes minus ordinary whitespace
     /[\x0-\x8\xe-\x1f\x7f]/.match? sample.b
   end
+
+  # def self.text? thing
+  #   not binary? thing
+  # end
 
   def self.default_type thing
     new(self.binary?(thing) ? 'application/octet-stream' : 'text/plain')
