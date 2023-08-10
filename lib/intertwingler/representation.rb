@@ -1,4 +1,6 @@
-require 'intertwingler/version'
+require 'intertwingler/version' # for the symbol
+
+require 'mimemagic'
 
 # This is a base class for what are called "representations" in [the
 # Fielding dissertation](https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm).
@@ -81,8 +83,8 @@ class Intertwingler::Representation
   end
 
   def coerce_type type
-    return type if type.is_a? Intertwingler::MimeMagic
-    Intertwingler::MimeMagic.new type.to_s
+    return type if type.is_a? MimeMagic
+    MimeMagic.new type.to_s
   end
 
   def coerce_rfc5646 language

@@ -7,7 +7,7 @@ require 'stringio'
 require 'uri'
 
 # for filesystem
-require 'intertwingler/mimemagic'
+require 'mimemagic'
 require 'http-negotiate'
 
 # for cas
@@ -204,7 +204,7 @@ class Intertwingler::Handler
           dn, bn = p.split
           dn.glob("#{bn}{,.*}").each do |x|
             if stat = x.stat rescue nil
-              type = Intertwingler::MimeMagic.by_path(x).to_s
+              type = MimeMagic.by_path(x).to_s
               incl = re.match? x.realpath.to_s
               h[x] = { dir: false, stat: stat, type: type, included?: incl }
             end
@@ -214,7 +214,7 @@ class Intertwingler::Handler
         @indices.each do |i|
           p.glob("#{i}{,.*}").each do |x|
             if stat = x.stat rescue nil
-              type = Intertwingler::MimeMagic.by_path(x).to_s
+              type = MimeMagic.by_path(x).to_s
               incl = re.match? x.realpath.to_s
               h[x] = { dir: true, stat: stat, type: type, included?: incl }
             end

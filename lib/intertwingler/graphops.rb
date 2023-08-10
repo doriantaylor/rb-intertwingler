@@ -1,12 +1,12 @@
 require 'intertwingler/version'
 
+require 'mimemagic'
 require 'set'
 require 'rdf'
 require 'rdf/vocab'
 require 'rdf/reasoner'
 require 'intertwingler/resolver'
 require 'intertwingler/util/clean'
-require 'intertwingler/mimemagic'
 
 # load up my vocabs before reasoner is applied
 require 'intertwingler/vocab/ci'
@@ -805,7 +805,7 @@ module Intertwingler
       objects_for(subject, predicate,
                   graph: graph, datatype: datatype, only: :literal) do |o|
         t = o.object.to_s.strip.downcase
-        /\//.match?(t) ? Intertwingler::MimeMagic.new(t) : nil
+        /\//.match?(t) ? MimeMagic.new(t) : nil
       end.compact.sort.uniq
     end
 

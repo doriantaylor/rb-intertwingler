@@ -10,6 +10,7 @@ require 'nokogiri'
 require 'md-noko'
 require 'uuid-ncname'
 require 'xml-mixup'
+require 'mimemagic'
 
 # This is the base class for (X)HTML+RDFa documents. It is a temporary
 # situation intended to absorb the dissolution of
@@ -1001,7 +1002,7 @@ class Intertwingler::Document
 
       # pathnames turned into IO objects
       if doc.is_a? Pathname
-        type = Intertwingler::MimeMagic.by_path doc
+        type = MimeMagic.by_path doc
         doc  = doc.open # this may raise if the file isn't there
       end
 
@@ -1009,7 +1010,7 @@ class Intertwingler::Document
       doc = doc.to_s unless [IO, StringIO].any? { |c| doc.is_a? c }
 
       # check type by content
-      type ||= Intertwingler::MimeMagic.by_magic(doc)
+      type ||= MimeMagic.by_magic(doc)
 
       # can you believe there is a special bookmarks mime type good grief
       type = 'text/html' if type == 'application/x-mozilla-bookmarks'

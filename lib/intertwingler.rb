@@ -6,6 +6,7 @@ require 'stringio'
 require 'pathname'
 require 'tempfile'
 require 'yaml' # apparently no longer stock
+require 'mimemagic'
 
 # rdf stuff
 require 'uri'
@@ -22,7 +23,6 @@ require 'uuid-ncname'
 require 'intertwingler/graphops'
 require 'intertwingler/resolver'
 
-require 'intertwingler/mimemagic'
 require 'intertwingler/util'
 require 'intertwingler/nlp'
 
@@ -2486,8 +2486,8 @@ module Intertwingler
       files = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).reject do |x|
-        x.directory? or /.*(?:markdown|(?:x?ht|x)ml).*/i !~
-          Intertwingler::MimeMagic.by_path(x).to_s
+        x.directory? or
+          /.*(?:markdown|(?:x?ht|x)ml).*/i !~ MimeMagic.by_path(x).to_s
       end.uniq
 
       # warn files.inspect
@@ -2974,7 +2974,7 @@ module Intertwingler
 
           # pathnames turned into IO objects
           if doc.is_a? Pathname
-            type = Intertwingler::MimeMagic.by_path doc
+            type = MimeMagic.by_path doc
             doc  = doc.open # this may raise if the file isn't there
           end
 
@@ -2982,7 +2982,7 @@ module Intertwingler
           doc = doc.to_s unless doc.is_a? IO
 
           # check type by content
-          type ||= Intertwingler::MimeMagic.by_magic(doc)
+          type ||= MimeMagic.by_magic(doc)
 
           # can you believe there is a special bookmarks mime type good grief
           type = 'text/html' if type == 'application/x-mozilla-bookmarks'

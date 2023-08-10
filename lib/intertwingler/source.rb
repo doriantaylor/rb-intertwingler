@@ -1,7 +1,7 @@
-require 'intertwingler/mimemagic'
+require 'intertwingler/version' # for the symbol
 
+require 'mimemagic'
 require 'http-negotiate'
-#
 require 'store-digest'
 
 # A _source_ is where (opaque) representations of information
@@ -141,7 +141,7 @@ class Intertwingler::Source
       variants = candidates.uniq.map do |c|
         Pathname.glob(c.to_s + '{,.*,/index{,.*}}')
       end.reduce(:+).select { |x| x.file? && x.readable? }.map do |x|
-        [x, { type: Intertwingler::MimeMagic.by_path(x).to_s, size: x.size }]
+        [x, { type: MimeMagic.by_path(x).to_s, size: x.size }]
       end.to_h
 
       # XXX in some future we can imagine telling the difference

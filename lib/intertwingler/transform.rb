@@ -211,7 +211,7 @@ class Intertwingler::Transform
     # value if the transform function can handle the type, even if it
     # does not explicitly mention it (e.g. if the transform specifies
     # it accepts application/xml and you hand it application/xhtml+xml)
-    variants = Intertwingler::MimeMagic.new(type).lineage.map do |t|
+    variants = MimeMagic.new(type).lineage.map do |t|
       # the key can be anything as long as it's unique since it ends
       # up as a hash
       [t.to_s, [1, t.to_s]]

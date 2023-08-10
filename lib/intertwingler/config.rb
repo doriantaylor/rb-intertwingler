@@ -1,9 +1,9 @@
 require 'intertwingler/resolver'
-require 'intertwingler/mimemagic'
 
 require 'dry-schema'
 require 'uri'
 require 'pathname'
+require 'mimemagic'
 
 module Intertwingler
   # XXX pop this out into its own module when we're ready
@@ -99,7 +99,7 @@ module Intertwingler
     end
 
     # A media type, e.g. `text/plain`.
-    MediaType = Types::Constructor(Intertwingler::MimeMagic).constrained(
+    MediaType = Types::Constructor(MimeMagic).constrained(
       format: /^[^\/]+\/[^\/]+$/)
 
     # An unprocessed CURIE or IRI, i.e. prior to prefix expansion.

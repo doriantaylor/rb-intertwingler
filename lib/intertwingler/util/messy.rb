@@ -7,6 +7,7 @@ require 'set'
 require 'uuidtools'
 require 'uuid-ncname'
 require 'xml-mixup'
+require 'mimemagic'
 
 require 'rdf'
 require 'rdf/vocab'
@@ -17,7 +18,6 @@ require 'rdf/vocab/bibo'
 require 'rdf/vocab/dc'
 require 'rdf/vocab/dc11'
 
-require 'intertwingler/mimemagic'
 require 'intertwingler/vocab/ci'
 require 'intertwingler/vocab/tfo'
 require 'intertwingler/vocab/ibis'
@@ -1766,7 +1766,7 @@ module Intertwingler::Util::Messy
     objects_for(
       repo, subject, predicate, only: :literal, datatype: datatype) do |o|
       t = o.object
-      t =~ /\// ? Intertwingler::MimeMagic.new(t.to_s.downcase) : nil
+      t =~ /\// ? MimeMagic.new(t.to_s.downcase) : nil
     end.compact.sort.uniq
   end
 
