@@ -10,7 +10,7 @@ module Intertwingler
    ['application/x-vnd.sass', %w(sass), %w(text/plain), []],
    ['application/x-vnd.sass.scss', %w(scss), %w(text/css), []],
   ].each do |magic|
-    MimeMagic.add magic[0],
-      extensions: magic[1], parents: magic[2], magic: magic[3]
+    MimeMagic.add magic[0], extensions: magic[1],
+      parents: magic[2], magic: magic[3]
   end
 end

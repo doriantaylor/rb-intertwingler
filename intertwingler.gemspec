@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rake',    '>= 13.0'
   spec.add_development_dependency 'rspec',   '>= 3.9'
 
-  # stuff we use
+  # stuff we use pretty universally
   spec.add_runtime_dependency 'rdf',              '>= 3.1.7'
   spec.add_runtime_dependency 'rdf-reasoner',     '>= 0.6.2' # my patch
   spec.add_runtime_dependency 'linkeddata',       '>= 3.1.2'
@@ -38,26 +38,24 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'sassc',            '>= 2.2.1'
   spec.add_runtime_dependency 'shared-mime-info', '>= 0.2.0'
   spec.add_runtime_dependency 'commander',        '>= 4.4.5' # my patch
-  spec.add_runtime_dependency 'mimemagic',        '>= 0.3.4'
-
-  # stuff for urlrunner
-  spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'
-  spec.add_runtime_dependency 'concurrent-ruby-edge', '>= 0.6.0'
-  spec.add_runtime_dependency 'tidy_ffi',             '>= 1.0.0'
-  spec.add_runtime_dependency 'crass',                '>= 1.0.6'
-  spec.add_runtime_dependency 'uuidtools',            '>= 2.1.5'
-  # spec.add_runtime_dependency 'uri-urn',              '>= 0.0.3'
-
-  # stuff for docstats
-  spec.add_runtime_dependency 'descriptive_statistics', '>= 2.5.1'
-  spec.add_runtime_dependency 'engtagger',              '>= 0.3.2'
-  spec.add_runtime_dependency 'lemmatizer',             '>= 0.2.2'
-
+  spec.add_runtime_dependency 'uuidtools',        '>= 2.1.5'
+  spec.add_runtime_dependency 'mimemagic',        '>= 0.5.0' # my patch
 
   # stuff i wrote
   spec.add_runtime_dependency 'xml-mixup',      '>= 0.1.16'
   spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4'
   spec.add_runtime_dependency 'md-noko',        '>= 0.1.0'
   spec.add_runtime_dependency 'http-negotiate', '>= 0.1.0'
+
+  # stuff for urlrunner
+  spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'
+  spec.add_runtime_dependency 'concurrent-ruby-edge', '>= 0.6.0'
+  spec.add_runtime_dependency 'tidy_ffi',             '>= 1.0.0'
+  spec.add_runtime_dependency 'crass',                '>= 1.0.6'
+
+  # stuff for docstats
+  spec.add_runtime_dependency 'descriptive_statistics', '>= 2.5.1'
+  spec.add_runtime_dependency 'engtagger',              '>= 0.3.2'
+  spec.add_runtime_dependency 'lemmatizer',             '>= 0.2.2'
 
 end

@@ -17,6 +17,8 @@ class Intertwingler::Transform
 
   private
 
+  TFO = Intertwingler::Vocab::TFO
+
   def self.numeric_objects repo, subject, predicate, entail: false
     repo.objects_for(
       subject, predicate, entail: entail, only: :literal
@@ -28,7 +30,7 @@ class Intertwingler::Transform
 
   def self.gather_params repo, subject
     params = {}
-    repo.objects_for(subject, Intertwingler::Vocab::TFO.parameter,
+    repo.objects_for(subject, TFO.parameter,
                      entail: false, only: :resource).each do |ps|
       param = params[ps] ||= {}
 
@@ -43,7 +45,7 @@ class Intertwingler::Transform
       param[:range] = range.to_set unless range.empty?
 
       # default = Intertwingler::Util
-      param[:default] = repo.objects_for(ps, Intertwingler::Vocab::TFO.default)
+      param[:default] = repo.objects_for(ps, TFO.default)
 
       # cardinalities
       param[:minc] = 0
@@ -67,7 +69,7 @@ class Intertwingler::Transform
   def self.gather_accepts_returns repo, subject, raw: false, returns: false
     literals = []
     lists    = []
-    pred     = Intertwingler::Vocab::TFO[returns ? 'returns' : 'accepts']
+    pred     = TFO[returns ? 'returns' : 'accepts']
 
     repo.query([subject, pred, nil]).objects.each do |o|
       if o.literal?
@@ -107,12 +109,12 @@ class Intertwingler::Transform
 
     asserted = repo.objects_for subject, RDF.type, only: :resource
 
-    return if (asserted & repo.all_related(Intertwingler::Vocab::TFO.Transform)).empty?
+    return if (asserted & repo.all_related(TFO.Transform)).empty?
 
     params = gather_params repo, subject
 
     plist = if pl = repo.objects_for(
-              subject, Intertwingler::Vocab::TFO['parameter-list'], only: :resource
+              subject, TFO['parameter-list'], only: :resource
             ).sort.first
               RDF::List.from(repo, pl).to_a
             else
@@ -126,8 +128,8 @@ class Intertwingler::Transform
 
     # XXX this is all dumb but it has to be this way for now
 
-    if impl = repo.objects_for(
-      subject, Intertwingler::Vocab::TFO.implementation, only: :uri).sort.first
+    if impl = repo.objects_for(subject,
+      TFO.implementation, only: :uri).sort.first
 
       case impl.to_s
       when /^file:/i then
@@ -407,8 +409,7 @@ class Intertwingler::Transform
     # @return [self] daisy-chainable self-reference
     #
     def load
-      repo.subjects_for(RDF.type,
-                        Intertwingler::Vocab::TFO.Partial).each do |s|
+      repo.subjects_for(RDF.type, TFO.Partial).each do |s|
         resolve subject: s
       end
 
@@ -535,7 +536,7 @@ class Intertwingler::Transform
     # @return [Array] the transforms
     def load
       @repo.subjects_for(
-        RDF.type, Intertwingler::Vocab::TFO.Transform, only: :resource
+        RDF.type, TFO.Transform, only: :resource
       ).each do |subject|
         resolve subject
       end
@@ -625,10 +626,10 @@ class Intertwingler::Transform
         # this should say, try matching the partial if there is one
         # to match, otherwise attempt to directly match the transform
         return true if partial and repo.has_statement?(
-          RDF::Statement(subject, Intertwingler::Vocab::TFO.completes, partial.subject))
+          RDF::Statement(subject, TFO.completes, partial.subject))
 
         if repo.has_statement?(
-          RDF::Statement(subject, Intertwingler::Vocab::TFO.transform, transform.subject))
+          RDF::Statement(subject, TFO.transform, transform.subject))
           testp = transform.keys.map do |p|
             o = repo.query([subject, p, nil]).objects.uniq.sort
             o.empty? ? nil : [p, o]
@@ -665,7 +666,7 @@ class Intertwingler::Transform
       elsif subject.is_a? RDF::URI
         # locate the transform if given the subject
         transform = repo.objects_for(
-          subject, Intertwingler::Vocab::TFO.transform, only: :resource).first or return
+          subject, TFO.transform, only: :resource).first or return
         transform = harness.resolve(transform) or return
         warn transform
       end
@@ -685,8 +686,8 @@ class Intertwingler::Transform
           # longer values will probably be less common; anyway this is
           # gonna all need to be rethought
           params.each { |p, objs| objs.each { |o| pattern [:s, p, o] } }
-          pattern [:s, RDF.type, Intertwingler::Vocab::TFO.Partial]
-          pattern [:s, Intertwingler::Vocab::TFO.transform, transform.subject]
+          pattern [:s, RDF.type, TFO.Partial]
+          pattern [:s, TFO.transform, transform.subject]
 
           # add any remaining parameters
           # XXX this actually messes up; we don't want this
@@ -781,7 +782,7 @@ class Intertwingler::Transform
 
         # okay partial
         partial = repo.objects_for(
-          subject, Intertwingler::Vocab::TFO.completes, only: :resource).sort.first
+          subject, TFO.completes, only: :resource).sort.first
 
         if partial
           tmp = partials.resolve(subject: partial) or
@@ -790,7 +791,7 @@ class Intertwingler::Transform
           transform = partial.transform
         else
           transform = repo.objects_for(
-            subject, Intertwingler::Vocab::TFO.transform, only: :resource).sort.first or
+            subject, TFO.transform, only: :resource).sort.first or
             raise "Could not find a transform for #{subject}"
           tmp = harness.resolve(transform) or
             raise "Could not find transform #{transform}"
@@ -808,9 +809,9 @@ class Intertwingler::Transform
 
         # get inputs and outputs
         input  = repo.objects_for(
-          subject, Intertwingler::Vocab::TFO.input,  only: :resource).sort.first
+          subject, TFO.input,  only: :resource).sort.first
         output = repo.objects_for(
-          subject, Intertwingler::Vocab::TFO.output, only: :resource).sort.first
+          subject, TFO.output, only: :resource).sort.first
 
         raise 'Data must have both input and output' unless input and output
       elsif input and ((transform and params) or partial)
@@ -836,16 +837,16 @@ class Intertwingler::Transform
         candidates = RDF::Query.new do
           # note that there is no cost-based optimization so we write
           # these in the order of least to most cardinality
-          pattern [:t, Intertwingler::Vocab::TFO.output, output] if output
-          pattern [:t, Intertwingler::Vocab::TFO.input,  input]
+          pattern [:t, TFO.output, output] if output
+          pattern [:t, TFO.input,  input]
         end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
           # this should say, try matching the partial if there is one
           # to match, otherwise attempt to directly match the transform
           if partial and repo.has_statement?(
-            RDF::Statement(s, Intertwingler::Vocab::TFO.completes, partial.subject))
+            RDF::Statement(s, TFO.completes, partial.subject))
             true
           elsif repo.has_statement?(
-            RDF::Statement(s, Intertwingler::Vocab::TFO.transform, transform.subject))
+            RDF::Statement(s, TFO.transform, transform.subject))
             testp = transform.keys.map do |p|
               o = repo.query([s, p, nil]).objects.uniq.sort
               o.empty? ? nil : [p, o]
@@ -885,9 +886,8 @@ class Intertwingler::Transform
       end
 
       # don't forget the output
-      output ||= repo.query(
-        [subject, Intertwingler::Vocab::TFO.output, nil]
-      ).objects.select(&:uri?).sort.first
+      output ||= repo.objects_for(
+        subject, TFO.output, only: :resource).sort.first
 
       new subject, transform, input, output, partial || params
 
@@ -919,7 +919,7 @@ class Intertwingler::Transform
     def to_triples
       out = [] # .extend RDF::Enumerable
       s = @subject
-      out << [s, RDF.type, Intertwingler::Vocab::TFO.Application]
+      out << [s, RDF.type, TFO.Application]
 
       if @start
         start = @start.is_a?(RDF::Literal) ? @start : RDF::Literal(@start)
@@ -932,9 +932,9 @@ class Intertwingler::Transform
       end
 
       if @completes
-        out << [s, Intertwingler::Vocab::TFO.completes, @completes.subject]
+        out << [s, TFO.completes, @completes.subject]
       else
-        out << [s, Intertwingler::Vocab::TFO.transform, transform.subject]
+        out << [s, TFO.transform, transform.subject]
         pdup = transform.validate params, defaults: false, silent: true
         pdup.each do |k, vals|
           vals.each { |v| out << [s, k, v] }
@@ -1033,13 +1033,13 @@ class Intertwingler::Transform
     candidates = RDF::Query.new do
       # note that there is no cost-based optimization so we write
       # these in the order of least to most cardinality
-      pattern [:t, Intertwingler::Vocab::TFO.output, output]
-      pattern [:t, Intertwingler::Vocab::TFO.input,  input]
+      pattern [:t, TFO.output, output]
+      pattern [:t, TFO.input,  input]
     end.execute(repo).map { |sol| sol[:t] }.compact.uniq.select do |s|
       repo.has_statement?(
-        RDF::Statement(s, Intertwingler::Vocab::TFO.transform, transform)) or
+        RDF::Statement(s, TFO.transform, transform)) or
         partial && repo.has_statement?(
-        RDF::Statement(s, Intertwingler::Vocab::TFO.completes, partial))
+        RDF::Statement(s, TFO.completes, partial))
     end.compact.uniq
 
     # first will be nil if this is empty so voila
@@ -1070,8 +1070,8 @@ class Intertwingler::Transform
   def get_partial_transform repo, function, params = {}
     temp = {}
     RDF::Query.new do
-      pattern [:s, RDF.type, Intertwingler::Vocab::TFO.Partial]
-      pattern [:s, Intertwingler::Vocab::TFO.transform, function]
+      pattern [:s, RDF.type, TFO.Partial]
+      pattern [:s, TFO.transform, function]
       params.keys.each { |k| pattern [:s, k, nil] }
     end.execute(repo).each do |sol|
       t = temp[sol[:s]] ||= {}

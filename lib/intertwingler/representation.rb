@@ -124,12 +124,12 @@ class Intertwingler::Representation
   end
 
   def each &block
-    raise NotImplementedError, 'subclasses must implement each'
+    raise NotImplementedError, 'subclasses must implement `each`'
   end
 
   # Return the in-memory representation of the object.
   def object
-    raise NotImplementedError, 'subclasses must implement object'
+    raise NotImplementedError, 'subclasses must implement `object`'
   end
 
 end
