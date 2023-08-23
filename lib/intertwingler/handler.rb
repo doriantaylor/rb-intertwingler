@@ -39,30 +39,23 @@ class Intertwingler::Handler
 
   # Initialize a handler.
   #
-  # @param resolvers [Array<Intertwingler::Resolver>]
-  # @param args
+  # @param engine [Intertwingler::Engine]
+  # @param args [Hash{Symbol => Object}]
   #
-  def initialize resolvers, **args
-    # ensure resolvers are an array
-    resolvers = resolvers.respond_to?(:to_a) ? resolvers.to_a : [resolvers]
-    # set authority map
-    @authorities = (@resolvers = resolvers).reduce({}) do |h, r|
-      r.authorities.each { |a| h[a] = r }
-      h
-    end
+  def initialize engine, **args
+    @engine = engine
   end
 
-  attr_reader :resolvers
+  attr_reader :engine
 
   # Get the {Intertwingler::Resolver} for the given request.
   #
   # @param req [Rack::Request, URI, RDF::URI] the request (URI).
   #
-  # @return [Intertwingler::Resolver
+  # @return [Intertwingler::Resolver, nil] the resolver, maybe
   #
   def resolver_for req
-    req = req.url if req.respond_to? :url
-    @authorities[req.authority.downcase]
+    @engine.resolver_for req
   end
 
   # Get the resolver's graph for the given request.
@@ -72,8 +65,7 @@ class Intertwingler::Handler
   # @return [RDF::Repository] the graph.
   #
   def repo_for req
-    resolver = resolver_for(req) or return
-    resolver.repo
+    @engine.repo_for req
   end
 
   # This is a toy content handler for serving content-negotiated files
@@ -279,7 +271,7 @@ class Intertwingler::Handler
 
     def handle req
 
-      resolver = resolver_for req
+      resolver = resolver_for(req) or return Rack::Response[404, {}, ['not found lol']]
 
       # warn req.url.inspect
       # warn resolver.base.inspect

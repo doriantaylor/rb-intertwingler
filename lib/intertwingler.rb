@@ -291,7 +291,7 @@ module Intertwingler
 
       @graph    = coerce_graph graph, type: type
       @resolver = Intertwingler::Resolver.new @graph, base,
-        prefixes: @config[:prefixes]
+        prefixes: @config[:prefixes], aliases: @config[:aliases]
 
       # warn @config[:fragment]
 
@@ -1541,7 +1541,9 @@ module Intertwingler
         # next if canon.fragment
 
         # cache the forward direction
-        fwd[doc] = canon
+        fwd[URI(doc.to_s)] = canon
+
+        # warn uris.inspect
 
         uris.each do |uri|
           next unless uri.respond_to? :request_uri
@@ -1565,8 +1567,8 @@ module Intertwingler
       # warn fwd, rev
 
       rev.each do |uri, requri|
-        if (doc = @resolver.uuid_for(uri, published: published, as: :uri)) and
-            fwd[doc] and fwd[doc] != uri
+        doc = @resolver.uuid_for uri, published: published, as: :uri
+        if doc and fwd[doc] and fwd[doc] != uri
           # warn "#{doc.inspect} -> #{fwd[doc]} (ex #{uri})"
           out[requri] = fwd[doc].to_s
         end

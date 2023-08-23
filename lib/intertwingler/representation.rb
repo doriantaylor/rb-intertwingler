@@ -123,6 +123,9 @@ class Intertwingler::Representation
     @charset  = coerce_charset charset  if charset
   end
 
+  def self.coerce io, type: DEFAULT_TYPE, language: nil, charset: nil, **options
+  end
+
   def each &block
     raise NotImplementedError, 'subclasses must implement `each`'
   end

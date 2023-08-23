@@ -233,7 +233,7 @@ module Intertwingler::NLP
         # do something smarter like check if more than 50% of the
         # characters are uppercase rather than just the first one; ie
         # more than half, the thing is an acronym)
-        word.downcase! if word == word.downcase.capitalize
+        word = word.downcase if word == word.downcase.capitalize
         lem.lemma word, POS_MAP[t] || type
       end
     end.compact.join ' '

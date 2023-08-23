@@ -7,11 +7,71 @@ require 'mimemagic'
 require 'http/negotiate'
 require 'time'
 
+require 'intertwingler/handler'
+
+class Intertwingler::Transform < Intertwingler::Handler
+
+  class ParamError < ::ArgumentError
+  end
+
+  private
+
+  URI_MAP = {}.freeze
+
+  def uri_map uuid
+    (self.class.const_get(:URI_MAP) || {})[uuid]
+  end
+
+  public
+
+  def handle req
+    # first we check if the request method is POST; if not this is over quickly
+    return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST
+
+    # give us a default response
+    resp = Rack::Response[404, {}, []]
+
+    # get the resolver for this request
+    resolver = resolver_for req
+
+    uri  = req.url
+    uuid = resolver.split_pp(url).first.split(?/)[1].downcase
+
+    # match the function
+    func, atypes, rtypes = uri_map uuid
+
+    # 404 unless we have a function
+    return resp unless func
+
+    # here we do the content negotiation
+    # 406 unless types match up
+
+    # okay now we actually run the thing
+    begin
+      # run the transform
+      out = send func, req, params
+
+      # note `out` can be nil which should be interpreted as 304
+      return Rack::Response[304, {}, []] unless out
+
+    rescue Intertwingler::Transform::ParamError
+      return Rack::Response[409, {}, []]
+    rescue Intertwingler::Handler::Redirect => r
+      # umm i dunno
+      # r.location
+    end
+  end
+
+end
+
+# XXX EVERYTHING BELOW THIS LINE IS OLD AND I AM NOT SURE HOW MUCH I
+# WANT TO CHOP UP FOR PARTS YET. SO JUST IGNORE IT MKAY
+#
 # This class encapsulates a specification for an individual
 # transformation function, including its parameter spec, accepted and
 # returned types, identity, and implementation.
 #
-class Intertwingler::Transform
+class Intertwingler::NotTransform
   # mkay basically this transformation function stuff got too hairy to
   # just do ad-hoc so i guess i'm doing this now
 

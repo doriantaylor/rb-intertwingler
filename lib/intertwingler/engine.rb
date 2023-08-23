@@ -12,9 +12,41 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @param resolvers [Array<Intertwingler::Resolver>] the necessary resolvers.
   #
   def initialize resolvers, handlers: [], transforms: {}
+    # ensure resolvers are an array
+    resolvers = resolvers.respond_to?(:to_a) ? resolvers.to_a : [resolvers]
+    # set authority map
+    @authorities = (@resolvers = resolvers).reduce({}) do |h, r|
+      r.authorities.each { |a| h[a] = r }
+      h
+    end
+
     @handlers = handlers
 
     super resolvers
+  end
+
+  attr_reader :resolvers
+
+  # Get the {Intertwingler::Resolver} for the given request.
+  #
+  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
+  #
+  # @return [Intertwingler::Resolver, nil] the resolver, maybe
+  #
+  def resolver_for req
+    req = RDF::URI(req.url) if req.respond_to? :url
+    @authorities[req.authority.downcase] if req.respond_to? :authority
+  end
+
+  # Get the resolver's graph for the given request.
+  #
+  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
+  #
+  # @return [RDF::Repository] the graph.
+  #
+  def repo_for req
+    resolver = resolver_for(req) or return
+    resolver.repo
   end
 
   # Using the current request as a basis, fake up a new request with
