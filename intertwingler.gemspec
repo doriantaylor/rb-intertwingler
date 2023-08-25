@@ -45,7 +45,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'xml-mixup',      '>= 0.1.16'
   spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4'
   spec.add_runtime_dependency 'md-noko',        '>= 0.1.0'
-  spec.add_runtime_dependency 'http-negotiate', '>= 0.1.0'
+  spec.add_runtime_dependency 'http-negotiate', '>= 0.2.0'
 
   # stuff for urlrunner
   spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'

@@ -14,6 +14,57 @@ require 'http-negotiate'
 require 'store/digest/http'
 
 class Intertwingler::Handler
+  # do this to declare the symbol
+  class ::Intertwingler::Engine < self
+  end
+
+  # A response to an unsuccessful request.
+  class Unsuccessful < Exception
+    def initialize message, status: nil
+      @status = status
+
+      super message
+    end
+
+    attr_reader :status
+    alias_method :code, :status
+
+    def response
+      Rack::Response[status, { 'Content-Type' => 'text/plain' }, [message]]
+    end
+  end
+
+  # Redirects are implemented as exceptions
+  class Redirect < Unsuccessful
+    # Make a new redirect "exception"
+    #
+    # @param message [#to_s] the error message
+    # @param status [Integer] the response code
+    # @param location [URI, RDF::URI, #to_s, nil]
+    # @param as [:uri, :rdf] URI coercion type
+    #
+    def initialize message, status: nil, location: nil, as: :uri
+      @location =
+        Intertwingler::Resolver.coerce_resource location, as: as if location
+      super message, status || 302
+    end
+
+    attr_reader :location
+
+    def response
+      hdr = {}
+      hdr['Location'] = location.to_s if location
+      Rack::Response[status, hdr, [message]]
+    end
+  end
+
+  class Error < Unsuccessful
+    class Client
+    end
+    class Server
+    end
+  end
+
   # Handle a {Rack::Request}. Return a {Rack::Response}.
   #
   # @param req [Rack::Request] the request.
@@ -21,7 +72,7 @@ class Intertwingler::Handler
   # @return [Rack::Response] the response.
   #
   def handle req
-    raise NotImplementedError, 'Subclasses must implement `handle`'
+    raise NotImplementedError, 'Subclasses must implement their own `handle`'
   end
 
   # Handle a Rack request from the wire.
@@ -43,6 +94,8 @@ class Intertwingler::Handler
   # @param args [Hash{Symbol => Object}]
   #
   def initialize engine, **args
+    raise ArgumentError, 'engine must be an Intertwingler::Engine' unless
+      engine.is_a? ::Intertwingler::Engine
     @engine = engine
   end
 
@@ -108,17 +161,21 @@ class Intertwingler::Handler
     # Initialize a handler with parameters.
     #
     # @param resolvers [Array<Intertwingler::Resolver>] the URI resolver(s)
-    # @param root [Pathname, #to_s] the document root
-    # @param indices [Array<#to_s>] slugs to use for directory index
+    # @param roots [Pathname, #to_s, Array<Pathname, #to_s>] the document root(s)
+    # @param indices [#to_s, Array<#to_s>] slugs to use for directory index
     #
-    def initialize resolvers, root: nil, indices: %w[index].freeze
-      @root    = Pathname(root).expand_path.realpath
-      @indices = indices
+    def initialize engine, roots: nil, indices: %w[index].freeze
+      # coerce document root(s)
+      @roots = (roots.respond_to?(:to_a) ? roots.to_a : [roots]).map do |r|
+        Pathname(r).expand_path.realpath
+      end
 
-      super resolvers
+      @indices = indices.respond_to?(:to_a) ? indices.to_a : [indices]
+
+      super engine
     end
 
-    attr_reader :root, :indices
+    attr_reader :roots, :indices
 
     # XXX do we wanna do method methods? is this dumb?
     # def GET req
@@ -171,34 +228,38 @@ class Intertwingler::Handler
 
       paths = []
 
-      if uuid
-        paths << root + uuid.uuid
-        paths << root + path
-        paths += resolver.uri_for(uuid, scalar: false, as: :uri,
+      roots.each do |root|
+        if uuid
+          paths << root + uuid.uuid
+          paths << root + path
+          paths += resolver.uri_for(uuid, scalar: false, as: :uri,
                                   slugs: true, fragments: false, local: true).reduce([]) do |a, u|
-          next a if resolver.uuid_path u
-          a << root + resolver.clean_path(u, slash: false).delete_prefix(?/)
+            next a if resolver.uuid_path u
+            a << root + resolver.clean_path(u, slash: false).delete_prefix(?/)
+          end
+          paths.uniq!
+        else
+          # who knows maybe there's a thing on the file system
+          # XXX maybe make this verboten if it's not in the graph??
+          paths << root + path
         end
-        paths.uniq!
-      else
-        # who knows maybe there's a thing on the file system
-        # XXX maybe make this verboten if it's not in the graph??
-        paths << root + path
       end
+
+      re = /^#{roots.map { |r| Regexp.quote r.to_s }.join ?|}\//o
 
       # we'll just make a big chonkin' hash of variants which we can
       # use for the negotiation and afterwards
       variants = paths.reduce({}) do |h, p|
-        re = /^#{Regexp.quote root.to_s}\//o
 
         # don't do this if this is the root
-        unless r = p == root
+        unless r = roots.include?(p)
           dn, bn = p.split
           dn.glob("#{bn}{,.*}").each do |x|
             if stat = x.stat rescue nil
+              next if stat.directory?
               type = MimeMagic.by_path(x).to_s
               incl = re.match? x.realpath.to_s
-              h[x] = { dir: false, stat: stat, type: type, included?: incl }
+              h[x] ||= { dir: false, stat: stat, type: type, included?: incl }
             end
           end
         end
@@ -206,9 +267,10 @@ class Intertwingler::Handler
         @indices.each do |i|
           p.glob("#{i}{,.*}").each do |x|
             if stat = x.stat rescue nil
+              next if stat.directory?
               type = MimeMagic.by_path(x).to_s
               incl = re.match? x.realpath.to_s
-              h[x] = { dir: true, stat: stat, type: type, included?: incl }
+              h[x] ||= { dir: true, stat: stat, type: type, included?: incl }
             end
           end
         end unless !r and resolver.uuid? bn
@@ -226,9 +288,9 @@ class Intertwingler::Handler
 
         # the perl CatalystX::Action::Negotiate one does some
         # twiddling here; not sure if i wanna copy it
-        if val[:dir]
-        else
-        end
+        # if val[:dir]
+        # else
+        # end
 
         # this i thought was clever: you demote the variant to
         # oblivion so if it gets selected anyway you know to return a
@@ -236,15 +298,18 @@ class Intertwingler::Handler
         ok = stat.file? and stat.readable? and val[:included?]
         qs /= 100.0 unless ok
 
-        val.merge({ weight: qs, size: stat.size, mtime: stat.mtime, ok: ok })
+        val.merge(
+          { weight: qs, size: stat.size, mtime: stat.mtime.getgm, ok: ok })
       end
+
+      # warn variants
 
       # now we actually perform the negotiation and get our selected variant
       if selected = HTTP::Negotiate.negotiate(req, variants)
         var = variants[selected]
 
-        warn paths.inspect
-        warn selected
+        # warn paths.inspect
+        # warn selected
 
         # test if readable
         return Rack::Response[403, {}, []] unless var[:ok]
@@ -253,11 +318,18 @@ class Intertwingler::Handler
         # redirect if requested uri was not just a uuid
 
         # test mtime
+        if ims = req.get_header('HTTP_IF_MODIFIED_SINCE')
+          ims = (Time.httpdate(ims) rescue Time.at(0)).getgm
+          # warn "mtime: #{var[:mtime]} (#{var[:mtime].to_i}), IMS: #{ims} (#{ims.to_i}), lt: #{var[:mtime] < ims}, cmp: #{var[:mtime] <=> ims}"
+          # return not modified if the variant is *older* than ims
+          # XXX TIL Time objects can be equal but not
+          return Rack::Response[304, {}, []] if var[:mtime].to_i <= ims.to_i
+        end
 
         return Rack::Response[200, {
           'Content-Type'   => var[:type],
           'Content-Length' => var[:size].to_s, # rack should do this
-          'Last-Modified'  => var[:mtime].mtime.httpdate,
+          'Last-Modified'  => var[:mtime].httpdate,
         }, selected.open]
       end
 

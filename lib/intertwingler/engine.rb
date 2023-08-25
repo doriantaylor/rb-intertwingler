@@ -1,9 +1,20 @@
 require 'intertwingler/handler'
 
+require 'rack/mock_request' # for env_for
+
 # This is the engine. This is the thing that is run.
 class Intertwingler::Engine < Intertwingler::Handler
 
   private
+
+  # XXX all this is lame af
+  WRAPPER = eval 'Rack::Lint::Wrapper::InputWrapper' rescue nil
+  if WRAPPER and not WRAPPER.method_defined? :set_encoding
+    WRAPPER.define_method :set_encoding do |encoding, opt = nil|
+      @input.set_encoding encoding, opt if @input.respond_to? :set_encoding
+      self
+    end
+  end
 
   public
 
@@ -20,12 +31,23 @@ class Intertwingler::Engine < Intertwingler::Handler
       h
     end
 
-    @handlers = handlers
-
-    super resolvers
+    # XXX here is where we would have each of the handlers disgorge
+    # its manifest so we don't have to poll them all with each request
+    handlers  = handlers.respond_to?(:to_a) ? handlers.to_a : [handlers]
+    @handlers = handlers.map do |handler|
+      handler, args = (handler.respond_to?(:to_a) ? handler.to_a : [handler])
+      args ||= {}
+      handler.new self, **args
+    end
   end
 
   attr_reader :resolvers
+
+  # No-op to overwrite `engine` member.
+  #
+  # @return [self]
+  #
+  def engine; self; end
 
   # Get the {Intertwingler::Resolver} for the given request.
   #
@@ -60,15 +82,44 @@ class Intertwingler::Engine < Intertwingler::Handler
   #
   # @return [Rack::Request] a new request
   #
-  def new_request req, uri, method: :GET, headers: {}, body: nil
-    env = req.env
+  def make_request req, uri, method: nil, headers: {}, body: nil
+    # coerce the URI just so we can flatten it again so we can parse again
+    uri = Intertwingler::Resolver.coerce_resource uri, as: :uri
+
+    # get the io from existing environment
+    input, errors = req.env.values_at 'rack.input', 'rack.errors'
+
+    # override maybe
+    method ||= req.request_method
+
+    # fake up an environment
+    env = Rack::MockRequest.env_for uri.to_s, method: method.to_s.strip.upcase,
+      input: body || input
+    env['rack.errors'] = errors
+
+    headers.each do |hdr, val|
+      hdr = hdr.to_s.strip.upcase.tr_s(?-, ?_)
+      hdr = "HTTP_#{hdr}" unless hdr.start_with? 'HTTP_'
+      val = val.join ', ' if val.is_a? Array
+      env[hdr] = val
+    end
+
+    Rack::Request.new env
+  end
+
+  def replace_body resp, body
+    Rack::Response[resp.status, resp.headers, body]
   end
 
   # Fake up a request and run
   # the main handler. Returns the (potentially wrapped) body. Will
   # throw an error if the response is anything but `200 OK`.
-  def fetch req, uri, method: :GET, headers: {}, body: nil
-    subreq = new_request req, uri, method: method, body: body
+  def fetch req, uri: nil, method: :GET, headers: {}, body: nil
+    # start with a new request when there is a different URI
+    req = make_request req, uri, method: method,
+      headers: headers, body: body if uri
+
+    # XXX actually do the thing
   end
 
   # This is the master handler that runs the engine and marshals all
@@ -82,9 +133,23 @@ class Intertwingler::Engine < Intertwingler::Handler
     # cache the original request
     orig = req
 
+    # errors = orig.env['rack.errors']
+
+    uri = URI(req.url)
+
+    resolver = resolver_for(uri) or
+      return Rack::Response[404, {}, ['not found lol']]
+
+    warn resolver.base.inspect
+
+    uri, *pp = resolver.split_pp uri
+
     # XXX TODO normalize query parameters (à la Params::Registry)
 
-    # 
+    if subject = resolver.uuid_for(uri, as: :uri)
+      warn orig.base_url.inspect
+      req = make_request orig, uri
+    end
 
     # resolve URI
 
@@ -100,12 +165,16 @@ class Intertwingler::Engine < Intertwingler::Handler
     # always assume the worst, then you can only be pleasantly surprised.
     resp = Rack::Response[404, {}, []]
 
-    # poll content handlers until something returns non-404
+    # poll content handlers until something returns non-404/405
     begin
+      # XXX this should be replaced with the manifest system
       @handlers.each do |h|
         resp = h.handle req
-        break unless resp.status == 404
+
+        break unless [404, 405].include? resp.status
       end
+    rescue Intertwingler::Handler::Unsuccessful => e
+      resp = e.response
     rescue Exception => e
       resp = Rack::Response[500,
         { 'Content-Type' => 'text/plain' }, [e.message]]
@@ -116,6 +185,9 @@ class Intertwingler::Engine < Intertwingler::Handler
     # pre
 
     # path parameters
+    pp.each do |x|
+      warn x
+    end
 
     # post
 

@@ -8,6 +8,7 @@ require 'http/negotiate'
 require 'time'
 
 require 'intertwingler/handler'
+require 'http/negotiate'
 
 class Intertwingler::Transform < Intertwingler::Handler
 
@@ -22,11 +23,20 @@ class Intertwingler::Transform < Intertwingler::Handler
     (self.class.const_get(:URI_MAP) || {})[uuid]
   end
 
+  def representation
+    self.class.const_get :REPRESENTATION or raise NotImplementedError,
+      'a REPRESENTATION must be defined in the class'
+  end
+
   public
 
   def handle req
     # first we check if the request method is POST; if not this is over quickly
     return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST
+
+    # request must have a content type or return 400
+    type = req.content_type or return Rack::Response[400, {}, []]
+    type = MimeMagic[type].canonical # XXX do we preserve type parameters??
 
     # give us a default response
     resp = Rack::Response[404, {}, []]
@@ -35,16 +45,33 @@ class Intertwingler::Transform < Intertwingler::Handler
     resolver = resolver_for req
 
     uri  = req.url
-    uuid = resolver.split_pp(url).first.split(?/)[1].downcase
+    uuid = resolver.split_pp(uri).first.split(?/)[1].downcase
 
     # match the function
-    func, atypes, rtypes = uri_map uuid
+    func, accept, variants = uri_map uuid
 
     # 404 unless we have a function
     return resp unless func
 
+    # check request content type and return 415 if no match
+    return Rack::Response[415, {}, []] unless accept.include? type.to_s
+
+    variants = variants.reduce({}) do |hash, v|
+      v = MimeMagic[v].canonical
+      ([v.canonical] + v.aliases).each { |t| hash[t] = { type: v.to_s } }
+      hash
+    end
+
+    # we want to do surgery to Accept:
+    headers = HTTP::Negotiate.parse_headers req
+    # okay this is gonna be a weird one: we can have input like
+    # `major/*` and `*/*` which i'm inclined to just leave alone. we
+    # want to canonicalize any asserted types plus add the type
+    # lineage all the way up to application/octet-stream
+
     # here we do the content negotiation
     # 406 unless types match up
+    rtype = HTTP::Negotiate.negotiate headers, variants
 
     # okay now we actually run the thing
     begin
