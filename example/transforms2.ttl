@@ -1,0 +1,187 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .
+@prefix tfo:  <https://vocab.methodandstructure.com/transformation#> .
+
+<urn:uuid:8307ac09-670b-48b9-b08d-3eacc1f51f43> a tfo:Transform ;
+  ci:canonical-slug "parse-markdown"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "text/markdown"^^tfo:content-type ;
+  tfo:returns "application/xhtml+xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:ca069a8a-dd73-423d-b4c2-77777c049f36> a tfo:Transform ;
+  ci:canonical-slug "tidy"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
+  tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
+
+<urn:uuid:46be5c11-fbcb-4dfc-a486-9ac3344a0308> a tfo:Transform ;
+  ci:canonical-slug "strip-comments"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:b15e1970-9d1f-4ed1-b6cc-2a382d804dda> a tfo:Transform ;
+  ci:canonical-slug "rewrite-head"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
+  tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
+
+<urn:uuid:937b4f68-b29e-4d54-84ce-144348248686> a tfo:Transform ;
+  ci:canonical-slug "repair-rdfa"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:cdd7b9fb-c43a-48d1-a6ae-6a53f19146a4> a tfo:Transform ;
+  ci:canonical-slug "rehydrate"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
+  tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
+
+<urn:uuid:775636e5-51c1-41e8-a5c8-eb1173f67735> a tfo:Transform ;
+  ci:canonical-slug "add-social-meta"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
+  tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
+
+<urn:uuid:89a34334-956d-4122-92ee-29ae80fa558b> a tfo:Transform ;
+  ci:canonical-slug "add-backlinks"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
+  tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
+
+<urn:uuid:582b691a-6e57-4704-aaab-17ab25a30527> a tfo:Transform ;
+  ci:canonical-slug "rewrite-links"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:12c028fc-d780-4496-ab82-5b8fd82c5d65> a tfo:Transform ;
+  ci:canonical-slug "mangle-mailto"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:06bb8a91-7257-476d-96f4-601f7dbdbf5d> a tfo:Transform ;
+  ci:canonical-slug "amazon-tag"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:7713493a-617a-4980-80a5-3eaa9e441da1> a tfo:Transform ;
+  ci:canonical-slug "normalize-prefixes"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
+
+<urn:uuid:fb680265-b62f-4fb5-af35-52f18c186d01> a tfo:Transform ;
+  ci:canonical-slug "stylesheet-pi"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type .
+
+<urn:uuid:8c7dd87f-c236-4218-8028-e6c8692d7846> a tfo:Transform ;
+  ci:canonical-slug "reindent"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type .
+
+<urn:uuid:4c817a44-005d-48cb-83be-d962604cddda> a tfo:Transform ;
+  ci:canonical-slug "convert"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:deb428cb-2f88-4726-98ea-d4b8d4589f17> a tfo:Transform ;
+  ci:canonical-slug "crop"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:parameter <urn:uuid:1483b357-93a1-4d2e-b3a8-2be9b10095bb>, <urn:uuid:ee42569a-6025-4934-9fc8-9713a19cdc65>, <urn:uuid:406dc337-1792-4214-92eb-e9190990820f>, <urn:uuid:82043e29-75ff-42b6-94de-0944fecc55c4> ;
+  tfo:parameter-list ( <urn:uuid:1483b357-93a1-4d2e-b3a8-2be9b10095bb> <urn:uuid:ee42569a-6025-4934-9fc8-9713a19cdc65> <urn:uuid:406dc337-1792-4214-92eb-e9190990820f> <urn:uuid:82043e29-75ff-42b6-94de-0944fecc55c4> ) ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:5842e610-c5d3-46cd-8ec6-c1c64bf44d3a> a tfo:Transform ;
+  ci:canonical-slug "scale"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:parameter <urn:uuid:406dc337-1792-4214-92eb-e9190990820f>, <urn:uuid:82043e29-75ff-42b6-94de-0944fecc55c4> ;
+  tfo:parameter-list ( <urn:uuid:406dc337-1792-4214-92eb-e9190990820f> <urn:uuid:82043e29-75ff-42b6-94de-0944fecc55c4> ) ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:a3fd7171-ecaf-4f2a-a396-ebddf1b65eb4> a tfo:Transform ;
+  ci:canonical-slug "desaturate"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:7beb24fb-9708-4fd5-861a-1b2aaa45d46e> a tfo:Transform ;
+  ci:canonical-slug "posterize"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:e43dc4b8-20e1-4739-9150-c1842d64eb5d> a tfo:Transform ;
+  ci:canonical-slug "knockout"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:f77a0a45-2ba6-4a3b-8291-9eaae2a80a82> a tfo:Transform ;
+  ci:canonical-slug "brightness"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:973172a1-261b-4621-b27b-98d660e87544> a tfo:Transform ;
+  ci:canonical-slug "contrast"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:2fe3049b-bc1e-496f-9abc-dafa45746ef5> a tfo:Transform ;
+  ci:canonical-slug "gamma"^^xsd:token ;
+  tfo:implementation <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> ;
+  tfo:accepts "application/pdf"^^tfo:content-type, "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type ;
+  tfo:prefers "image/png"^^tfo:content-type ;
+  tfo:returns "image/avif"^^tfo:content-type, "image/gif"^^tfo:content-type, "image/heic"^^tfo:content-type, "image/heif"^^tfo:content-type, "image/jpeg"^^tfo:content-type, "image/jp2"^^tfo:content-type, "image/jxl"^^tfo:content-type, "image/png"^^tfo:content-type, "image/tiff"^^tfo:content-type, "image/webp"^^tfo:content-type, "image/x-portable-anymap"^^tfo:content-type, "image/x-portable-bitmap"^^tfo:content-type, "image/x-portable-graymap"^^tfo:content-type, "image/x-portable-pixmap"^^tfo:content-type .
+
+<urn:uuid:1483b357-93a1-4d2e-b3a8-2be9b10095bb> a tfo:Parameter ;
+  ci:canonical-slug "x"^^xsd:token ;
+  skos:prefLabel "X-Offset"@en ;
+  rdfs:comment "The x-offset of an image, in pixels."@en ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:nonNegativeInteger .
+
+<urn:uuid:ee42569a-6025-4934-9fc8-9713a19cdc65> a tfo:Parameter ;
+  ci:canonical-slug "y"^^xsd:token ;
+  skos:prefLabel "Y-Offset"@en ;
+  rdfs:comment "The y-offset of an image, in pixels."@en ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:nonNegativeInteger .
+
+<urn:uuid:406dc337-1792-4214-92eb-e9190990820f> a tfo:Parameter ;
+  ci:canonical-slug "width"^^xsd:token ;
+  skos:prefLabel "Width"@en ;
+  rdfs:comment "The width of an image, in pixels."@en ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:positiveInteger .
+
+<urn:uuid:82043e29-75ff-42b6-94de-0944fecc55c4> a tfo:Parameter ;
+  ci:canonical-slug "height"^^xsd:token ;
+  skos:prefLabel "Height"@en ;
+  rdfs:comment "The height of an image, in pixels."@en ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:positiveInteger .

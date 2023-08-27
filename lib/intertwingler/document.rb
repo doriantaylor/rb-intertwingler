@@ -203,7 +203,7 @@ class Intertwingler::Document
         { '#id' => @subject.to_s },
         { '#updated' => latest.iso8601 },
         { '#generator' => 'Intertwingler', version: Intertwingler::VERSION,
-          uri: "https://github.com/doriantaylor/rb-rdf-sak" },
+          uri: "https://github.com/doriantaylor/rb-intertwingler" },
         { nil => :link, rel: :self, type: 'application/atom+xml',
           href: @resolver.uri_for(@subject) },
         { nil => :link, rel: :alternate, type: 'text/html',
