@@ -92,8 +92,14 @@ class Intertwingler::Engine < Intertwingler::Handler
     body ||= req.env['rack.input']
 
     # fake up an environment
-    env = req.env.merge Rack::MockRequest.env_for uri.to_s,
-      method: method.to_s.strip.upcase, input: body
+    env = req.env.merge Rack::MockRequest.env_for uri.to_s, input: body,
+      method: method.to_s.strip.upcase, script_name: req.script_name
+
+    # correct (non-standard??) REQUEST_URI which will be wrong now if it exists
+    env['REQUEST_URI'] = uri.request_uri.b if env.key? 'REQUEST_URI'
+
+    # supplant rack.errors which will also be wrong
+    env['rack.errors'] = req.env['rack.errors']
 
     # now overwrite the headers
     headers.each do |hdr, val|
@@ -103,6 +109,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       env[hdr] = val
     end
 
+    # et voilà
     Rack::Request.new env
   end
 
