@@ -92,14 +92,19 @@ class Intertwingler::Engine < Intertwingler::Handler
     body ||= req.env['rack.input']
 
     # fake up an environment
-    env = req.env.merge Rack::MockRequest.env_for uri.to_s, input: body,
+    env = req.env.merge Rack::MockRequest.env_for uri.to_s,
       method: method.to_s.strip.upcase, script_name: req.script_name
 
-    # correct (non-standard??) REQUEST_URI which will be wrong now if it exists
-    env['REQUEST_URI'] = uri.request_uri.b if env.key? 'REQUEST_URI'
+    # bored with the discussion happening in
+    # https://github.com/rack/rack/pull/2115 so just gonna do this
+    body.set_encoding(Encoding::BINARY) if body.respond_to? :set_encoding
+    env['rack.input'] = body
 
-    # supplant rack.errors which will also be wrong
+    # supplant rack.errors which will be wrong
     env['rack.errors'] = req.env['rack.errors']
+
+    # correct (non-standard??) REQUEST_URI which will also be wrong if it exists
+    env['REQUEST_URI'] = uri.request_uri.b if env.key? 'REQUEST_URI'
 
     # now overwrite the headers
     headers.each do |hdr, val|
@@ -113,7 +118,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     Rack::Request.new env
   end
 
-  def replace_resp_body resp, body
+  def replace_response_body resp, body
     # why oh why no body=
     Rack::Response[resp.status, resp.headers, body]
   end
@@ -180,7 +185,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
         break unless [404, 405].include? resp.status
       end
-    rescue Intertwingler::Handler::Unsuccessful => e
+    rescue Intertwingler::Handler::NotSuccess => e
       resp = e.response
     rescue Exception => e
       resp = Rack::Response[500,

@@ -11,6 +11,13 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
 
   OBJECT_CLASS = ::Vips::Image
 
+  DEFAULT_TYPE = 'image/png'.freeze
+  VALID_TYPES  = %w[application/pdf] +
+    %w[avif gif heic heif jpeg jp2 jxl png tiff webp x-portable-anymap
+           x-portable-bitmap x-portable-graymap x-portable-pixmap].map do |t|
+    "image/#{t}".freeze
+  end.freeze
+
   public
 
   def each &block
@@ -37,11 +44,22 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
   def object
     # if it isn't already parsed, we parse it
     unless @object
-      # this is weird
-      #src = ::Vips::SourceCustom.new
-      #src.on_read { |len| warn "reading #{len} bytes"; @io.read len }
-      #src.on_seek { |offset, whence| warn "seeking #{offset} #{whence}"; @io.seek offset, whence }
-      src = ::Vips::Source.new_from_descriptor @io.to_i
+      if @io.respond_to? :fileno and @io.fileno
+        # if there's a file descriptor just use it, don't screw around
+        src = ::Vips::Source.new_from_descriptor @io.fileno
+      else
+        # this is weird
+        src = ::Vips::SourceCustom.new
+        src.on_read do |len|
+          warn "reading #{len} bytes"
+          @io.read len
+        end
+
+        src.on_seek do |offset, whence|
+          warn "seeking #{offset} #{whence}"
+          @io.seek offset, whence
+        end
+      end
 
       # XXX i imagine this can crash
 

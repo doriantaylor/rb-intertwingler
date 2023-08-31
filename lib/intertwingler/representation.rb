@@ -1,6 +1,7 @@
 require 'intertwingler/version' # for the symbol
 
 require 'mimemagic'
+require 'tempfile'
 
 # This is a base class for what are called "representations" in [the
 # Fielding dissertation](https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm).
@@ -76,10 +77,29 @@ class Intertwingler::Representation
   # subclasses should set this
   OBJECT_CLASS = nil
 
-  def assert_io_like obj
-    raise ArgumentError, "object of #{obj.class} is not IO-ey enough" unless
-      IO === obj or obj.respond_to? :each
-    obj
+  # make a temp file with presets
+  def tempfile
+    Tempfile.new 'repr-', encoding: Encoding::BINARY
+  end
+
+  def coerce_io_like obj
+    # just give us the io if it's one of ours
+    return obj.io if obj.is_a? Intertwingler::Representation
+
+    if obj.respond_to? :each
+      return obj if obj.is_a? IO or
+        %i[getc read seek close].all? { |m| obj.respond_to? m }
+      # this would be where we upgrade the IO object to a seekable thing
+      io = tempfile
+      obj.each { |x| io << x }
+      return io
+    elsif objs.respond_to? :call
+      # okay then it's a rack streaming response body
+      obj.call(io = tempfile)
+      return io
+    end
+
+    raise ArgumentError, "object of #{obj.class} is not IO-ey enough"
   end
 
   def coerce_type type
@@ -98,6 +118,7 @@ class Intertwingler::Representation
   end
 
   DEFAULT_TYPE = 'application/octet-stream'.freeze
+  VALID_TYPES  = [].freeze
 
   public
 
@@ -109,26 +130,45 @@ class Intertwingler::Representation
     const_get :DEFAULT_TYPE
   end
 
-  attr_reader :io, :type, :language, :charset
+  def self.valid_types
+    const_get(:VALID_TYPES).map { |t| MimeMagic[t] }
+  end
 
-  def initialize io, type: DEFAULT_TYPE, language: nil, charset: nil, **options
-    cl = self.class
+  attr_accessor :type, :language, :charset
+
+  def initialize io, type: nil, language: nil, charset: nil, **options
+    cl = self.class # self.class is sloowww
 
     raise NotImplementedError, 'Subclasses need an OBJECT_CLASS' unless
       cl.object_class
 
-    @io       = assert_io_like io
+    @io       = coerce_io_like io
     @type     = coerce_type(type || cl.default_type)
     @language = coerce_rfc5646 language if language
     @charset  = coerce_charset charset  if charset
   end
 
-  def self.coerce io, type: DEFAULT_TYPE, language: nil, charset: nil, **options
+  def self.coerce io, type: nil, language: nil, charset: nil, **options
+    if io.is_a? self
+      io.type     = type     if type
+      io.language = language if language
+      io.charset  = charset  if charset
+      return io
+    end
+    new io, type: type, language: language, charset: charset, **options
   end
+
+  # def gets &block
+  #   io.gets
+  # end
 
   def each &block
     raise NotImplementedError, 'subclasses must implement `each`'
   end
+
+  # def read length, buffer = nil
+  # end
+
 
   # Return the in-memory representation of the object.
   def object

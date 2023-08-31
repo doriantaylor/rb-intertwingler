@@ -356,6 +356,7 @@ class Intertwingler::Resolver
       # swap in our canonical scheme/authority
       if %w[http https].include? uri.scheme.to_s.downcase and
           uri.authority and authorities.include? uri.authority.downcase
+        uri = uri.dup # duplicate because frozen sometimes
         uri.scheme    = @base.scheme
         uri.authority = @base.authority
       end

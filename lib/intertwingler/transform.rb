@@ -17,6 +17,11 @@ class Intertwingler::Transform < Intertwingler::Handler
 
   private
 
+  NUMBER_RE = /^[+-]?(?=\.?\d)\d*\.?\d*(?:[Ee][+-]?\d+)?\z/
+  TOKEN_RE  = /[^\x0-\x20\x7f-\xff()<>@,;:\\"\/\[\]?={}]+/n # srsly??
+  MTYPE_RE  = /^#{TOKEN_RE}\/#{TOKEN_RE}/on
+
+  # subclasses contain a hard-coded URI map that never changes
   URI_MAP = {}.freeze
 
   def uri_map uuid
@@ -34,17 +39,18 @@ class Intertwingler::Transform < Intertwingler::Handler
     # first we check if the request method is POST; if not this is over quickly
     return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST
 
-    # request must have a content type or return 400
-    type = req.content_type or return Rack::Response[400, {}, []]
+    # request must have a content type or return 409
+    type = req.content_type or
+      return Rack::Response[409, {}, ['Missing Content-Type header']]
     type = MimeMagic[type].canonical # XXX do we preserve type parameters??
 
     # give us a default response
     resp = Rack::Response[404, {}, []]
 
-    # get the resolver for this request
-    resolver = resolver_for req
+    # get the resolver for this request or bail out
+    resolver = resolver_for(req) or return resp
 
-    uri  = req.url
+    uri  = URI(resolver.preproc req.url) # annoying that isn't already a URI
     uuid = resolver.split_pp(uri).first.split(?/)[1].downcase
 
     # match the function
@@ -53,17 +59,46 @@ class Intertwingler::Transform < Intertwingler::Handler
     # 404 unless we have a function
     return resp unless func
 
+    # XXX this next bit is where we would have the thing like Params::Registry
+
+    # harvest params from uri
+    params = URI.decode_www_form(uri.query).reduce({}) do |hash, pair|
+      k, v = pair
+      # XXX UNKNOWN KEYS SHOULD BE IGNORED
+      k = k.strip.downcase.tr_s(?-, ?_).to_sym
+      v = NUMBER_RE === v ? v.to_f : v
+      (hash[k] ||= []) << v
+      hash
+    end
+
     # check request content type and return 415 if no match
-    return Rack::Response[415, {}, []] unless accept.include? type.to_s
+    return Rack::Response[415, {}, ["Unsupported type #{type}"]] unless
+      type.lineage.any? { |t| accept.include? t.to_s }
 
     variants = variants.reduce({}) do |hash, v|
       v = MimeMagic[v].canonical
       ([v.canonical] + v.aliases).each { |t| hash[t] = { type: v.to_s } }
+
       hash
     end
 
     # we want to do surgery to Accept:
     headers = HTTP::Negotiate.parse_headers req
+
+    # this will guarantee that if the request accepts a certain type
+    if ahdr = headers[:type]
+      ahdr.keys.each do |t|
+        q = ahdr[t][:q]
+        lin = MimeMagic[t].lineage.reject do |x|
+          %w[text/plain application/octet-stream].include? x
+        end
+        lin.each_with_index do |mt, i|
+          # this will slightly decrement the score a little more each time
+          (ahdr[mt.to_s] = {})[:q] = 0.999 ** i * q unless ahdr.key? mt.to_s
+        end
+      end
+    end
+
     # okay this is gonna be a weird one: we can have input like
     # `major/*` and `*/*` which i'm inclined to just leave alone. we
     # want to canonicalize any asserted types plus add the type
@@ -73,9 +108,13 @@ class Intertwingler::Transform < Intertwingler::Handler
     # 406 unless types match up
     rtype = HTTP::Negotiate.negotiate headers, variants
 
+    return Rack::Response[406, {}, []] unless rtype
+
     # okay now we actually run the thing
     begin
-      # run the transform
+      # it is so dumb you can't just set the body
+      req.env['rack.input'] = representation.coerce req.body, type: rtype.to_s
+      # run the transform, get back
       out = send func, req, params
 
       # note `out` can be nil which should be interpreted as 304
@@ -1188,7 +1227,7 @@ class Intertwingler::NotTransform
     nil
   end
 
-  class XPath < Intertwingler::Transform
+  class XPath < self
     protected
 
     def execute input, parsed = nil, params
@@ -1220,7 +1259,7 @@ class Intertwingler::NotTransform
     end
   end
 
-  class XSLT < Intertwingler::Transform
+  class XSLT < self
     protected
 
     def init_implementation harness

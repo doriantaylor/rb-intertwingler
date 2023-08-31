@@ -18,8 +18,11 @@ class Intertwingler::Handler
   class ::Intertwingler::Engine < self
   end
 
-  # A response to an unsuccessful request.
-  class Unsuccessful < Exception
+  # This is the abstract parent Exception class that acts as an escape
+  # hatch for responses that are something _other_ than 200-series,
+  # i.e. they are not-successful (albeit not strictly _un_successful)
+  # responses.
+  class NotSuccess < Exception
     def initialize message, status: nil
       @status = status
 
@@ -30,12 +33,12 @@ class Intertwingler::Handler
     alias_method :code, :status
 
     def response
-      Rack::Response[status, { 'Content-Type' => 'text/plain' }, [message]]
+      Rack::Response[status, { 'content-type' => 'text/plain' }, [message]]
     end
   end
 
-  # Redirects are implemented as exceptions
-  class Redirect < Unsuccessful
+  # Redirects are an example of not-successful-yet-not-unsuccessful responses.
+  class Redirect < NotSuccess
     # Make a new redirect "exception"
     #
     # @param message [#to_s] the error message
@@ -58,10 +61,10 @@ class Intertwingler::Handler
     end
   end
 
-  class Error < Unsuccessful
-    class Client
+  class Error < NotSuccess
+    class Client < self
     end
-    class Server
+    class Server < self
     end
   end
 
@@ -327,9 +330,9 @@ class Intertwingler::Handler
         end
 
         return Rack::Response[200, {
-          'Content-Type'   => var[:type],
-          'Content-Length' => var[:size].to_s, # rack should do this
-          'Last-Modified'  => var[:mtime].httpdate,
+          'content-type'   => var[:type],
+          'content-length' => var[:size].to_s, # rack should do this
+          'last-modified'  => var[:mtime].httpdate,
         }, selected.open]
       end
 
@@ -365,7 +368,7 @@ class Intertwingler::Handler
       # bail out if this doesn't return anything
 
       return Rack::Response[404, {
-        'Content-Type' => 'text/plain',
+        'content-type' => 'text/plain',
       }, ['lol fail']] unless subject
 
       # okay now we see if there are any sub-handlers that will take this request
@@ -386,14 +389,19 @@ class Intertwingler::Handler
         base['href'] = href.to_s
       end
 
-      str = doc.to_xml
+      str = doc.to_xml.b
 
       # warn 'ouate de phoque'
 
       Rack::Response[200, {
-        'Content-Type'   => 'application/xhtml+xml',
-        'Content-Length' => str.b.length.to_s,
-      }, StringIO.new(str, ?r)]
+        'content-type'   => 'application/xhtml+xml',
+        'content-length' => str.length.to_s,
+      }, StringIO.new(str, ?r, encoding: Encoding::BINARY)]
+    end
+  end
+
+  class ContentAddressable < self
+    def initialize engine
     end
   end
 end
