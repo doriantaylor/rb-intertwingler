@@ -63,7 +63,10 @@ creating websites with dense hypermedia characteristics:
 
 This is a brief glossary of terms that are significant to
 `Intertwingler`. It is not exhaustive, as it is assumed that the
-reader is familiar with Web development terminology.
+reader is familiar with Web development terminology. Note that I will
+typically prefer the term "URI" (identifier) rather than "URL", and
+use "HTTP" to refer to both HTTP and HTTPS unless the situation
+demands more precision.
 
 ### (Information) Resource
 
@@ -75,21 +78,14 @@ identifier (file name/path). Web resources have an additional
 dimension, which is the _request method_ or _verb_ with which the
 resource was requested.
 
-### Representation
-
-A representation (of an information resource on the Web) is a literal
-sequence of bytes (octets) that represents the given information
-resource. Representations can vary by media type, natural language,
-character set, compression, and potentially many other dimensions.
-
-### Opaque Resource
+#### Opaque Resource
 
 An _opaque_ resource is named such because the enclosing information
 system does not need to "see into" it. An opaque resource _may_ have
 more than one representation, but one representation will always be
 designated as canonical.
 
-### Transparent Resource
+#### Transparent Resource
 
 A _transparent_ resource is the complement of an opaque resource: the
 enclosing information system can, and often _must_, "see into" its
@@ -98,7 +94,14 @@ transparent resource resides only in live working memory, all
 serializations (that neither discard information nor make it up) are
 considered equivalent.
 
-### HTTP(S) Transaction
+### Representation
+
+A representation (of an information resource on the Web) is a literal
+sequence of bytes (octets) that represents the given information
+resource. Representations can vary by media type, natural language,
+character set, compression, and potentially many other dimensions.
+
+### HTTP Transaction
 
 An HTTP(S) transaction refers to the process of a client issuing a
 single request to a server, and that server responding in kind. In
@@ -133,17 +136,17 @@ next. Through its interaction with an HTTP message, a transform may
 also trigger a _subsequent_ transform to be added to its own, or
 another queue.
 
-### Request Transform
+#### Request Transform
 
 A _request_ transform operates over HTTP requests. It can modify the
 request's method, URI, headers, body (if present), or any
 combination thereof.
 
-### Response Transform
+#### Response Transform
 
 A _response_ transform operates over HTTP responses. Analogous to
 request transforms, response transforms can manipulate the response
-status, headers, body, or any combination thereof. _Un_like a request
+status, headers, body, or any combination thereof. _Unlike_ a request
 transform, there are multiple queues for response transforms: an
 early-run queue and a late-run queue, with an _addressable_ queue
 sandwiched between them.
@@ -183,7 +186,7 @@ is intended to advertise the set of URIs that a given handler will
 respond to, along with:
 
 * what request methods are recognized,
-* what content types are available in the response,
+* what content types are available as a response,
 * what URI query parameters are recognized, their data types,
   cardinality, etc.,
 * what content types are accepted in requests (at least the ones that
@@ -224,7 +227,45 @@ but I have not seen a server module that can take advantage of it.)
 
 A direct request to a transform looks like a `POST` to the transform's
 URI where the request body is the object to be transformed. Additional
-parameters can be fed into the transform using the URI's query component.
+parameters can be fed into the transform using the URI's query
+component, it being on a separate band from the request body. `POST`s
+to transforms _must_ include a `Content-Type` header and _should_
+include an `Accept:` header to tell the transform what it prefers as a
+response. The `Content-Length`, `Content-Type`, `Content-Language`,
+and `Content-Encoding` headers of the transform's response will be
+automatically merged into the original HTTP message.
+
+### Entire-Message Transforms
+
+Transforms can modify the entire HTTP message by serializing the
+message (or the part desired to be modified) into the body of the
+request to the transform, and using the content type `message/http`.
+Transforms that accept serialized HTTP messages as request bodies
+should respond in kind.
+
+> That is, if you were writing an entire-request-manipulating
+> _request_ transform, it would expect the `POST`ed content to be a
+> serialized _request_, and would likewise _return_ a serialized
+> request. An analogous _response_ transform would expect a serialized
+> _response_ in the request body, and likewise respond with a
+> serialized _response_, all `message/http`.
+
+For entire-message-manipulating transforms, it is only necessary to
+pass in the part of the HTTP message that one wishes to have
+transformed, plus any additional information needed for the
+transformation to be successful. (It is, however, necessary to include
+the request line or status line, for request transforms and response
+transforms, respectively.) Results will be merged into the original
+HTTP message. To signal that a header ought to be deleted, include it
+in the outgoing header set with the empty string for a value.
+
+### URI Rewriting and No-Ops
+
+The response codes `303 See Other` and `304 Not Modified` have special
+meaning with respect to transforms. A `303`, or rather its `Location`
+header, signifies that the transform only intends to rewrite the
+request-URI internally. A `304` indicates that the transform has made
+no changes at all. All other `3XX` responses are forwarded to the client.
 
 ### Addressable Transforms
 
@@ -233,9 +274,9 @@ transforms are addressable through the use of _path parameters_, a
 lesser-known feature of URIs. The advantage of using path parameters
 to identify response transforms is that they stack lexically, so the example:
 
-    http://my.website/my/image;crop=200,100,1200,900;scale=640,480
+    http://my.website/some/image;crop=200,100,1200,900;scale=640,480
 
-…would fetch `/my/image` from a content handler, and then in a
+…would fetch `/some/image` from a content handler, and then in a
 subrequest, `POST` the resulting response body to, say,
 `/transform/crop?x=200&y=100&width=1200&height=900`, receive _that_
 response body, and then `POST` _it_ to
