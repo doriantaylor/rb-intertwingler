@@ -1,7 +1,15 @@
 #+STARTUP: showall hidestars
 * desired outcome
   - [ ] command-line tool that can:
-    - [ ] spawn a scraper
+    - [ ] spawn a web server
+      - [ ] that resolves URIs
+        - [ ] that appropriately does redirects
+        - [ ] that resolves 410s (gone)
+        - [ ] that resolves 300s (multiple choices)
+      - [ ] that does content negotiation where applicable
+      - [ ] that generates (x)html with all the trimmings
+      - [ ] that applies transformation functions to whatever is thrown at it (modulo mime type compatibility)
+    - [ ] spawn a scraper/crawler
       - [ ] that traces redirects
         - [ ] that is smart enough to recognize loops
       - [ ] that can either resolve a given list or follow links
@@ -12,22 +20,12 @@
         - [ ] with term completion
         - [ ] with shortcuts for certain vocabs
         - [ ] with commands for common bulk rdf operations
-    - [ ] spawn a web server
-      - [ ] that resolves URIs
-        - [ ] that appropriately does redirects
-        - [ ] that resolves 410s (gone)
-        - [ ] that resolves 300s (multiple choices)
-      - [ ] that does content negotiation where applicable
-      - [ ] that generates (x)html with all the trimmings
-      - [ ] that applies transformation functions to whatever is
-        thrown at it (modulo mime type compatibility)
 * TODO major refactor
   - [X] methods that are strictly extensions of RDF::Repository
     - [X] actually make these an extension of RDF::Repository
   - [ ] the context that encapsulates configuration data
     - [ ] config parser, coercer, etc
-    - [ ] methods that *would* be strict extensions of RDF::Repository
-      if not for the fact that they require some of this configuration
+    - [ ] methods that *would* be strict extensions of RDF::Repository if not for the fact that they require some of this configuration
   - [-] summary/collection generators
     - [ ] atom feeds
     - [ ] google sitemaps
@@ -38,7 +36,7 @@
   - [ ] opaque data source providers
     - [ ] file system
       - [ ] git
-      - [ ] hg (ugh that will have to
+      - [ ] hg (ugh that will have to pipe out to the program but at least it speaks json)
     - [ ] Store::Digest
   - [ ] opaque *Surface* providers
     - [ ] /also/ file system
@@ -66,11 +64,8 @@
   - [ ] aw yiss
   - [ ] predicate order
   - [ ] predicate show/hide
-    - note "hide" can mean invisible but present vs completely omitted
-      from the representation
-    - gut says "completely omit from representation" should happen at
-      the data source level, ie the processor does not have access to
-      see what it should be omitting from the representation
+    - note "hide" can mean invisible but present vs completely omitted from the representation
+    - gut says "completely omit from representation" should happen at the data source level, ie the processor does not have access to see what it should be omitting from the representation
   - [ ] value order
   - [ ] value show/hide
   - [ ] label determination
