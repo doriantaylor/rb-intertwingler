@@ -48,16 +48,24 @@ Also packaged with the `Intertwingler` demonstrator are the means for
 creating websites with dense hypermedia characteristics:
 
 * A file system handler, for transition from legacy configurations
-* A [content-addressable store]() handler, for bulk storage of _opaque
-  resources_
+* A [content-addressable store]() handler, for bulk storage and
+  caching of _opaque resources_
 * A markup generation handler, for rendering _transparent resources_
 * Mutation handlers (e.g. `PUT` and `POST`) for both opaque and
   transparent resources
 * A set of _transforms_ for manipulating _representations_
 
-# Concepts
+# Architecture
 
-## (Information) Resource
+> figure goes here
+
+## Concepts
+
+This is a brief glossary of terms that are significant to
+`Intertwingler`. It is not exhaustive, as it is assumed that the
+reader is familiar with Web development terminology.
+
+### (Information) Resource
 
 An information resource is a _relation_ between one or more
 _identifiers_ (in this case URIs) and one or more _representations_. A
@@ -67,21 +75,21 @@ identifier (file name/path). Web resources have an additional
 dimension, which is the _request method_ or _verb_ with which the
 resource was requested.
 
-## Representation
+### Representation
 
 A representation (of an information resource on the Web) is a literal
 sequence of bytes (octets) that represents the given information
 resource. Representations can vary by media type, natural language,
 character set, compression, and potentially many other dimensions.
 
-## Opaque Resource
+### Opaque Resource
 
 An _opaque_ resource is named such because the enclosing information
 system does not need to "see into" it. An opaque resource _may_ have
 more than one representation, but one representation will always be
 designated as canonical.
 
-## Transparent Resource
+### Transparent Resource
 
 A _transparent_ resource is the complement of an opaque resource: the
 enclosing information system can, and often _must_, "see into" its
@@ -90,13 +98,13 @@ transparent resource resides only in live working memory, all
 serializations (that neither discard information nor make it up) are
 considered equivalent.
 
-## HTTP(S) Transaction
+### HTTP(S) Transaction
 
 An HTTP(S) transaction refers to the process of a client issuing a
 single request to a server, and that server responding in kind. In
 other words, a single request-response pair.
 
-## Handler
+### Handler
 
 An `Intertwingler` handler is a microservice with certain
 characteristics. All handlers are designed to be run as stand-alone
@@ -107,13 +115,13 @@ types, etc. under their control. This enables the `Intertwingler`
 engine to perform preemptive input sanitation, and efficiently route
 requests to the correct handler.
 
-## Engine
+### Engine
 
 The `Intertwingler` _engine_ is a special-purpose handler that
 marshals all other handlers and transforms, resolves URIs, and routes
 requests to handlers. This is the part that faces the external network.
 
-## Transform
+### Transform
 
 A _transform_ is a special-purpose handler that encapsulates one or
 more operations (each identified by URI) over a request body. As such,
@@ -125,13 +133,13 @@ next. Through its interaction with an HTTP message, a transform may
 also trigger a _subsequent_ transform to be added to its own, or
 another queue.
 
-## Request Transform
+### Request Transform
 
 A _request_ transform operates over HTTP requests. It can modify the
 request's method, URI, headers, body (if present), or any
 combination thereof.
 
-## Response Transform
+### Response Transform
 
 A _response_ transform operates over HTTP responses. Analogous to
 request transforms, response transforms can manipulate the response
@@ -139,10 +147,6 @@ status, headers, body, or any combination thereof. _Un_like a request
 transform, there are multiple queues for response transforms: an
 early-run queue and a late-run queue, with an _addressable_ queue
 sandwiched between them.
-
-# Architecture
-
-> figure goes here
 
 ## Handlers
 
@@ -218,9 +222,28 @@ a _filter_
 role](https://fastcgi-archives.github.io/FastCGI_Specification.html#S6.4),
 but I have not seen a server module that can take advantage of it.)
 
-A direct request to a transform looks like a `POST` to
+A direct request to a transform looks like a `POST` to the transform's
+URI where the request body is the object to be transformed. Additional
+parameters can be fed into the transform using the URI's query component.
 
 ### Addressable Transforms
+
+Most transforms are configured statically, but some response
+transforms are addressable through the use of _path parameters_, a
+lesser-known feature of URIs. The advantage of using path parameters
+to identify response transforms is that they stack lexically, so the example:
+
+    http://my.website/my/image;crop=200,100,1200,900;scale=640,480
+
+…would fetch `/my/image` from a content handler, and then in a
+subrequest, `POST` the resulting response body to, say,
+`/transform/crop?x=200&y=100&width=1200&height=900`, receive _that_
+response body, and then `POST` _it_ to
+`/transform/scale?width=640&height=480`, the response to which would
+be reattached to the outgoing response to the client. The mapping that
+relates the comma-separated positional arguments in the path
+parameters to key-value query parameters is expressed using the
+[Transformation Functions Ontology](#transformation-functions-ontology).
 
 ## RDF-KV Protocol
 
