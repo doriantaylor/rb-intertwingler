@@ -155,8 +155,8 @@ sandwiched between them.
 
 Everything in `Intertwingler` is a handler, including the engine
 itself. At root, a handler is a _microservice_ created in compliance
-with the host language's lightweight Web server interface (in our case
-with Ruby, [that would be Rack](https://github.com/rack/rack)).
+with the host language's lightweight Web server interface ([in our case
+with Ruby](#implementation-note), [that would be Rack](https://github.com/rack/rack)).
 
 A handler is intended to be only interfaced with using HTTP (or,
 again, the Web server interface's approximation of it). That is, a
@@ -169,9 +169,10 @@ least one URI that will respond to at least one request method.
 The `Intertwingler` engine imagines itself one day turned into a
 high-performance, stand-alone reverse proxy, with hot-pluggable
 handlers (and by extension, transforms) that interface internally over
-HTTP. That is the lens with which to view the design. It is meant to
-be put at the edge of an organization's Web infrastructure and manage
-the Web address space for all of the organization's DNS domains.
+HTTP. That is the lens with which to view the design. The engine is
+meant to be put at the edge of an organization's Web infrastructure
+and manage the Web address space for all of the organization's (DNS)
+domains.
 
 When an HTTP transaction occurs completely within the engine's process
 space (i.e., it does not try to access handlers running in other
@@ -208,6 +209,79 @@ does not explicitly define semantics for any content in response to
 return=representation`](https://datatracker.ietf.org/doc/html/rfc7240#section-4.2)
 header is present in the request, in addition to the ordinary content
 negotiation headers, `Accept` and so on.
+
+## State
+
+`Intertwingler` maintains its state — at least the [transparent
+resources](#transparent-resource) — in an RDF graph database. The
+current implementation uses a very simple, locally-attached quad
+store. [Opaque resources](#opaque-resource), or rather their literal
+representations, are held primarily in a content-addressable
+store. `Intertwingler` also includes a file system handler to help
+transition from legacy configurations.
+
+> Both the graph database and the content-addressable store are
+> candidates for stand-alone systems that could be scaled up and out.
+
+## Addressing
+
+`Intertwingler` maintains URI continuity by ascribing durable
+canonical identifiers to every resource, and then _overlaying_
+human-friendly yet potentially perishable identifiers on top. The goal
+of the `Intertwingler` resolver is to eliminate the possibility of a
+user receiving a `404` error, at least in practice. (In principle it
+will always be possible to request URIs that `Intertwingler` has never
+had under its management.)
+
+While it is possible, for aesthetic reasons, to ascribe an explicit
+path as an overlay URI, Intertwingler only needs as much path
+information as is necessary to match exactly _one_ canonical
+identifier. That is, if the database only contains one resource with a
+slug of `my-summer-vacation`, then the full URI
+`https://my.website/my-summer-vacation` is enough to positively
+identify it. (If a longer path was explicitly specified, then
+`Intertwingler` will redirect.) If a _second_ resource shows up in the
+graph with the same slug, `Intertwingler` will return `300 Multiple
+Choices` with the shortest URIs that will unambiguously identify both
+options.
+
+URI path segments prior than the terminating one correspond to
+arbitrary entities in the graph that happen to have been appropriately
+tagged. Again, the only purpose they serve is to unambiguously
+identify the terminating path segment. For the path `/A/B/C/d` to
+resolve, `A` has to exist and be connected (again, arbitrarily) to `B`, `B` to
+`C`, and `C` to `d`. If `d` can be uniquely identified using a shorter
+path, `Intertwingler` can be configured to either redirect, or leave
+it alone.
+
+> In practice, this behaviour subsumes what we ordinarily think of as
+> "folders" or "containers", and will be possible to configure which
+> resource types get considered for "container-ness", but in general
+> `Intertwingler` does not recognize the concept of a container as a
+> category of entity that is meaningfully distinct from a non-container.
+
+### Canonical Identifiers
+
+`Intertwingler` uses
+[UUIDs](https://datatracker.ietf.org/doc/html/rfc4122) for the bulk of
+its canonical identifiers, with the exception of those that correspond
+1:1 to byte segments (that is to say, the opaquest of the opaque),
+which use [URIs derived from cryptographic
+digests](https://datatracker.ietf.org/doc/html/rfc6920). The former
+can always be reached by accessing, e.g.:
+
+    `https://my.website/d3e20207-1ab0-4e65-a03c-2580baab25bc`
+
+and the latter, e.g.:
+
+    `https://my.website/.well-known/ni/sha-256/jq-0Y8RhxWwGp_G_jZqQ0NE5Zlz6MxK3Qcx02fTSfgk`
+
+…per [RFC6920](https://datatracker.ietf.org/doc/html/rfc6920). If the
+resolver finds a suitable overlay address for the UUID form, it will
+redirect, but the hash URI form remains as-is. Direct requests to
+these hash URIs (at least from the outside) will also bypass any
+response transforms, in order to preserve the cryptographic
+relationship between the URI and the representation.
 
 ## `Intertwingler` Transform Protocol
 
@@ -256,8 +330,11 @@ transformed, plus any additional information needed for the
 transformation to be successful. (It is, however, necessary to include
 the request line or status line, for request transforms and response
 transforms, respectively.) Results will be merged into the original
-HTTP message. To signal that a header ought to be deleted, include it
-in the outgoing header set with the empty string for a value.
+HTTP message. Responding with an identical value as the request
+(request line, status line, or header) will leave it unchanged, or in
+the case of headers, it is safe to omit them. To signal that a header
+ought to be deleted, include it in the outgoing header set with the
+empty string for a value.
 
 ### URI Rewriting and No-Ops
 
@@ -274,7 +351,7 @@ transforms are addressable through the use of _path parameters_, a
 lesser-known feature of URIs. The advantage of using path parameters
 to identify response transforms is that they stack lexically, so the example:
 
-    http://my.website/some/image;crop=200,100,1200,900;scale=640,480
+    https://my.website/some/image;crop=200,100,1200,900;scale=640,480
 
 …would fetch `/some/image` from a content handler, and then in a
 subrequest, `POST` the resulting response body to, say,
