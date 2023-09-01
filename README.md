@@ -28,7 +28,8 @@ URL is _referenced_. `Intertwingler` solves this problem the following
 way:
 
 * It stores _links_ (i.e., referent-reference pairs✱) as first-class objects,
-* It assigns every resource a _canonical identifier_ that doesn't budge,
+* It assigns every resource a [canonical
+  identifier](#canonical-identifiers] that doesn't budge,
 * It _overlays_ human-friendly address components (slugs) on top,
 * It _remembers_ prior values for these address components if you change them,
 * It uses a custom _resolver_ to do everything in its power to match a
@@ -231,12 +232,12 @@ transition from legacy configurations.
 ## Addressing
 
 `Intertwingler` maintains URI continuity by ascribing durable
-canonical identifiers to every resource, and then _overlaying_
-human-friendly yet potentially perishable identifiers on top. The goal
-of the `Intertwingler` resolver is to eliminate the possibility of a
-user receiving a `404` error, at least in practice. (In principle it
-will always be possible to request URIs that `Intertwingler` has never
-had under its management.)
+[canonical identifiers](#canonical-identifiers) to every resource, and
+then _overlaying_ human-friendly yet potentially perishable
+identifiers on top. The goal of the `Intertwingler` resolver is to
+eliminate the possibility of a user receiving a `404` error, at least
+in practice. (In principle it will always be possible to request URIs
+that `Intertwingler` has never had under its management.)
 
 While it is possible, for aesthetic reasons, to ascribe an explicit
 path as an overlay URI, Intertwingler only needs as much path
@@ -475,8 +476,9 @@ applies them to the graph. This can be used in conjunction with the
 Much of the labour of Web development is considerably simplified if
 you realize that many of the operations that bulk up Web applications
 can be construed as transformations over HTTP message bodies. Most
-transforms don't need much, if _any_ information outside of the segment
-of bytes they get as input.
+transforms don't need much, if _any_ information outside of the
+segment of bytes they get as input. Most transforms, moreover, are
+tiny pieces of code.
 
 ### Request Transforms
 
@@ -490,6 +492,10 @@ This simple transform adds `text/markdown` to the request's `Accept`
 header, so downstream content negotiation selects Markdown variants
 when it wouldn't otherwise. It also hooks the [Markdown to
 HTML](#markdown-to-html-transform) response transform.
+
+> Note that if the `Accept` header _already_ contains `text/markdown`
+> with a higher score than `text/html` or `application/xhtml+xml`,
+> the markdown passes through to the client untouched.
 
 #### Sass Hook Transform
 
@@ -505,9 +511,10 @@ transforming the request into a `POST` to
 [`/.well-known/ni/`](#content-addressable-store-handler) to store the
 content.
 
-> This is in lieu of a fully-fledged WebDAV infrastructure, which will
-> come later. I have implemented a WebDAV server before and it was an
-> entire project unto itself.
+> This is a basic mechanism for getting content onto the site in lieu
+> of a fully-fledged [WebDAV](https://datatracker.ietf.org/doc/html/rfc4918)
+> infrastructure, which will come later. I have implemented a WebDAV
+> server before and it was an entire project unto itself.
 
 #### RDF-KV Transform
 
@@ -538,6 +545,13 @@ turn it into CSS.
 
 This transform will run [HTML Tidy](https://www.html-tidy.org/) over
 (X)HTML content.
+
+#### RDF Transform
+
+Turn an RDFa document into Turtle, N-Triples, RDF/XML, or
+[JSON-LD](https://json-ld.org/).
+
+> Also turn any of those types into each other.
 
 #### Strip Comments Transform
 
@@ -640,16 +654,15 @@ Manipulates an image's gamma value.
 
 ## Implementation Note
 
-Parts of `Intertwingler`, notably the URI resolver, depend on a
+Parts of `Intertwingler`, notably the URI resolver and markup
+generation handlers, depend on a
 [reasoner](https://en.wikipedia.org/wiki/Reasoner) to make inferences
 about assertions in the database. In 2018, when I began working on
 `Intertwingler`'s predecessor, `RDF::SAK`, the only workable
-implementations of reasoners were in Java and Ruby. I chose Ruby
-because it was easier for prototyping. My vision for `Intertwingler`,
-though, is that it eventually has implementations in as many languages
-as it can.
-
-# Code Atlas
+implementations of reasoners were in Java and Ruby (which still
+appears to more or less be the case). I chose Ruby because it was
+easier for prototyping. My vision for `Intertwingler`, though, is that
+it eventually has implementations in as many languages as it can.
 
 # Installation
 
@@ -660,6 +673,10 @@ For now I recommend just running the library out of its source tree:
 ~$ cd intertwingler
 ~/intertwingler$ bundle install
 ```
+
+# Configuration
+
+`Intertwingler` is effectively a form of middleware, meaning it's effectively useless without mounds of content.  Until further notice, my recommendation is to monitor the [Getting Started](CONFIGURATION.md) guide.
 
 # Sponsorship
 
