@@ -48,12 +48,16 @@ Also packaged with the `Intertwingler` demonstrator are the means for
 creating websites with dense hypermedia characteristics:
 
 * A file system handler, for transition from legacy configurations
-* A [content-addressable store]() handler, for bulk storage and
-  caching of _opaque resources_
-* A markup generation handler, for rendering _transparent resources_
+* A [content-addressable
+  store](https://en.wikipedia.org/wiki/Content-addressable_storage)
+  handler, for bulk storage and caching of [opaque resources](#opaque-resource)
+* A pluggable markup generation handler, for rendering [transparent
+  resources](#transparent-resource)
 * Mutation handlers (e.g. `PUT` and `POST`) for both opaque and
-  transparent resources
-* A set of _transforms_ for manipulating _representations_
+  transparent resources,
+* A set of [transforms](#transform) for manipulating resource
+  [representations](#representation), specifically HTML/XML markup and
+  images.
 
 # Architecture
 
@@ -64,9 +68,9 @@ creating websites with dense hypermedia characteristics:
 This is a brief glossary of terms that are significant to
 `Intertwingler`. It is not exhaustive, as it is assumed that the
 reader is familiar with Web development terminology. Note that I will
-typically prefer the term "URI" (identifier) rather than "URL", and
-use "HTTP" to refer to both HTTP and HTTPS unless the situation
-demands more precision.
+typically prefer the more generic term "URI" (identifier) rather than
+"URL" (locator), and use "HTTP" to refer to both HTTP and HTTPS unless
+the situation demands more precision.
 
 ### (Information) Resource
 
@@ -155,8 +159,9 @@ sandwiched between them.
 
 Everything in `Intertwingler` is a handler, including the engine
 itself. At root, a handler is a _microservice_ created in compliance
-with the host language's lightweight Web server interface ([in our case
-with Ruby](#implementation-note), [that would be Rack](https://github.com/rack/rack)).
+with the host language's lightweight Web server interface ([in our
+case with Ruby](#implementation-note), [that would be
+Rack](https://github.com/rack/rack)).
 
 A handler is intended to be only interfaced with using HTTP (or,
 again, the Web server interface's approximation of it). That is, a
@@ -168,11 +173,11 @@ least one URI that will respond to at least one request method.
 
 The `Intertwingler` engine imagines itself one day turned into a
 high-performance, stand-alone reverse proxy, with hot-pluggable
-handlers (and by extension, transforms) that interface internally over
-HTTP. That is the lens with which to view the design. The engine is
-meant to be put at the edge of an organization's Web infrastructure
-and manage the Web address space for all of the organization's (DNS)
-domains.
+handlers (and by extension, transforms) that can be written in any
+language, and interface internally over HTTP. That is the lens with
+which to view the design. The engine is meant to be put at the edge of
+an organization's Web infrastructure and manage the Web address space
+for all of the organization's (DNS) domains.
 
 When an HTTP transaction occurs completely within the engine's process
 space (i.e., it does not try to access handlers running in other
@@ -249,16 +254,22 @@ URI path segments prior than the terminating one correspond to
 arbitrary entities in the graph that happen to have been appropriately
 tagged. Again, the only purpose they serve is to unambiguously
 identify the terminating path segment. For the path `/A/B/C/d` to
-resolve, `A` has to exist and be connected (again, arbitrarily) to `B`, `B` to
-`C`, and `C` to `d`. If `d` can be uniquely identified using a shorter
-path, `Intertwingler` can be configured to either redirect, or leave
-it alone.
+resolve, `A` has to exist and be connected (again, arbitrarily) to
+`B`, `B` to `C`, and `C` to `d`. If only _part_ of the path resolves,
+then _that_ is one of the few situations you will encounter a `404` —
+because the path is _over_\specified — something you can only do if
+you enter the path manually, as `Intertwingler` will only ever expose
+(explicit overrides notwithstanding) the shortest uniquely-identifying
+overlay path for any resource. As such, if `d` can be uniquely
+identified using a shorter path, the default behaviour of
+`Intertwingler` is to redirect.
 
 > In practice, this behaviour subsumes what we ordinarily think of as
 > "folders" or "containers", and will be possible to configure which
-> resource types get considered for "container-ness", but in general
-> `Intertwingler` does not recognize the concept of a container as a
-> category of entity that is meaningfully distinct from a non-container.
+> resource and relation types get considered for "container-ness", but
+> in general `Intertwingler` does not recognize the concept of a
+> container as a category of entity that is meaningfully distinct from
+> a non-container.
 
 ### Canonical Identifiers
 
@@ -270,11 +281,11 @@ which use [URIs derived from cryptographic
 digests](https://datatracker.ietf.org/doc/html/rfc6920). The former
 can always be reached by accessing, e.g.:
 
-    `https://my.website/d3e20207-1ab0-4e65-a03c-2580baab25bc`
+    https://my.website/d3e20207-1ab0-4e65-a03c-2580baab25bc
 
 and the latter, e.g.:
 
-    `https://my.website/.well-known/ni/sha-256/jq-0Y8RhxWwGp_G_jZqQ0NE5Zlz6MxK3Qcx02fTSfgk`
+    https://my.website/.well-known/ni/sha-256/jq-0Y8RhxWwGp_G_jZqQ0NE5Zlz6MxK3Qcx02fTSfgk
 
 …per [RFC6920](https://datatracker.ietf.org/doc/html/rfc6920). If the
 resolver finds a suitable overlay address for the UUID form, it will
@@ -288,10 +299,10 @@ relationship between the URI and the representation.
 The transform protocol is inspired by [the FastCGI
 specification](https://fastcgi-archives.github.io/FastCGI_Specification.html#S6.3),
 and its use in server modules like Apache's
-[`mod_authnz_fcgi`](https://httpd.apache.org/docs/2.4/mod/mod_authnz_fcgi.html). In
-this configuration, the main server issues a subrequest to a FastCGI
-daemon, and then uses the response, in this case, to determine if the
-outermost request is authorized. The reasoning goes that this
+[`mod_authnz_fcgi`](https://httpd.apache.org/docs/2.4/mod/mod_authnz_fcgi.html).
+In this configuration, the main server issues a subrequest to a
+FastCGI daemon, and then uses the response, in this case, to determine
+if the outermost request is authorized. The reasoning goes that this
 behaviour can be generalized to ordinary HTTP (in our era of reverse
 proxies, FastCGI is an extra step), as well as handle other concerns
 in addition to authorization. (Indeed, FastCGI itself [also specifies
@@ -339,10 +350,16 @@ empty string for a value.
 ### URI Rewriting and No-Ops
 
 The response codes `303 See Other` and `304 Not Modified` have special
-meaning with respect to transforms. A `303`, or rather its `Location`
-header, signifies that the transform only intends to rewrite the
-request-URI internally. A `304` indicates that the transform has made
-no changes at all. All other `3XX` responses are forwarded to the client.
+meaning with respect to transforms. If a _request_ transform returns a
+`303`, its `Location` header should be interpreted as a simple
+internal rewrite of the request-URI. A `304` indicates that the
+transform (request _or_ response) has made no changes at all. All
+other `3XX` responses are forwarded to the client.
+
+> Redirect responses from _addressable_ response transforms that
+> return their own URI path with different _query_ parameter values
+> are translated backwards into the outermost request with different
+> _path_ parameter values.
 
 ### Addressable Transforms
 
@@ -363,11 +380,263 @@ relates the comma-separated positional arguments in the path
 parameters to key-value query parameters is expressed using the
 [Transformation Functions Ontology](#transformation-functions-ontology).
 
-## RDF-KV Protocol
+## Handler Inventory
 
-## Content Inventory Ontology
+Everything in `Intertwingler` is a handler, but the undecorated term
+"handler" refers to content handlers. These are the stripped-down
+microservices that actually respond to outside requests.
 
-## Transformation Functions Ontology
+### File System Handler
+
+This is a rudimentary handler that provides content-negotiated `GET`
+support to one or more document roots on the local file system.
+
+### Markup Generation Handler
+
+This handler generates
+(X)HTML+[RDFa](https://www.w3.org/TR/rdfa-primer/) (or other markup)
+documents from subjects in the graph. Pluggable sub-handlers can be
+attached to different URIs or RDF classes.
+
+#### Generic Markup Generation Sub-Handler
+
+This creates a simple (X)HTML document with embedded RDFa intended for
+subsequente manipulation downstream. This sub-handler and others will
+eventually be supplanted by a hot-configurable
+[Loupe](https://vocab.methodandstructure.com/loupe#) handler.
+
+#### Atom Feed Sub-Handler
+
+This will map resources typed with certain RDF classes to Atom feeds
+when the request's content preference is for `application/atom+xml`.
+
+#### Google Site Map Sub-Handler
+
+This will generate a Google site map at the designated address.
+
+#### `skos:ConceptScheme` Sub-Handler
+
+This is a special alphabetized list handler for
+[SKOS](https://www.w3.org/TR/skos-primer/) concept schemes.
+
+#### `sioct:ReadingList` Sub-Handler
+
+This is a special alphabetized list handler for bibliographies.
+
+#### Person/Organization List Sub-Handler
+
+This is a special alphabetized list handler for people, groups, and
+organizations.
+
+#### All Classes Sub-Handler
+
+This handler will generate a list of all RDF/OWL classes known to
+`Intertwingler`. Useful for composing into interactive interfaces.
+
+#### Adjacent Property Sub-Handler
+
+This handler will generate a resource containing a list of RDF
+properties that are in the domain of the subject's RDF type(s).
+Useful for composing into interactive interfaces.
+
+#### Adjacent Class Sub-Handler
+
+This handler will generate a resource containing a list of subjects
+with `?s rdf:type ?Class .` statements where `?Class` is in the range
+of a given property. Useful for composing into interactive interfaces.
+
+### Content-Addressable Store Handler
+
+The content-addressable store handler wraps
+[`Store::Digest::HTTP`](https://github.com/doriantaylor/rb-store-digest-http)
+(which itself wraps
+[`Store::Digest`](https://github.com/doriantaylor/rb-store-digest)).
+This handler maps everything under `/.well-known/ni/`. You can add a
+new object to the store by `POST`ing it to that address.
+`Store::Digest::HTTP` also generates rudimentary index pages.
+
+### Reverse Proxy Handler (TODO)
+
+While the plan is to include a reverse proxy handler, and while they
+are relatively easy to write, I am leaving it out until I can
+determine a sensible policy for not letting the entire internet access
+the entire rest of the internet through the reverse proxy.
+
+### Linked Data Patch Handler
+
+The
+[LD-Patch](https://dvcs.w3.org/hg/ldpwg/raw-file/ldpatch/ldpatch.html)
+handler processes `PATCH` requests with `text/ldpatch` content and
+applies them to the graph. This can be used in conjunction with the
+[RDF-KV Transform](#rdf-kv-transform).
+
+## Transform Inventory
+
+Much of the labour of Web development is considerably simplified if
+you realize that many of the operations that bulk up Web applications
+can be construed as transformations over HTTP message bodies. Most
+transforms don't need much, if _any_ information outside of the segment
+of bytes they get as input.
+
+### Request Transforms
+
+Again, request transforms are run in advance of the content handlers,
+generally making small adjustments to headers and sometimes
+manipulating request bodies.
+
+#### Markdown Hook Transform
+
+This simple transform adds `text/markdown` to the request's `Accept`
+header, so downstream content negotiation selects Markdown variants
+when it wouldn't otherwise. It also hooks the Markdown to HTML
+response transform.
+
+#### Sass Hook Transform
+
+In a virtually identical move, this transform adds the
+`text/x-vnd.sass` and `text/x-vnd.sass.scss` content types to the
+request's `Accept` header, and hooks the [Sass Transform](#sass-transform).
+
+#### Pseudo-File `PUT` Transform
+
+This transform will take a `PUT` request to a particular URI and
+generate the graph statements needed to fake up a file path, while
+transforming the request into a `POST` to
+[`/.well-known/ni/`](#content-addressable-store-handler) to store the
+content.
+
+> This is in lieu of a fully-fledged WebDAV infrastructure, which will
+> come later. I have implemented a WebDAV server before and it was an
+> entire project unto itself.
+
+#### RDF-KV Transform
+
+This transform will take `POST` requests with
+`application/x-www-form-urlencoded` or `multipart/form-data` bodies
+that conform to the [RDF-KV protocol](https://doriantaylor.com/rdf-kv)
+and transform the request into a `PATCH` with a `text/ldpatch` body,
+suitable for the [LD-Patch handler](#linked-data-patch-handler).
+
+### Response Transforms
+
+Response transforms are run _after_ the selected content handler, in
+three phases: _early-run_, _addressable_, and _late-run_.
+Theoretically any response transform can be run in any phase, but some
+transforms will only make sense to run in certain phases, and/or
+before or after other transforms in the same phase.
+
+#### Markdown to HTML Transform
+
+This transform will take Markdown and turn it into (X)HTML.
+
+#### Sass Transform
+
+This transform will take [Sass](https://sass-lang.org/) content and
+turn it into CSS.
+
+#### Tidy Transform
+
+This transform will run [HTML Tidy](https://www.html-tidy.org/) over
+(X)HTML content.
+
+#### Strip Comments Transform
+
+Removes the comments from HTML/XML markup.
+
+#### (X)HTML Conversion Transform
+
+Transforms HTML to XHTML and vice versa.
+
+#### Rewrite `<head>` Transform
+
+Ensures the correct `<title>` and `<base href="…">` elements are
+present in an (X)HTML document, as well as `<link>`, `<meta>`,
+`<script>` and `<style>`.
+
+#### Rehydrate Transform
+
+Transforms certain inline elements in an (X)HTML document (`<dfn>`,
+`<abbr>`…) into links to term definitions, people, places, companies…
+
+#### Add Social Media Metadata Transform
+
+Adds [Google](https://schema.org/), [Facebook](https://ogp.me/),
+[Twitter](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/abouts-cards),
+etc. metadata to the `<head>` of an (X)HTML document.
+
+#### Add Backlinks Transform
+
+Adds a chunk of markup containing backlinks to every block or section
+element in an (X)HTML document that is an identifiable RDF subject.
+
+#### Rewrite Links Transform
+
+Rewrites all links embedded in a markup document to the most up-to-date URIs.
+
+#### Mangle `mailto:` Transform
+
+Obfuscates e-mail addresses/links in a manner serviceable to recovery
+by client-side scripting.
+
+#### Add Amazon Tag Transform
+
+Adds an affiliate tag to Amazon links.
+
+#### Normalize RDFa Prefixes Transform
+
+Moves RDFa prefix declarations to the root (or otherwise outermost
+available) node where possible; overwrites alternate prefix
+identifiers with those configured in the resolver; prunes out unused
+prefix declarations.
+
+#### Add `xml-stylesheet` PI Transform
+
+This transform will add an `<?xml-stylesheet …?>` processing
+instruction to the top of an XML document, for use with XSLT or CSS.
+
+#### Apply XSLT Transform
+
+Applies an XSLT stylesheet to an XML document.
+
+#### Reindent Transform
+
+Normalizes the indentation of an HTML/XML document.
+
+#### Image Conversion Transform
+
+Converts a raster image from one format to another.
+
+#### Crop Transform
+
+Crops an image.
+
+#### Scale Transform
+
+Scales an image down.
+
+#### Desaturate Transform
+
+Makes an image black and white.
+
+#### Posterize Transform
+
+Posterizes an image.
+
+#### Knockout Transform
+
+Generates a transparency mask based on a colour value.
+
+#### Brightness Transform
+
+Manipulates an image's brightness.
+
+#### Contrast Transform
+
+Manipulates an image's contrast.
+
+#### Gamma Transform
+
+Manipulates an image's gamma value.
 
 ## Implementation Note
 
@@ -379,6 +648,18 @@ implementations of reasoners were in Java and Ruby. I chose Ruby
 because it was easier for prototyping. My vision for `Intertwingler`,
 though, is that it eventually has implementations in as many languages
 as it can.
+
+# Code Atlas
+
+# Installation
+
+For now I recommend just running the library out of its source tree:
+
+```bash
+~$ git clone git@github.com/doriantaylor/rb-intertwingler.git intertwingler
+~$ cd intertwingler
+~/intertwingler$ bundle install
+```
 
 # Sponsorship
 
