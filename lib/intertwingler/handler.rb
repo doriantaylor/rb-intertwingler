@@ -13,6 +13,8 @@ require 'http-negotiate'
 # for cas
 require 'store/digest/http'
 
+# Everything in {Intertwingler} is a handler.
+#
 class Intertwingler::Handler
   # do this to declare the symbol
   class ::Intertwingler::Engine < self
@@ -20,7 +22,7 @@ class Intertwingler::Handler
 
   # This is the abstract parent Exception class that acts as an escape
   # hatch for responses that are something _other_ than 200-series,
-  # i.e. they are not-successful (albeit not strictly _un_successful)
+  # i.e. they are not-successful (albeit not strictly _unsuccessful_)
   # responses.
   class NotSuccess < Exception
     def initialize message, status: nil
@@ -400,7 +402,7 @@ class Intertwingler::Handler
     end
   end
 
-  class ContentAddressable < self
+  class CAS < self
     def initialize engine
     end
   end

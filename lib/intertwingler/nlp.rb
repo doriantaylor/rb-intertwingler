@@ -97,13 +97,13 @@ public
 #   }
 # }
 # ```
-# ... etc. 
+# ... etc.
 #
 # Oh also I suppose we can generate TF-IDF scores or whatever with
 # that data too.
 #
 # OK so other stuff: say we have a set of extracted terms and we want
-# to compare it with a concept scheme w want to 
+# to compare it with a concept scheme w want to
 #
 module Intertwingler::NLP
   # This class encapsulates a cache of SKOS concepts (either a concept

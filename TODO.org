@@ -20,48 +20,267 @@
         - [ ] with term completion
         - [ ] with shortcuts for certain vocabs
         - [ ] with commands for common bulk rdf operations
-* TODO major refactor
-  - [X] methods that are strictly extensions of RDF::Repository
-    - [X] actually make these an extension of RDF::Repository
-  - [ ] the context that encapsulates configuration data
-    - [ ] config parser, coercer, etc
-    - [ ] methods that *would* be strict extensions of RDF::Repository if not for the fact that they require some of this configuration
-  - [-] summary/collection generators
-    - [ ] atom feeds
-    - [ ] google sitemaps
-    - [-] rdf collections of various kinds (temporary)
-      - [X] SKOS concept schemes
-      - [ ] sioct:ReadingList
-      - [ ] sioct:AddressBook
-  - [ ] opaque data source providers
-    - [ ] file system
-      - [ ] git
-      - [ ] hg (ugh that will have to pipe out to the program but at least it speaks json)
-    - [ ] Store::Digest
-  - [ ] opaque *Surface* providers
-    - [ ] /also/ file system
-      - [ ] including rewrite maps
-    - [ ] /also/ Store::Digest
-    - [ ] something to clean out either one
-  - [-] document context
-    - [X] markdown to xhtml
-    - [-] social media metadata
-      - [X] twitter
-      - [ ] facebook
-      - [ ] google
-    - [ ] "modernize"/rewrite legacy tags (xslt? something less/more?)
-      - this is sorta done but not organized
-    - [ ] inject/repair RDFa
-    - [ ] segment compound documents
-      - [ ] fragment IDs
-    - [X] backlinks
-  - [ ] natural language processing (very light)
-    - [ ] n-gram extraction
-      - [ ] inline markup (dfn/abbr/span, also em/strong etc) treatment
-    - [ ] n-gram match (to skos concepts etc)
-    - [ ] inline markup generation
-* TODO loupe processor <https://vocab.methodandstructure.com/loupe#>
-  - [ ] aw yiss
+* TODO Major refactor
+  - [ ] Create an ~Intertwingler::Config~ configuration file parser
+  - [ ] Main ~Intertwingler~ namespace has a convenience function for loading an ~Intertwingler::Engine~ instance from a config file
+** TODO Basic ~Intertwingler::Engine~
+   - [ ] with tests
+   - [ ] with documentation
+   - [ ] Loads configuration
+     - [ ] handles multiple authorities (host names + aliases)
+     - [ ] optionally shares RDF store but optionally doesn't
+   - [ ] Central dispatcher
+     - [ ] Figure out how ~OPTIONS *~ manifests are going to work
+       - [ ] actually make them
+   - [ ] Some facility for routing to meaningful error messages
+   - [ ] Handles ~410 Gone~
+   - [ ] Handles ~300 Multiple Choices~
+*** TODO Core content handlers
+    - [ ] ~Intertwingler::Handler::Generated~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] Devise sub-handler configuration/loading mechanism
+        - [ ] Also determine sub-handler interface
+      - [ ] Core sub-handlers
+        - [ ] Generic (X)HTML+RDFa
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] Atom feed
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] Google site map
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] SKOS concept scheme/collection
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] Bibliography
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] Person/organization list
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] All classes
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] Adjacent properties (to subject)
+          - [ ] with tests
+          - [ ] with documentation
+        - [ ] Adjacent class instances (to property)
+          - [ ] with tests
+          - [ ] with documentation
+    - [ ] ~Intertwingler::Handler::CAS~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] ~/.well-known/ni/~ handles ~POST~ requests
+        - [ ] responds with redirect, either ~201 Created~ or ~303 See Other~
+    - [-] ~Intertwingler::Handler::FileSystem~
+      - [ ] with tests
+      - [ ] with documentation
+      - [-] handles multiple document roots
+        - [X] does not venture outside of them
+        - [ ] skips dotfiles
+        - [X] configurable index basename
+      - [X] does content negotiation
+        - [X] treats ~slug~ (file) first and ~slug/~ (dir) second
+    - [ ] ~Intertwingler::Handler::LDPatch~
+      - [ ] with tests
+      - [ ] with documentation
+    - [ ] ~Intertwingler::Handler::Proxy~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] ~Prefer: respond-async~ and ~wait=N~
+*** TODO Core transforms
+    - [ ] ~Intertwingler::Representation~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] ~Intertwingler::Representation::Nokogiri~
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] ~Intertwingler::Representation::Vips~
+        - [ ] with tests
+        - [ ] with documentation
+    - [ ] ~Intertwingler::Transform~
+      - [ ] with tests
+      - [ ] with documentation
+    - [ ] ~Intertwingler::Transform::Markup~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] HTML ↔ XHTML transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Strip comments transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Rewrite ~<head>~ transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Rehydrate transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Add social media metadata transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Add backlinks transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Rewrite links transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Mangle ~mailto:~ transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Amazon tag transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Normalize RDFa prefixes transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Add ~xml-stylesheet~ PI transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Apply XSLT transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Reindent transform
+        - [ ] with tests
+        - [ ] with documentation
+    - [ ] ~Intertwingler::Transform::Raster~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] Conversion transform
+        - [ ] converts from one image file format to another; does nothing else
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Crop transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Scale transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Desaturate transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Posterize transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Knockout transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Brightness transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Contrast transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Gamma transform
+        - [ ] with tests
+        - [ ] with documentation
+    - [ ] ~Intertwingler::Transform::Markdown~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] Markdown /hook/ transform
+        - [ ] with tests
+        - [ ] with documentation
+        - [ ] add ~text/markdown~ to ~Accept~
+        - [ ] hook the actual transform
+      - [ ] Markdown → (X)HTML transform
+        - [ ] with tests
+        - [ ] with documentation
+    - [ ] ~Intertwingler::Transform::Sass~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] Sass /hook/ transform
+        - [ ] with tests
+        - [ ] with documentation
+        - [ ] add ~text/x-vnd.sass~ and ~text/x-vnd.sass.scss~ to ~Accept~
+      - [ ] Sass transform
+        - [ ] with tests
+        - [ ] with documentation
+        - [ ] Sass internal loader can fetch other Sass via subrequest
+    - [ ] ~Intertwingler::Transform::Tidy~
+      - [ ] with tests
+      - [ ] with documentation
+    - [ ] ~Intertwingler::Transform::RDF~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] XXX what about RDF-star?
+      - [ ] Triples
+        - [ ] N-Triples target
+        - [ ] Turtle target
+        - [ ] RDF/XML target
+      - [ ] Quads
+        - [ ] NQuads target
+        - [ ] TriG target
+        - [ ] JSON-LD target
+          - [ ] XXX do we try to do contexts???
+          - [ ] expand/contract/framing??
+    - [ ] ~Intertwingler::Transform::Input~
+      - [ ] with tests
+      - [ ] with documentation
+      - [ ] Pseudo-file ~PUT~ transform
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] [[https://doriantaylor.com/rdf-kv][RDF-KV]] transform
+        - [ ] with tests
+        - [ ] with documentation
+** TODO Legacy static site generator ~Intertwingler::Static~
+   - [ ] ~GET~ every URL in the manifest, save it out to the file system
+     - [ ] depends on figuring out manifests
+   - [ ] write out rewrite maps
+   - [ ] include documentation for configuring Apache
+     - [ ] nginx, IIS too?? (can they even do conneg?)
+** TODO "Offline" components
+*** TODO Stand-alone document class ~Intertwingler::Document~
+    - [ ] general cleanup
+    - [ ] tests
+    - [ ] documentation
+*** TODO Crawler ~Intertwingler::Crawler~
+    - [ ] rename ~URLRunner~ to ~Crawler~
+    - [ ] general cleanup
+    - [ ] tests
+    - [ ] documentation
+*** TODO Document stats ~Intertwingler::DocStats~
+    - [ ] general cleanup
+    - [ ] tests
+    - [ ] documentation
+*** TODO Text mining for terminology ~Intertwingler::NLP~
+    - [ ] actually finish this
+    - [ ] tests
+    - [ ] documentation
+** TODO Command line and shell ~Intertwingler::CLI~
+*** TODO Batch commands
+    - [ ] spawn engine
+      - [ ] HTTP
+      - [ ] FastCGI
+        - [ ] option to use UNIX socket
+    - [ ] load RDF graph
+      - [ ] dump RDF graph
+    - [ ] load file(s) into content-addressable store
+    - [ ] crawl external links
+    - [ ] batch-run document stats
+    - [ ] batch-run NLP scan
+      - [ ] disgorge data to JSON(-LD?)/CSV
+*** TODO Interactive shell
+    - [ ] all batch commands also available in shell
+    - [ ] tab completion
+    - [ ] RDF data entry (Turtle with tab completion)
+    - [ ] run SPARQL queries (also with tab completion)
+      - [ ] output to CSV or RDF
+** TODO Clean out all the cruft from ~RDF::SAK~
+   - [ ] Eliminate ~Intertwingler::Context~ and ~Intertwingler::Context::Document~
+   - [ ] Eliminate ~Intertwingler::Source~ and ~Intertwingler::Surface~
+   - [ ] Eliminate old junk from ~Intertwingler::Transform~
+   - [ ] Eliminate ~Intertwingler::Util::Messy~
+   - [ ] Eliminate ~Intertwingler::Console~
+* TODO Packaging/installation
+  - [ ] Installation guide
+  - [ ] Sample configurations
+  - [ ] Docker image
+** TODO get patches to third-party modules merged
+   - [ ] MimeMagic
+   - [ ] Rack
+* TODO [[https://vocab.methodandstructure.com/loupe#][Loupe]] processor
   - [ ] predicate order
   - [ ] predicate show/hide
     - note "hide" can mean invisible but present vs completely omitted from the representation
@@ -82,17 +301,6 @@
   - [ ] element selection
     - [ ] block (section, div, paragraph, figure, etc)
     - [ ] list (ol, ul, dl)
-      - note rdf:List treatment as well
-  - [ ] serialize to (x)html+rdfa
-  - [ ] serialize to json-ld (?)
-* TODO server
-  - [ ] yeeeeahhh gonna need to think about that
-  - [ ] path parameter -> transformation function resolver
-    - [ ] actually applying the transformations
-    - [ ] caching/memoizing the results
-      - [ ] some kind of cache clearance and/or denial-of-resource protection
-        - only authorized clients get to mint the initial transform?
-* TODO command line
-  - [ ] depends on command completion, still unresolved
-* TODO scraper
-  - [ ] i dunno mainly cleanup and reporting i think?
+      - note ~rdf:List~ treatment as well
+  - [ ] serialize to (X)HTML+RDFa
+  - [ ] serialize to JSON-LD (?)

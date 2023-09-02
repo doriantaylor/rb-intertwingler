@@ -1,8 +1,19 @@
 require 'intertwingler/version' # for the symbol
 
+require 'forwardable'
 require 'mimemagic'
 require 'tempfile'
 
+# This class is a cheap knockoff of a
+# {https://en.wikipedia.org/wiki/Monad_(functional_programming) monad}
+# for handling successive transformations to a given resource
+# representation within the same process. The goal is to mitigate the
+# amount of times a (potentially large) object gets serialized and
+# reparsed. It works by wrapping a Rack body (either request or
+# response, it works on both), and associating it with a parser
+# (via parser-specific subclasses).
+#
+# 
 # This is a base class for what are called "representations" in [the
 # Fielding dissertation](https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm).
 #
@@ -13,6 +24,8 @@ require 'tempfile'
 # If applicable, a representation also may have a [character
 # set](https://www.iana.org/assignments/character-sets/) and a
 # content-encoding (i.e. compression).
+#
+# 
 #
 # Of additional interest to us is the fact that a resource's
 # representation has to *come* from somewhere: say a file system or
@@ -76,6 +89,8 @@ class Intertwingler::Representation
 
   # subclasses should set this
   OBJECT_CLASS = nil
+  DEFAULT_TYPE = 'application/octet-stream'.freeze
+  VALID_TYPES  = [].freeze
 
   # make a temp file with presets
   def tempfile
@@ -117,9 +132,6 @@ class Intertwingler::Representation
     charset.to_s.downcase.strip
   end
 
-  DEFAULT_TYPE = 'application/octet-stream'.freeze
-  VALID_TYPES  = [].freeze
-
   public
 
   def self.object_class
@@ -150,6 +162,7 @@ class Intertwingler::Representation
 
   def self.coerce io, type: nil, language: nil, charset: nil, **options
     if io.is_a? self
+      # this might be dumb?
       io.type     = type     if type
       io.language = language if language
       io.charset  = charset  if charset

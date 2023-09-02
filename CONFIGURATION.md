@@ -15,14 +15,15 @@ anyway it's gonna be an empty thing so not really very interesting to most peopl
 i already said [in the video](https://youtu.be/d5-lcvKfBM4) what the first things are:
 
 * [my website](https://doriantaylor.com/)
+* my client extranets
 * [the nature of software](https://the.natureof/software/)
-* [the ibis tool](https://ibis.makethingsmakesense.com/)
+* [remaking the ibis tool](https://ibis.makethingsmakesense.com/)
 
 ## my website
 
 this thing has a bunch of cruft on the file system which will stay there for the time being
 
-excited to finally replace the fake scaled images that have been there for like 15 years with real ones
+excited to finally replace the fake scaled images (rewrite rules) that have been there for like 15 years with real ones
 
 also excited to do a content inventory for once, basically bootstrap some content inventory ui
 
@@ -64,7 +65,7 @@ definitely need a data entry interface for people/orgs too
 
 # anyway so if you were gonna use this to absorb a website
 
-say static site, like jekyll; wordpress or whatever i have no idea
+say static site, like [jekyll](https://jekyllrb.com/); if it's wordpress or whatever i have no idea
 
 i mean you could probably just load all the files into content-addressable storage, that'd be a good start
 
@@ -80,7 +81,7 @@ i mean you could probably just load all the files into content-addressable stora
 >
 > thing about `Store::Digest` (and really any other content-addressable store) is it knows what it has in it, but it doesn't know _why_; that's what the index layer is for
 >
-> so if you have two things in the store, a big object and a small object, and can say definitively that the small object is the same as the big object with a particular invertible function applied to it (`gzip(a) = gunzip(b)`), then you can delete the big object and just compute it when you need to
+> so if you have two things in the store, a big object and a small object, and can say definitively that the small object is the same as the big object with a particular invertible function applied to it (`b = gzip(a) <=> a = gunzip(b)`), then you can delete the big object and just recompute it when you need to
 >
 > now that gets trickier when a _third_ object is used as input: `diff(a, b) = c <=> patch(b, c) = a` because you will have to make goddamn certain you _never_ throw that part out
 >
