@@ -7,7 +7,7 @@
         - [ ] that resolves 410s (gone)
         - [ ] that resolves 300s (multiple choices)
       - [ ] that does content negotiation where applicable
-      - [ ] that generates (x)html with all the trimmings
+      - [ ] that generates (X)HTML with all the trimmings
       - [ ] that applies transformation functions to whatever is thrown at it (modulo mime type compatibility)
     - [ ] spawn a scraper/crawler
       - [ ] that traces redirects
@@ -16,7 +16,7 @@
       - [ ] that stores content in the content-addressable store
       - [ ] that returns an rdf graph of the metadata
     - [ ] spawn a shell
-      - [ ] that can view and edit the rdf graph
+      - [ ] that can view and edit THE rdf graph
         - [ ] with term completion
         - [ ] with shortcuts for certain vocabs
         - [ ] with commands for common bulk rdf operations
@@ -255,7 +255,7 @@
       - [ ] FastCGI
         - [ ] option to use UNIX socket
     - [ ] load RDF graph
-      - [ ] dump RDF graph
+      - [ ] dump RDF graph to syntax of choice
     - [ ] load file(s) into content-addressable store
     - [ ] crawl external links
     - [ ] batch-run document stats
@@ -271,13 +271,15 @@
    - [ ] Eliminate ~Intertwingler::Context~ and ~Intertwingler::Context::Document~
    - [ ] Eliminate ~Intertwingler::Source~ and ~Intertwingler::Surface~
    - [ ] Eliminate old junk from ~Intertwingler::Transform~
-   - [ ] Eliminate ~Intertwingler::Util::Messy~
    - [ ] Eliminate ~Intertwingler::Console~
+   - [ ] Eliminate ~Intertwingler::Util::Messy~
+     - [ ] Merge ~Intertwingler::Util::Clean~ into ~Intertwingler::Util~ and eliminate all explicit references to it
 * TODO Packaging/installation
   - [ ] Installation guide
   - [ ] Sample configurations
+    - [ ] Download and install materials
   - [ ] Docker image
-** TODO get patches to third-party modules merged
+** TODO get patches to third-party modules merged and released
    - [ ] MimeMagic
    - [ ] Rack
 * TODO [[https://vocab.methodandstructure.com/loupe#][Loupe]] processor

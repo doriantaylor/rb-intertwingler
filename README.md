@@ -29,7 +29,7 @@ way:
 
 * It stores _links_ (i.e., referent-reference pairs✱) as first-class objects,
 * It assigns every resource a [canonical
-  identifier](#canonical-identifiers] that doesn't budge,
+  identifier](#canonical-identifiers) that doesn't budge,
 * It _overlays_ human-friendly address components (slugs) on top,
 * It _remembers_ prior values for these address components if you change them,
 * It uses a custom _resolver_ to do everything in its power to match a
