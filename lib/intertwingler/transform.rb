@@ -51,7 +51,7 @@ class Intertwingler::Transform < Intertwingler::Handler
     resolver = resolver_for(req) or return resp
 
     uri  = URI(resolver.preproc req.url) # annoying that isn't already a URI
-    uuid = resolver.split_pp(uri).first.split(?/)[1].downcase
+    uuid = resolver.split_pp(uri).first.path.split(?/)[1].downcase
 
     # match the function
     func, accept, variants = uri_map uuid
@@ -108,23 +108,35 @@ class Intertwingler::Transform < Intertwingler::Handler
     # 406 unless types match up
     rtype = HTTP::Negotiate.negotiate headers, variants
 
+    # XXX this would be helpful if it would say what variants it *does* have
     return Rack::Response[406, {}, []] unless rtype
+
+    # duplicate the request
+    req = Rack::Request.new req.env.dup
+
+    # set the accept header to the only one
+    req.set_header 'HTTP_ACCEPT', "#{rtype.to_s}, */*;q=0"
 
     # okay now we actually run the thing
     begin
       # it is so dumb you can't just set the body
-      req.env['rack.input'] = representation.coerce req.body, type: rtype.to_s
-      # run the transform, get back
+      req.env['rack.input'] = representation.coerce req.body, type: type.to_s
+
+      # run the transform, get back the body
       out = send func, req, params
 
       # note `out` can be nil which should be interpreted as 304
       return Rack::Response[304, {}, []] unless out
+
+      # this should be it
+      return Rack::Response[200, { 'content-type' => out.type.to_s }, out]
 
     rescue Intertwingler::Transform::ParamError
       return Rack::Response[409, {}, []]
     rescue Intertwingler::Handler::Redirect => r
       # umm i dunno
       # r.location
+      warn r
     end
   end
 

@@ -18,56 +18,55 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
     "image/#{t}".freeze
   end.freeze
 
-  public
+  def parse io
+    if io.respond_to? :fileno and io.fileno
+      # seek and ye shall find
+      io.seek 0 if io.respond_to? :seek
 
-  def each &block
-    io.each(&block)
-  end
-
-  def io
-    # just return the input unless something has been done to it
-    return @io unless @object
-
-    # screw it we'll blit to memory and do stringio for now
-    # target = ::Vips::TargetCustom.new
-    # string = ''.b # binary string lol
-    # target.on_write { |bytes| string << bytes }
-    target = ::Vips::Target.new_to_memory
-
-    @object.write_to_target target, ".#{type.extensions.first}"
-    # this is weird like what about race conditions or something
-    string = target.get 'blob'
-
-    StringIO.new string
-  end
-
-  def object
-    # if it isn't already parsed, we parse it
-    unless @object
-      if @io.respond_to? :fileno and @io.fileno
-        # if there's a file descriptor just use it, don't screw around
-        src = ::Vips::Source.new_from_descriptor @io.fileno
-      else
-        # this is weird
-        src = ::Vips::SourceCustom.new
-        src.on_read do |len|
-          warn "reading #{len} bytes"
-          @io.read len
-        end
-
-        src.on_seek do |offset, whence|
-          warn "seeking #{offset} #{whence}"
-          @io.seek offset, whence
-        end
+      # if there's a file descriptor just use it, don't screw around
+      src = ::Vips::Source.new_from_descriptor io.fileno
+    else
+      # this is weird
+      src = ::Vips::SourceCustom.new
+      src.on_read do |len|
+        warn "reading #{len} bytes"
+        io.read len
       end
 
-      # XXX i imagine this can crash
-
-      # whatever
-      @object = ::Vips::Image.new_from_source src, ''
+      src.on_seek do |offset, whence|
+        warn "seeking #{offset} #{whence}"
+        io.seek offset, whence
+      end
     end
 
-    # now return it
-    @object
+    ::Vips::Image.new_from_source src, ''
   end
+
+  def serialize obj, target
+    if target.respond_to? :fileno and target.fileno
+      tgt = ::Vips::Target.new_to_descriptor target.fileno
+    else
+      tgt = ::Vips::TargetCustom.new
+      tgt.on_write { |bytes| target << bytes }
+      tgt.on_finish do
+        if target.respond_to? :fsync
+          target.fsync
+        elsif target.respond_to? :flush
+          target.flush
+        end
+      end
+    end
+
+    obj.write_to_target tgt, ".#{type.extensions.first}"
+
+    # culta da cargo
+    target.fsync  if target.respond_to? :fsync
+    target.flush  if target.respond_to? :flush
+    target.seek 0 if target.respond_to? :seek
+
+    target
+  end
+
+  public
+
 end

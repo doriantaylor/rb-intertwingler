@@ -83,14 +83,18 @@ require 'tempfile'
 # 1. use 
 #
 class Intertwingler::Representation
-  include Enumerable
+  extend Forwardable
+
+  # just enough io methods
+  def_delegators :io,
+    :each, :read, :gets, :seek, :pos, :tell, :length, :size, :flush, :close
 
   private
 
   # subclasses should set this
   OBJECT_CLASS = nil
   DEFAULT_TYPE = 'application/octet-stream'.freeze
-  VALID_TYPES  = [].freeze
+  VALID_TYPES  = [DEFAULT_TYPE].freeze
 
   # make a temp file with presets
   def tempfile
@@ -118,8 +122,13 @@ class Intertwingler::Representation
   end
 
   def coerce_type type
-    return type if type.is_a? MimeMagic
-    MimeMagic.new type.to_s
+    # this syntax sugar will automatically noop for MimeMagic objects
+    type = MimeMagic[type]
+
+    raise ArgumentError, "#{type} is not a valid type" unless
+      valid_types.any? { |t| type.descendant_of? t }
+
+    type
   end
 
   def coerce_rfc5646 language
@@ -130,6 +139,16 @@ class Intertwingler::Representation
   def coerce_charset charset
     # i dunno right yet
     charset.to_s.downcase.strip
+  end
+
+  def parse io
+    raise NotImplementedError,
+      'subclasses must implement private method `parse`'
+  end
+
+  def serialize obj, target
+    raise NotImplementedError,
+      'subclasses must implement private method `serialize`'
   end
 
   public
@@ -146,15 +165,32 @@ class Intertwingler::Representation
     const_get(:VALID_TYPES).map { |t| MimeMagic[t] }
   end
 
-  attr_accessor :type, :language, :charset
+  def object_class
+    self.class.object_class
+  end
 
-  def initialize io, type: nil, language: nil, charset: nil, **options
-    cl = self.class # self.class is sloowww
+  def default_type
+    self.class.default_type
+  end
 
-    raise NotImplementedError, 'Subclasses need an OBJECT_CLASS' unless
-      cl.object_class
+  def valid_types
+    self.class.valid_types
+  end
 
-    @io       = coerce_io_like io
+  attr_reader :type
+  attr_accessor :language, :charset
+
+  def initialize obj, type: nil, language: nil, charset: nil, **options
+    oc = object_class # call this once cause self.class is slow
+
+    raise NotImplementedError, 'Subclasses need an OBJECT_CLASS' unless oc
+
+    if obj.is_a? oc
+      @object = obj
+    else
+      @io = coerce_io_like obj
+    end
+
     @type     = coerce_type(type || cl.default_type)
     @language = coerce_rfc5646 language if language
     @charset  = coerce_charset charset  if charset
@@ -171,21 +207,53 @@ class Intertwingler::Representation
     new io, type: type, language: language, charset: charset, **options
   end
 
-  # def gets &block
-  #   io.gets
-  # end
+  def type= newtype
+    newtype = coerce_type newtype
 
-  def each &block
-    raise NotImplementedError, 'subclasses must implement `each`'
+    # if this is different we're converting so we need to parse the io
+    # if we haven't already
+    if @type != newtype
+      @type = newtype
+
+      if @io
+        @io.seek 0 if @io.respond_to? :seek
+        @object ||= parse @io
+      end
+    end
+
+    @type
   end
 
-  # def read length, buffer = nil
-  # end
+  def io
+    warn "hi lol #{caller}"
 
+    if @object
+      @io = serialize @object, tempfile
+      @io.seek 0 if @io.respond_to? :seek
+      @object = nil
+    end
+
+    @io
+  end
+
+  def io= obj
+    @object = nil
+    @io = coerce_io_like obj
+  end
+
+  def object= obj
+    cls = object_class # do this because self.class is slow
+    raise ArgumentError,
+      "object must be a #{cls}, not #{obj.class}" unless object.is_a? cls
+
+    # wipe out the stale io
+    @io = nil if @io
+    @object = obj
+  end
 
   # Return the in-memory representation of the object.
   def object
-    raise NotImplementedError, 'subclasses must implement `object`'
+    @object ||= parse @io
   end
 
 end

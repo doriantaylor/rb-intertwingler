@@ -3,7 +3,7 @@ require 'intertwingler/transform'
 # the representation
 require 'intertwingler/representation/vips'
 
-class Intertwingler::Transform::Raster < Intertwingler::Handler
+class Intertwingler::Transform::Raster < Intertwingler::Transform
   private
 
   REPRESENTATION = Intertwingler::Representation::Vips
@@ -29,16 +29,57 @@ class Intertwingler::Transform::Raster < Intertwingler::Handler
     '2fe3049b-bc1e-496f-9abc-dafa45746ef5' => [:gamma,      IN, OUT],
   }.freeze
 
+  def accept_header req
+    accept =
+      req.get_header('HTTP_ACCEPT').to_s.split(/\s*,+\s*/).first or return
+
+    MimeMagic[accept]
+  end
+
   # do nothing but convert
   def convert req, params
+
+    body = req.body
+
+    # this will have been set
+
+    accept = accept_header req
+
+    # this fast-tracks to 304
+    return if body.type == accept
+
+    # setting the body type invalidates the io
+    body.type = accept
+
+    body
   end
 
   # crops the image by xywh
   def crop req, params
+    # XXX sanitize params
+    x, y, width, height = params.values_at :x, :y, :width, :height
+
+    body = req.body
+    img  = body.object
+    img  = img.crop x, y, width, height
+
+    body.object = img
+    body
   end
 
   # scales the image down
   def scale req, params
+    # XXX sanitize params
+    # width, height = params.values_at :width, :height
+
+    body = req.body
+    img  = body.object
+
+    img  = img.thumbnail_image params[:width].first.to_i
+    body.type = accept_header req
+
+    body.object = img
+    body
   end
 
   # parameterless desaturate; maybe we roll it into brightness/contrast? iunno
