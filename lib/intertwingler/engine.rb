@@ -5,6 +5,15 @@ require 'rack/mock_request' # for env_for
 # This is the engine. This is the thing that is run.
 class Intertwingler::Engine < Intertwingler::Handler
 
+  class Dispatcher
+    def initialize engine, handlers
+    end
+
+    def dispatch req
+    end
+
+  end
+
   private
 
   # XXX all this is lame af
@@ -39,6 +48,8 @@ class Intertwingler::Engine < Intertwingler::Handler
       args ||= {}
       handler.new self, **args
     end
+
+    # create transform harness from handlers
   end
 
   attr_reader :resolvers
@@ -157,6 +168,12 @@ class Intertwingler::Engine < Intertwingler::Handler
     # split out the path parameters
     uri, *pp = resolver.split_pp uri, parse: true
 
+    # cut a per-request instance of the transform harness
+    # transforms = @transform_harness.dup
+
+    # this would actually be a 404 if it couldn't resolve one of them.
+    # blow up unless transforms.construct_queue(:addressable, pp)
+
     # XXX TODO normalize query parameters (à la Params::Registry)
 
     # resolve URI and mint a new request if necessary
@@ -166,6 +183,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     end
 
     # run all request transforms
+
+    # req = transforms.run_queue :request, req
 
     # transforms can signal that they manipulate the request wholesale
     # by only accepting and returning message/http, meaning that if
@@ -185,7 +204,8 @@ class Intertwingler::Engine < Intertwingler::Handler
 
         break unless [404, 405].include? resp.status
       end
-    rescue Intertwingler::Handler::NotSuccess => e
+
+    rescue Intertwingler::Handler::AnyButSuccess => e
       resp = e.response
     rescue Exception => e
       resp = Rack::Response[500,
@@ -195,6 +215,48 @@ class Intertwingler::Engine < Intertwingler::Handler
     # run all response transforms
 
     # early-run transforms
+
+    # resp = transforms.run_queue :early, resp
+
+    # resp = transforms.run_queue :addressable, resp
+
+    # So here is a situation: I want to make it so direct requests to
+    # the content-addressable store are not transformed (except
+    # optionally by addressable transforms). These are easy enough to
+    # identify via `/.well-known/ni/{algo}/{hash}` URIs (plus I repeat
+    # the `ni:` URI in the etag). One solution would be an early-run
+    # response transform that if successful clears the current queue
+    # *and* the late-run queue. We already know we need to *add*
+    # things to queues; we should also be able to *remove* things from
+    # queues, as well as empty them completely.
+    #
+    # Another solution would be to *construct* queues-of-queues on the
+    # fly (which is already being done with the addressable
+    # transforms), and you start off with a single queue which is
+    # empty except for this one test, and if the test is successful
+    # (or rather, the test is *negative*), *then* it switches tracks
+    # to the ordinary queue of queues. I am less sanguine about this
+    # one; I think what I want is to be able to designate three of the
+    # four queues (request and the early-run/late-run response queues)
+    # by URI and then assign them. The addressable response queue will
+    # always need to be constructed on the fly (indeed piece by piece)
+    # because there will be identifiers in the path parameters
+    # potentially associated with more than one transform (e.g.
+    # analogous operations for different content types). So while it's
+    # a good idea to content-negotiate *all* the transforms, we need
+    # to do the addressable ones in particular, run each one, see what
+    # type it outputs, then see what the response type is before
+    # content-negotiating the next one.
+    #
+    # While the ordinary non-addressable queues can just ignore any
+    # transforms whose input/output specs don't match the payload
+    # and/or requestor's Accept: header, an addressable queue *has* to
+    # attempt to run its entire contents. It also has to maintain the
+    # explicit sequence in which it was enqueued (while the other ones
+    # can get by with a quasi-topological sort). This means that any
+    # non-matching transform in the addressable queue can blow up the
+    # response (either with a 406 or 415 internally which should be
+    # translated into a 409 for public consumption).
 
     # addressable transforms
     pp.each do |x|

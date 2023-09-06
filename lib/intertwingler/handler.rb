@@ -24,14 +24,14 @@ class Intertwingler::Handler
   # hatch for responses that are something _other_ than 200-series,
   # i.e. they are not-successful (albeit not strictly _unsuccessful_)
   # responses.
-  class NotSuccess < Exception
+  class AnyButSuccess < Exception
     def initialize message, status: nil
       @status = status
 
       super message
     end
 
-    attr_reader :status
+    attr_reader  :status
     alias_method :code, :status
 
     def response
@@ -40,7 +40,7 @@ class Intertwingler::Handler
   end
 
   # Redirects are an example of not-successful-yet-not-unsuccessful responses.
-  class Redirect < NotSuccess
+  class Redirect < AnyButSuccess
     # Make a new redirect "exception"
     #
     # @param message [#to_s] the error message
@@ -63,10 +63,16 @@ class Intertwingler::Handler
     end
   end
 
-  class Error < NotSuccess
+  class Error < AnyButSuccess
     class Client < self
+      def initialize message, status: nil
+        super message, status || 403
+      end
     end
     class Server < self
+      def initialize message, status: nil
+        super message, status || 500
+      end
     end
   end
 

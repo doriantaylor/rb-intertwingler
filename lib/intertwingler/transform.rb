@@ -13,6 +13,48 @@ require 'http/negotiate'
 class Intertwingler::Transform < Intertwingler::Handler
 
   class ParamError < ::ArgumentError
+    # XXX TODO something coherent about which parameters were wrong
+    # (and irreparable by the transform) and a hint at what would fix
+    # them, preferably something machine-actionable so any prose can
+    # be localized (in addition to machine-actionable being generally
+    # good).
+  end
+
+  # This class represents an ordered collection of transforms. "Queue"
+  # is a slight misnomer as it's more like a _bag_ of transforms that
+  # will be sorted topologically when given a request, if not given an
+  # explicit sequence upon initialization. An explicit sequence
+  # supersedes the topological sort; unordered transforms will be
+  # ignored when it is present. An ordinary transform queue will
+  # attempt to run everything in its (potentially
+  # dynamically-determined) sequence, ignoring those transforms that
+  # do not match the intersection of least one available return type,
+  # and the content of the client's `Accept` header.
+  #
+
+  # I call the unordered incarnation of a
+  # transform queue a _bag_ rather than a _set_ because some
+  # transforms may not match the payload or the request's `Accept:`
+  # header and will thus not be run. Conversely, two or more
+  # transforms can be *punned* into the same (human-readable)
+  # identifier, implying they do analogous things for different
+  # content-types.
+
+  class Queue
+
+    # A strict queue differs from its ancestor insofar as all
+    # transforms in the queue *must* be run. This means a strict queue
+    # is liable to generate an error if *any* of its constituent
+    # transforms don't match the payload, *including* (and
+    # *especially*) transforms that are intended to process the result
+    # of a previous one. In general it only makes sense for a strict
+    # queue to be addressable, even though it is possible 
+    class Strict < self
+    end
+  end
+
+  # The harness contains transforms and queues thereof.
+  class Harness
   end
 
   private
@@ -62,7 +104,7 @@ class Intertwingler::Transform < Intertwingler::Handler
     # XXX this next bit is where we would have the thing like Params::Registry
 
     # harvest params from uri
-    params = URI.decode_www_form(uri.query).reduce({}) do |hash, pair|
+    params = URI.decode_www_form(uri.query.to_s).reduce({}) do |hash, pair|
       k, v = pair
       # XXX UNKNOWN KEYS SHOULD BE IGNORED
       k = k.strip.downcase.tr_s(?-, ?_).to_sym
@@ -137,6 +179,10 @@ class Intertwingler::Transform < Intertwingler::Handler
       # umm i dunno
       # r.location
       warn r
+    rescue Intertwingler::Handler::Error => r
+      # umm i dunno
+      # r.location
+      return r.response
     end
   end
 

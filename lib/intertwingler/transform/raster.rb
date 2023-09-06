@@ -45,10 +45,10 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform
 
     accept = accept_header req
 
-    # this fast-tracks to 304
+    # this fast-tracks to 304 upstream
     return if body.type == accept
 
-    # setting the body type invalidates the io
+    # setting the body type (if different) invalidates the io
     body.type = accept
 
     body
@@ -57,12 +57,15 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform
   # crops the image by xywh
   def crop req, params
     # XXX sanitize params
-    x, y, width, height = params.values_at :x, :y, :width, :height
+    x, y, width, height = params.values_at(:x, :y, :width, :height).map do |x|
+      x.first.to_i
+    end
 
     body = req.body
     img  = body.object
     img  = img.crop x, y, width, height
 
+    body.type   = accept_header req
     body.object = img
     body
   end
@@ -74,37 +77,62 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform
 
     body = req.body
     img  = body.object
-
     img  = img.thumbnail_image params[:width].first.to_i
-    body.type = accept_header req
 
+    body.type   = accept_header req
     body.object = img
     body
   end
 
   # parameterless desaturate; maybe we roll it into brightness/contrast? iunno
   def desaturate req, params
+
+    body = req.body
+    img  = body.object
+    img  = img.colourspace :b_w
+
+    body.type   = accept_header req
+    body.object = img
+    body
   end
 
   # flatten colours out
   def posterize req, params
+    # okay so apparently posterize involves chonking out the colours;
+    # the parameter is the number of steps
+
+    body.type   = accept_header req
+    body.object = img
+    body
   end
 
   # knock out a colour ± radius around it
   def knockout req, params
+    # this one is gonna be tough and require some thought
+    raise Intertwingler::Handler::Error::Server.new(
+      'Transform `knockout` not implemented', status: 501)
   end
 
   # adjust brightness
   def brightness req, params
+    raise Intertwingler::Handler::Error::Server.new(
+      'Transform `brightness` not implemented', status: 501)
   end
 
   # adjust contrast
   def contrast req, params
+    raise Intertwingler::Handler::Error::Server.new(
+      'Transform `contrast` not implemented', status: 501)
   end
 
   # adjust gamma
   def gamma req, params
+    raise Intertwingler::Handler::Error::Server.new(
+      'Transform `gamma` not implemented', status: 501)
   end
+
+  # TODO rotate (arbitrary with speedup for 45-degree increments,
+  # alpha channel), flip (h, v), gaussian blur
 
   public
 end
