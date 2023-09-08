@@ -32,7 +32,7 @@ text {
      showgrid="true"
      showguides="true"
      inkscape:zoom="0.84096521"
-     inkscape:cx="540.45042"
+     inkscape:cx="1023.229"
      inkscape:cy="319.27599"
      inkscape:window-width="2256"
      inkscape:window-height="1464"
@@ -671,7 +671,7 @@ text {
              id="tspan738"
              style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
              x="362.44165"
-             y="58.208336">Content Handlers</tspan></text>
+             y="58.208336">Response Handlers</tspan></text>
         <rect
            style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
            id="rect2737"
