@@ -1,0 +1,1126 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1920"
+   height="1080"
+   viewBox="0 0 508 285.75"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   sodipodi:docname="flow-diagram.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#505050"
+     bordercolor="#ffffff"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="1"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="px"
+     showgrid="true"
+     showguides="true"
+     inkscape:zoom="1.6819304"
+     inkscape:cx="1201.5955"
+     inkscape:cy="404.00007"
+     inkscape:window-width="2256"
+     inkscape:window-height="1464"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid1115" />
+  </sodipodi:namedview>
+  <defs
+     id="defs2">
+    <rect
+       x="1738.4596"
+       y="119.63941"
+       width="334.39824"
+       height="749.02435"
+       id="rect1046" />
+    <rect
+       x="310.81815"
+       y="59.777845"
+       width="201.64809"
+       height="85.895767"
+       id="rect1034" />
+    <rect
+       x="877.82419"
+       y="491.90543"
+       width="100.0507"
+       height="110.39801"
+       id="rect798" />
+  </defs>
+  <g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="delete bg"
+     sodipodi:insensitive="true">
+    <rect
+       style="fill:#ffffff;stroke:none;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+       id="rect2579"
+       width="508"
+       height="272.52084"
+       x="0"
+       y="2.6458333" />
+  </g>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <text
+       xml:space="preserve"
+       transform="scale(0.26458333)"
+       id="text796"
+       style="font-size:26.6667px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;white-space:pre;shape-inside:url(#rect798);display:inline" />
+    <text
+       xml:space="preserve"
+       style="font-size:7.05555556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;stroke-width:0.264583"
+       x="94.966896"
+       y="20.697803"
+       id="text1030"><tspan
+         sodipodi:role="line"
+         id="tspan1028"
+         style="stroke-width:0.264583;font-size:7.05555556px"
+         x="94.966896"
+         y="20.697803" /></text>
+    <text
+       xml:space="preserve"
+       transform="scale(0.26458333)"
+       id="text1032"
+       style="font-size:26.6667px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;white-space:pre;shape-inside:url(#rect1034);display:inline" />
+    <text
+       xml:space="preserve"
+       transform="scale(0.26458333)"
+       id="text1044"
+       style="font-size:26.6667px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;white-space:pre;shape-inside:url(#rect1046);display:inline" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0;stroke-opacity:1"
+       d="M 58.208333,19.84375 V 259.29167"
+       id="path1113"
+       sodipodi:nodetypes="cc" />
+    <g
+       id="g3112-2-8"
+       transform="translate(-169.29807,-32.554326)"
+       inkscape:transform-center-x="19.555342"
+       inkscape:transform-center-y="-13.155213">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="365.08975"
+         y="102.40433"
+         id="text812-0-4"><tspan
+           sodipodi:role="line"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="365.08975"
+           y="102.40433"
+           id="tspan3876">Resolver</tspan></text>
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         id="rect2793-6-6-3-1"
+         width="52.916668"
+         height="21.166666"
+         x="338.66669"
+         y="89.958328"
+         ry="1.3229166"
+         rx="1.3229166" />
+    </g>
+    <g
+       id="g3750"
+       transform="translate(5.2916768,2.5611649)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="108.47916"
+         y="92.604164"
+         id="text840"><tspan
+           sodipodi:role="line"
+           id="tspan838"
+           style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="108.47916"
+           y="92.604164">URI Pre-</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="108.47916"
+           y="101.42361"
+           id="tspan1020">processing</tspan></text>
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         id="rect2793-6-6-3-3"
+         width="47.624996"
+         height="21.166662"
+         x="84.666656"
+         y="84.751335"
+         ry="1.3229166"
+         rx="1.3229166" />
+    </g>
+    <g
+       id="g3750-0"
+       transform="translate(169.33335,2.5611649)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="108.47916"
+         y="92.604164"
+         id="text840-7"><tspan
+           sodipodi:role="line"
+           id="tspan838-8"
+           style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="108.47916"
+           y="92.604164">URI Post-</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="108.47916"
+           y="101.42361"
+           id="tspan1020-6">processing</tspan></text>
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         id="rect2793-6-6-3-3-8"
+         width="47.624996"
+         height="21.166662"
+         x="84.666656"
+         y="84.751335"
+         ry="1.3229166"
+         rx="1.3229166" />
+    </g>
+    <g
+       id="g3190"
+       transform="translate(-0.03527524,61.658511)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="460.375"
+         y="101.07082"
+         id="text848"><tspan
+           sodipodi:role="line"
+           id="tspan846"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="460.375"
+           y="101.07082">File System</tspan></text>
+      <g
+         id="g2911"
+         transform="translate(0.03527524,1.8414887)">
+        <path
+           id="rect2899"
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           d="m 436.5625,87.3125 v 15.875 a 23.8125,2.6458333 0 0 0 23.8125,2.64583 23.8125,2.6458333 0 0 0 23.8125,-2.64583 V 87.3125 A 23.8125,2.6458333 0 0 1 460.375,89.958333 23.8125,2.6458333 0 0 1 436.5625,87.3125 Z" />
+        <ellipse
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="path2907"
+           cx="460.375"
+           cy="87.3125"
+           rx="23.8125"
+           ry="2.6458333" />
+      </g>
+    </g>
+    <g
+       id="g3197"
+       transform="translate(1.2699897,3.2596893)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="459.10501"
+         y="131.67781"
+         id="text852"><tspan
+           sodipodi:role="line"
+           id="tspan850"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="459.10501"
+           y="131.67781">Actual CAS</tspan></text>
+      <g
+         id="g2911-7"
+         transform="translate(-1.3370168,31.707672)">
+        <path
+           id="rect2899-0"
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           d="m 436.5625,87.3125 v 15.875 a 23.8125,2.6458333 0 0 0 23.8125,2.64583 23.8125,2.6458333 0 0 0 23.8125,-2.64583 V 87.3125 A 23.8125,2.6458333 0 0 1 460.375,89.958333 23.8125,2.6458333 0 0 1 436.5625,87.3125 Z" />
+        <ellipse
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="path2907-9"
+           cx="460.375"
+           cy="87.3125"
+           rx="23.8125"
+           ry="2.6458333" />
+      </g>
+    </g>
+    <g
+       id="g3204"
+       transform="translate(-5.2916565,-66.145793)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="465.66666"
+         y="164.04163"
+         id="text844"><tspan
+           sodipodi:role="line"
+           id="tspan842"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="465.66666"
+           y="164.04163">Graph DB</tspan></text>
+      <g
+         id="g2911-3"
+         transform="translate(5.274016,64.240829)">
+        <path
+           id="rect2899-6"
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           d="m 436.5625,87.3125 v 15.875 a 23.8125,2.6458333 0 0 0 23.8125,2.64583 23.8125,2.6458333 0 0 0 23.8125,-2.64583 V 87.3125 A 23.8125,2.6458333 0 0 1 460.375,89.958333 23.8125,2.6458333 0 0 1 436.5625,87.3125 Z" />
+        <ellipse
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="path2907-0"
+           cx="460.375"
+           cy="87.3125"
+           rx="23.8125"
+           ry="2.6458333" />
+      </g>
+    </g>
+    <g
+       id="g3948"
+       transform="translate(5.3939762,5.2493282)">
+      <g
+         id="g3888">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="362.44165"
+           y="58.208336"
+           id="text740"><tspan
+             sodipodi:role="line"
+             id="tspan738"
+             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="362.44165"
+             y="58.208336">Content Handlers</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+           id="rect2737"
+           width="68.791664"
+           height="193.14581"
+           x="328.08334"
+           y="47.625"
+           ry="5.2916694"
+           rx="5.2916665" />
+      </g>
+      <g
+         id="g3133"
+         transform="translate(-2.7481276,29.146495)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="365.22729"
+           y="166.64517"
+           id="text820"><tspan
+             sodipodi:role="line"
+             id="tspan818"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="365.22729"
+             y="166.64517">Generated</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2793"
+           width="52.916668"
+           height="21.166666"
+           x="338.66666"
+           y="153.45834"
+           ry="1.3229166"
+           rx="1.3229166" />
+      </g>
+      <g
+         id="g3128"
+         transform="translate(5.086263e-5,33.337507)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="362.55319"
+           y="128.74625"
+           id="text816"><tspan
+             sodipodi:role="line"
+             id="tspan814"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="362.55319"
+             y="128.74625">Content-</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="362.55319"
+             y="137.56569"
+             id="tspan1038">Addressable</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2793-6"
+           width="52.916668"
+           height="21.166666"
+           x="336.02078"
+           y="120.12083"
+           ry="1.3229166"
+           rx="1.3229166" />
+      </g>
+      <g
+         id="g3128-7"
+         transform="translate(5.5948893e-5,-24.870824)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="362.55319"
+           y="128.74625"
+           id="text816-5"><tspan
+             sodipodi:role="line"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="362.55319"
+             y="128.74625"
+             id="tspan1038-2">Pseudo-file</tspan><tspan
+             sodipodi:role="line"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="362.55319"
+             y="137.56569"
+             id="tspan3291">PUT</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2793-6-2"
+           width="52.916668"
+           height="21.166666"
+           x="336.02078"
+           y="120.12083"
+           ry="1.3229166"
+           rx="1.3229166" />
+      </g>
+      <g
+         id="g3112"
+         transform="translate(-2.6458435,34.39584)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="365.08975"
+           y="102.40433"
+           id="text812"><tspan
+             sodipodi:role="line"
+             id="tspan810"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="365.08975"
+             y="102.40433">File System</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2793-6-6"
+           width="52.916668"
+           height="21.166666"
+           x="338.66669"
+           y="89.958328"
+           ry="1.3229166"
+           rx="1.3229166" />
+      </g>
+      <g
+         id="g3112-2"
+         transform="translate(-2.6458537,-23.812494)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="365.08975"
+           y="102.40433"
+           id="text812-0"><tspan
+             sodipodi:role="line"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="365.08975"
+             y="102.40433"
+             id="tspan3243">LD-PATCH</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2793-6-6-3"
+           width="52.916668"
+           height="21.166666"
+           x="338.66669"
+           y="89.958328"
+           ry="1.3229166"
+           rx="1.3229166" />
+      </g>
+      <g
+         id="g3151"
+         transform="translate(2.3847555,36.075054)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="359.83334"
+           y="187.85417"
+           id="text824"><tspan
+             sodipodi:role="line"
+             id="tspan822"
+             style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="359.83334"
+             y="187.85417">Reverse Proxy</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2793-6-1"
+           width="52.916668"
+           height="21.166666"
+           x="333.63608"
+           y="175.59161"
+           ry="1.3229166"
+           rx="1.3229166" />
+      </g>
+    </g>
+    <g
+       id="g3829"
+       transform="translate(13.229161,5.2916718)">
+      <g
+         id="g2835-6"
+         transform="translate(122.29749,91.097806)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="163.58658"
+           y="96.572914"
+           id="text2747-1"><tspan
+             sodipodi:role="line"
+             id="tspan2745-29"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="163.58658"
+             y="96.572914">T1</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-31"
+           width="15.875"
+           height="15.875"
+           x="155.51501"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2845-9"
+         transform="translate(38.406921,91.097806)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="223.77048"
+           y="96.572914"
+           id="text2747-6-4"><tspan
+             sodipodi:role="line"
+             id="tspan2745-2-7"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="223.77048"
+             y="96.572914">Tn</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-1-8"
+           width="15.875"
+           height="15.875"
+           x="215.59308"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g3691"
+         transform="translate(1.0559579)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="272.36786"
+           y="206.375"
+           id="text828"><tspan
+             sodipodi:role="line"
+             id="tspan826"
+             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="272.36786"
+             y="206.375">Early Queue</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+           id="rect3494"
+           width="50.27084"
+           height="42.33334"
+           x="247.38779"
+           y="169.33333"
+           ry="5.2916689" />
+      </g>
+    </g>
+    <g
+       id="g3652"
+       transform="translate(10.583333,5.2916718)">
+      <g
+         id="g2835-8"
+         transform="translate(64.089152,91.097806)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="163.58658"
+           y="96.572914"
+           id="text2747-9"><tspan
+             sodipodi:role="line"
+             id="tspan2745-7"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="163.58658"
+             y="96.572914">T1</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-3"
+           width="15.875"
+           height="15.875"
+           x="155.51501"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2840-0-6"
+         transform="translate(9.2604167,92.604166)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="194.59927"
+           y="95.066551"
+           id="text2747-3-6-9"><tspan
+             sodipodi:role="line"
+             id="tspan2745-5-1-3"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="194.59927"
+             y="95.066551">T2</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-9-5-7"
+           width="15.875"
+           height="15.875"
+           x="186.53125"
+           y="84.666664"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2845-4"
+         transform="translate(-43.349328,91.362386)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="223.77048"
+           y="96.572914"
+           id="text2747-6-5"><tspan
+             sodipodi:role="line"
+             id="tspan2745-2-0"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="223.77048"
+             y="96.572914">Tn</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-1-3"
+           width="15.875"
+           height="15.875"
+           x="215.59308"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g3634"
+         transform="translate(2.7199275)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="201.08333"
+           y="206.375"
+           id="text832"><tspan
+             sodipodi:role="line"
+             id="tspan830"
+             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="201.08333"
+             y="206.375">Addressable Queue</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+           id="rect3494-4"
+           width="74.083336"
+           height="42.33334"
+           x="163.96758"
+           y="169.33333"
+           ry="5.2916689" />
+      </g>
+    </g>
+    <g
+       id="g3815"
+       transform="translate(10.583333,5.291667)">
+      <g
+         id="g2835"
+         transform="translate(-2.3212648,19.92489)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="163.58658"
+           y="96.572914"
+           id="text2747"><tspan
+             sodipodi:role="line"
+             id="tspan2745"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="163.58658"
+             y="96.572914">T1</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795"
+           width="15.875"
+           height="15.875"
+           x="155.51501"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2840"
+         transform="translate(-9.3909402,21.350115)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="194.59927"
+           y="95.066551"
+           id="text2747-3"><tspan
+             sodipodi:role="line"
+             id="tspan2745-5"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="194.59927"
+             y="95.066551">T2</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-9"
+           width="15.875"
+           height="15.875"
+           x="186.53125"
+           y="84.666664"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2845"
+         transform="translate(-14.509745,19.660306)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="223.77048"
+           y="96.572914"
+           id="text2747-6"><tspan
+             sodipodi:role="line"
+             id="tspan2745-2"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="223.77048"
+             y="96.572914">Tn</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-1"
+           width="15.875"
+           height="15.875"
+           x="215.59308"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g3797">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="185.20834"
+           y="96.308334"
+           id="text744"><tspan
+             sodipodi:role="line"
+             id="tspan742"
+             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="185.20834"
+             y="96.308334">Request Transforms</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+           id="rect3494-4-2"
+           width="74.083336"
+           height="42.33334"
+           x="148.16667"
+           y="87.3125"
+           ry="5.2916689" />
+      </g>
+    </g>
+    <g
+       id="g3629"
+       transform="translate(7.9375041,5.2916718)">
+      <g
+         id="g2835-61"
+         transform="translate(-17.931681,91.097806)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="163.58658"
+           y="96.572914"
+           id="text2747-0"><tspan
+             sodipodi:role="line"
+             id="tspan2745-6"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="163.58658"
+             y="96.572914">T1</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-32"
+           width="15.875"
+           height="15.875"
+           x="155.51501"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2840-0"
+         transform="translate(-72.760417,92.604166)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="194.59927"
+           y="95.066551"
+           id="text2747-3-6"><tspan
+             sodipodi:role="line"
+             id="tspan2745-5-1"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="194.59927"
+             y="95.066551">T2</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-9-5"
+           width="15.875"
+           height="15.875"
+           x="186.53125"
+           y="84.666664"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g2845-5"
+         transform="translate(-125.63475,91.097806)">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="223.77048"
+           y="96.572914"
+           id="text2747-6-47"><tspan
+             sodipodi:role="line"
+             id="tspan2745-2-6"
+             style="text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="223.77048"
+             y="96.572914">Tn</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+           id="rect2795-1-5"
+           width="15.875"
+           height="15.875"
+           x="215.59308"
+           y="86.173027"
+           rx="1.3229166"
+           ry="1.3229166" />
+      </g>
+      <g
+         id="g3611">
+        <text
+           xml:space="preserve"
+           style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="121.59192"
+           y="206.375"
+           id="text836"><tspan
+             sodipodi:role="line"
+             id="tspan834"
+             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             x="121.59192"
+             y="206.375">Main Queue</tspan></text>
+        <rect
+           style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+           id="rect3494-4-5"
+           width="74.083336"
+           height="42.33334"
+           x="84.666664"
+           y="169.33333"
+           ry="5.2916689" />
+      </g>
+    </g>
+    <g
+       id="g3883"
+       transform="translate(-2.6458333,37.04167)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="31.951086"
+         y="129.56117"
+         id="text860"><tspan
+           sodipodi:role="line"
+           id="tspan858"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="31.951086"
+           y="129.56117">The User™</tspan></text>
+      <path
+         id="path3831"
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         d="M 31.75,74.083333 A 13.229166,13.229166 0 0 0 18.520833,87.3125 13.229166,13.229166 0 0 0 24.373706,98.290641 15.875,26.458332 0 0 0 15.875,121.70833 h 31.75 A 15.875,26.458332 0 0 0 39.126294,98.290641 13.229166,13.229166 0 0 0 44.979167,87.3125 13.229166,13.229166 0 0 0 31.75,74.083333 Z" />
+    </g>
+    <g
+       id="g1861"
+       transform="translate(5.355152,-3.0356496)">
+      <text
+         xml:space="preserve"
+         style="font-size:10.5833px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="235.47917"
+         y="44.979168"
+         id="text744-7"><tspan
+           sodipodi:role="line"
+           id="tspan742-5"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:10.5833px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="235.47917"
+           y="44.979168">Intertwingler Engine</tspan></text>
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         id="rect4056"
+         width="338.66666"
+         height="222.25"
+         x="66.346931"
+         y="32.014584"
+         rx="5.2916665"
+         ry="5.2916689" />
+    </g>
+    <g
+       id="g1511"
+       transform="translate(-51.59375,5.2916718)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="253.83066"
+         y="222.25"
+         id="text804"><tspan
+           sodipodi:role="line"
+           id="tspan802"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="253.83066"
+           y="222.25">Response Transforms</tspan></text>
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:3.175, 3.175;stroke-dashoffset:0"
+         id="rect4056-3"
+         width="230.18752"
+         height="66.145836"
+         x="138.90625"
+         y="161.39583"
+         rx="5.2916665"
+         ry="5.2916689" />
+    </g>
+    <g
+       id="g1796">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="461.69791"
+         y="232.8333"
+         id="text856"><tspan
+           sodipodi:role="line"
+           id="tspan854"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="461.69791"
+           y="232.8333">The Network</tspan></text>
+      <path
+         id="path1767"
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         d="m 465.59258,210.38609 a 15.213541,17.197916 0 0 0 -13.65136,9.61595 15.875,9.921875 0 0 0 -4.20801,-0.35553 15.875,9.921875 0 0 0 -15.875,9.92187 15.875,9.921875 0 0 0 13.26585,9.78132 8.598958,5.953125 0 0 0 8.56227,5.43222 8.598958,5.953125 0 0 0 5.7087,-1.5043 15.213541,17.197916 0 0 0 6.19755,1.5043 15.213541,17.197916 0 0 0 8.89713,-3.2613 9.921875,11.244792 0 0 0 6.97787,3.2613 9.921875,11.244792 0 0 0 9.92188,-11.24479 9.921875,11.244792 0 0 0 -9.92188,-11.24479 9.921875,11.244792 0 0 0 -1.36891,0.11162 15.213541,17.197916 0 0 0 -14.50609,-12.01787 z" />
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:5.64444px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="54.138664"
+       y="245.00417"
+       id="text3043"><tspan
+         sodipodi:role="line"
+         id="tspan3041"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="54.138664"
+         y="245.00417">Organizational</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="54.138664"
+         y="252.14803"
+         id="tspan3045">Boundary</tspan></text>
+    <g
+       id="g4208"
+       transform="translate(-2.6458333)">
+      <text
+         xml:space="preserve"
+         style="font-size:7.05556px;line-height:1.25;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:center;text-anchor:middle;stroke-width:0.264583"
+         x="460.375"
+         y="187.7695"
+         id="text840-7-5"><tspan
+           sodipodi:role="line"
+           style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="460.375"
+           y="187.7695"
+           id="tspan1020-6-5">Type-Specific</tspan><tspan
+           sodipodi:role="line"
+           style="font-size:7.05556px;text-align:center;text-anchor:middle;stroke-width:0.264583"
+           x="460.375"
+           y="196.58894"
+           id="tspan4001">Generators</tspan></text>
+      <rect
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         id="rect2793-6-6-3-3-8-6"
+         width="47.624996"
+         height="21.166662"
+         x="436.5625"
+         y="179.91667"
+         ry="1.3229166"
+         rx="1.3229166" />
+      <path
+         id="rect2793-6-6-3-3-8-6-0"
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         d="m 484.1875,182.5625 v 17.19792 c 0,0.73289 -0.59002,1.32291 -1.32292,1.32291 h -43.65625 v 1.32292 c 0,0.7329 0.59002,1.32292 1.32292,1.32292 h 44.97917 c 0.73289,0 1.32291,-0.59002 1.32291,-1.32292 v -18.52083 c 0,-0.7329 -0.59002,-1.32292 -1.32291,-1.32292 z" />
+      <path
+         id="rect2793-6-6-3-3-8-6-6"
+         style="fill:none;stroke:#000000;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         d="m 486.83333,185.20833 v 17.19792 c 0,0.7329 -0.59002,1.32292 -1.32291,1.32292 h -43.65625 v 1.32291 c 0,0.7329 0.59002,1.32292 1.32291,1.32292 h 44.97917 c 0.7329,0 1.32292,-0.59002 1.32292,-1.32292 v -18.52083 c 0,-0.7329 -0.59002,-1.32292 -1.32292,-1.32292 z" />
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:5.64444px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="255.32291"
+       y="142.875"
+       id="text4212"><tspan
+         sodipodi:role="line"
+         id="tspan4210"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;stroke-width:0.264583"
+         x="255.32291"
+         y="142.875">Manipulates</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;stroke-width:0.264583"
+         x="255.32291"
+         y="150.01886"
+         id="tspan4214">Queue</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:5.64444px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="120.38541"
+       y="134.9375"
+       id="text4212-7"><tspan
+         sodipodi:role="line"
+         id="tspan4210-9"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;stroke-width:0.264583"
+         x="120.38541"
+         y="134.9375">Manipulates</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;stroke-width:0.264583"
+         x="120.38541"
+         y="142.08136"
+         id="tspan4214-2">Queue</tspan></text>
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer3"
+     inkscape:label="dumb lines"
+     style="display:inline">
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 129.64583,111.125 c 55.5625,58.20833 55.5625,58.20833 55.5625,58.20833"
+       id="path4004" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32292;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="M 47.625,124.35417 87.312499,103.1875"
+       id="path4006"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="M 134.9375,87.312499 C 171.97916,68.791666 169.33333,68.791666 169.33333,68.791666"
+       id="path4008" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="M 137.58333,103.1875 C 158.75,113.77083 158.75,113.77083 158.75,113.77083"
+       id="path4010" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 182.5625,119.0625 c 5.29166,0 7.9375,0 7.9375,0"
+       id="path4012" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 201.08333,119.0625 c 13.22917,0 13.22917,0 13.22917,0"
+       id="path4014" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="M 230.1875,119.0625 C 254,100.54167 254,100.54167 254,100.54167"
+       id="path4016" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 301.625,97.895832 c 34.39583,-15.875 34.39583,-15.875 34.39583,-15.875"
+       id="path4018" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 365.125,92.604166 c 0,10.583334 2.64583,10.583334 2.64583,10.583334"
+       id="path4022" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 365.125,116.41667 c 2.64583,13.22916 2.64583,13.22916 2.64583,13.22916"
+       id="path4024" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="M 359.83333,145.52083 C 362.47916,158.75 362.47916,158.75 362.47916,158.75"
+       id="path4026" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 362.47916,174.625 c 0,7.9375 -2.64583,15.875 -2.64583,15.875"
+       id="path4028" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 365.125,203.72916 c -2.64584,5.29167 2.64583,13.22917 2.64583,13.22917"
+       id="path4030" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="M 343.95833,227.54166 C 296.33333,190.5 296.33333,190.5 296.33333,190.5"
+       id="path4032" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32292;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="M 296.33333,190.5 277.8125,187.85416 87.312499,182.5625 46.302083,141.55208"
+       id="path4034"
+       sodipodi:nodetypes="cccc" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 222.25,63.499999 c 87.3125,-29.104166 179.91666,-15.875 179.91666,-15.875 l 44.97917,34.395833"
+       id="path4036" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 391.58333,87.312499 c 50.27083,7.9375 52.91666,7.9375 52.91666,7.9375"
+       id="path4038" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 391.58333,111.125 c 44.97916,-15.875001 44.97916,-15.875001 0,0 z"
+       id="path4040" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 388.9375,111.125 c 50.27083,-13.229168 50.27083,-10.58333 50.27083,-10.58333"
+       id="path4042" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 386.29166,113.77083 c 55.5625,23.8125 55.5625,23.8125 55.5625,23.8125"
+       id="path4044" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 386.29166,142.875 c 52.91667,18.52083 55.5625,18.52083 55.5625,18.52083"
+       id="path4046" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 391.58333,171.97916 c 39.6875,-37.04166 39.6875,-37.04166 39.6875,-37.04166"
+       id="path4048" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.26458333;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374996,0.79374996;stroke-dashoffset:0"
+       d="M 388.9375,201.08333 C 441.85416,97.895832 444.49999,103.1875 444.49999,103.1875"
+       id="path4050" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="m 383.64583,222.25 c 58.20833,0 58.20833,0 58.20833,0"
+       id="path4052" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1.32291667;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:none"
+       d="M 452.43749,235.47916 C 386.29166,230.1875 386.29166,230.1875 386.29166,230.1875 Z"
+       id="path4054" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="M 211.66666,74.083332 C 261.9375,97.895832 254,97.895832 254,97.895832"
+       id="path1852" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 219.60416,129.64583 c 71.4375,47.625 71.4375,47.625 71.4375,47.625"
+       id="path1854" />
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-dasharray:0.79374898,0.79374898;stroke-dashoffset:0"
+       d="m 171.97916,124.35417 c -55.56249,52.91666 -55.56249,52.91666 -55.56249,52.91666"
+       id="path1856" />
+  </g>
+</svg>
