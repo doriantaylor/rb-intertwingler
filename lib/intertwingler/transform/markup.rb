@@ -26,7 +26,7 @@ require 'intertwingler/representation/nokogiri'
 # As mentioned elsewhere, a transform responds exclusively to `POST`
 # requests, and has a limited range of media types that it accepts and
 # emits. Additional parameters are passed in via the URI query string.
-class Intertwingler::Transform::Markup < Intertwingler::Transform
+class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   private
 
   # XXX do we actually need this?
@@ -86,29 +86,46 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform
   end
 
   def strip_comments req, params
+    body = req.body
+    doc  = body.object
+
+    # easy peasy
+    doc.xpath('//comment()').each { |c| c.unlink }
+
+    # add back to invalidate
+    body.object = doc
+    body
   end
 
+  # not sure what i actually intended this to do; probably scan for
+  # missing prefixes or something
   def repair_rdfa req, params
   end
 
+  # this one relinks
   def rehydrate req, params
     req.body.object
     Intertwingler::Document.rehydrate
   end
 
+  # what would be really sneaky is to do this exclusively based on
+  # rdfa and never look at the graph
   def add_social_meta req, params
     # add schema dot org
     # add ogp
     # add twitter meta
   end
 
-  # stick a nav
+  # stick a wad of backlinks everywhere they fit
   def add_backlinks req, params
     # backlinks = Intertwingler::Document.backlinks
     # XML::Mixup.markup
   end
 
+  # rewrite uuids and crap to their http(s or whatever other scheme)
+  # counterparts
   def rewrite_links req, params
+    # engine.resolver_for params[:subject]
   end
 
   # mangle mailto: URIs according to house style
@@ -119,7 +136,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform
   def amazon_tag req, params
   end
 
-  # read the RDFa and prune unnecessary prefix declarations
+  # read the RDFa and prune unnecessary prefix declarations, also
+  # bundle them all up to the outermost bit
   def normalize_prefixes req, params
   end
 
@@ -129,6 +147,16 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform
 
   # normalize the indentation
   def reindent req, params
+    body = req.body
+    doc  = body.object
+
+    # this reindents in place
+    Intertwingler::Document.reindent doc
+
+    # spur the invalidation of the embedded io object
+    body.object = doc
+
+    body
   end
 
 end

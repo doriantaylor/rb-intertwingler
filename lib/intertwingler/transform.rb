@@ -10,7 +10,7 @@ require 'time'
 require 'intertwingler/handler'
 require 'http/negotiate'
 
-class Intertwingler::Transform < Intertwingler::Handler
+class Intertwingler::Transform
 
   class ParamError < ::ArgumentError
     # XXX TODO something coherent about which parameters were wrong
@@ -31,7 +31,7 @@ class Intertwingler::Transform < Intertwingler::Handler
   # do not match the intersection of least one available return type,
   # and the content of the client's `Accept` header.
   #
-
+  #
   # I call the unordered incarnation of a
   # transform queue a _bag_ rather than a _set_ because some
   # transforms may not match the payload or the request's `Accept:`
@@ -39,7 +39,6 @@ class Intertwingler::Transform < Intertwingler::Handler
   # transforms can be *punned* into the same (human-readable)
   # identifier, implying they do analogous things for different
   # content-types.
-
   class Queue
 
     # A strict queue differs from its ancestor insofar as all
@@ -48,143 +47,148 @@ class Intertwingler::Transform < Intertwingler::Handler
     # transforms don't match the payload, *including* (and
     # *especially*) transforms that are intended to process the result
     # of a previous one. In general it only makes sense for a strict
-    # queue to be addressable, even though it is possible 
+    # queue to be addressable, even though it is possible
     class Strict < self
     end
+
   end
 
   # The harness contains transforms and queues thereof.
   class Harness
   end
 
-  private
+  class Handler < Intertwingler::Handler
 
-  NUMBER_RE = /^[+-]?(?=\.?\d)\d*\.?\d*(?:[Ee][+-]?\d+)?\z/
-  TOKEN_RE  = /[^\x0-\x20\x7f-\xff()<>@,;:\\"\/\[\]?={}]+/n # srsly??
-  MTYPE_RE  = /^#{TOKEN_RE}\/#{TOKEN_RE}/on
+    private
 
-  # subclasses contain a hard-coded URI map that never changes
-  URI_MAP = {}.freeze
+    NUMBER_RE = /^[+-]?(?=\.?\d)\d*\.?\d*(?:[Ee][+-]?\d+)?\z/
+    TOKEN_RE  = /[^\x0-\x20\x7f-\xff()<>@,;:\\"\/\[\]?={}]+/n # srsly??
+    MTYPE_RE  = /^#{TOKEN_RE}\/#{TOKEN_RE}/on
 
-  def uri_map uuid
-    (self.class.const_get(:URI_MAP) || {})[uuid]
-  end
+    # subclasses contain a hard-coded URI map that never changes
+    URI_MAP = {}.freeze
 
-  def representation
-    self.class.const_get :REPRESENTATION or raise NotImplementedError,
-      'a REPRESENTATION must be defined in the class'
-  end
-
-  public
-
-  def handle req
-    # first we check if the request method is POST; if not this is over quickly
-    return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST
-
-    # request must have a content type or return 409
-    type = req.content_type or
-      return Rack::Response[409, {}, ['Missing Content-Type header']]
-    type = MimeMagic[type].canonical # XXX do we preserve type parameters??
-
-    # give us a default response
-    resp = Rack::Response[404, {}, []]
-
-    # get the resolver for this request or bail out
-    resolver = resolver_for(req) or return resp
-
-    uri  = URI(resolver.preproc req.url) # annoying that isn't already a URI
-    uuid = resolver.split_pp(uri).first.path.split(?/)[1].downcase
-
-    # match the function
-    func, accept, variants = uri_map uuid
-
-    # 404 unless we have a function
-    return resp unless func
-
-    # XXX this next bit is where we would have the thing like Params::Registry
-
-    # harvest params from uri
-    params = URI.decode_www_form(uri.query.to_s).reduce({}) do |hash, pair|
-      k, v = pair
-      # XXX UNKNOWN KEYS SHOULD BE IGNORED
-      k = k.strip.downcase.tr_s(?-, ?_).to_sym
-      v = NUMBER_RE === v ? v.to_f : v
-      (hash[k] ||= []) << v
-      hash
+    def uri_map uuid
+      (self.class.const_get(:URI_MAP) || {})[uuid]
     end
 
-    # check request content type and return 415 if no match
-    return Rack::Response[415, {}, ["Unsupported type #{type}"]] unless
-      type.lineage.any? { |t| accept.include? t.to_s }
-
-    variants = variants.reduce({}) do |hash, v|
-      v = MimeMagic[v].canonical
-      ([v.canonical] + v.aliases).each { |t| hash[t] = { type: v.to_s } }
-
-      hash
+    def representation
+      self.class.const_get :REPRESENTATION or raise NotImplementedError,
+        'a REPRESENTATION must be defined in the class'
     end
 
-    # we want to do surgery to Accept:
-    headers = HTTP::Negotiate.parse_headers req
+    public
 
-    # this will guarantee that if the request accepts a certain type
-    if ahdr = headers[:type]
-      ahdr.keys.each do |t|
-        q = ahdr[t][:q]
-        lin = MimeMagic[t].lineage.reject do |x|
-          %w[text/plain application/octet-stream].include? x
-        end
-        lin.each_with_index do |mt, i|
-          # this will slightly decrement the score a little more each time
-          (ahdr[mt.to_s] = {})[:q] = 0.999 ** i * q unless ahdr.key? mt.to_s
+    def handle req
+      # first we check if the request method is POST; if not this is over quickly
+      return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST
+
+      # request must have a content type or return 409
+      type = req.content_type or
+        return Rack::Response[409, {}, ['Missing Content-Type header']]
+      type = MimeMagic[type].canonical # XXX do we preserve type parameters??
+
+      # give us a default response
+      resp = Rack::Response[404, {}, []]
+
+      # get the resolver for this request or bail out
+      resolver = resolver_for(req) or return resp
+
+      uri  = URI(resolver.preproc req.url) # annoying that isn't already a URI
+      uuid = resolver.split_pp(uri).first.path.split(?/)[1].downcase
+
+      # match the function
+      func, accept, variants = uri_map uuid
+
+      # 404 unless we have a function
+      return resp unless func
+
+      # XXX this next bit is where we would have the thing like Params::Registry
+
+      # harvest params from uri
+      params = URI.decode_www_form(uri.query.to_s).reduce({}) do |hash, pair|
+        k, v = pair
+        # XXX UNKNOWN KEYS SHOULD BE IGNORED
+        k = k.strip.downcase.tr_s(?-, ?_).to_sym
+        v = NUMBER_RE === v ? v.to_f : v
+        (hash[k] ||= []) << v
+        hash
+      end
+
+      # check request content type and return 415 if no match
+      return Rack::Response[415, {}, ["Unsupported type #{type}"]] unless
+        type.lineage.any? { |t| accept.include? t.to_s }
+
+      variants = variants.reduce({}) do |hash, v|
+        v = MimeMagic[v].canonical
+        ([v.canonical] + v.aliases).each { |t| hash[t] = { type: v.to_s } }
+
+        hash
+      end
+
+      # we want to do surgery to Accept:
+      headers = HTTP::Negotiate.parse_headers req
+
+      # this will guarantee that if the request accepts a certain type
+      if ahdr = headers[:type]
+        ahdr.keys.each do |t|
+          q = ahdr[t][:q]
+          lin = MimeMagic[t].lineage.reject do |x|
+            %w[text/plain application/octet-stream].include? x
+          end
+          lin.each_with_index do |mt, i|
+            # this will slightly decrement the score a little more each time
+            (ahdr[mt.to_s] = {})[:q] = 0.999 ** i * q unless ahdr.key? mt.to_s
+          end
         end
       end
-    end
 
-    # okay this is gonna be a weird one: we can have input like
-    # `major/*` and `*/*` which i'm inclined to just leave alone. we
-    # want to canonicalize any asserted types plus add the type
-    # lineage all the way up to application/octet-stream
+      # okay this is gonna be a weird one: we can have input like
+      # `major/*` and `*/*` which i'm inclined to just leave alone. we
+      # want to canonicalize any asserted types plus add the type
+      # lineage all the way up to application/octet-stream
 
-    # here we do the content negotiation
-    # 406 unless types match up
-    rtype = HTTP::Negotiate.negotiate headers, variants
+      # here we do the content negotiation
+      # 406 unless types match up
+      rtype = HTTP::Negotiate.negotiate headers, variants
 
-    # XXX this would be helpful if it would say what variants it *does* have
-    return Rack::Response[406, {}, []] unless rtype
+      # XXX this would be helpful if it would say what variants it *does* have
+      return Rack::Response[406, {}, []] unless rtype
 
-    # duplicate the request
-    req = Rack::Request.new req.env.dup
+      # duplicate the request
+      req = Rack::Request.new req.env.dup
 
-    # set the accept header to the only one
-    req.set_header 'HTTP_ACCEPT', "#{rtype.to_s}, */*;q=0"
+      # set the accept header to the only one
+      req.set_header 'HTTP_ACCEPT', "#{rtype.to_s}, */*;q=0"
 
-    # okay now we actually run the thing
-    begin
-      # it is so dumb you can't just set the body
-      req.env['rack.input'] = representation.coerce req.body, type: type.to_s
+      # okay now we actually run the thing
+      begin
+        # it is so dumb you can't just set the body
+        req.env['rack.input'] = representation.coerce req.body, type: type.to_s
 
-      # run the transform, get back the body
-      out = send func, req, params
+        # run the transform, get back the body
+        out = send func, req, params
 
-      # note `out` can be nil which should be interpreted as 304
-      return Rack::Response[304, {}, []] unless out
+        # note `out` can be nil which should be interpreted as 304
+        return Rack::Response[304, {}, []] unless out
 
-      # this should be it
-      return Rack::Response[200, { 'content-type' => out.type.to_s }, out]
+        # this should be it
+        return Rack::Response[200, { 'content-type' => out.type.to_s }, out]
 
-    rescue Intertwingler::Transform::ParamError
-      return Rack::Response[409, {}, []]
-    rescue Intertwingler::Handler::Redirect => r
-      # umm i dunno
-      # r.location
-      warn r
-    rescue Intertwingler::Handler::Error => r
-      # umm i dunno
-      # r.location
-      return r.response
+      rescue Intertwingler::Transform::ParamError
+        return Rack::Response[409, {}, []]
+      rescue Intertwingler::Handler::Redirect => r
+        # umm i dunno
+        # r.location
+        warn r
+      rescue Intertwingler::Handler::Error => r
+        # umm i dunno
+        # r.location
+        return r.response
+      end
     end
   end
+
 
 end
 

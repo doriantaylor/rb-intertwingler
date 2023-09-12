@@ -4,6 +4,8 @@
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix itcv: <https://vocab.methodandstructure.com/intertwingler#> .
 
+# So §9.6.1 of the SKOS reference <https://www.w3.org/TR/skos-reference/#L3514> says that we should infer that the elements of a skos:memberList of a skos:OrderedCollection should also be related to said collection via skos:member, but laments that OWL has no way of expressing this. It turns out, though, that you can say exactly this in SHACL:
+
 # can we do this with a triple rule?
 <tag:intertwingler.net,2023:resolve-list> a sh:SPARQLRule ;
   sh:subject sh:this ;
@@ -16,3 +18,5 @@
   sh:subject sh:this ;
   sh:predicate itcv:handler ;
   sh:object [ sh:path ( itcv:handler-list [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ] .
+
+# Granted these examples aren't SKOS, but they consider the exact same problem.

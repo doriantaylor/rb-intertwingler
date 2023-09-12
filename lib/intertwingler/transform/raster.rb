@@ -3,7 +3,7 @@ require 'intertwingler/transform'
 # the representation
 require 'intertwingler/representation/vips'
 
-class Intertwingler::Transform::Raster < Intertwingler::Transform
+class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
   private
 
   REPRESENTATION = Intertwingler::Representation::Vips
@@ -17,6 +17,8 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform
   # we are not averse to reading pdfs
   IN = (%w[application/pdf] + OUT).freeze
 
+  # XXX TODO `page` for pdfs and `frame` for animated gifs, also
+  # rotate (90deg *and* arbitrary), flip etc.
   URI_MAP = {
     '4c817a44-005d-48cb-83be-d962604cddda' => [:convert,    IN, OUT],
     'deb428cb-2f88-4726-98ea-d4b8d4589f17' => [:crop,       IN, OUT],
