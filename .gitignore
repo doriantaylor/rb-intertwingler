@@ -14,3 +14,4 @@ syntax: glob
 sample.conf
 .byebug_history
 *.gem
+flow-diagram-white.png

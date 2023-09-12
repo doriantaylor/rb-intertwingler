@@ -2987,7 +2987,8 @@ module Intertwingler
           type ||= MimeMagic.by_magic(doc)
 
           # can you believe there is a special bookmarks mime type good grief
-          type = 'text/html' if type == 'application/x-mozilla-bookmarks'
+          type = MimeMagic['text/html'] if
+            type == 'application/x-mozilla-bookmarks'
 
           # now we try to parse the blob
           if type.to_s =~ /xml/i

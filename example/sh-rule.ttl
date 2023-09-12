@@ -1,0 +1,18 @@
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix itcv: <https://vocab.methodandstructure.com/intertwingler#> .
+
+# can we do this with a triple rule?
+<tag:intertwingler.net,2023:resolve-list> a sh:SPARQLRule ;
+  sh:subject sh:this ;
+  sh:construct "CONSTRUCT { $this itcv:handler ?h } WHERE { ?this itcv:handler-list/rdf:rest*/rdf:first ?h }" ;
+  sh:condition [ sh:path itcv:handler-list ] .
+
+# yes, we can
+<tag:intertwingler.net,2023:resolve-list-triple> a sh:TripleRule ;
+  sh:condition [ sh:path itcv:handler-list ] ;
+  sh:subject sh:this ;
+  sh:predicate itcv:handler ;
+  sh:object [ sh:path ( itcv:handler-list [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ] .
