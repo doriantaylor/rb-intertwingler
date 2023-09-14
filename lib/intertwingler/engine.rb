@@ -6,9 +6,13 @@ require 'rack/mock_request' # for env_for
 class Intertwingler::Engine < Intertwingler::Handler
 
   class Dispatcher
+    def self.configure engine
+    end
+
     def initialize engine, handlers
     end
 
+    # find a handler for the request and return the response
     def dispatch req
     end
 
@@ -27,11 +31,48 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   public
 
+  # Resolve the engine and all of its handlers and transforms and
+  # queues and such out of the graph.
+  def self.configure resolvers
+    # step 1: find the instance of itcv:Engine that has the same base
+    # URI as the resolvers and initialize.
+    me = self.new resolvers, subject: subject
+
+    # step 2: find the handlers and load them.
+    me.refresh_handlers
+
+    # step 3: construct the transform queues and their contents. (note
+    # the queues are apt to reuse transforms, and the transform
+    # handler instances could very well already be in the handler
+    # stack.)
+    me.refresh_queues
+  end
+
+  # Refresh the handler stack associated with this engine.
+  #
+  # @return [self]
+  #
+  def refresh_handlers
+    list = resolver.repo.objects_for(
+      subject, ITCV['handler-list'], only: :resource).first
+    unless list
+    self
+  end
+
+  # Refresh the transform queues associated with this engine.
+  #
+  # @return [self]
+  #
+  def refresh_queues
+
+    self
+  end
+
   # Initialize the engine.
   #
   # @param resolvers [Array<Intertwingler::Resolver>] the necessary resolvers.
   #
-  def initialize resolvers, handlers: [], transforms: {}
+  def initialize resolvers, subject: nil, handlers: [], transforms: {}
     # ensure resolvers are an array
     resolvers = resolvers.respond_to?(:to_a) ? resolvers.to_a : [resolvers]
     # set authority map

@@ -10,7 +10,14 @@ require 'time'
 require 'intertwingler/handler'
 require 'http/negotiate'
 
+# This class represents an individual service endpoint for a
+# transformation function, and encapsulates the parameters. It is
+# meant to be congruent with the Transformation Functions Ontology.
 class Intertwingler::Transform
+
+
+
+  ### BELOW THIS IS HANDLER/QUEUE STUFF
 
   class ParamError < ::ArgumentError
     # XXX TODO something coherent about which parameters were wrong

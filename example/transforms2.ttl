@@ -1,8 +1,16 @@
 @prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
 @prefix dct:  <http://purl.org/dc/terms/> .
+@prefix bibo: <http://purl.org/ontology/bibo/> .
+@prefix adms: <http://www.w3.org/ns/adms#> .
+@prefix dcat: <http://www.w3.org/ns/dcat#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix http: <http://www.w3.org/2011/http#> .
+@prefix qb:   <http://purl.org/linked-data/cube#> .
+@prefix sioc: <http://rdfs.org/sioc/ns#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .
 @prefix tfo:  <https://vocab.methodandstructure.com/transformation#> .
@@ -38,12 +46,24 @@
   itcv:queue <urn:uuid:e1800fdd-96e5-4c35-8dbd-d78204c2f1cb> ;
   rdfs:label "Raster Image Transforms"@en .
 
+# the resolver
+
+<urn:uuid:3b7f95f0-5eea-4f86-adc7-27ad18be1979> a itcv:Resolver ;
+  rdfs:label "Main resolver for doriantaylor.com"@en ;
+  itcv:manages <https://doriantaylor.com/> ;
+  itcv:alias <http://localhost:9292/>, <http://spigot:9292/> ;
+  itcv:prefix [ sh:prefix "rdf"^^xsd:token ; sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ], [ sh:prefix "adms"^^xsd:token ; sh:namespace "http://www.w3.org/ns/adms#"^^xsd:anyURI ], [ sh:prefix "awol"^^xsd:token ; sh:namespace "http://bblfish.net/work/atom-owl/2006-06-06/#"^^xsd:anyURI ], [ sh:prefix "bibo"^^xsd:token ; sh:namespace "http://purl.org/ontology/bibo/"^^xsd:anyURI ], [ sh:prefix "bs"^^xsd:token ; sh:namespace "http://purl.org/ontology/bibo/status/"^^xsd:anyURI ], [ sh:prefix "ci"^^xsd:token ; sh:namespace "https://vocab.methodandstructure.com/content-inventory#"^^xsd:anyURI ], [ sh:prefix "dcat"^^xsd:token ; sh:namespace "http://www.w3.org/ns/dcat#"^^xsd:anyURI ], [ sh:prefix "dc"^^xsd:token ; sh:namespace "http://purl.org/dc/elements/1.1/"^^xsd:anyURI ], [ sh:prefix "dct"^^xsd:token ; sh:namespace "http://purl.org/dc/terms/"^^xsd:anyURI ], [ sh:prefix "foaf"^^xsd:token ; sh:namespace "http://xmlns.com/foaf/0.1/"^^xsd:anyURI ], [ sh:prefix "http"^^xsd:token ; sh:namespace "http://www.w3.org/2011/http#"^^xsd:anyURI ], [ sh:prefix "ibis"^^xsd:token ; sh:namespace "https://vocab.methodandstructure.com/ibis#"^^xsd:anyURI ], [ sh:prefix "og"^^xsd:token ; sh:namespace "http://ogp.me/ns#"^^xsd:anyURI ], [ sh:prefix "org"^^xsd:token ; sh:namespace "http://www.w3.org/ns/org#"^^xsd:anyURI ], [ sh:prefix "owl"^^xsd:token ; sh:namespace "http://www.w3.org/2002/07/owl#"^^xsd:anyURI ], [ sh:prefix "qb"^^xsd:token ; sh:namespace "http://purl.org/linked-data/cube#"^^xsd:anyURI ], [ sh:prefix "rdfs"^^xsd:token ; sh:namespace "http://www.w3.org/2000/01/rdf-schema#"^^xsd:anyURI ], [ sh:prefix "schema"^^xsd:token ; sh:namespace "https://schema.org/"^^xsd:anyURI ], [ sh:prefix "sioc"^^xsd:token ; sh:namespace "http://rdfs.org/sioc/ns#"^^xsd:anyURI ], [ sh:prefix "sioct"^^xsd:token ; sh:namespace "http://rdfs.org/sioc/types#"^^xsd:anyURI ], [ sh:prefix "skos"^^xsd:token ; sh:namespace "http://www.w3.org/2004/02/skos/core#"^^xsd:anyURI ], [ sh:prefix "xhv"^^xsd:token ; sh:namespace "http://www.w3.org/1999/xhtml/vocab#"^^xsd:anyURI ], [ sh:prefix "xsd"^^xsd:token ; sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI ] ;
+  itcv:vocab "http://www.w3.org/1999/xhtml/vocab#"^^xsd:anyURI ;
+  itcv:document foaf:Document, bibo:Collection, skos:Collection, skos:ConceptScheme, qb:DataSet, sioc:Container, dcat:Resource, adms:Asset, http:Response ;
+  itcv:fragment [ itcv:fragment-class rdfs:Resource ; itcv:via foaf:isPrimaryTopicOf, [ sh:inversePath dct:hasPart ], dct:isPartOf ], [ itcv:fragment-class skos:Concept ; itcv:via skos:topConceptOf, skos:inScheme, [ sh:inversePath skos:member ], [ sh:inversePath ( skos:memberList [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ], [ itcv:fragment-class qb:Observation ; itcv:via qb:dataSet, [ sh:inversePath qb:observation ] ] .
+
 # the engine
 
 <urn:uuid:d62dfddf-9e84-45b8-8da9-8fd3d830a1bc> a itcv:Engine ;
   rdfs:label "The Intertwingler Engine"@en ;
-  itcv:queue <urn:uuid:4474528f-0345-4fcb-9437-aea24667f2ca> ;
-  itcv:handler-list ( <ruby:intertwingler/handler;Intertwingler::Handler::FileSystem> <ruby:intertwingler/handler;Intertwingler::Handler::Generated> <ruby:intertwingler/handler;Intertwingler::Handler::CAS> <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> <ruby:intertwingler/transform/text;Intertwingler::Transform::Text> <ruby:intertwingler/transform/sass;Intertwingler::Transform::Sass> ) .
+  itcv:resolver <urn:uuid:3b7f95f0-5eea-4f86-adc7-27ad18be1979> ;
+  itcv:response-queue <urn:uuid:4474528f-0345-4fcb-9437-aea24667f2ca> ;
+  itcv:handler-list ( <ruby:intertwingler/handler;Intertwingler::Handler::FileSystem> <ruby:intertwingler/handler;Intertwingler::Handler::Generated> <ruby:intertwingler/handler;Intertwingler::Handler::CAS> <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> <ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> <ruby:intertwingler/transform/rdf;Intertwingler::Transform::RDF> <ruby:intertwingler/transform/text;Intertwingler::Transform::Text> <ruby:intertwingler/transform/sass;Intertwingler::Transform::Sass> ) .
 
 # queues
 
@@ -70,13 +90,13 @@
 
 <urn:uuid:8307ac09-670b-48b9-b08d-3eacc1f51f43> a tfo:Transform ;
   ci:canonical-slug "parse-markdown"^^xsd:token ;
-  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Text> ;
   tfo:accepts "text/markdown"^^tfo:content-type ;
   tfo:returns "application/xhtml+xml"^^tfo:content-type, "text/html"^^tfo:content-type .
 
 <urn:uuid:ca069a8a-dd73-423d-b4c2-77777c049f36> a tfo:Transform ;
   ci:canonical-slug "tidy"^^xsd:token ;
-  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:implementation <ruby:intertwingler/transform/markup;Intertwingler::Transform::Text> ;
   tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
   tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
 
