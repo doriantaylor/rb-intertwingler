@@ -890,5 +890,8 @@ module Intertwingler::Vocab
         )],
       label: "words-and-blocks",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
+
+    RDF::Vocabulary.register :ci, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

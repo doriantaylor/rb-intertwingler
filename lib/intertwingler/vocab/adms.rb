@@ -246,7 +246,7 @@ module Intertwingler::Vocab
       range: "http://www.w3.org/2000/01/rdf-schema#Literal",
       type: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#Property", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
 
-    RDF::Vocabulary.register :ci, self if
+    RDF::Vocabulary.register :adms, self if
       RDF::Vocabulary.respond_to? :register
   end
 end
