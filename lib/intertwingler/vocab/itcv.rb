@@ -36,6 +36,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Transform
   #
+  #     # Denotes, ultimately, an HTTP Host: header that is an acceptable substitute for the authority under management.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :alias
+  #
   #     # Denotes a class which is always to be treated as a stand-alone document.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :document
@@ -71,6 +75,10 @@ module Intertwingler::Vocab
   #     # Specifies the relationship between a fragment and its host document.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :via
+  #
+  #     # Defines the null prefix vocabulary, e.g. for use with RDFa.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :vocab
   #
   #   end
   ITCV = Class.new(RDF::StrictVocabulary("https://vocab.methodandstructure.com/intertwingler#")) do
@@ -141,6 +149,12 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
+    property :alias,
+      comment: {en: "Denotes, ultimately, an HTTP Host: header that is an acceptable substitute for the authority under management."},
+      domain: "https://vocab.methodandstructure.com/intertwingler#Resolver",
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "alias"},
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :document,
       comment: {en: "Denotes a class which is always to be treated as a stand-alone document."},
       domain: "https://vocab.methodandstructure.com/intertwingler#Resolver",
@@ -240,6 +254,13 @@ module Intertwingler::Vocab
       label: {en: "via"},
       note: {en: "Rather than type out a formal definition of the range of this property, note that it is intended to be the same range as a SHACL property path (the SHACL people didn't formally define this either)."},
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :vocab,
+      comment: {en: "Defines the null prefix vocabulary, e.g. for use with RDFa."},
+      domain: "https://vocab.methodandstructure.com/intertwingler#Resolver",
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "vocab"},
+      range: "http://www.w3.org/2001/XMLSchema#anyURI",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
 
     RDF::Vocabulary.register :itcv, self if
       RDF::Vocabulary.respond_to? :register

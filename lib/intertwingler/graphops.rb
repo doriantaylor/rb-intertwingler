@@ -6,7 +6,7 @@ require 'rdf'
 require 'rdf/vocab'
 require 'rdf/reasoner'
 require 'intertwingler/resolver'
-require 'intertwingler/util/clean'
+require 'intertwingler/util'
 
 # load up my vocabs before reasoner is applied
 require 'intertwingler/vocab/ci'
