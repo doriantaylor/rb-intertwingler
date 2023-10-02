@@ -53,10 +53,11 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @return [self]
   #
   def refresh_handlers
-    list = resolver.repo.objects_for(
-      subject, ITCV['handler-list'], only: :resource).first
+    list = resolver.repo.objects_for(subject,
+                                     ITCV['handler-list'], only: :resource).first
     unless list
-    self
+      self
+    end
   end
 
   # Refresh the transform queues associated with this engine.
@@ -250,7 +251,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       resp = e.response
     rescue Exception => e
       resp = Rack::Response[500,
-        { 'content-type' => 'text/plain' }, [e.message]]
+                            { 'content-type' => 'text/plain' }, [e.message]]
     end
 
     # run all response transforms
@@ -309,4 +310,5 @@ class Intertwingler::Engine < Intertwingler::Handler
     # return the response
     resp
   end
+
 end
