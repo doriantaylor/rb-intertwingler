@@ -89,6 +89,7 @@ module Intertwingler::Vocab
       "http://purl.org/dc/terms/created": "2023-09-06T21:14:10Z",
       "http://purl.org/dc/terms/creator": "http://doriantaylor.com/person/dorian-taylor#me",
       "http://purl.org/dc/terms/description": {en: "This document specifies the on-line configuration vocabulary for Intertwingler, a dense hypermedia engine."},
+      "http://purl.org/dc/terms/modified": "2023-10-09T19:04:07Z",
       "http://purl.org/dc/terms/references": "https://github.com/doriantaylor/rb-intertwingler",
       "http://purl.org/dc/terms/subject": "https://intertwingler.net/",
       "http://purl.org/dc/terms/title": {en: "Intertwingler Configuration Vocabulary"},
@@ -117,6 +118,7 @@ module Intertwingler::Vocab
       comment: {en: "An itcv:Handler is the basic unit of functionality in Intertwingler. Handlers are microservices that serve one or more URIs via one or more HTTP request methods."},
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
       label: {en: "Handler"},
+      subClassOf: "https://vocab.methodandstructure.com/transformation#Bundle",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :HandlerList,
       comment: {en: "An itcv:HandlerList is a list of handlers and only handlers."},
