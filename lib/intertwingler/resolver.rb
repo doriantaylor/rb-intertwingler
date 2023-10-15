@@ -58,6 +58,40 @@ class Intertwingler::Resolver
     prefixes
   end
 
+  ITCV = Intertwingler::Vocab::ITCV
+  TFO  = Intertwingler::Vocab::TFO
+  XSD  = RDF::XSD
+  SH   = RDF::Vocab::SH
+
+  def self.configure_one repo, subject
+    # 1) get site under management and aliases
+    base    = repo.objects_for(subject, ITCV.manages, only: :uri).sort.first
+    aliases = repo.objects_for(subject, ITCV.alias, only: :uri).sort
+
+    # 2) get prefixes and vocab
+    prefixes = repo.objects_for(
+      subject, ITCV.prefix, only: :resource).reduce({}) do |h, n|
+      pfx = repo.objects_for(n, SH.prefix, only: :literal).sort.first
+      uri = repo.objects_for(n,
+        SH.prefix, only: :literal, datatype: XSD.anyURI).sort.first
+
+      h[pfx.value] = uri.value if pfx && uri
+
+      h
+    end
+    vocab = repo.objects_for(subject, ITCV.vocab).select do |o|
+      o.iri? or o.literal? && o.datatype? && o.datatype == XSD.anyURI
+    end.sort.first
+
+    prefix[nil] = vocab.value if vocab
+
+    # 3) get document and fragment specifications
+    documents = repo.objects_for(subject, ITCV.document, only: :uri)
+    fragments = repo.objects_for(subject, ITCV.fragment, only: :resource)
+
+    self.new repo, base, aliases: aliases, prefixes: prefixes, subject: subject
+  end
+
   public
 
   # Sanitize a term as an {RDF::Vocabulary}.
@@ -90,7 +124,17 @@ class Intertwingler::Resolver
     SANITIZE_PREFIXES.call prefixes, nonnil: nonnil, cache: @vocabs
   end
 
-  attr_reader :repo, :base, :aliases, :prefixes
+  def self.locate repo
+    repo.all_of_type Intertwingler::Vocab::ITCV.Resolver
+  end
+
+  def self.configure repo, subject = nil
+    return configure_one repo, subject if subject
+
+    locate(repo).map { |s| configure_one repo, r }
+  end
+
+  attr_reader :repo, :base, :aliases, :prefixes, :id
 
   # Create a new URI resolver.
   #
@@ -100,7 +144,7 @@ class Intertwingler::Resolver
   #  be treated as equivalent in lookups
   # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
   #
-  def initialize repo, base, aliases: [], prefixes: {}
+  def initialize repo, base, aliases: [], prefixes: {}, subject: nil
     @repo = repo
     raise ArgumentError, 'repo must be RDF::Queryable' unless
       repo.is_a? RDF::Queryable
@@ -109,6 +153,7 @@ class Intertwingler::Resolver
     @base     = coerce_resource   base,    as: :uri
     @aliases  = coerce_resources  aliases, as: :uri
     @prefixes = sanitize_prefixes prefixes
+    @id       = subject
 
     # cache of subjects in the graph so we only look them up once
     @subjects = {}

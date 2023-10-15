@@ -5,18 +5,12 @@ require 'set'
 require 'rdf'
 require 'rdf/vocab'
 require 'rdf/reasoner'
+require 'sparql'
 require 'intertwingler/resolver'
 require 'intertwingler/util'
 
 # load up my vocabs before reasoner is applied
-require 'intertwingler/vocab/ci'
-require 'intertwingler/vocab/tfo'
-require 'intertwingler/vocab/ibis'
-
-# also third-party vocabs not found in RDF::Vocab
-require 'intertwingler/vocab/pav'
-require 'intertwingler/vocab/qb'
-require 'intertwingler/vocab/scovo'
+require 'intertwingler/vocab'
 
 module Intertwingler
 
@@ -157,6 +151,7 @@ module Intertwingler
     # this gives us a set of inverse (and symmetric) properties for
     # the given input
     def invert_semantic properties, entail: false
+      # 1warn properties.inspect
       properties = assert_resources properties, empty: false
 
       inverted = properties.map do |p|
@@ -174,7 +169,7 @@ module Intertwingler
       # warn properties.inspect, inverted.inspect
 
       # don't forget to entail
-      entail ? property_set(inverted) : inverted
+      entail && !inverted.empty? ? property_set(inverted) : inverted
     end
 
     # this gives us a label spec we can use
@@ -1650,7 +1645,7 @@ module Intertwingler
     #
     # @return [Set<RDF::URI>] said equivalent/subproperties
     #
-    def property_set properties
+    def property_set properties, inverse: false
       properties = assert_resources(
         properties, blank: false, vocab: true).to_set
 
@@ -1658,7 +1653,7 @@ module Intertwingler
 
       # if there are cache entries for all the properties in the set,
       # union them together and return it
-      properties.map do |p|
+      out = properties.map do |p|
         if pcache[p]
           pcache[p]
         else
@@ -1667,8 +1662,8 @@ module Intertwingler
           ep = Set[p] | p.entail(:equivalentProperty).select(&:uri?).to_set
           ep.map do |e|
             # get the subproperties of each
-            sp = e.respond_to?(:entail) ?
-              e.entail(:subProperty).flatten.to_set : Set[]
+            sp = e.respond_to?(:property?) && e.respond_to?(:entail) ?
+              e.entail(:subProperty).flatten.to_set : Set[e]
             pe = pcache[e] || Set[]
             pe |= (ep | sp)
             pcache[e] = pe
@@ -1677,6 +1672,8 @@ module Intertwingler
           end.reduce :|
         end
       end.reduce :|
+
+      inverse ? invert_semantic(out, entail: true) : out
     end
 
     # as i will invariably trip over this

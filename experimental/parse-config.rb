@@ -1,16 +1,14 @@
 #!/usr/bin/env ruby
 
-# this should haul in a bunch of stuff
-require 'intertwingler/graphops'
-
-# get us some vocabs
-require 'intertwingler/vocab/tfo'
-require 'intertwingler/vocab/itcv'
-
 # third-party rdf
+require 'rdf'
 require 'rdf/vocab'  # dat vocab
 require 'rdf/turtle' # to parse input
 require 'sparql'     # dat algebra, lol
+
+# this should haul in a bunch of stuff
+require 'intertwingler/vocab'
+require 'intertwingler/graphops'
 
 # save some typing
 ITCV = Intertwingler::Vocab::ITCV
@@ -31,6 +29,39 @@ PATHS = {
   SH.zeroOrOnePath   => SPARQL::Algebra::Operator::PathOpt,
   SH.zeroOrMorePath  => SPARQL::Algebra::Operator::PathStar,
 }
+
+def entail_term repo, term
+  fwd = repo.property_set term
+  rev = repo.property_set term, inverse: true
+
+  fwd = fwd.count == 1 ? fwd.first : fwd.reduce do |a, b|
+    SPARQL::Algebra::Operator::Alt.new b, a
+  end
+
+  unless rev.empty?
+    rev = rev.count == 1 ? rev.first : rev.reduce do |a, b|
+      SPARQL::Algebra::Operator::Alt.new b, a
+    end
+
+    fwd = SPARQL::Algebra::Operator::Alt.new fwd,
+      SPARQL::Algebra::Operator::Reverse.new(rev)
+  end
+
+  fwd
+end
+
+def entail_op repo, expr
+  case expr
+  when RDF::URI
+    entail_term repo, expr
+  when SPARQL::Algebra::Operator
+    ops = expr.operands.map { |o| entail_op repo, o }
+    # XXX there is no provision for options
+    expr.class.new(*ops)
+  else
+    expr
+  end
+end
 
 # recursively trace the shacl predicate paths. the shacl module
 # appears to be really only about doing shacl shapes and appears to
@@ -117,7 +148,7 @@ repo.objects_for(resolver, ITCV.fragment, only: :resource).each do |frag|
   repo.objects_for(frag, ITCV.via, only: :resource).each do |path|
     # this will be either a term or a path object or a list
     via = specifier[:via] ||= []
-    via << algebra(repo, path)
+    via << rewrite_alts(repo, algebra(repo, path))
   end
 
   params[:fragments][fc] = specifier

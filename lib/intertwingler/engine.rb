@@ -20,7 +20,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   private
 
-  # XXX all this is lame af
+  # XXX this is wack af
   WRAPPER = eval 'Rack::Lint::Wrapper::InputWrapper' rescue nil
   if WRAPPER and not WRAPPER.method_defined? :set_encoding
     WRAPPER.define_method :set_encoding do |encoding, opt = nil|
@@ -29,11 +29,23 @@ class Intertwingler::Engine < Intertwingler::Handler
     end
   end
 
+  ITCV = Intertwingler::Vocab::ITCV
+
   public
+
+  # Find all the subjects in the graph that are an `itcv:Engine`.
+  #
+  # @param repo [RDF::Queryable, Intertwingler::GraphOps] the repository.
+  #
+  # @return [Array] all engine instances.
+  #
+  def self.locate repo
+    repo.all_of_type ITCV.Engine
+  end
 
   # Resolve the engine and all of its handlers and transforms and
   # queues and such out of the graph.
-  def self.configure resolvers
+  def self.configure repo, subject, resolvers: []
     # step 1: find the instance of itcv:Engine that has the same base
     # URI as the resolvers and initialize.
     me = self.new resolvers, subject: subject
@@ -54,7 +66,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   #
   def refresh_handlers
     list = resolver.repo.objects_for(subject,
-                                     ITCV['handler-list'], only: :resource).first
+      ITCV['handler-list'], only: :resource).first
     unless list
       self
     end
