@@ -27,6 +27,9 @@ module Intertwingler
 
     private
 
+    # we type this out a lot so let's not
+    SAO = SPARQL::Algebra::Operator
+
     # rdf term type tests
     NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
     NMAP   = { iri: :uri, bnode: :blank }.merge(
@@ -955,90 +958,6 @@ module Intertwingler
 
     private
 
-    def host_for_internal subject, seen = Set[],
-        dtypes = nil, graph: [], published: false, circulated: false
-      # caching manoeuvre
-      key = [subject.to_s, graph.sort, published]
-      return hcache[key] if hcache.key? key
-
-      # we begin by looking for an explicit designation
-      host = objects_for(subject, Intertwingler::Vocab::CI['fragment-of'],
-        graph: graph, only: :resource).first
-
-      # get all the classes but the two basic ones that will net everything
-      ft = fragment_spec.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
-      dtypes ||= document_types(fragments: true) & all_types
-
-      types = types_for subject, graph: graph
-      isdoc = type_is? types, dtypes
-      frags = type_is? types, ft
-
-      # this condition is true if there is no explicit host document
-      # and the subject itself is not a document type or explicit fragment type
-      unless host or (isdoc and not frags)
-        # attempt to find a list head (although not sure what we do if
-        # there are multiple list heads)
-        head = subjects_for(
-          RDF.first, subject, graph: graph, only: :blank).sort.first
-        head = list_head(head, graph: graph) if head
-        # get an ordered set of [predicate, revp] pairs
-        preds = fragment_spec.map do |type, pv|
-          # this will give us
-          score = type_is?(types, type) or next
-          [score, pv.to_a]
-        end.compact.sort do |a, b|
-          # this will sort the mappings by score
-          a.first <=> b.first
-        end.map(&:last).flatten(1).uniq
-
-        # accumulate candidate hosts and filter them
-        tab = {}
-        pab = {}
-        pmap = {}
-        hosts = preds.reduce([]) do |a, pair|
-          pred, rev = pair
-          px = pmap[pred] ||= property_set pred
-          if rev
-            # reverse relations include list heads
-            a += subjects_for px, subject,
-              graph: graph, entail: false, only: :resource
-            a += subjects_for px, head,
-              graph: graph, entail: false, only: :resource if head
-          else
-            a += objects_for subject, px, entail: false, only: :resource
-          end
-          a # <-- the accumulator
-        end.uniq.reject do |h|
-          ((tab[h] ||= types_for h) & dtypes).empty?
-        end.sort do |a, b|
-          # sort by publication status
-          pa, pb = [a, b].map do |x|
-            pab[x] ||= (published?(x, circulated: circulated) ? -1 : 0)
-          end
-          c = pa <=> pb
-          # sort by priority in config (ish; ordering could be better)
-          if c == 0
-            # warn "#{tab[a]} <=> #{tab[b]}"
-            pa, pb = [a, b].map do |x|
-              tab[x].map { |y| dtypes.index(y) || Float::INFINITY }.min
-            end
-            c = pa <=> pb
-          end
-          # XXX TODO maybe sort by date? i unno
-          # sort lexically if it's a tie
-          c == 0 ? a <=> b : c
-        end
-
-        # the first one will be our baby
-        if host = hosts.first and not seen.include? host
-          parent = host_for_internal host, seen | Set[host], dtypes,
-            graph: graph, published: published, circulated: circulated
-          host = parent if parent
-        end
-      end
-
-      hcache[key] = host
-    end
 
     # XXX YO MAYBE REIN IN THE CACHES? lol
 
@@ -1094,29 +1013,102 @@ module Intertwingler
     end
 
     def cache_limit= limit
-      hcache.capacity  = limit
-      tcache.capacity  = limit
-      tscache.capacity = limit
-      tdcache.capacity = limit
-      pcache.capacity  = limit
-      icache.capacity  = limit
-      eqcache.capacity = limit
-      sbcache.capacity = limit
-      sucache.capacity = limit
-      @cache_limit     = limit
+      [hcache, tcache, tscache, tdcache, pcache, icache,
+        eqcache, sbcache, sucache].each { |c| c.capacity = limit }
+      @cache_limit = limit
     end
 
     def flush_cache
-      hcache.clear
-      tcache.clear
-      tscache.clear
-      tdcache.clear
-      pcache.clear
-      icache.clear
-      eqcache.clear
-      sbcache.clear
-      sucache.clear
+      [hcache, tcache, tscache, tdcache, pcache, icache,
+        eqcache, sbcache, sucache].each { |c| c.clear }
+
       nil
+    end
+
+    private def host_for_internal subject, seen = Set[],
+        dtypes = nil, graph: [], published: false, circulated: false
+      # caching manoeuvre
+      key = [subject.to_s, graph.sort, published]
+      return hcache[key] if hcache.key? key
+
+      # we begin by looking for an explicit designation
+      host = objects_for(subject, Intertwingler::Vocab::CI['fragment-of'],
+        graph: graph, only: :resource).sort.first
+
+      # get all the classes but the two basic ones that will net everything
+      ft = fragment_spec.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
+      dtypes ||= document_types(fragments: true) & all_types
+
+      types = types_for subject, graph: graph
+      isdoc = type_is? types, dtypes
+      frags = type_is? types, ft
+
+      # this condition is true if there is no explicit host document
+      # and the subject itself is not a document type or explicit fragment type
+      unless host or (isdoc and not frags)
+        # attempt to find a list head (although not sure what we do if
+        # there are multiple list heads)
+        head = subjects_for(
+          RDF.first, subject, graph: graph, only: :blank).sort.first
+        head = list_head(head, graph: graph) if head
+
+        # get an ordered set of [predicate, revp] pairs
+        preds = fragment_spec.map do |type, pv|
+          # this will give us an order to try the mappings in
+          score = type_is?(types, type) or next
+          [score, pv.to_a]
+        end.compact.sort do |a, b|
+          # this will sort the mappings by score
+          a.first <=> b.first
+        end.map(&:last).flatten(1).uniq
+
+        # accumulate candidate hosts and filter them
+        tab = {}
+        pab = {}
+        pmap = {}
+        hosts = preds.reduce([]) do |a, pair|
+          pred, rev = pair
+          px = pmap[pred] ||= property_set pred
+          if rev
+            # reverse relations include list heads
+            a += subjects_for px, subject,
+              graph: graph, entail: false, only: :resource
+            a += subjects_for px, head,
+              graph: graph, entail: false, only: :resource if head
+          else
+            a += objects_for subject, px, entail: false, only: :resource
+          end
+          a # <-- the accumulator
+        end.uniq.reject do |h|
+          ((tab[h] ||= types_for h) & dtypes).empty?
+        end.sort do |a, b|
+          # sort by publication status
+          pa, pb = [a, b].map do |x|
+            pab[x] ||= (published?(x, circulated: circulated) ? -1 : 0)
+          end
+          c = pa <=> pb
+          # sort by priority in config (ish; ordering could be better)
+          if c == 0
+            # warn "#{tab[a]} <=> #{tab[b]}"
+            pa, pb = [a, b].map do |x|
+              tab[x].map { |y| dtypes.index(y) || Float::INFINITY }.min
+            end
+            c = pa <=> pb
+          end
+          # XXX TODO maybe sort by date? i unno
+          # sort lexically if it's a tie
+          c == 0 ? a <=> b : c
+        end
+
+        # the first one will be our baby
+        if host = hosts.first and not seen.include? host
+          parent = host_for_internal host, seen | Set[host], dtypes,
+            graph: graph, published: published, circulated: circulated
+          host = parent if parent
+        end
+      end
+
+      hcache[key] = host
     end
 
     # Retrieve a host document for a suspected document fragment, if
@@ -1536,7 +1528,7 @@ module Intertwingler
               end
 
       # add to the cache
-      equivs.each { |t| sbcache[t.to_s] = terms }
+      equivs.each { |t| sucache[t.to_s] = terms }
 
       terms
     end
@@ -1550,13 +1542,18 @@ module Intertwingler
     #
     # @param rdftype [RDF::Term, :to_a] the type(s) to inspect
     # @param descend [false, true] descend instead of ascend
+    # @param roots [false, true] whether to include `rdfs:Resource`
+    #  and `owl:Thing`
     #
     # @return [Array<Array<RDF::URI>>] the type stratum
     #
-    def type_strata rdftype, descend: false
+    def type_strata rdftype, descend: false, roots: false
       rdftype = assert_resources rdftype, vocab: true
 
-      return [] if rdftype.empty?
+      if rdftype.empty?
+        return [[RDF::RDFS.Resource], [RDF::OWL.Thing]] if !descend && roots
+        return []
+      end
 
       qmeth  = descend ? :subs_for : :supers_for # inheritance direction
       strata = []
@@ -1576,7 +1573,15 @@ module Intertwingler
         queue << hier unless hier.empty?
       end
 
-      descend ? strata.flatten : strata
+      return strata.flatten if descend
+
+      if roots
+        [RDF::RDFS.Resource, RDF::OWL.Thing].each do |c|
+          strata << [c] unless strata.flatten.include? c
+        end
+      end
+
+      strata
     end
 
     # Obtain everything that is an `owl:equivalentClass` or
@@ -2274,11 +2279,141 @@ module Intertwingler
       end
     end
 
+    # Return all the alternatives for a term as a SPARQL alternative
+    # property path.
+    #
+    # @param term [RDF::URI] the term to be expanded.
+    #
+    # @return [SPARQL::Algebra::Operator::Alt] a SPARQL property path
+    #  of alternatives, including inverse and symmetric properties.
+    #
+    def entail_sparql_predicate term
+      term = assert_resource term
+      fwd = property_set term
+      rev = property_set term, inverse: true
+
+      fwd = fwd.count == 1 ? fwd.first : fwd.reduce do |a, b|
+        SPARQL::Algebra::Operator::Alt.new b, a
+      end
+
+      unless rev.empty?
+        rev = rev.count == 1 ? rev.first : rev.reduce do |a, b|
+          SPARQL::Algebra::Operator::Alt.new b, a
+        end
+
+        fwd = SPARQL::Algebra::Operator::Alt.new fwd,
+          SPARQL::Algebra::Operator::Reverse.new(rev)
+      end
+
+      fwd
+    end
+
+    # Find all the URIs in a piece of SPARQL algebra and entail them.
+    #
+    # @param expr [RDF::Term, SPARQL::Algebra::Operator] the SPARQL algebra.
+    #
+    # @return [SPARQL::Algebra::Operator] a new, modified piece of algebra.
+    #
+    def entail_property_path expr
+      case expr
+      when RDF::URI
+        entail_sparql_predicate expr
+      when SAO
+        ops = expr.operands.map { |o| entail_property_path o }
+        # XXX there is no accessor for options
+        expr.class.new(*ops)
+      else
+        expr
+      end
+    end
+
+    # Parse a SPARQL property path into its algebra.
+    #
+    # @param sparql [#to_s] the SPARQL property path.
+    # @param prefixes [Hash] the (optional) overriding prefixes
+    #
+    # @return [SPARQL::Algebra::Operator] the corresponding piece of algebra.
+    #
+    def parse_property_path sparql, prefixes, entail: false
+      begin
+        out = SPARQL::Grammar::Parser.new(
+          sparql.to_s, prefixes: prefixes).parse(:Path).last
+        entail ? entail_property_path(out): out
+      rescue EBNF::LL1::Parser::Error
+        raise ArgumentError, "Malformed property path: #{sparql}"
+      end
+    end
+
+    private
+
+    SH = RDF::Vocab::SHACL
+
+    PATHS = {
+      SH.alternativePath => -> o {
+        # this shoouuuuld be a list
+        list = RDF::List subject: o, graph: self
+        list.reverse.reduce do |a, x|
+          SAO::Alt.new x, a
+        end
+      },
+      SH.inversePath     => SAO::Reverse,
+      SH.oneOrMorePath   => SAO::PathPlus,
+      SH.zeroOrOnePath   => SAO::PathOpt,
+      SH.zeroOrMorePath  => SAO::PathStar,
+    }
+
+    def process_shacl_path_internal subject, seen = Set[]
+      raise ArgumentError,
+        "Cycle detected in property path: #{subject}" if seen.include? subject
+      seen << subject
+
+      # if seen.include? subject
+      # it's either a sequence or one of these buggers
+      if !objects_for(subject, RDF.first, only: :resource).empty?
+        list = RDF::List.new(subject: subject, graph: self).map do |x|
+          process_shacl_path_internal x, seen
+        end.to_a
+
+        return list.reverse.reduce { |a, x| SAO::Seq.new x, a }
+      else
+        struct = struct_for subject
+        # warn struct
+        # this should yield exactly one thing
+        keys = PATHS.keys & struct.keys
+        raise ArgumentError,
+          "More than one key: #{keys.sort.join ?,}" if keys.size > 1
+
+        # then this is a term
+        return subject if keys.empty?
+
+        op  = PATHS[keys.first]
+        obj = struct[keys.first].first # XXX this should only be one
+
+        return op.is_a?(Proc) ? instance_exec(obj, &op) :
+          op.new(process_shacl_path_internal obj, seen)
+      end
+    end
+
+    public
+
+    # Turns a SHACL property path into a piece of SPARQL algebra,
+    # suitable for constructing a query.
+    #
+    # @param subject [RDF::Term] the subject node of the SHACL path.
+    #
+    # @return [RDF::Term, SPARQL::Algebra::Operator] the result of the
+    #  transformation.
+    #
+    def process_shacl_path subject
+      subject = assert_resource subject
+      process_shacl_path_internal subject
+    end
   end
 
   # This class provides a resource-oriented view of the graph. When I
   # get around to implementing it. (Python librdf has one of these and
   # it's handy. This should really belong in the core rdflib.)
+  # Currently does not do anything.
   class Resource
     attr_reader :repository, :resolver
 

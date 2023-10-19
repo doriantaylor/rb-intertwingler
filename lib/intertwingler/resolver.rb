@@ -1,4 +1,5 @@
 require 'intertwingler/graphops'
+require 'intertwingler/vocab'
 require 'intertwingler/util/clean'
 
 require 'uri'

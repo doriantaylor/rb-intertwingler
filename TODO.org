@@ -325,6 +325,10 @@
 *** TODO reverse proxy handler
     - While not strictly necessary for an MVP, a proxy handler would be necessary for the ultimate goal of making ~Intertwingler~ a layered system.
     - Making it so anybody can access anything on the internet is also problematic, so some kind of access control will need to be in place before it could go live, even if rudimentary.
+*** TODO SPARQL handler
+    - I mean, the backend is RDF; it should probably have one, right?
+    - That said, SPARQL is an excellent ready-made vector for a denial-of-service attack, to say nothing of security over the content of the graph.
+    - You could make one in an afternoon if you didn't have to think about this, but I'd rather solve for capability-based access control first.
 ** TODO lower-priority transforms
    - Many of the markup transforms are going to be important for MVP, but we only need crop and resize image transforms for now.
    - [ ] ~Intertwingler::Transform::Raster~
