@@ -864,12 +864,50 @@ module Intertwingler
       }.freeze,
     }.freeze
 
+    FRAGMENTS_SPARQL = {
+      RDF::RDFS.Resource => [
+        SAO::Reverse.new(RDF::Vocab::DC.hasPart),
+        RDF::Vocab::DC.isPartOf,
+      ],
+      RDF::Vocab::BIBO.DocumentPart => [
+        SAO::Reverse.new(RDF::Vocab::DC.hasPart),
+        RDF::Vocab::DC.isPartOf,
+      ]
+    }
+
     # these are all the types unambiguously considered to be "documents"
     DOCUMENTS = [RDF::Vocab::FOAF.Document].freeze
 
     def expand_documents docs
       docs = assert_resources docs, blank: false, empty: false, vocab: true
       type_strata docs, descend: true
+    end
+
+    def expand_fragments_sparql spec
+      out = {}
+      typeq = spec.keys
+      i = 0
+      while i < typeq.length do
+        type = typeq[i]
+
+        paths = spec[type].map { |pred| entail_property_path pred }
+
+        # we don't want to do this for base types; just pass them through
+        if [RDF::RDFS.Resource, RDF::OWL.Thing].include? type
+          out[type] = paths
+          next i += 1
+        end
+        # get all the equivalent and subtypes minus those explicitly defined
+        tequiv = type_strata(type, descend: true) - typeq
+        # splice these in to the queue
+        typeq.insert(i + 1, *tequiv)
+
+        ([type] + tequiv).each { |t| out[t] = paths }
+
+        i += 1 + tequiv.length
+      end
+
+      out
     end
 
     def expand_fragments spec
@@ -1025,7 +1063,68 @@ module Intertwingler
       nil
     end
 
-    private def host_for_internal subject, seen = Set[],
+    private
+
+    def host_for_internal_sparql subject, seen = Set[],
+        dtypes = nil, graph: nil, published: false, circulated: false
+
+      # caching manoeuvre
+      key = [subject.to_s, graph.sort, published]
+      return hcache[key] if hcache.key? key
+
+      # 1. attempt to detect a direct assertion that this is a fragment
+      host = objects_for(
+        subject, CI['fragment-of'], graph: graph, only: :resource).sort.first
+
+      # XXX disambiguate if there is more than one direct assertion (is
+      # document type, is published, newest?, alphabetical)
+
+      ft = fragment_spec_sparql.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
+      dtypes ||= document_types(fragments: true) & all_types
+
+      types = types_for subject, graph: graph
+      isdoc = type_is? types, dtypes
+      frags = type_is? types, ft
+
+      unless host or (isdoc and not frags)
+        paths = fragment_spec_sparql.map do |type, path|
+          score = type_is?(types, type) or next
+          [score, path]
+        end.compact.sort do |a, b|
+          a.first <=> b.first
+        end.map(&:last).flatten(1).uniq
+
+        # accumulate candidates
+        hosts = paths.reduce([]) do |array, path|
+          # okay here is where we construct the query from the algebra
+
+          o = RDF::Query::Variable.new ?o
+          c = RDF::Query::Variable.new ?c
+          # this says SELECT DISTINCT ?o WHERE {
+          #   $subject $path $o . $o a $c FILTER (?c in ($dtypes)) }
+          query = SAO::Distinct.new(
+            SAO::Project.new([o], SAO::Filter.new(SAO::In.new(c, *dtypes),
+              SAO::Sequence.new(SAO::Path.new(subject, path, o),
+                RDF::Query.new { pattern [o, RDF.type, c] }))))
+
+          # this just says SELECT DISTINCT ?o WHERE { $subject $path ?o }
+          # query = SAO::Distinct.new(SAO::Project.new(
+          #   [o], SAO::Path.new(subject, path, o)))
+
+          array + query.execute(repo).map { |sol| sol[:o] }
+        end.uniq
+      end
+
+      if host = hosts.first and not seen.include? host
+        parent = host_for_internal_sparql host, seen | Set[host], dtypes,
+          graph: graph, published: published, circulated: circulated
+        host = parent if parent
+      end
+
+      hcache[key] = host
+    end
+
+    def host_for_internal subject, seen = Set[],
         dtypes = nil, graph: [], published: false, circulated: false
       # caching manoeuvre
       key = [subject.to_s, graph.sort, published]
@@ -1110,6 +1209,8 @@ module Intertwingler
 
       hcache[key] = host
     end
+
+    public
 
     # Retrieve a host document for a suspected document fragment, if
     # it exists; null otherwise (or itself if `:noop` is true).
@@ -2293,16 +2394,15 @@ module Intertwingler
       rev = property_set term, inverse: true
 
       fwd = fwd.count == 1 ? fwd.first : fwd.reduce do |a, b|
-        SPARQL::Algebra::Operator::Alt.new b, a
+        SAO::Alt.new b, a
       end
 
       unless rev.empty?
         rev = rev.count == 1 ? rev.first : rev.reduce do |a, b|
-          SPARQL::Algebra::Operator::Alt.new b, a
+          SAO::Alt.new b, a
         end
 
-        fwd = SPARQL::Algebra::Operator::Alt.new fwd,
-          SPARQL::Algebra::Operator::Reverse.new(rev)
+        fwd = SAO::Alt.new fwd, SAO::Reverse.new(rev)
       end
 
       fwd

@@ -159,12 +159,12 @@ def host_for_internal repo, subject, spec, seen = nil, dtypes = nil, graph: nil,
 
     if host = hosts.first and not seen.include? host
       parent = host_for_internal repo, host, spec, seen | Set[host], dtypes,
-            graph: graph, published: published, circulated: circulated
-          host = parent if parent
+        graph: graph, published: published, circulated: circulated
+      host = parent if parent
     end
   end
 
-  host
+  hcache[key] = host
 end
 
 # load the graph

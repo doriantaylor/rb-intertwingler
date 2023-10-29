@@ -16,6 +16,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Engine
   #
+  #     # An itcv:FragmentList is a list of fragments and only fragments.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :FragmentList
+  #
   #     # A fragment specifier tells a resolver to treat a particular class of resource as a document fragment, rather than a full document, as well how to relate said fragment to a host document.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :FragmentSpecifier
@@ -89,7 +93,7 @@ module Intertwingler::Vocab
       "http://purl.org/dc/terms/created": "2023-09-06T21:14:10Z",
       "http://purl.org/dc/terms/creator": "http://doriantaylor.com/person/dorian-taylor#me",
       "http://purl.org/dc/terms/description": {en: "This document specifies the on-line configuration vocabulary for Intertwingler, a dense hypermedia engine."},
-      "http://purl.org/dc/terms/modified": "2023-10-09T19:04:07Z",
+      "http://purl.org/dc/terms/modified": ["2023-10-09T19:04:07Z", "2023-10-29T19:43:48Z"],
       "http://purl.org/dc/terms/references": "https://github.com/doriantaylor/rb-intertwingler",
       "http://purl.org/dc/terms/subject": "https://intertwingler.net/",
       "http://purl.org/dc/terms/title": {en: "Intertwingler Configuration Vocabulary"},
@@ -108,6 +112,19 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
       label: {en: "Engine"},
       subClassOf: "https://vocab.methodandstructure.com/intertwingler#Handler",
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :FragmentList,
+      comment: {en: "An itcv:FragmentList is a list of fragments and only fragments."},
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "FragmentList"},
+      subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#List", term(
+          allValuesFrom: term(
+            unionOf: list("https://vocab.methodandstructure.com/intertwingler#FragmentList", term(
+              "http://www.w3.org/2002/07/owl#hasValue": list()
+            ))
+          ),
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
+        )],
       type: "http://www.w3.org/2002/07/owl#Class"
     term :FragmentSpecifier,
       comment: {en: "A fragment specifier tells a resolver to treat a particular class of resource as a document fragment, rather than a full document, as well how to relate said fragment to a host document."},
@@ -172,11 +189,18 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"fragment-class",
-      comment: {en: "The target class of an itcv:FragmentSpecifier."},
+      comment: {en: "A target class of an itcv:FragmentSpecifier."},
       domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier",
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
       label: {en: "fragment-class"},
       range: "http://www.w3.org/2000/01/rdf-schema#Class",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"fragment-list",
+      comment: {en: "Denotes an ordered list of itcv:FragmentSpecifiers that describes how a given class is to be treated as a fragment of another document."},
+      domain: "https://vocab.methodandstructure.com/intertwingler#Resolver",
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "fragment-list"},
+      range: "https://vocab.methodandstructure.com/intertwingler#FragmentList",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :handler,
       comment: {en: "This property relates a handler to the engine."},
@@ -263,8 +287,5 @@ module Intertwingler::Vocab
       label: {en: "vocab"},
       range: "http://www.w3.org/2001/XMLSchema#anyURI",
       type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
-
-    RDF::Vocabulary.register :itcv, self if
-      RDF::Vocabulary.respond_to? :register
   end
 end
