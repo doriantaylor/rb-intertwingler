@@ -127,6 +127,7 @@ module Intertwingler::Util::Clean
   #  RDF::Vocabulary, String>] the coerced elements
   #
   def coerce_resources arg, as: :rdf
+    # note nil.to_a is []
     (arg.respond_to?(:to_a) ? arg.to_a : [arg]).map do |c|
       coerce_resource c, as: as
     end.compact

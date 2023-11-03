@@ -249,17 +249,12 @@ module Intertwingler
 
       # fragment maps
       config[:fragment] = {} unless config[:fragment].is_a? Hash
-      config[:fragment] = config[:fragment].map do |k, v|
-        k = Intertwingler::Resolver.resolve_curie k.to_s, prefixes: pfx
-        # warn "yo #{k.inspect}"
-        v = v.respond_to?(:to_a) ? v.to_a : [v]
-        v = v.reduce({}) do |a, x|
-          x = x.to_s.split(/^\^+/).reverse
-          a[Intertwingler::Resolver.resolve_curie(x.first, prefixes: pfx)] = !!x[1]
-          a
+      config[:fragment] = config[:fragment].map do |frag, paths|
+        paths = (paths.respond_to?(:to_a) ? paths.to_a : [paths]).map do |path|
+          Intertwingler::GraphOps.parse_property_path path, pfx
         end
-        [k, v]
-      end.to_h
+        [[Intertwingler::Resolver.resolve_curie(frag.to_s, prefixes: pfx)], paths]
+      end
 
       config
     end

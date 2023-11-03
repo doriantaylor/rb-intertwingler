@@ -55,7 +55,20 @@
   itcv:prefix [ sh:prefix "rdf"^^xsd:token ; sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ], [ sh:prefix "adms"^^xsd:token ; sh:namespace "http://www.w3.org/ns/adms#"^^xsd:anyURI ], [ sh:prefix "awol"^^xsd:token ; sh:namespace "http://bblfish.net/work/atom-owl/2006-06-06/#"^^xsd:anyURI ], [ sh:prefix "bibo"^^xsd:token ; sh:namespace "http://purl.org/ontology/bibo/"^^xsd:anyURI ], [ sh:prefix "bs"^^xsd:token ; sh:namespace "http://purl.org/ontology/bibo/status/"^^xsd:anyURI ], [ sh:prefix "ci"^^xsd:token ; sh:namespace "https://vocab.methodandstructure.com/content-inventory#"^^xsd:anyURI ], [ sh:prefix "dcat"^^xsd:token ; sh:namespace "http://www.w3.org/ns/dcat#"^^xsd:anyURI ], [ sh:prefix "dc"^^xsd:token ; sh:namespace "http://purl.org/dc/elements/1.1/"^^xsd:anyURI ], [ sh:prefix "dct"^^xsd:token ; sh:namespace "http://purl.org/dc/terms/"^^xsd:anyURI ], [ sh:prefix "foaf"^^xsd:token ; sh:namespace "http://xmlns.com/foaf/0.1/"^^xsd:anyURI ], [ sh:prefix "http"^^xsd:token ; sh:namespace "http://www.w3.org/2011/http#"^^xsd:anyURI ], [ sh:prefix "ibis"^^xsd:token ; sh:namespace "https://vocab.methodandstructure.com/ibis#"^^xsd:anyURI ], [ sh:prefix "og"^^xsd:token ; sh:namespace "http://ogp.me/ns#"^^xsd:anyURI ], [ sh:prefix "org"^^xsd:token ; sh:namespace "http://www.w3.org/ns/org#"^^xsd:anyURI ], [ sh:prefix "owl"^^xsd:token ; sh:namespace "http://www.w3.org/2002/07/owl#"^^xsd:anyURI ], [ sh:prefix "qb"^^xsd:token ; sh:namespace "http://purl.org/linked-data/cube#"^^xsd:anyURI ], [ sh:prefix "rdfs"^^xsd:token ; sh:namespace "http://www.w3.org/2000/01/rdf-schema#"^^xsd:anyURI ], [ sh:prefix "schema"^^xsd:token ; sh:namespace "https://schema.org/"^^xsd:anyURI ], [ sh:prefix "sioc"^^xsd:token ; sh:namespace "http://rdfs.org/sioc/ns#"^^xsd:anyURI ], [ sh:prefix "sioct"^^xsd:token ; sh:namespace "http://rdfs.org/sioc/types#"^^xsd:anyURI ], [ sh:prefix "skos"^^xsd:token ; sh:namespace "http://www.w3.org/2004/02/skos/core#"^^xsd:anyURI ], [ sh:prefix "xhv"^^xsd:token ; sh:namespace "http://www.w3.org/1999/xhtml/vocab#"^^xsd:anyURI ], [ sh:prefix "xsd"^^xsd:token ; sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI ] ;
   itcv:vocab "http://www.w3.org/1999/xhtml/vocab#"^^xsd:anyURI ;
   itcv:document foaf:Document, bibo:Collection, skos:Collection, skos:ConceptScheme, qb:DataSet, sioc:Container, dcat:Resource, adms:Asset, http:Response ;
-  itcv:fragment [ itcv:fragment-class rdfs:Resource ; itcv:via foaf:isPrimaryTopicOf, [ sh:inversePath dct:hasPart ], dct:isPartOf ], [ itcv:fragment-class skos:Concept ; itcv:via skos:topConceptOf, skos:inScheme, [ sh:inversePath skos:member ], [ sh:inversePath ( skos:memberList [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ] ], [ itcv:fragment-class qb:Observation ; itcv:via qb:dataSet, [ sh:inversePath qb:observation ] ] .
+  itcv:fragment-list (
+      [ itcv:fragment-class foaf:Agent ;
+        itcv:via foaf:isPrimaryTopicOf ]
+      [ itcv:fragment-class skos:Concept ;
+        itcv:host-class skos:Collection ;
+        itcv:via [ sh:inversePath skos:member ], [ sh:inversePath ( skos:memberList [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ] ]
+      [ itcv:fragment-class skos:Concept ;
+        itcv:host-class skos:ConceptScheme ;
+        itcv:via skos:topConceptOf, skos:inScheme ]
+      [ itcv:fragment-class qb:Observation ;
+        itcv:via qb:dataSet, [ sh:inversePath qb:observation ] ]
+      [ itcv:fragment-class rdfs:Resource ;
+        itcv:via foaf:isPrimaryTopicOf, [ sh:inversePath dct:hasPart ], dct:isPartOf ]
+  ) .
 
 # the engine
 

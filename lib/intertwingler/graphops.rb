@@ -30,6 +30,8 @@ module Intertwingler
     # we type this out a lot so let's not
     SAO = SPARQL::Algebra::Operator
 
+    CI = Intertwingler::Vocab::CI
+
     # rdf term type tests
     NTESTS = { uri: :"uri?", blank: :"node?", literal: :"literal?" }.freeze
     NMAP   = { iri: :uri, bnode: :blank }.merge(
@@ -848,32 +850,24 @@ module Intertwingler
 
     # the fragment spec determines the kinds of types which are
     # always considered fragments (rather than full documents)
+    #
+    # sparql-based fragments are different because they relate many
+    # fragment classes to many document classes via many property
+    # paths, and so we are ultimately testing the cartesian product here.
 
-    # fragment specs take the form { type => { predicate => reversed? } }
-    FRAGMENTS = {
-      RDF::RDFS.Resource => {
-        RDF::Vocab::FOAF.isPrimaryTopicOf => false,
-        RDF::Vocab::DC.hasPart            => true,
-        RDF::Vocab::DC.isPartOf           => false,
-      }.freeze,
-      # we explicitly add this class because it overrides the fact
-      # that foaf:Document etc are otherwise never fragments
-      RDF::Vocab::BIBO.DocumentPart => {
-        RDF::Vocab::DC.hasPart            => true,
-        RDF::Vocab::DC.isPartOf           => false,
-      }.freeze,
-    }.freeze
-
-    FRAGMENTS_SPARQL = {
-      RDF::RDFS.Resource => [
-        SAO::Reverse.new(RDF::Vocab::DC.hasPart),
-        RDF::Vocab::DC.isPartOf,
+    FRAGMENTS = [
+      [
+       [RDF::Vocab::BIBO.DocumentPart],
+       [SAO::Reverse.new(RDF::Vocab::DC.hasPart), RDF::Vocab::DC.isPartOf],
+       [RDF::Vocab::FOAF.Document],
       ],
-      RDF::Vocab::BIBO.DocumentPart => [
-        SAO::Reverse.new(RDF::Vocab::DC.hasPart),
-        RDF::Vocab::DC.isPartOf,
-      ]
-    }
+      [
+       [RDF::RDFS.Resource],
+       [RDF::Vocab::FOAF.isPrimaryTopicOf,
+        SAO::Reverse.new(RDF::Vocab::DC.hasPart), RDF::Vocab::DC.isPartOf],
+       [],
+      ],
+    ]
 
     # these are all the types unambiguously considered to be "documents"
     DOCUMENTS = [RDF::Vocab::FOAF.Document].freeze
@@ -883,88 +877,16 @@ module Intertwingler
       type_strata docs, descend: true
     end
 
+    FRAGMENT_COERCIONS = [-> x { coerce_resources(x) }] * 4
+    FRAGMENT_COERCIONS[1] = -> x { entail_property_path x }
+
+
     def expand_fragments_sparql spec
-      out = {}
-      typeq = spec.keys
-      i = 0
-      while i < typeq.length do
-        type = typeq[i]
-
-        paths = spec[type].map { |pred| entail_property_path pred }
-
-        # we don't want to do this for base types; just pass them through
-        if [RDF::RDFS.Resource, RDF::OWL.Thing].include? type
-          out[type] = paths
-          next i += 1
-        end
-        # get all the equivalent and subtypes minus those explicitly defined
-        tequiv = type_strata(type, descend: true) - typeq
-        # splice these in to the queue
-        typeq.insert(i + 1, *tequiv)
-
-        ([type] + tequiv).each { |t| out[t] = paths }
-
-        i += 1 + tequiv.length
+      spec.map do |row|
+        (0..3).map do |i|
+          instance_exec row[i], &FRAGMENT_COERCIONS[i]
+        end.map(&:to_set)
       end
-
-      out
-    end
-
-    def expand_fragments spec
-      out = {}
-
-      # create an initial queue of rdf types
-      typeq = spec.keys
-      i = 0
-      while i < typeq.length do
-        type = typeq[i]
-        # we don't want to do this for base types; just pass them through
-        if [RDF::RDFS.Resource, RDF::OWL.Thing].include? type
-          out[type] = spec[type]
-          next i += 1
-        end
-        # get all the equivalent and subtypes minus those explicitly defined
-        tequiv = type_strata(type, descend: true) - typeq
-        # splice these in to the queue
-        typeq.insert(i + 1, *tequiv)
-
-        # note it is not strictly necessary to splice at point because
-        # these queues are kind of punned as to their function: both
-        # as a queue and as a set of 'seen' terms. since the terms are
-        # operated on all at once, the order doesn't matter and they
-        # could just as easily be tacked onto the end and there should
-        # be no substantive difference in the behaviour of this routine.
-
-        # prepare the predicate spec
-        ps = {}
-        # now do a queue of predicates
-        predq = spec[type].keys
-        j = 0
-        while j < predq.length do
-          pred = predq[j]
-          rev  = spec[type][pred]
-
-          # get the equivalent properties
-          pequiv = property_set(pred).to_a.sort - predq
-          # do the same thing with the predicates
-          predq.insert(j + 1, *pequiv)
-
-          # bulk-assign spec with the asserted predicate first
-          ([pred] + pequiv).each { |p| ps[p] = rev }
-
-          # increment plus whatever was in the equivalents
-          j += 1 + pequiv.length
-        end
-
-        # bulk assign type spec, same deal
-        ([type] + tequiv).each { |t| out[t] = ps }
-
-        # increment plus whatever was in the equivalents
-        i += 1 + tequiv.length
-      end
-
-      # chuck out an expando'd copy of what was handed in
-      out
     end
 
     public
@@ -978,7 +900,7 @@ module Intertwingler
     # @return [Hash{RDF::URI=>Hash{RDF::URI=>false,true}}]
     #
     def fragment_spec
-      @fragments ||= expand_fragments FRAGMENTS
+      @fragments ||= expand_fragments_sparql FRAGMENTS
     end
 
     # Set a new fragment spec.
@@ -991,7 +913,7 @@ module Intertwingler
     #  dereferenced.
     #
     def fragment_spec= spec
-      @fragments = expand_fragments spec
+      @fragments = expand_fragments_sparql spec
     end
 
     private
@@ -1065,12 +987,21 @@ module Intertwingler
 
     private
 
-    def host_for_internal_sparql subject, seen = Set[],
-        dtypes = nil, graph: nil, published: false, circulated: false
+    BASE_TYPES = [RDF::RDFS.Resource, RDF::OWL.Thing].freeze
 
+    def host_for_internal_sparql subject, seen = Set[], dtypes = nil,
+        spec: nil, graph: nil, published: false, circulated: false, force: false
       # caching manoeuvre
       key = [subject.to_s, graph.sort, published]
-      return hcache[key] if hcache.key? key
+
+      if force
+        hcache.delete key
+      elsif hcache.key? key
+        return hcache[key]
+      end
+
+      # get us a fragment spec
+      spec ||= fragment_spec
 
       # 1. attempt to detect a direct assertion that this is a fragment
       host = objects_for(
@@ -1079,134 +1010,114 @@ module Intertwingler
       # XXX disambiguate if there is more than one direct assertion (is
       # document type, is published, newest?, alphabetical)
 
-      ft = fragment_spec_sparql.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
+      ft = fragment_types - BASE_TYPES
       dtypes ||= document_types(fragments: true) & all_types
 
       types = types_for subject, graph: graph
       isdoc = type_is? types, dtypes
       frags = type_is? types, ft
 
+      # none of this block gets run if we already have an explicit
+      # host or the subject has been asserted to be a document and
+      # *not* also asserted to be a fragment.
       unless host or (isdoc and not frags)
-        paths = fragment_spec_sparql.map do |type, path|
-          score = type_is?(types, type) or next
-          [score, path]
-        end.compact.sort do |a, b|
-          a.first <=> b.first
-        end.map(&:last).flatten(1).uniq
 
+        # filter path/class pairs based on the subject type
+        tests = spec.map do |pattern|
+          ftypes, paths, classes, except = pattern
+
+          score = type_is?(types, ftypes) or next
+
+          [score, paths, classes, except]
+        end.compact.uniq
+
+        # warn tests.inspect
+
+        attempt = 0 # attempt score
         # accumulate candidates
-        hosts = paths.reduce([]) do |array, path|
-          # okay here is where we construct the query from the algebra
+        hosts = tests.reduce([]) do |array, test|
+          score, paths, classes, except = test
 
-          o = RDF::Query::Variable.new ?o
-          c = RDF::Query::Variable.new ?c
-          # this says SELECT DISTINCT ?o WHERE {
-          #   $subject $path $o . $o a $c FILTER (?c in ($dtypes)) }
-          query = SAO::Distinct.new(
-            SAO::Project.new([o], SAO::Filter.new(SAO::In.new(c, *dtypes),
-              SAO::Sequence.new(SAO::Path.new(subject, path, o),
-                RDF::Query.new { pattern [o, RDF.type, c] }))))
+          # gin up a special
+          tc = type_strata(classes - BASE_TYPES, descend: true) & all_types
 
-          # this just says SELECT DISTINCT ?o WHERE { $subject $path ?o }
-          # query = SAO::Distinct.new(SAO::Project.new(
-          #   [o], SAO::Path.new(subject, path, o)))
+          # cargo cult; can't remember if &= is overloaded
 
-          array + query.execute(repo).map { |sol| sol[:o] }
-        end.uniq
-      end
+          # this will give us an array of arrays
+          mine = paths.map do |path|
+            # okay here is where we construct the query from the algebra
+            o = RDF::Query::Variable.new ?o
+            c = RDF::Query::Variable.new ?c
 
-      if host = hosts.first and not seen.include? host
-        parent = host_for_internal_sparql host, seen | Set[host], dtypes,
-          graph: graph, published: published, circulated: circulated
-        host = parent if parent
-      end
+            # we have to determine if this is a bgp or a path
+            query = if path.is_a? SAO
+                      SAO::Path.new subject, path, o
+                    else
+                      # not sure why you gotta do it this way
+                      RDF::Query.new { pattern [subject, path, o] }
+                    end
 
-      hcache[key] = host
-    end
+            # this is WHERE { $subject $path ?o . ?o a ?c }
+            query = SAO::Sequence.new(query,
+              RDF::Query.new { pattern [o, RDF.type, c] })
 
-    def host_for_internal subject, seen = Set[],
-        dtypes = nil, graph: [], published: false, circulated: false
-      # caching manoeuvre
-      key = [subject.to_s, graph.sort, published]
-      return hcache[key] if hcache.key? key
+            # conditionally add FILTER (?c in ($classes)) }
+            query = SAO::Filter.new(SAO::In.new(c, *tc), query) unless
+              tc.empty?
 
-      # we begin by looking for an explicit designation
-      host = objects_for(subject, Intertwingler::Vocab::CI['fragment-of'],
-        graph: graph, only: :resource).sort.first
+            # finally wrap with SELECT DISTINCT ?o, ?c
+            query = SAO::Distinct.new(SAO::Project.new([o, c], query))
 
-      # get all the classes but the two basic ones that will net everything
-      ft = fragment_spec.keys - [RDF::RDFS.Resource, RDF::OWL.Thing]
-      dtypes ||= document_types(fragments: true) & all_types
+            # warn query.to_sparql
 
-      types = types_for subject, graph: graph
-      isdoc = type_is? types, dtypes
-      frags = type_is? types, ft
+            # this will collect the candidates into a hash of scores
+            # which we turn into an array of arrays [?o, scores]
+            query.execute(self).reduce({}) do |sols, sol|
+              unless (!except.empty? and type_is? sol[:c], except)
+                # create a record
+                o   = sol[:o]
+                # these are in the order we wanna sort them in
+                rec = sols[o] ||= [score, attempt, Float::INFINITY]
+                # now get the type score
 
-      # this condition is true if there is no explicit host document
-      # and the subject itself is not a document type or explicit fragment type
-      unless host or (isdoc and not frags)
-        # attempt to find a list head (although not sure what we do if
-        # there are multiple list heads)
-        head = subjects_for(
-          RDF.first, subject, graph: graph, only: :blank).sort.first
-        head = list_head(head, graph: graph) if head
+                tscore = type_is? sol[:c], classes
+                # make sure this index is wherever the infinity is
+                rec[2] = tscore if tscore and tscore < rec[2]
+                # the accumulator
+              end
 
-        # get an ordered set of [predicate, revp] pairs
-        preds = fragment_spec.map do |type, pv|
-          # this will give us an order to try the mappings in
-          score = type_is?(types, type) or next
-          [score, pv.to_a]
-        end.compact.sort do |a, b|
-          # this will sort the mappings by score
-          a.first <=> b.first
-        end.map(&:last).flatten(1).uniq
+              sols
+            end.to_a
+          end.flatten(1)
 
-        # accumulate candidate hosts and filter them
-        tab = {}
-        pab = {}
-        pmap = {}
-        hosts = preds.reduce([]) do |a, pair|
-          pred, rev = pair
-          px = pmap[pred] ||= property_set pred
-          if rev
-            # reverse relations include list heads
-            a += subjects_for px, subject,
-              graph: graph, entail: false, only: :resource
-            a += subjects_for px, head,
-              graph: graph, entail: false, only: :resource if head
-          else
-            a += objects_for subject, px, entail: false, only: :resource
-          end
-          a # <-- the accumulator
-        end.uniq.reject do |h|
-          ((tab[h] ||= types_for h) & dtypes).empty?
+          # add this to the score
+          attempt += 1.0 / tests.count
+
+          array + mine
+        end.reduce({}) do |collation, row|
+          vec = collation[row.first] ||= [Float::INFINITY] * 3 +
+            [published?(row.first, circulated: circulated) ? 0 : 1]
+          row.last.each_with_index { |s, i| vec[i] = s if s < vec[i] }
+          collation
+        end.to_a.map do |row|
+          # just compare vector lengths i guess
+          [row.first, Math.sqrt(row.last.map { |xi| xi ** 2 }.sum)]
         end.sort do |a, b|
-          # sort by publication status
-          pa, pb = [a, b].map do |x|
-            pab[x] ||= (published?(x, circulated: circulated) ? -1 : 0)
-          end
-          c = pa <=> pb
-          # sort by priority in config (ish; ordering could be better)
-          if c == 0
-            # warn "#{tab[a]} <=> #{tab[b]}"
-            pa, pb = [a, b].map do |x|
-              tab[x].map { |y| dtypes.index(y) || Float::INFINITY }.min
-            end
-            c = pa <=> pb
-          end
-          # XXX TODO maybe sort by date? i unno
-          # sort lexically if it's a tie
-          c == 0 ? a <=> b : c
-        end
+          # we want published over unpublished, closer matches over farther matches
+          a.last <=> b.last
+        end.map(&:first)
 
-        # the first one will be our baby
+        # now we prune
+
         if host = hosts.first and not seen.include? host
-          parent = host_for_internal host, seen | Set[host], dtypes,
-            graph: graph, published: published, circulated: circulated
+          parent = host_for_internal_sparql host, seen | Set[host],
+            dtypes, spec: spec, graph: graph, published: published,
+            circulated: circulated
           host = parent if parent
         end
       end
 
+      # if host is nil then this goes into the cache as don't try this again
       hcache[key] = host
     end
 
@@ -1221,10 +1132,11 @@ module Intertwingler
     # @param published [false, true, :circulated] only consider
     #  published (or circulated) documents
     # @param noop [false, true] return the subject if there is no host
+    # @param spec [Hash] an optional overriding (expanded) fragment spec
     #
     # @return [nil, RDF::Resource] the host document, if any
     #
-    def host_for subject, graph: nil, published: true, noop: false
+    def host_for subject, graph: nil, published: true, noop: false, spec: nil
       subject = assert_resource  subject
       graph   = assert_resources graph
 
@@ -1233,8 +1145,8 @@ module Intertwingler
                    else false
                    end
 
-      host = host_for_internal subject, graph: graph,
-        published: published, circulated: circulated
+      host = host_for_internal_sparql subject, graph: graph,
+        published: published, circulated: circulated, spec: spec
 
       # return the noop
       noop ? host || subject : host
@@ -1254,13 +1166,21 @@ module Intertwingler
       !!host_for(subject, graph: graph, published: published)
     end
 
+    # Return the set of fragment types.
+    #
+    # @return [Array<RDF::URI>] All recognized fragment types
+    #
+    def fragment_types
+      fragment_spec.map(&:first).reduce(&:|).to_a
+    end
+
     # Retrieve the RDF types considered to be "documents".
     #
     # @return [Array<RDF::URI>] all recognized document types
     #
     def document_types fragments: false
       @documents ||= expand_documents DOCUMENTS
-      fragments ? @documents : @documents - fragment_spec.keys
+      fragments ? @documents : @documents - fragment_types
     end
 
     # Set the RDF types that are recognized as "documents".
@@ -1272,7 +1192,6 @@ module Intertwingler
     def document_types= types
       @documents = expand_documents types
     end
-
     # Return all subjects in the graph that conform to the configured
     # notion of a "document".
     #
@@ -2430,11 +2349,12 @@ module Intertwingler
     # Parse a SPARQL property path into its algebra.
     #
     # @param sparql [#to_s] the SPARQL property path.
-    # @param prefixes [Hash] the (optional) overriding prefixes
+    # @param prefixes [Hash] the prefix map
+    # @param entail [false, true] whether to entail the resulting expression.
     #
     # @return [SPARQL::Algebra::Operator] the corresponding piece of algebra.
     #
-    def parse_property_path sparql, prefixes, entail: false
+    def self.parse_property_path sparql, prefixes, entail: false
       begin
         out = SPARQL::Grammar::Parser.new(
           sparql.to_s, prefixes: prefixes).parse(:Path).last
@@ -2442,6 +2362,12 @@ module Intertwingler
       rescue EBNF::LL1::Parser::Error
         raise ArgumentError, "Malformed property path: #{sparql}"
       end
+    end
+
+    def parse_property_path sparql, prefixes, entail: false
+      # XXX is there a way to resolve this otherwise?
+      Intertwingler::GraphOps.parse_property_path sparql, prefixes,
+        entail: entail
     end
 
     private

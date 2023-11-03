@@ -760,7 +760,7 @@ class Intertwingler::Resolver
     prefixes = { rdf: RDF::RDFV }.merge(sanitize_prefixes prefixes)
 
     out = (curie.respond_to?(:to_a) ? curie.to_a : [curie]).map do |c|
-      Intertwingler::Util::Clean.normalize_space(c).split
+      Intertwingler::Util::Clean.normalize_space(c.to_s).split
     end.flatten.compact.map do |c|
       prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
       prefix = prefix.to_sym if prefix
@@ -1009,12 +1009,28 @@ class Intertwingler::Resolver
   end
 
   # Returns the "host document" of a given subject (or `nil` if the
-  # subject is not a fragment)
+  # subject is not a discernible fragment).
+  #
+  # @param subject [RDF::URI, URI] the subject to resolve
+  # @param graph [RDF::URI, Array<RDF::URI>] named graph(s), if any
+  # @param published [false, true, :circulated] whether to limit
+  #  candidates to `published` resources
+  # @param noop [false, true] returns `subject` if no host document found
+  # @param as [:rdf, :uri] optional type coercion
   #
   # @return [URI, RDF::URI, nil] the host document, if any
   #
-  def host_for subject, scalar: true, as: :rdf, published: false
+  def host_for subject, graph: nil, published: true, noop: false, as: :rdf
     subject = uuid_for subject, noop: true
+
+    # XXX feed in our own fragment spec
+    host = @repo.host_for subject,
+      graph: graph, published: published, noop: noop
+
+    # not sure if this is necessary
+    host ||= subject if noop
+
+    coerce_resource host, as: as
   end
 
   # Determine whether the subject is "published", which canonically
