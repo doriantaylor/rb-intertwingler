@@ -1,0 +1,5 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<urn:uuid:f332cd08-6b5c-47a6-8d3e-33dc420dfa53> a skos:OrderedCollection ;
+  skos:prefLabel "bogus ordered collection"@en ;
+  skos:memberList ( <urn:uuid:3a978497-8980-4695-a316-cb9c66740c49> <urn:uuid:c9bc74c4-1f77-4342-bd43-150e8f6329aa> <urn:uuid:0f47fbb1-91c0-4fbb-bafc-e85faa64ae2d> ) .

@@ -877,9 +877,8 @@ module Intertwingler
       type_strata docs, descend: true
     end
 
-    FRAGMENT_COERCIONS = [-> x { coerce_resources(x) }] * 4
+    FRAGMENT_COERCIONS = [-> x { coerce_resources(x, as: :term) }] * 4
     FRAGMENT_COERCIONS[1] = -> x { entail_property_path x }
-
 
     def expand_fragments_sparql spec
       spec.map do |row|
@@ -1031,7 +1030,7 @@ module Intertwingler
           [score, paths, classes, except]
         end.compact.uniq
 
-        # warn tests.inspect
+        warn tests.inspect
 
         attempt = 0 # attempt score
         # accumulate candidates
@@ -1049,7 +1048,7 @@ module Intertwingler
             o = RDF::Query::Variable.new ?o
             c = RDF::Query::Variable.new ?c
 
-            # we have to determine if this is a bgp or a path
+            # we have to determine if this is a bgp or a sparql path
             query = if path.is_a? SAO
                       SAO::Path.new subject, path, o
                     else
@@ -1072,7 +1071,7 @@ module Intertwingler
 
             # this will collect the candidates into a hash of scores
             # which we turn into an array of arrays [?o, scores]
-            query.execute(self).reduce({}) do |sols, sol|
+            query.execute(self, debug: true).reduce({}) do |sols, sol|
               unless (!except.empty? and type_is? sol[:c], except)
                 # create a record
                 o   = sol[:o]
