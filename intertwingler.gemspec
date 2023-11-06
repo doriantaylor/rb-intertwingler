@@ -4,14 +4,14 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'intertwingler/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = 'rdf-sak'
+  spec.name          = 'intertwingler'
   spec.version       = Intertwingler::VERSION
   spec.authors       = ['Dorian Taylor']
   spec.email         = ['code@doriantaylor.com']
   spec.license       = 'Apache-2.0'
-  spec.homepage      = 'https://github.com/doriantaylor/rb-rdf-sak'
-  spec.summary       = 'Swiss-Army Knife for RDF(a) markup generation'
-  spec.description   = <<-DESC
+  spec.homepage      = 'https://github.com/doriantaylor/rb-intertwingler'
+  spec.summary       = 'An engine for dense hypermedia.'
+  spec.description   = <<~DESC
 
   DESC
 
@@ -23,35 +23,38 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   # ruby
-  spec.required_ruby_version = ">= 2.0"
+  spec.required_ruby_version = '>= 2.7'
 
   # dev/test dependencies
-  spec.add_development_dependency 'bundler', '>= 2.1.4'
-  spec.add_development_dependency 'rake',    '>= 13.0'
-  spec.add_development_dependency 'rspec',   '>= 3.9'
+  spec.add_development_dependency 'bundler', '>= 2.4'
+  spec.add_development_dependency 'rake',    '>= 13.1'
+  spec.add_development_dependency 'rspec',   '>= 3.12'
 
   # stuff we use pretty universally
-  spec.add_runtime_dependency 'rdf',              '>= 3.1.7'
-  spec.add_runtime_dependency 'rdf-reasoner',     '>= 0.6.2' # my patch
-  spec.add_runtime_dependency 'linkeddata',       '>= 3.1.2'
-  spec.add_runtime_dependency 'uri-urn',          '>= 0.0.3'
-  spec.add_runtime_dependency 'sassc',            '>= 2.2.1'
-  spec.add_runtime_dependency 'shared-mime-info', '>= 0.2.0'
-  spec.add_runtime_dependency 'commander',        '>= 4.4.5' # my patch
-  spec.add_runtime_dependency 'uuidtools',        '>= 2.1.5'
-  spec.add_runtime_dependency 'mimemagic',        '>= 0.5.0' # my patch
+  spec.add_runtime_dependency 'http-negotiate', '>= 0.2.0' # mine
+  spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
+  spec.add_runtime_dependency 'mimemagic',      '>= 0.5.0' # my patch
+  spec.add_runtime_dependency 'rdf',            '>= 3.1.7'
+  spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
+  spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
+  spec.add_runtime_dependency 'uri-urn',        '>= 0.0.3'
+  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4'   # mine
+  spec.add_runtime_dependency 'uuidtools',      '>= 2.1.5'
 
-  # stuff i wrote
-  spec.add_runtime_dependency 'xml-mixup',      '>= 0.1.16'
-  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4'
-  spec.add_runtime_dependency 'md-noko',        '>= 0.1.0'
-  spec.add_runtime_dependency 'http-negotiate', '>= 0.2.0'
+  # stuff for handlers/transforms
+  spec.add_runtime_dependency 'md-noko',      '>= 0.1.0'  # mine
+  spec.add_runtime_dependency 'sassc',        '>= 2.2.1'
+  spec.add_runtime_dependency 'store-digest', '>= 0.1.3'  # mine
+  spec.add_runtime_dependency 'xml-mixup',    '>= 0.1.16' # mine
+
+  # stuff for cli
+  spec.add_runtime_dependency 'thor', '>= 1.2.2'
 
   # stuff for urlrunner
   spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'
   spec.add_runtime_dependency 'concurrent-ruby-edge', '>= 0.6.0'
-  spec.add_runtime_dependency 'tidy_ffi',             '>= 1.0.0'
   spec.add_runtime_dependency 'crass',                '>= 1.0.6'
+  spec.add_runtime_dependency 'tidy_ffi',             '>= 1.0.0'
 
   # stuff for docstats
   spec.add_runtime_dependency 'descriptive_statistics', '>= 2.5.1'
