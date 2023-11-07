@@ -43,12 +43,12 @@ class Intertwingler::RubyURN < URI::URN::Generic
   MY_NSS = /\A([#{UNRESERVED}!$&'()*+,=\/]+)?;(#{CONST})\z/o
 
   def check_nss value
-    MY_NSS.match? value or raise URI::InvalidURIComponentError,
+    MY_NSS.match? value or raise URI::InvalidComponentError,
       "Invalid urn:x-ruby: NSS: #{value}"
   end
 
   def check_opaque value
-    out = OPAQUE.match(value) or raise URI::InvalidURIComponentError,
+    out = OPAQUE.match(value) or raise URI::InvalidComponentError,
       "Invalid opaque value for URN: #{value}"
     out
   end
@@ -160,7 +160,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
   #
   def r_component= value
     return @r_component = nil unless value
-    /\A#{RQ}\z/o.match? value or raise URI::InvalidURIComponentError,
+    /\A#{RQ}\z/o.match? value or raise URI::InvalidComponentError,
       "Invalid r-component value for URN: #{value}"
     @r_component = value
   end
@@ -173,7 +173,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
   #
   def q_component= value
     return @q_component = nil unless value
-    /\A#{RQ}\z/o.match? value or raise URI::InvalidURIComponentError,
+    /\A#{RQ}\z/o.match? value or raise URI::InvalidComponentError,
       "Invalid q-component value for URN: #{value}"
     @q_component = value
   end
@@ -215,7 +215,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
   # This will #require the #path and then `eval` whatever's in #constant.
   #
   # @raise [LoadError] if loading the module fails.
-  # @raise [URI::InvalidURIComponentError] if the constant is invalid.
+  # @raise [URI::InvalidComponentError] if the constant is invalid.
   # @raise [NameError] if the constant isn't in the execution context.
   #
   # @return [Object] whatever constant was named in the URN.
@@ -223,9 +223,9 @@ class Intertwingler::RubyURN < URI::URN::Generic
   def object
     self.require # this may raise a LoadError
     ref = URI.decode_www_form_component nss.split(?;, 2).last.split(/[?#]/).first
-    raise URI::InvalidURIComponentError, "#{ref} is not a valid constant" unless
+    raise URI::InvalidComponentError, "#{ref} is not a valid constant" unless
       /\A\p{Lu}\p{Word}*(?:::\p{Lu}\p{Word}*)*\z/.match? ref
-    # this may raise
+    # this may raise a NameError
     @constant ||= eval ref
   end
 end
@@ -240,6 +240,6 @@ module URI::URN
   # the `x-ruby` NID, instead of just using `split` like a normal person.
   def self.new *arg
     nid = arg[6].to_s.split(?:).first
-    @@nids[nid.to_s.upcase].new(*arg)
+    @@nids.fetch(nid.to_s.upcase, Generic).new(*arg)
   end
 end
