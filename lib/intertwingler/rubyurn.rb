@@ -31,7 +31,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
     out
   end
 
-  def query_params which
+  def query_hash_for which
     URI.decode_www_form(which.to_s).reduce({}) do |hash, pair|
       key, value = pair
       key = key.to_sym
@@ -53,11 +53,11 @@ class Intertwingler::RubyURN < URI::URN::Generic
   alias_method :query, :q_component
 
   def r_component_hash
-    query_params r_component
+    query_hash_for r_component
   end
 
   def q_component_hash
-    query_params q_component
+    query_hash_for q_component
   end
 
   def initialize *arg
@@ -118,6 +118,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
   end
 
   def require
+    # wtf i guess pry overloads Kernel.require
     super path if path and !path.empty?
   end
 
@@ -126,10 +127,11 @@ class Intertwingler::RubyURN < URI::URN::Generic
   end
 
   def object
-    self.require # this may raise 
+    self.require # this may raise a LoadError
     ref = URI.decode_www_form_component nss.split(?;, 2).last.split(/[?#]/).first
     raise URI::Error, "#{ref} is not a valid constant" unless
-      /^\p{Lu}\p{Word}*(?::\p{Lu}\p{Word}*)*$/.match? ref
+      /\A\p{Lu}\p{Word}*(?:::\p{Lu}\p{Word}*)*\z/.match? ref
+    # this may raise
     @constant ||= eval ref
   end
 end
