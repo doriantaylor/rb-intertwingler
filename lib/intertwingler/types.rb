@@ -5,6 +5,8 @@ require 'uri'
 require 'pathname'
 require 'mimemagic'
 
+require_relative 'rubyurn'
+
 module Intertwingler
   # XXX pop this out into its own module when we're ready
   module Types
@@ -34,9 +36,8 @@ module Intertwingler
 
     UNITS = { nil => 1 }
     'kmgtpe'.split('').each_with_index do |x, i|
-      j = i + 1
-      UNITS[x] = 1000 ** j
-      UNITS[x.upcase] = 1024 ** j
+      UNITS[x] = 1000 ** (i + 1)
+      UNITS[x.upcase] = 1024 ** (i + 1)
     end
     UNITS.freeze
 
@@ -92,6 +93,8 @@ module Intertwingler
       k.downcase
     end
 
+    Port = Coercible::Integer.constrained(gt: 0, lt: 65536)
+
     # An authority differs from a hostname in that it can have a port
     # number separated by a colon.
     Authority = String.constrained(format: /^#{AUTHRE}$/o).constructor do |k|
@@ -115,10 +118,22 @@ module Intertwingler
       out
     end
 
+    URI = Types.Constructor(::URI) do |x|
+      begin
+        out = ::URI.parse(x)
+      rescue ::URI::InvalidURIError => e
+        raise Dry::Types::CoercionError, e
+      end
+
+      out
+    end
+
     # A single RDF vocabulary
     Vocab = Types::Constructor(RDF::Vocabulary) do |vocab|
       Intertwingler::Resolver.sanitize_vocab vocab
     end
+
+    RubyURN = URI.constrained format: /\Aurn:x-ruby:/i
 
     # @!group Molecules
 
@@ -128,48 +143,23 @@ module Intertwingler
       h.transform_keys { |k| NormSym[k] }
     end
 
-    # A plugin has two mandatory keys: `driver` and `options`.
-    Plugin = SymbolHash.schema(driver: String, options: SymbolHash)
-
-    # A sequence of plugins
-    PluginSeq = Array.of Plugin
-
-    # A map of plugins
-    NamedPlugins = Hash.map(NormSym, Plugin)
-
     # RDF vocabularies
     Vocabs = SymbolHash.constructor do |x|
       Intertwingler::Resolver.sanitize_prefixes x, nonnil: true
     end
 
-    # A sequence of RDF types that are always directly addressable via HTTP
-    Documents = Array.of CURIEOrIRIString
+    # new configuration should
 
-    # A mapping of RDF types that are canonically fragments if
-    # connected to a directly-addressable resource via a predicate
-    Fragments = Hash.map(CURIEOrIRIString, Array.of(NegatableCURIEOrIRI))
+    GraphConfig = SymbolHash.schema driver: RubyURN,
+      init: Array.of(ExtantPathname)
 
-    # A presentation transform
-    Transform = SymbolHash.schema(name: String, params?: SymbolHash)
+    EngineConfig = SymbolHash.schema host: Hostname, port: Port,
+      domains: Array.of(Hostname)
 
-    # Multiple presentation transforms
-    Transforms = Hash.map(MediaType, Array.of(Transform))
+    StaticConfig = SymbolHash.schema target: ExtantPathname
 
-    # A site-specific record
-    Site = SymbolHash.schema(
-      aliases?:    Array.of(Authority),
-      home?:       ExtantPathname,
-      graph?:      Plugin,
-      sources?:    PluginSeq,
-      surfaces?:   NamedPlugins,
-      vocab?:      Vocab,
-      prefixes?:   Vocabs,
-      documents?:  Documents,
-      fragments?:  Fragments,
-      transforms?: Transforms,
-    )
+    BaseConfig = SymbolHash.schema graph: GraphConfig,
+      engine: EngineConfig, static: StaticConfig
 
-    # Multiple sites
-    Sites = Hash.map(Hostname, Site)
   end
 end

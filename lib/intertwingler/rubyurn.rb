@@ -190,6 +190,9 @@ class Intertwingler::RubyURN < URI::URN::Generic
     out
   end
 
+  # it is highly annoying that string coercion only recognizes `to_str`
+  alias_method :to_str, :to_s
+
   # Return the string representation of the constant that will be
   # returned from #object.
   #

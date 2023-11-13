@@ -2371,7 +2371,7 @@ module Intertwingler
 
     private
 
-    SH = RDF::Vocab::SHACL
+    SH = RDF::Vocab::SH
 
     PATHS = {
       SH.alternativePath => -> o {
