@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'http-negotiate', '>= 0.2.0' # mine
   spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
   spec.add_runtime_dependency 'mimemagic',      '>= 0.5.0' # my patch
-  spec.add_runtime_dependency 'rdf',            '>= 3.1.7'
+  spec.add_runtime_dependency 'rack',           '~> 3'
   spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
   spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
   spec.add_runtime_dependency 'uri-urn',        '>= 0.0.3'
@@ -48,7 +48,10 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'xml-mixup',    '>= 0.1.16' # mine
 
   # stuff for cli
-  spec.add_runtime_dependency 'thor', '>= 1.2.2'
+  spec.add_runtime_dependency 'thor',         '>= 1.2.2'
+  spec.add_runtime_dependency 'tty-markdown', '>= 0.7.2'
+  spec.add_runtime_dependency 'tty-prompt',   '>= 0.23.1'
+  spec.add_runtime_dependency 'tty-prompt',   '>= 0.9.0' # my patch
 
   # stuff for urlrunner
   spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'

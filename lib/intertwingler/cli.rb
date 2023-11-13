@@ -1,7 +1,7 @@
 2# frozen_string_literal: true
-require 'thor'
-require 'intertwingler/rubyurn'
+require 'intertwingler/types'
 require 'rdf'
+require 'thor'
 
 require 'pathname'
 require 'psych'
