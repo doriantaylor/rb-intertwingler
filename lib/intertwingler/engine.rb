@@ -31,6 +31,14 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   ITCV = Intertwingler::Vocab::ITCV
 
+  def self.collect_resolvers repo, subject
+  end
+
+  def self.verify_resolvers repo, subject, resolvers
+  end
+
+  def self.
+
   public
 
   # Find all the subjects in the graph that are an `itcv:Engine`.
@@ -45,18 +53,70 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   # Resolve the engine and all of its handlers and transforms and
   # queues and such out of the graph.
-  def self.configure repo, subject, resolvers: []
+  def self.configure repo, subject = nil, resolvers: []
+    resolvers ||= []
+
+    unless subject
+      ss = if resolvers.empty?
+             repo.all_of_type ITCV.Engine
+           else
+             t1 = resolvers.map(&:id).compact.map do |r|
+               repo.subjects_for(ITCV.resolver, r, only: :resource)
+             end.flatten.reduce({}) do |h, e|
+               h[e] ||= 0
+               h[e] += 1
+               h
+             end
+
+             raise Intertwingler::ConfigError,
+               'No engines found linked to supplied resolvers' if t1.empty?
+
+             t2 = t1.values.max
+             t1.select { |_, v| v == t2 }.keys
+           end
+
+      if ss.empty?
+        raise Intertwingler::ConfigError,
+          'No itcv:Engine subject specified and none found in the graph.'
+      elsif ss.count > 1
+        raise Intertwingler::ConfigError,
+          "No itcv:Engine specified and more than one found: #{ss.join ', '}"
+      else
+        # we have our subject
+        subject = ss.first
+      end
+    end
+
+    # determine what resolvers have been asserted relative to the subject
+    t3 = repo.objects_for subject, ITCV.resolver, only: :resource
+
+    # okay now let's load our resolvers
+    if resolvers.empty?
+      raise Intertwingler::ConfigError,
+        "Can't find any resolvers relative to #{subject}" if t3.empty?
+
+      #
+      resolvers = Intertwingler::Resolver.configure repo, t3
+    else
+      # we already have resolvers but let's ensure they're asserted
+      resolvers.select! { |r| t3.include? r.id }
+
+      raise Intertwingler::ConfigError,
+        "No supplied resolvers connect to #{subject}" if resolvers.empty?
+    end
+
     # step 1: find the instance of itcv:Engine that has the same base
     # URI as the resolvers and initialize.
-    me = self.new resolvers, subject: subject
+    me = self.new repo, subject, resolvers
 
-    # step 2: find the handlers and load them.
+    # step 2: find the handlers and load them. (incidentally, this
+    # returns `self`.)
     me.refresh_handlers
 
     # step 3: construct the transform queues and their contents. (note
     # the queues are apt to reuse transforms, and the transform
     # handler instances could very well already be in the handler
-    # stack.)
+    # stack.) NB this also returns `self`.
     me.refresh_queues
   end
 
@@ -65,11 +125,18 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @return [self]
   #
   def refresh_handlers
-    list = resolver.repo.objects_for(subject,
-      ITCV['handler-list'], only: :resource).first
-    unless list
-      self
+
+    resolvers.each do |r|
+     # handlers = r.repo.objects_for(subje
     end
+
+    # nothing to do if you can't find one of these
+    list = resolver.repo.objects_for(subject,
+      ITCV['handler-list'], only: :resource).sort.first or return
+
+    list = RDF::List.new subject: list, graph: resolver.repo
+
+    self
   end
 
   # Refresh the transform queues associated with this engine.
@@ -83,9 +150,12 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   # Initialize the engine.
   #
+  # @param subject [RDF::URI]
   # @param resolvers [Array<Intertwingler::Resolver>] the necessary resolvers.
   #
-  def initialize resolvers, subject: nil, handlers: [], transforms: {}
+  def initialize repo, subject, resolvers = []
+    @repo    = repo
+    @subject = coerce_resource subject
     # ensure resolvers are an array
     resolvers = resolvers.respond_to?(:to_a) ? resolvers.to_a : [resolvers]
     # set authority map
@@ -93,6 +163,12 @@ class Intertwingler::Engine < Intertwingler::Handler
       r.authorities.each { |a| h[a] = r }
       h
     end
+
+    # find the handlers and load them
+    refresh_handlers
+
+    # find the transform queues and load them
+    refresh_queues
 
     # XXX here is where we would have each of the handlers disgorge
     # its manifest so we don't have to poll them all with each request
@@ -106,7 +182,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     # create transform harness from handlers
   end
 
-  attr_reader :resolvers
+  attr_reader :subject, :resolvers
+  alias_method :id, :subject
 
   # No-op to overwrite `engine` member.
   #
@@ -263,7 +340,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       resp = e.response
     rescue Exception => e
       resp = Rack::Response[500,
-                            { 'content-type' => 'text/plain' }, [e.message]]
+        { 'content-type' => 'text/plain' }, [e.message]]
     end
 
     # run all response transforms

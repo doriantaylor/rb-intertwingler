@@ -65,6 +65,9 @@ class Intertwingler::Resolver
   SH   = RDF::Vocab::SH
 
   def self.configure_one repo, subject
+    # 0) assert that the subject is indeed a resource
+    subject = coerce_resource subject
+
     # 1) get site under management and aliases
     base    = repo.objects_for(subject, ITCV.manages, only: :uri).sort.first
     aliases = repo.objects_for(subject, ITCV.alias, only: :uri).sort
@@ -88,9 +91,10 @@ class Intertwingler::Resolver
 
     # 3) get document and fragment specifications
     documents = repo.objects_for(subject, ITCV.document, only: :uri)
-    fragments = repo.objects_for(subject, ITCV.fragment, only: :resource)
+    fragments = repo.objects_for(subject, ITCV['fragment-list'], only: :resource)
 
-    self.new repo, base, aliases: aliases, prefixes: prefixes, subject: subject
+    self.new repo, base, aliases: aliases, prefixes: prefixes,
+      subject: subject, documents: documents, fragments: fragments
   end
 
   public
@@ -130,12 +134,14 @@ class Intertwingler::Resolver
   end
 
   def self.configure repo, subject = nil
-    return configure_one repo, subject if subject
+    return locate(repo).map { |s| configure_one repo, r } unless subject
 
-    locate(repo).map { |s| configure_one repo, r }
+    return subject.map { |s| configure_one repo, s} if subject.is_a? Array
+
+    configure_one repo, subject
   end
 
-  attr_reader :repo, :base, :aliases, :prefixes, :id
+  attr_reader :repo, :base, :aliases, :prefixes, :id, :documents, :fragments
 
   # Create a new URI resolver.
   #
@@ -145,7 +151,9 @@ class Intertwingler::Resolver
   #  be treated as equivalent in lookups
   # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
   #
-  def initialize repo, base, aliases: [], prefixes: {}, subject: nil
+  def initialize repo, base, aliases: [], prefixes: {}, subject: nil,
+      documents: [], fragments: []
+
     @repo = repo
     raise ArgumentError, 'repo must be RDF::Queryable' unless
       repo.is_a? RDF::Queryable
@@ -154,7 +162,7 @@ class Intertwingler::Resolver
     @base     = coerce_resource   base,    as: :uri
     @aliases  = coerce_resources  aliases, as: :uri
     @prefixes = sanitize_prefixes prefixes
-    @id       = subject
+    @id       = coerce_resource subject if subject
 
     # cache of subjects in the graph so we only look them up once
     @subjects = {}

@@ -20,7 +20,8 @@ class Intertwingler::CLI < Thor
       blockquote: :bright_magenta,
     }
 
-    #
+    # This is just #{TTY::Prompt#say} but with Markdown. Not sure why
+    # this isn't just built in.
     def say_md message = '', **options
       mdopts = options.fetch :markdown, {}
       mdopts[:theme] ||= THEME # sub in a theme if there isn't one
@@ -122,6 +123,17 @@ class Intertwingler::CLI < Thor
     [$stdin, $stdout].all?(&:tty?)
   end
 
+  def load_repo urn
+    raise ArgumentError, 'Expecting an Intertwingler::RubyURN' unless
+      urn.is_a? Intertwingler::RubyURN
+    cls = urn.object
+    raise TypeError,
+      "URN refers to #{cls} which is not an RDF::Repository" unless
+      cls.ancestors.include? RDF::Repository
+    # this can still raise, of course
+    cls.new(**urn.q_component_hash)
+  end
+
   # 
   CTRL_W = %[[:space:]/\\'+=_.,:;-]
   CW_RE  = /\A.*?[#{CTRL_W}]\z/o
@@ -133,23 +145,36 @@ class Intertwingler::CLI < Thor
   class_option :config, aliases: %i[-C],
     desc: 'Configuration file (default: $INTERTWINGLER_HOME/intertwingler.conf)'
 
-  # Note that {Thor} objects get (re)initialized with every command
-  # invocation, so calling {Thor#invoke} on one of these commands will
-  # actually create a new one.
-  def initialize args = [], opts = {}, config = {}
-    super
+  no_commands do
+    # Note that {Thor} objects get (re)initialized with every command
+    # invocation, so calling {Thor#invoke} on one of these commands will
+    # actually create a new one.
+    def initialize args = [], opts = {}, config = {}
+      super
 
-    unless @raw_config
-      begin
-        @raw_config = Psych.load_file config_file, symbolize_names: true
-      rescue Psych::SyntaxError
-        warn "There is a problem with the syntax of #{config_file}. " +
-          "You'll need to either fix the syntax or rerun the initialization."
-        exit 1
-      end if config_file.exist? and config_file.readable?
+      unless @base_config
+        begin
+          @raw_config  = Psych.load_file config_file, symbolize_names: true
+          @base_config = Intertwingler::Types::BaseConfig[@raw_config]
+        rescue Psych::SyntaxError
+          warn "There is a problem with the syntax of #{config_file}. " +
+            "You'll need to either fix the syntax or rerun the initialization."
+          exit 1
+        end if config_file.exist? and config_file.readable?
+      end
+
+      # warn config_file
     end
 
-    # warn config_file
+    attr_reader :base_config
+
+    def repo
+      raise RuntimeError, "Can't access repo without base config" unless
+        base_config && base_config.dig(:graph, :driver)
+      urn = base_config.dig :graph, :driver
+      @repo ||= load_repo urn
+    end
+
   end
 
   # detect state directory
@@ -211,7 +236,7 @@ class Intertwingler::CLI < Thor
 
     prompt.say 'Initializing...'
     # TODO maybe someday
-    # prompt.say "Taking defaults from #{config_file}..." if @raw_config
+    # prompt.say "Taking defaults from #{config_file}..." if base_config
 
     # Collect the following prompts into a structure:
     config = prompt.collect do
@@ -339,22 +364,26 @@ EOS
 
   def engine
     # we imagine detecting whether the configuration has been initialized
-    unless @raw_config
-      return invoke :init
-    end
+    return invoke :init unless base_config
 
-    require 'intertwingler/engine'
+    config = base_config[:engine]
+
     require 'rack'
-
-    warn 'sup'
-
-    # initialize quad store
-    # repo = whatever
+    require 'rackup'
+    require 'intertwingler/engine'
 
     # initialize Intertwingler::Engine
-    # engine = Intertwingler::Engine.configure repo
+    engine = Intertwingler::Engine.configure repo
 
     # initialize rack server
+    Rackup::Server.start({
+      app: engine,
+      # server: ...
+      # environment: ...
+      daemonize: options[:detach],
+      Host: config[:host],
+      Port: config[:port],
+    })
   end
 
   default_command :engine

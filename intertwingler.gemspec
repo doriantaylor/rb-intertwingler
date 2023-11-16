@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
   DESC
 
   spec.files         = `git ls-files -z`.split("\x0").reject do |f|
-    f.match(%r{^(test|spec|features)/})
+    f.match(%r{^(test|spec|features|example|experimental)/})
   end
   spec.bindir        = 'exe'
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
@@ -35,6 +35,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
   spec.add_runtime_dependency 'mimemagic',      '>= 0.5.0' # my patch
   spec.add_runtime_dependency 'rack',           '~> 3'
+  spec.add_runtime_dependency 'rackup',         '~> 2'
   spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
   spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
   spec.add_runtime_dependency 'uri-urn',        '>= 0.0.3'
@@ -49,9 +50,8 @@ Gem::Specification.new do |spec|
 
   # stuff for cli
   spec.add_runtime_dependency 'thor',         '>= 1.2.2'
-  spec.add_runtime_dependency 'tty-markdown', '>= 0.7.2'
+  spec.add_runtime_dependency 'tty-markdown', '>= 0.9.0' # my patch
   spec.add_runtime_dependency 'tty-prompt',   '>= 0.23.1'
-  spec.add_runtime_dependency 'tty-prompt',   '>= 0.9.0' # my patch
 
   # stuff for urlrunner
   spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'
