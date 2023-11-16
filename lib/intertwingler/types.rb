@@ -150,16 +150,15 @@ module Intertwingler
 
     # new configuration should
 
-    GraphConfig = SymbolHash.schema driver: RubyURN,
-      init: Array.of(ExtantPathname)
-
-    EngineConfig = SymbolHash.schema host: Hostname, port: Port,
-      domains: Array.of(Hostname)
+    GraphConfig = SymbolHash.schema driver?: RubyURN,
+      init?: Array.of(ExtantPathname)
 
     StaticConfig = SymbolHash.schema target: ExtantPathname
 
-    BaseConfig = SymbolHash.schema graph: GraphConfig,
-      engine: EngineConfig, static: StaticConfig
+    DomainConfig = SymbolHash.schema graph?: GraphConfig, static?: StaticConfig
+
+    BaseConfig = SymbolHash.schema host?: Hostname, port?: Port,
+      graph?: GraphConfig, domains?: Hash.map(String, DomainConfig)
 
   end
 end

@@ -130,11 +130,17 @@ class Intertwingler::CLI < Thor
     raise TypeError,
       "URN refers to #{cls} which is not an RDF::Repository" unless
       cls.ancestors.include? RDF::Repository
-    # this can still raise, of course
-    cls.new(**urn.q_component_hash)
+    oldpwd = Dir.getwd
+    begin
+      Dir.chdir config_home
+      # this can still raise, of course
+      cls.new(**urn.q_component_hash)
+    ensure
+      Dir.chdir oldpwd
+    end
   end
 
-  # 
+  # eh deal with this later
   CTRL_W = %[[:space:]/\\'+=_.,:;-]
   CW_RE  = /\A.*?[#{CTRL_W}]\z/o
 
@@ -178,6 +184,34 @@ class Intertwingler::CLI < Thor
   end
 
   # detect state directory
+
+  no_commands do
+
+    def collect_graph_config prompt, initial: false
+      prompt.collect do
+        key(:driver).ask 'Driver to use',
+          default: STORE unless prompt.no? 'Specify graph driver?'
+
+        prompt.say_md(<<~EOS) if initial
+
+When an empty graph is initialized, we can load it with the contents
+of one or more RDF files.
+
+EOS
+        path = Pathname(?.).expand_path
+        until prompt.no? 'Add an RDF file to initialize the graph with?'
+          path = prompt.ask(?>, value: path.to_s + ?/) or break
+          path = Pathname(path) # okay *now*
+
+          if path.file? && path.readable? or !prompt.no?(
+            "#{path} doesn't seem to be a readable file. Are you sure?")
+            key(:init).values.add_answer path.to_s
+            path = path.parent
+          end
+        end
+      end
+    end
+  end
 
   # first command line, then env, then test ./, then ~/
 
@@ -238,13 +272,17 @@ class Intertwingler::CLI < Thor
     # TODO maybe someday
     # prompt.say "Taking defaults from #{config_file}..." if base_config
 
+    me = self
+
     # Collect the following prompts into a structure:
     config = prompt.collect do
-      # Store (category mandatory):
-      # * quad store driver and options (default RDF::LMDB relative to config home)
-      # * RDF files to initialize with (tab completion?)
-      #
-      prompt.say_md(<<~EOS)
+      if prompt.yes? 'Specify the host and port for the application?'
+        key(:host).ask 'Host:', default: HOST
+        key(:port).ask 'Port:', default: PORT
+      end
+
+      if prompt.yes? 'Configure a global default graph database?'
+        prompt.say_md(<<~EOS)
 
 _Intertwingler_ uses a provisional `x-ruby` URN scheme (also known as a
 NID) to identify pluggable modules. These take the following form:
@@ -261,60 +299,114 @@ subclass of `RDF::Repository`. This defines how and where the graph
 data is stored.
 
 EOS
-      key :graph do
-        key(:driver).ask 'Driver to use', required: true, default: STORE
-        prompt.say_md(<<~EOS)
-
-When an empty graph is initialized, we can load it with the contents
-of one or more RDF files.
-
-EOS
-        path = Pathname(?.).expand_path
-        until prompt.no? 'Add an RDF file to initialize the graph with?'
-          path = prompt.ask(?>, value: path.to_s + ?/) or break
-          path = Pathname(path) # okay *now*
-
-          if path.file? && path.readable? or !prompt.no?(
-            "#{path} doesn't seem to be a readable file. Are you sure?")
-            key(:init).values.add_answer path.to_s
-            path = path.parent
-          end
-        end
+        gconf = me.collect_graph_config prompt
+        key(:graph).add_answer gconf if gconf and !gconf.empty?
       end
 
-      # Engine (category optional, default yes):
-      # * host (default localhost)
-      # * port (default 10101)
-      # * domains to expose (default empty == all of them)
-      #
-      if prompt.yes? 'Configure the main Intertwingler engine?'
-        key :engine do
-          key(:host).ask 'Host:', default: HOST
-          key(:port).ask 'Port:', default: PORT
-          prompt.say <<~EOS
+      if prompt.yes? 'Add domain-specific configuration?'
+        tmp = {}
+        while domain = prompt.ask('Domain name (leave blank to stop):')
+          subcol = create_collector.call do
+            gconf = me.collect_graph_config prompt
+            key(:graph).add_answer gconf if gconf and !gconf.empty?
 
-The engine's default behaviour is to configure a resolver for every domain
-found in the graph. You can limit the DNS domains the engine answers to.
-
-EOS
-          domain = prompt.ask 'Add an explicit domain? (leave blank to skip):'
-          if domain
-            key(:domains).values.add_answer domain
-            while (domain = prompt.ask 'Add another? (leave blank if not):')
-              key(:domains).values.add_answer domain
+            unless prompt.no? 'Configure the static site generator?'
+              key :static do
+                key(:target).ask 'Target directory: ', value: Dir.getwd
+              end
             end
+
           end
+
+          # this little incantation is to ensure a null value rather
+          # than an empty hash.
+          tmp[domain] = subcol ? subcol.empty? ? nil : subcol : nil
         end
+
+        key(:authorities).add_answer tmp unless tmp.empty?
       end
 
-      # Static (category optional, default no):
-      # * target directory (required)
-      unless prompt.no? 'Configure the static site generator?'
-        key :static do
-          key(:target).ask 'Target directory: ', value: Dir.getwd
-        end
-      end
     end
+
+    prompt.say config.inspect
+
+#     # XXX BURN THIS WHEN DONE
+#     config = prompt.collect do
+#       # Store (category mandatory):
+#       # * quad store driver and options (default RDF::LMDB relative to config home)
+#       # * RDF files to initialize with (tab completion?)
+#       #
+#       prompt.say_md(<<~EOS)
+
+# _Intertwingler_ uses a provisional `x-ruby` URN scheme (also known as a
+# NID) to identify pluggable modules. These take the following form:
+
+
+# ```
+# urn:x-ruby:module/path;Class::Name?=constructor=parameter&other=param
+
+# ```
+
+
+# In this case, the class identified by the URN is expected to be a
+# subclass of `RDF::Repository`. This defines how and where the graph
+# data is stored.
+
+# EOS
+#       key :graph do
+#         key(:driver).ask 'Driver to use', required: true, default: STORE
+#         prompt.say_md(<<~EOS)
+
+# When an empty graph is initialized, we can load it with the contents
+# of one or more RDF files.
+
+# EOS
+#         path = Pathname(?.).expand_path
+#         until prompt.no? 'Add an RDF file to initialize the graph with?'
+#           path = prompt.ask(?>, value: path.to_s + ?/) or break
+#           path = Pathname(path) # okay *now*
+
+#           if path.file? && path.readable? or !prompt.no?(
+#             "#{path} doesn't seem to be a readable file. Are you sure?")
+#             key(:init).values.add_answer path.to_s
+#             path = path.parent
+#           end
+#         end
+#       end
+
+#       # Engine (category optional, default yes):
+#       # * host (default localhost)
+#       # * port (default 10101)
+#       # * domains to expose (default empty == all of them)
+#       #
+#       if prompt.yes? 'Configure the main Intertwingler engine?'
+#         key :engine do
+#           key(:host).ask 'Host:', default: HOST
+#           key(:port).ask 'Port:', default: PORT
+#           prompt.say <<~EOS
+
+# The engine's default behaviour is to configure a resolver for every domain
+# found in the graph. You can limit the DNS domains the engine answers to.
+
+# EOS
+#           domain = prompt.ask 'Add an explicit domain? (leave blank to skip):'
+#           if domain
+#             key(:domains).values.add_answer domain
+#             while (domain = prompt.ask 'Add another? (leave blank if not):')
+#               key(:domains).values.add_answer domain
+#             end
+#           end
+#         end
+#       end
+
+#       # Static (category optional, default no):
+#       # * target directory (required)
+#       unless prompt.no? 'Configure the static site generator?'
+#         key :static do
+#           key(:target).ask 'Target directory: ', value: Dir.getwd
+#         end
+#       end
+#     end
 
     # if resulting configuration is (semantically) identical to
     # existing config file contents, exit.

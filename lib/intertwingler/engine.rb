@@ -1,4 +1,5 @@
 require 'intertwingler/handler'
+require 'intertwingler/error'
 
 require 'rack/mock_request' # for env_for
 
@@ -37,7 +38,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   def self.verify_resolvers repo, subject, resolvers
   end
 
-  def self.
+  # def self.
 
   public
 
@@ -68,7 +69,7 @@ class Intertwingler::Engine < Intertwingler::Handler
                h
              end
 
-             raise Intertwingler::ConfigError,
+             raise Intertwingler::Error::Config,
                'No engines found linked to supplied resolvers' if t1.empty?
 
              t2 = t1.values.max
@@ -76,10 +77,10 @@ class Intertwingler::Engine < Intertwingler::Handler
            end
 
       if ss.empty?
-        raise Intertwingler::ConfigError,
+        raise Intertwingler::Error::Config,
           'No itcv:Engine subject specified and none found in the graph.'
       elsif ss.count > 1
-        raise Intertwingler::ConfigError,
+        raise Intertwingler::Error::Config,
           "No itcv:Engine specified and more than one found: #{ss.join ', '}"
       else
         # we have our subject
@@ -92,7 +93,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     # okay now let's load our resolvers
     if resolvers.empty?
-      raise Intertwingler::ConfigError,
+      raise Intertwingler::Error::Config,
         "Can't find any resolvers relative to #{subject}" if t3.empty?
 
       #
@@ -101,7 +102,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       # we already have resolvers but let's ensure they're asserted
       resolvers.select! { |r| t3.include? r.id }
 
-      raise Intertwingler::ConfigError,
+      raise Intertwingler::Error::Config,
         "No supplied resolvers connect to #{subject}" if resolvers.empty?
     end
 
