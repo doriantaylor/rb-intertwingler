@@ -140,6 +140,9 @@ module Intertwingler
     # A hash where the keys are normalized symbols.
     # @note XXX it is fucking stupid that you have to do this.
     SymbolHash = Hash.constructor do |h|
+      h = {} if h.nil?
+      raise Dry::Types::CoercionError,
+        "#{h.inspect} is a #{h.class}, not a Hash" unless h.is_a? ::Hash
       h.transform_keys { |k| NormSym[k] }
     end
 
@@ -148,7 +151,7 @@ module Intertwingler
       Intertwingler::Resolver.sanitize_prefixes x, nonnil: true
     end
 
-    # new configuration should
+    # this is the harness configuration
 
     GraphConfig = SymbolHash.schema driver?: RubyURN,
       init?: Array.of(ExtantPathname)
@@ -157,8 +160,8 @@ module Intertwingler
 
     DomainConfig = SymbolHash.schema graph?: GraphConfig, static?: StaticConfig
 
-    BaseConfig = SymbolHash.schema host?: Hostname, port?: Port,
-      graph?: GraphConfig, domains?: Hash.map(String, DomainConfig)
+    HarnessConfig = SymbolHash.schema host?: Hostname, port?: Port,
+      graph?: GraphConfig, authorities?: Hash.map(Hostname, DomainConfig)
 
   end
 end

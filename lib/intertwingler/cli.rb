@@ -1,6 +1,6 @@
 2# frozen_string_literal: true
 require 'intertwingler/types'
-require 'rdf'
+require 'rdf/repository'
 require 'thor'
 
 require 'pathname'
@@ -20,15 +20,32 @@ class Intertwingler::CLI < Thor
       blockquote: :bright_magenta,
     }
 
-    # This is just #{TTY::Prompt#say} but with Markdown. Not sure why
-    # this isn't just built in.
-    def say_md message = '', **options
+    private
+
+    def x_md which, message = '', **options
       mdopts = options.fetch :markdown, {}
       mdopts[:theme] ||= THEME # sub in a theme if there isn't one
       mdopts[:theme] = mdopts[:theme].merge THEME # *now* merge
       options = options.except :markdown
-      say TTY::Markdown.parse(message, **mdopts), **options
+      send which, TTY::Markdown.parse(message, **mdopts), **options
     end
+
+    public
+
+    # This is just #{TTY::Prompt#say} but with Markdown. Not sure why
+    # this isn't just built in.
+    def say_md message = '', **options
+      x_md :say, message, **options
+    end
+
+    def warn_md message = '', **options
+      x_md :error, message, **options
+    end
+
+    def error_md message = '', **options
+      x_md :error, message, **options
+    end
+
   end
 
   private
@@ -67,10 +84,11 @@ class Intertwingler::CLI < Thor
       # its containing directory takes precedence over the default.
       tests.insert(2, config_file(home: false).dirname)
 
-      return @config_home = Pathname(tests.detect { |t| t }).expand_path
+      return @config_home = Pathname(tests.compact.first).expand_path
     end
 
-    Pathname(tests.detect { |t| t }).expand_path
+    # note we don't want to cache in this case
+    Pathname(tests.compact.first).expand_path
   end
 
   # Return the full path of the base configuration file, which stores
@@ -90,8 +108,11 @@ class Intertwingler::CLI < Thor
     file = Pathname(options[:config] || ENV[ENV_CONFIG] || CONFIG_FILE)
 
     # note the directory defaults to ./
-    home && file == file.basename ?
-      @config_file = config_home(file: false) + file : file.expand_path
+    out = file == file.basename ?
+      config_home(file: false) + file : file.expand_path
+
+    # default behaviour is to cache
+    home ? @config_file = out : out
   end
 
   # honestly i am surprised this kind of thing isn't part of the yaml module
@@ -123,6 +144,46 @@ class Intertwingler::CLI < Thor
     [$stdin, $stdout].all?(&:tty?)
   end
 
+  def init_repo urn
+    repo = @repo_urn[urn] or raise ArgumentError,
+      "there should be a repo at #{urn}"
+
+    if repo.empty?
+      require 'rdf/turtle'
+
+      default = base_config.dig(:graph, :driver) == urn
+      files = {}
+
+      # if this repository is the default
+      if default and i = base_config.dig(:graph, :init)
+        files[nil] = i
+      end
+
+      base_config.fetch(:authorities, {}).each do |domain, config|
+        driver = config.dig :graph, :driver
+        init   = config.dig :graph, :init
+
+        files[domain] = init if
+          init and (driver.nil? && default || driver == urn)
+      end
+
+      files.each do |domain, fs|
+        if interactive?
+          msg = domain ? "RDF files for #{domain}" : 'default RDF files'
+          prompt.say "Loading #{msg}…"
+        end
+
+        fs.each do |f|
+          prompt.say "#{f} …" if interactive?
+          repo.load f
+        end
+      end
+
+    end
+
+    repo
+  end
+
   def load_repo urn
     raise ArgumentError, 'Expecting an Intertwingler::RubyURN' unless
       urn.is_a? Intertwingler::RubyURN
@@ -133,11 +194,14 @@ class Intertwingler::CLI < Thor
     oldpwd = Dir.getwd
     begin
       Dir.chdir config_home
+
       # this can still raise, of course
-      cls.new(**urn.q_component_hash)
+      repo = cls.new(**urn.q_component_hash)
     ensure
       Dir.chdir oldpwd
     end
+
+    repo
   end
 
   # eh deal with this later
@@ -152,66 +216,116 @@ class Intertwingler::CLI < Thor
     desc: 'Configuration file (default: $INTERTWINGLER_HOME/intertwingler.conf)'
 
   no_commands do
+
     # Note that {Thor} objects get (re)initialized with every command
     # invocation, so calling {Thor#invoke} on one of these commands will
     # actually create a new one.
     def initialize args = [], opts = {}, config = {}
       super
 
+      # XXX figure out how to force the invocation of `init` (with
+      # subsequent exit) if there is no config (EXCEPT if the config
+      # was passed in through the environment or command line, in which case
+      # complain
+
       unless @base_config
         begin
-          @raw_config  = Psych.load_file config_file, symbolize_names: true
-          @base_config = Intertwingler::Types::BaseConfig[@raw_config]
+          @raw_config  = Psych.load_file config_file
+          @base_config = Intertwingler::Types::HarnessConfig[@raw_config]
         rescue Psych::SyntaxError
-          warn "There is a problem with the syntax of #{config_file}. " +
-            "You'll need to either fix the syntax or rerun the initialization."
+          prompt.error_md <<~EOS
+There is a problem with the syntax of #{config_file}. You'll need to
+either fix the syntax or rerun the initialization.
+
+EOS
           exit 1
+        rescue Dry::Types::CoercionError
+          prompt.error_md <<~EOS
+The structure of the configuration file #{config_file} appears to be malformed.
+EOS
         end if config_file.exist? and config_file.readable?
       end
+
+      # graph repositories by domain and by urn
+      @repos    = {}
+      @repo_urn = {}
 
       # warn config_file
     end
 
     attr_reader :base_config
 
-    def repo
-      raise RuntimeError, "Can't access repo without base config" unless
-        base_config && base_config.dig(:graph, :driver)
-      urn = base_config.dig :graph, :driver
-      @repo ||= load_repo urn
+    def prompt
+      # TODO maybe propagate/merge parameters in a sensible way
+      @prompt ||= Prompt.new help_color: :cyan, interrupt: :exit
     end
 
+    def repo_for authority
+      authority = authority.to_s.strip.downcase
+
+      return @repo_urn[@repos[authority]] if @repos.key? authority
+
+      raise RuntimeError,
+        "Can't access repo without base config" unless base_config
+
+      urn = base_config.dig(:authorities, authority, :graph, :driver)
+      unless urn
+        urn = base_config.dig(:graph, :driver)
+        default = true
+      end
+
+      raise Intertwingler::ConfigError,
+        'No default driver specified' unless urn
+
+      @repo_urn[urn] ||= load_repo urn
+
+      # collect all the authorities for which this is the repo
+      base_config.fetch(:authorities, {}).reduce([]) do |out, pair|
+        driver = pair.last.dig(:graph, :driver)
+        out << pair.first if default && driver.nil? or driver == urn
+        out
+      end.each { |auth| @repos[auth] = urn }
+
+      # XXX this is a bit spaghetti-ey
+      init_repo urn
+    end
+
+    def authorities
+      base_config.fetch(:authorities, {}).keys.map do |k|
+        [k, repo_for(k)]
+      end.to_h
+    end
+
+    # end of no_commands region
   end
 
-  # detect state directory
+  private
 
-  no_commands do
+  def collect_graph_config message: nil
+    # gotta overwrite as a local variable or it will fail method resolution
+    prompt = self.prompt
 
-    def collect_graph_config prompt, initial: false
-      prompt.collect do
-        key(:driver).ask 'Driver to use',
-          default: STORE unless prompt.no? 'Specify graph driver?'
+    prompt.collect do
+      key(:driver).ask 'Driver to use',
+        default: STORE unless prompt.no? 'Specify graph driver?'
 
-        prompt.say_md(<<~EOS) if initial
+      prompt.say_md(message) if message
 
-When an empty graph is initialized, we can load it with the contents
-of one or more RDF files.
+      path = Pathname(?.).expand_path
+      until prompt.no? 'Add an RDF file to initialize the graph with?'
+        path = prompt.ask(?>, value: path.to_s + ?/) or break
+        path = Pathname(path) # okay *now*
 
-EOS
-        path = Pathname(?.).expand_path
-        until prompt.no? 'Add an RDF file to initialize the graph with?'
-          path = prompt.ask(?>, value: path.to_s + ?/) or break
-          path = Pathname(path) # okay *now*
-
-          if path.file? && path.readable? or !prompt.no?(
-            "#{path} doesn't seem to be a readable file. Are you sure?")
-            key(:init).values.add_answer path.to_s
-            path = path.parent
-          end
+        if path.file? && path.readable? or !prompt.no?(
+          "#{path} doesn't seem to be a readable file. Are you sure?")
+          key(:init).values.add_answer path.to_s
+          path = path.parent
         end
       end
     end
   end
+
+  public
 
   # first command line, then env, then test ./, then ~/
 
@@ -228,7 +342,8 @@ EOS
       exit 1
     end
 
-    prompt = Prompt.new help_color: :cyan, interrupt: :exit
+    me     = self      # copy self so we can refer to the right self
+    prompt = me.prompt # copy prompt for similar reasons
 
     prompt.reader.on(:keyctrl_a) do |event|
       event.line.move_to_start
@@ -272,7 +387,6 @@ EOS
     # TODO maybe someday
     # prompt.say "Taking defaults from #{config_file}..." if base_config
 
-    me = self
 
     # Collect the following prompts into a structure:
     config = prompt.collect do
@@ -287,19 +401,23 @@ EOS
 _Intertwingler_ uses a provisional `x-ruby` URN scheme (also known as a
 NID) to identify pluggable modules. These take the following form:
 
-
 ```
 urn:x-ruby:module/path;Class::Name?=constructor=parameter&other=param
 
-```
 
+```
 
 In this case, the class identified by the URN is expected to be a
 subclass of `RDF::Repository`. This defines how and where the graph
 data is stored.
 
 EOS
-        gconf = me.collect_graph_config prompt
+        gconf = me.collect_graph_config(message: <<~EOS) if prompt
+
+When an empty graph is initialized, we can load it with the contents
+of one or more RDF files.
+
+EOS
         key(:graph).add_answer gconf if gconf and !gconf.empty?
       end
 
@@ -307,7 +425,7 @@ EOS
         tmp = {}
         while domain = prompt.ask('Domain name (leave blank to stop):')
           subcol = create_collector.call do
-            gconf = me.collect_graph_config prompt
+            gconf = me.collect_graph_config
             key(:graph).add_answer gconf if gconf and !gconf.empty?
 
             unless prompt.no? 'Configure the static site generator?'
@@ -327,86 +445,6 @@ EOS
       end
 
     end
-
-    prompt.say config.inspect
-
-#     # XXX BURN THIS WHEN DONE
-#     config = prompt.collect do
-#       # Store (category mandatory):
-#       # * quad store driver and options (default RDF::LMDB relative to config home)
-#       # * RDF files to initialize with (tab completion?)
-#       #
-#       prompt.say_md(<<~EOS)
-
-# _Intertwingler_ uses a provisional `x-ruby` URN scheme (also known as a
-# NID) to identify pluggable modules. These take the following form:
-
-
-# ```
-# urn:x-ruby:module/path;Class::Name?=constructor=parameter&other=param
-
-# ```
-
-
-# In this case, the class identified by the URN is expected to be a
-# subclass of `RDF::Repository`. This defines how and where the graph
-# data is stored.
-
-# EOS
-#       key :graph do
-#         key(:driver).ask 'Driver to use', required: true, default: STORE
-#         prompt.say_md(<<~EOS)
-
-# When an empty graph is initialized, we can load it with the contents
-# of one or more RDF files.
-
-# EOS
-#         path = Pathname(?.).expand_path
-#         until prompt.no? 'Add an RDF file to initialize the graph with?'
-#           path = prompt.ask(?>, value: path.to_s + ?/) or break
-#           path = Pathname(path) # okay *now*
-
-#           if path.file? && path.readable? or !prompt.no?(
-#             "#{path} doesn't seem to be a readable file. Are you sure?")
-#             key(:init).values.add_answer path.to_s
-#             path = path.parent
-#           end
-#         end
-#       end
-
-#       # Engine (category optional, default yes):
-#       # * host (default localhost)
-#       # * port (default 10101)
-#       # * domains to expose (default empty == all of them)
-#       #
-#       if prompt.yes? 'Configure the main Intertwingler engine?'
-#         key :engine do
-#           key(:host).ask 'Host:', default: HOST
-#           key(:port).ask 'Port:', default: PORT
-#           prompt.say <<~EOS
-
-# The engine's default behaviour is to configure a resolver for every domain
-# found in the graph. You can limit the DNS domains the engine answers to.
-
-# EOS
-#           domain = prompt.ask 'Add an explicit domain? (leave blank to skip):'
-#           if domain
-#             key(:domains).values.add_answer domain
-#             while (domain = prompt.ask 'Add another? (leave blank if not):')
-#               key(:domains).values.add_answer domain
-#             end
-#           end
-#         end
-#       end
-
-#       # Static (category optional, default no):
-#       # * target directory (required)
-#       unless prompt.no? 'Configure the static site generator?'
-#         key :static do
-#           key(:target).ask 'Target directory: ', value: Dir.getwd
-#         end
-#       end
-#     end
 
     # if resulting configuration is (semantically) identical to
     # existing config file contents, exit.
@@ -458,23 +496,24 @@ EOS
     # we imagine detecting whether the configuration has been initialized
     return invoke :init unless base_config
 
-    config = base_config[:engine]
+    # require 'pry'
+    # binding.pry
 
     require 'rack'
     require 'rackup'
-    require 'intertwingler/engine'
+    require 'intertwingler/harness'
 
-    # initialize Intertwingler::Engine
-    engine = Intertwingler::Engine.configure repo
+    # give us a harness
+    harness = Intertwingler::Harness.new(**authorities)
 
     # initialize rack server
     Rackup::Server.start({
-      app: engine,
+      app: harness,
       # server: ...
       # environment: ...
       daemonize: options[:detach],
-      Host: config[:host],
-      Port: config[:port],
+      Host: options[:host] || base_config[:host],
+      Port: options[:port] || base_config[:port],
     })
   end
 
