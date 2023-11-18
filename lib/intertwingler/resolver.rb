@@ -91,7 +91,24 @@ class Intertwingler::Resolver
 
     # 3) get document and fragment specifications
     documents = repo.objects_for(subject, ITCV.document, only: :uri)
-    fragments = repo.objects_for(subject, ITCV['fragment-list'], only: :resource)
+    fragments = repo.objects_for(
+      subject, ITCV['fragment-list'], only: :resource)
+    unless fragments.empty?
+      fragments = RDF::List.new(
+        subject: fragments.first, graph: repo).to_a.map do |f|
+        # fragment class
+        c = repo.objects_for(f, ITCV['fragment-class'], only: :uri)
+        # via shacl property path
+        v = repo.objects_for(f, ITCV.via, only: :resource)
+        # host class
+        h = repo.objects_for(f, ITCV['host-class'], only: :uri)
+
+        # massage property path
+        v = repo.process_shacl_path v
+
+        [c, v, h]
+      end
+    end
 
     self.new repo, base, aliases: aliases, prefixes: prefixes,
       subject: subject, documents: documents, fragments: fragments
@@ -133,12 +150,28 @@ class Intertwingler::Resolver
     repo.all_of_type Intertwingler::Vocab::ITCV.Resolver
   end
 
-  def self.configure repo, subject = nil
-    return locate(repo).map { |s| configure_one repo, r } unless subject
+  def self.configure repo, subject: nil, authority: nil
+    if subject
+      return subject.map { |s| configure_one repo, s} if subject.is_a? Array
 
-    return subject.map { |s| configure_one repo, s} if subject.is_a? Array
+      configure_one repo, subject
+    elsif authority
+      candidates = %w[http https].map do |scheme|
+        base = RDF::URI("#{scheme}://#{authority}/")
+        repo.subjects_for(ITCV.manages, base, only: :resource)
+      end.flatten.uniq
 
-    configure_one repo, subject
+      case candidates.size
+      when 1 then return configure_one repo, candidates.first
+      when 0 then raise Intertwingler::ConfigError,
+          "No resolver found for #{authority}"
+      else raise Intertwingler::ConfigError,
+          'Multiple resolvers identified for %s: %s' %
+          [authority, candidates.join(', ')]
+      end
+    else
+      locate(repo).map { |s| configure_one repo, r }
+    end
   end
 
   attr_reader :repo, :base, :aliases, :prefixes, :id, :documents, :fragments
@@ -163,6 +196,9 @@ class Intertwingler::Resolver
     @aliases  = coerce_resources  aliases, as: :uri
     @prefixes = sanitize_prefixes prefixes
     @id       = coerce_resource subject if subject
+
+    @documents = documents.to_set
+    @fragments = fragments # this is in order
 
     # cache of subjects in the graph so we only look them up once
     @subjects = {}

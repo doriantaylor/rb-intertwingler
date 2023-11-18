@@ -2435,10 +2435,10 @@ module Intertwingler
     end
   end
 
-  # This class provides a resource-oriented view of the graph. When I
-  # get around to implementing it. (Python librdf has one of these and
-  # it's handy. This should really belong in the core rdflib.)
-  # Currently does not do anything.
+  # XXX TODO This class provides a resource-oriented view of the
+  # graph. When I get around to implementing it. (Python librdf has
+  # one of these and it's handy. This should really belong in the core
+  # rdflib.)  Currently does not do anything.
   class Resource
     attr_reader :repository, :resolver
 

@@ -114,22 +114,18 @@ class Intertwingler::Handler
 
   # Get the {Intertwingler::Resolver} for the given request.
   #
-  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
-  #
   # @return [Intertwingler::Resolver, nil] the resolver, maybe
   #
-  def resolver_for req
-    @engine.resolver_for req
+  def resolver
+    @engine.resolver
   end
 
   # Get the resolver's graph for the given request.
   #
-  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
-  #
   # @return [RDF::Repository] the graph.
   #
-  def repo_for req
-    @engine.repo_for req
+  def repo
+    @engine.repo
   end
 
   # This is a toy content handler for serving content-negotiated files
