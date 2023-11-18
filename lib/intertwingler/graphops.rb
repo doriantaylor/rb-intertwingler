@@ -988,8 +988,9 @@ module Intertwingler
 
     BASE_TYPES = [RDF::RDFS.Resource, RDF::OWL.Thing].freeze
 
-    def host_for_internal_sparql subject, seen = Set[], dtypes = nil,
-        spec: nil, graph: nil, published: false, circulated: false, force: false
+    def host_for_internal subject, seen = Set[], graph: nil,
+        published: false, circulated: false, force: false,
+        documents: nil, fragments: nil
       # caching manoeuvre
       key = [subject.to_s, graph.sort, published]
 
@@ -1000,7 +1001,7 @@ module Intertwingler
       end
 
       # get us a fragment spec
-      spec ||= fragment_spec
+      fragments ||= fragment_spec
 
       # 1. attempt to detect a direct assertion that this is a fragment
       host = objects_for(
@@ -1009,11 +1010,11 @@ module Intertwingler
       # XXX disambiguate if there is more than one direct assertion (is
       # document type, is published, newest?, alphabetical)
 
-      ft = fragment_types - BASE_TYPES
-      dtypes ||= document_types(fragments: true) & all_types
+      ft = fragment_types(fragments) - BASE_TYPES
+      documents ||= document_types(fragments: true) & all_types
 
       types = types_for subject, graph: graph
-      isdoc = type_is? types, dtypes
+      isdoc = type_is? types, documents
       frags = type_is? types, ft
 
       # none of this block gets run if we already have an explicit
@@ -1022,7 +1023,7 @@ module Intertwingler
       unless host or (isdoc and not frags)
 
         # filter path/class pairs based on the subject type
-        tests = spec.map do |pattern|
+        tests = fragments.map do |pattern|
           ftypes, paths, classes, except = pattern
 
           score = type_is?(types, ftypes) or next
@@ -1109,9 +1110,9 @@ module Intertwingler
         # now we prune
 
         if host = hosts.first and not seen.include? host
-          parent = host_for_internal_sparql host, seen | Set[host],
-            dtypes, spec: spec, graph: graph, published: published,
-            circulated: circulated
+          parent = host_for_internal host, seen | Set[host],
+            graph: graph, published: published, circulated: circulated,
+            documents: documents, fragments: fragments
           host = parent if parent
         end
       end
@@ -1131,11 +1132,13 @@ module Intertwingler
     # @param published [false, true, :circulated] only consider
     #  published (or circulated) documents
     # @param noop [false, true] return the subject if there is no host
-    # @param spec [Hash] an optional overriding (expanded) fragment spec
+    # @param documents [#to_set] optional overriding document spec
+    # @param fragments [Array] an optional overriding (expanded) fragment spec
     #
     # @return [nil, RDF::Resource] the host document, if any
     #
-    def host_for subject, graph: nil, published: true, noop: false, spec: nil
+    def host_for subject, graph: nil, published: true, noop: false,
+        documents: nil, fragments: nil
       subject = assert_resource  subject
       graph   = assert_resources graph
 
@@ -1144,8 +1147,9 @@ module Intertwingler
                    else false
                    end
 
-      host = host_for_internal_sparql subject, graph: graph,
-        published: published, circulated: circulated, spec: spec
+      host = host_for_internal subject, graph: graph,
+        published: published, circulated: circulated,
+        documents: documents, fragments: fragments
 
       # return the noop
       noop ? host || subject : host
@@ -1169,15 +1173,15 @@ module Intertwingler
     #
     # @return [Array<RDF::URI>] All recognized fragment types
     #
-    def fragment_types
-      fragment_spec.map(&:first).reduce(&:|).to_a
+    def fragment_types fragments = nil
+      (fragments || fragment_spec).map(&:first).reduce(&:|).to_a
     end
 
     # Retrieve the RDF types considered to be "documents".
     #
     # @return [Array<RDF::URI>] all recognized document types
     #
-    def document_types fragments: false
+    def document_types types = nil, fragments: false
       @documents ||= expand_documents DOCUMENTS
       fragments ? @documents : @documents - fragment_types
     end

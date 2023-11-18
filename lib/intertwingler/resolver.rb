@@ -1,3 +1,4 @@
+require 'intertwingler/error'
 require 'intertwingler/graphops'
 require 'intertwingler/vocab'
 require 'intertwingler/util/clean'
@@ -87,7 +88,7 @@ class Intertwingler::Resolver
       o.iri? or o.literal? && o.datatype? && o.datatype == XSD.anyURI
     end.sort.first
 
-    prefix[nil] = vocab.value if vocab
+    prefixes[nil] = vocab.value if vocab
 
     # 3) get document and fragment specifications
     documents = repo.objects_for(subject, ITCV.document, only: :uri)
@@ -97,16 +98,18 @@ class Intertwingler::Resolver
       fragments = RDF::List.new(
         subject: fragments.first, graph: repo).to_a.map do |f|
         # fragment class
-        c = repo.objects_for(f, ITCV['fragment-class'], only: :uri)
+        c = repo.objects_for(f, ITCV.fragment, only: :uri)
         # via shacl property path
-        v = repo.objects_for(f, ITCV.via, only: :resource)
+        v = repo.objects_for(f, ITCV.via, only: :resource).map do |path|
+          repo.process_shacl_path path
+        end
+
         # host class
-        h = repo.objects_for(f, ITCV['host-class'], only: :uri)
+        h = repo.objects_for(f, ITCV.host, only: :uri)
+        # exceptions to host
+        e = repo.objects_for(f, ITCV.except, only: :uri)
 
-        # massage property path
-        v = repo.process_shacl_path v
-
-        [c, v, h]
+        [c, v, h, e]
       end
     end
 
@@ -163,9 +166,9 @@ class Intertwingler::Resolver
 
       case candidates.size
       when 1 then return configure_one repo, candidates.first
-      when 0 then raise Intertwingler::ConfigError,
+      when 0 then raise Intertwingler::Error::Config,
           "No resolver found for #{authority}"
-      else raise Intertwingler::ConfigError,
+      else raise Intertwingler::Error::Config,
           'Multiple resolvers identified for %s: %s' %
           [authority, candidates.join(', ')]
       end
@@ -702,7 +705,7 @@ class Intertwingler::Resolver
     # give us the host uri if available
     hosturi = if uuid
                 # XXX what do we do about explicit graphs? also published?
-                host = @repo.host_for uuid
+                host = host_for uuid
                 # note function-level scope of hosturi
                 uri_for(host, slugs: true) if host
               end
@@ -1068,8 +1071,8 @@ class Intertwingler::Resolver
     subject = uuid_for subject, noop: true
 
     # XXX feed in our own fragment spec
-    host = @repo.host_for subject,
-      graph: graph, published: published, noop: noop
+    host = @repo.host_for subject, graph: graph, published: published,
+      noop: noop, documents: @documents, fragments: @fragments
 
     # not sure if this is necessary
     host ||= subject if noop

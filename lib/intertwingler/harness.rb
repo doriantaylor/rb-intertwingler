@@ -13,8 +13,18 @@ class Intertwingler::Harness < Intertwingler::Handler
   def initialize **mapping
     # get the intersection of resolvers with authorities
 
-    mapping.map do |authority, repo|
+    resolvers = mapping.reduce({}) do |hash, pair|
+      authority, repo = pair
+      resolver = Intertwingler::Resolver.configure repo, authority: authority
+
+      ([resolver.base] + resolver.aliases).each do |uri|
+        hash[uri.authority] = resolver if uri.scheme.downcase.start_with? 'http'
+      end
+
+      hash
     end
+
+    warn resolvers.inspect
 
     # from there, load the engines
 
