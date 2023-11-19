@@ -160,8 +160,11 @@ module Intertwingler
 
     DomainConfig = SymbolHash.schema graph?: GraphConfig, static?: StaticConfig
 
+    # DevConfig = SymbolHash.schema map?: Hash.map(Authority, Authority)
+
     HarnessConfig = SymbolHash.schema host?: Hostname, port?: Port,
-      graph?: GraphConfig, authorities?: Hash.map(Hostname, DomainConfig)
+      graph?: GraphConfig, authorities?: Hash.map(Hostname, DomainConfig) #,
+    # development?: DevConfig
 
   end
 end

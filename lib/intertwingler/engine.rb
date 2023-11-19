@@ -1,4 +1,5 @@
 require 'intertwingler/handler'
+require 'intertwingler/util/clean'
 require 'intertwingler/error'
 
 require 'rack/mock_request' # for env_for
@@ -6,15 +7,62 @@ require 'rack/mock_request' # for env_for
 # This is the engine. This is the thing that is run.
 class Intertwingler::Engine < Intertwingler::Handler
 
+  # The dispatcher has one job, which is to dispatch an incoming
+  # request to the correct handler.
   class Dispatcher
-    def self.configure engine
+    # 
+    def initialize engine, *urns
+      @engine   = engine
+      @handlers = {}
+
+      add(*urns)
     end
 
-    def initialize engine, handlers
+    attr_reader :engine
+
+    def clear
+      @handlers.clear
+    end
+
+    def add *urns
+      urns.each do |urn|
+        urn = @engine.resolver.coerce_resource urn, as: :uri
+        # only attempt to load the right scheme
+        next unless urn.is_a? Intertwingler::RubyURN
+
+        unless @handlers[urn]
+          cls = urn.object
+          raise Intertwingler::Error::Config,
+            "#{cls} is not a subclass of Intertwingler::Handler" unless
+            cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
+
+          params = urn.q_component_hash
+
+          # XXX in here is where we would do the manifest stuff
+          @handlers[urn] = cls.new(engine, **params)
+        end
+      end
     end
 
     # find a handler for the request and return the response
     def dispatch req
+      # XXX right now we just iterate through the handlers until one
+      # returns something other than 404 or 405
+      @handlers.values.each do |handler|
+        # warn handler.inspect
+        begin
+          resp = handler.handle req
+        rescue => e
+          # quit now in case this blows up
+          # XXX do something smarter here
+          return Rack::Response[500, {}, [e.message]]
+        end
+        next if [404, 405].include? resp.status
+        return resp
+      end
+
+      # default non-response
+      Rack::Response[404, {}, []]
     end
 
   end
@@ -32,14 +80,6 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   ITCV = Intertwingler::Vocab::ITCV
 
-  def self.collect_resolvers repo, subject
-  end
-
-  def self.verify_resolvers repo, subject, resolvers
-  end
-
-  # def self.
-
   public
 
   # Find all the subjects in the graph that are an `itcv:Engine`.
@@ -54,71 +94,26 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   # Resolve the engine and all of its handlers and transforms and
   # queues and such out of the graph.
-  def self.configure repo, subject = nil, resolvers: []
-    resolvers ||= []
+  def self.configure repo: nil, subject: nil, resolver: nil, authority: nil
+    # you either need a resolver, or a repo + { subject or authority }
 
-    unless subject
-      ss = if resolvers.empty?
-             repo.all_of_type ITCV.Engine
-           else
-             t1 = resolvers.map(&:id).compact.map do |r|
-               repo.subjects_for(ITCV.resolver, r, only: :resource)
-             end.flatten.reduce({}) do |h, e|
-               h[e] ||= 0
-               h[e] += 1
-               h
-             end
-
-             raise Intertwingler::Error::Config,
-               'No engines found linked to supplied resolvers' if t1.empty?
-
-             t2 = t1.values.max
-             t1.select { |_, v| v == t2 }.keys
-           end
-
-      if ss.empty?
-        raise Intertwingler::Error::Config,
-          'No itcv:Engine subject specified and none found in the graph.'
-      elsif ss.count > 1
-        raise Intertwingler::Error::Config,
-          "No itcv:Engine specified and more than one found: #{ss.join ', '}"
+    if resolver
+      self.new resolver: resolver
+    elsif repo
+      if subject
+        self.new repo: repo, subject: subject
+      elsif authority
+        resolver = Intertwingler::Resolver.configure repo, authority: authority
+        self.new resolver: resolver
       else
-        # we have our subject
-        subject = ss.first
+        raise Intertwingler::Error::Config,
+          'A repository must be accompanied by an authority or a subject URI.'
       end
-    end
-
-    # determine what resolvers have been asserted relative to the subject
-    t3 = repo.objects_for subject, ITCV.resolver, only: :resource
-
-    # okay now let's load our resolvers
-    if resolvers.empty?
-      raise Intertwingler::Error::Config,
-        "Can't find any resolvers relative to #{subject}" if t3.empty?
-
-      #
-      resolvers = Intertwingler::Resolver.configure repo, t3
     else
-      # we already have resolvers but let's ensure they're asserted
-      resolvers.select! { |r| t3.include? r.id }
-
       raise Intertwingler::Error::Config,
-        "No supplied resolvers connect to #{subject}" if resolvers.empty?
+        'Configuration requires either a resolver, or a repository plus ' +
+        'either an authority or a subject URI.'
     end
-
-    # step 1: find the instance of itcv:Engine that has the same base
-    # URI as the resolvers and initialize.
-    me = self.new repo, subject, resolvers
-
-    # step 2: find the handlers and load them. (incidentally, this
-    # returns `self`.)
-    me.refresh_handlers
-
-    # step 3: construct the transform queues and their contents. (note
-    # the queues are apt to reuse transforms, and the transform
-    # handler instances could very well already be in the handler
-    # stack.) NB this also returns `self`.
-    me.refresh_queues
   end
 
   # Refresh the handler stack associated with this engine.
@@ -127,15 +122,15 @@ class Intertwingler::Engine < Intertwingler::Handler
   #
   def refresh_handlers
 
-    resolvers.each do |r|
-     # handlers = r.repo.objects_for(subje
-    end
+    # get the list of handlers
+    list = @repo.objects_for(subject,
+      ITCV['handler-list'], only: :resource).sort.first
+    list = list ? RDF::List.new(subject: list, graph: @repo).to_a : []
+    list += @repo.objects_for(@subject, ITCV.handler, only: :resource).sort
 
-    # nothing to do if you can't find one of these
-    list = resolver.repo.objects_for(subject,
-      ITCV['handler-list'], only: :resource).sort.first or return
-
-    list = RDF::List.new subject: list, graph: resolver.repo
+    # wipe out the contents of the dispatcher first
+    @dispatcher.clear
+    @dispatcher.add(*list)
 
     self
   end
@@ -149,41 +144,69 @@ class Intertwingler::Engine < Intertwingler::Handler
     self
   end
 
+  private
+
+  def subject_from_resolver resolver
+    subjects = resolver.repo.subjects_for(
+      ITCV.resolver, resolver.subject, only: :resource)
+    case subjects.count
+    when 0 then raise Intertwingler::Error::Config,
+        "No engine found associated with resolver #{resolver.subject}"
+    when 1 then return subjects.first
+    else raise Intertwingler::Error::Config,
+        'Multiple engines found associated with %s: %s' %
+        [resolver.subject, subjects.join(', ')]
+    end
+  end
+
+  def resolver_from_subject
+    resolvers = @repo.objects_for(@subject, ITCV.resolver, only: :resource)
+    case resolvers.count
+    when 0 then raise Intertwingler::Error::Config,
+        "No resolvers associated with engine #{@subject}."
+    when 1 then return Intertwingler::Resolver.configure @repo,
+        subject: resolvers.first
+    else raise Intertwingler::Error::Config, 'Multiple resolvers for %s: %s' %
+        [@subject, resolvers.join(', ')]
+    end
+  end
+
+  public
+
   # Initialize the engine.
   #
   # @param subject [RDF::URI]
-  # @param resolvers [Array<Intertwingler::Resolver>] the necessary resolvers.
+  # @param resolver [Intertwingler::Resolver] the associated resolver.
   #
-  def initialize repo, subject, resolvers = []
-    @repo    = repo
-    @subject = coerce_resource subject
-    # ensure resolvers are an array
-    resolvers = resolvers.respond_to?(:to_a) ? resolvers.to_a : [resolvers]
-    # set authority map
-    @authorities = (@resolvers = resolvers).reduce({}) do |h, r|
-      r.authorities.each { |a| h[a] = r }
-      h
+  def initialize repo: nil, subject: nil, resolver: nil
+    # step 1: the basics
+    if resolver
+      @resolver = resolver
+      @repo     = resolver.repo
+      @subject  = subject_from_resolver resolver
+    elsif repo && subject
+      @repo     = repo
+      @subject  = subject
+      @resolver = resolver_from_subject
+    else
+      raise Intertwingler::Error::Config,
+        'Must initialize with either a resolver or a repository and subject.'
     end
 
-    # find the handlers and load them
+    @dispatcher = Dispatcher.new self
+
+    # step 2: find the handlers and load them. (incidentally, this
+    # returns `self`.)
     refresh_handlers
 
-    # find the transform queues and load them
+    # step 3: construct the transform queues and their contents. (note
+    # the queues are apt to reuse transforms, and the transform
+    # handler instances could very well already be in the handler
+    # stack.) NB this also returns `self`.
     refresh_queues
-
-    # XXX here is where we would have each of the handlers disgorge
-    # its manifest so we don't have to poll them all with each request
-    handlers  = handlers.respond_to?(:to_a) ? handlers.to_a : [handlers]
-    @handlers = handlers.map do |handler|
-      handler, args = (handler.respond_to?(:to_a) ? handler.to_a : [handler])
-      args ||= {}
-      handler.new self, **args
-    end
-
-    # create transform harness from handlers
   end
 
-  attr_reader :subject, :resolvers
+  attr_reader :subject, :resolver, :repo, :dispatcher
   alias_method :id, :subject
 
   # No-op to overwrite `engine` member.
@@ -191,28 +214,6 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @return [self] this _is_ the engine.
   #
   def engine; self; end
-
-  # Get the {Intertwingler::Resolver} for the given request.
-  #
-  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
-  #
-  # @return [Intertwingler::Resolver, nil] the resolver, maybe
-  #
-  def resolver_for req
-    req = RDF::URI(req.url) if req.respond_to? :url
-    @authorities[req.authority.downcase] if req.respond_to? :authority
-  end
-
-  # Get the resolver's graph for the given request.
-  #
-  # @param req [Rack::Request, URI, RDF::URI] the request (URI).
-  #
-  # @return [RDF::Repository] the graph.
-  #
-  def repo_for req
-    resolver = resolver_for(req) or return
-    resolver.repo
-  end
 
   # Using the current request as a basis, fake up a new request with
   # the given URI.
@@ -293,10 +294,6 @@ class Intertwingler::Engine < Intertwingler::Handler
     # get the uri as given (hostname/authority may be an alias)
     uri = URI(req.url)
 
-    # implicit 404 if we can't locate the resolver
-    resolver = resolver_for(uri) or
-      return Rack::Response[404, {}, ['not found lol']]
-
     # split out the path parameters
     uri, *pp = resolver.split_pp uri, parse: true
 
@@ -328,15 +325,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     # always assume the worst, then you can only be pleasantly surprised.
     resp = Rack::Response[404, {}, []]
 
-    # poll content handlers until something returns non-404/405
     begin
-      # XXX this should be replaced with the manifest system
-      @handlers.each do |h|
-        resp = h.handle req
-
-        break unless [404, 405].include? resp.status
-      end
-
+      resp = dispatcher.dispatch req
     rescue Intertwingler::Handler::AnyButSuccess => e
       resp = e.response
     rescue Exception => e

@@ -168,12 +168,12 @@ class Intertwingler::Handler
     # Initialize a handler with parameters.
     #
     # @param resolvers [Array<Intertwingler::Resolver>] the URI resolver(s)
-    # @param roots [Pathname, #to_s, Array<Pathname, #to_s>] the document root(s)
+    # @param root [Pathname, #to_s, Array<Pathname, #to_s>] the document root(s)
     # @param indices [#to_s, Array<#to_s>] slugs to use for directory index
     #
-    def initialize engine, roots: nil, indices: %w[index].freeze
+    def initialize engine, root: nil, indices: %w[index].freeze
       # coerce document root(s)
-      @roots = (roots.respond_to?(:to_a) ? roots.to_a : [roots]).map do |r|
+      @roots = (root.respond_to?(:to_a) ? root.to_a : [root]).map do |r|
         Pathname(r).expand_path.realpath
       end
 
@@ -221,8 +221,6 @@ class Intertwingler::Handler
       # * then we get the UUID (if we didn't have it already)
       # * then we get the subset of `uri_for` on this scheme/authority
       #   (that we don't already have)
-
-      resolver = resolver_for req
 
       # determine if the requested path terminates with a slash (~ parameters)
       slash = resolver.slash? req.path
@@ -349,8 +347,6 @@ class Intertwingler::Handler
   class Generated < self
 
     def handle req
-
-      resolver = resolver_for(req) or return Rack::Response[404, {}, ['not found lol']]
 
       # warn req.url.inspect
       # warn resolver.base.inspect

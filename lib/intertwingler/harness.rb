@@ -1,5 +1,6 @@
 require 'intertwingler/handler'
 require 'intertwingler/resolver'
+require 'intertwingler/engine'
 
 # This is the multiplexing harness introduced to partition the
 # bootstrapping configuration
@@ -10,35 +11,37 @@ class Intertwingler::Harness < Intertwingler::Handler
   # @param mapping [Hash{String=>RDF::Repository}] The relation
   #  mapping authorities (domains) to RDF repositories.
   #
-  def initialize **mapping
-    # get the intersection of resolvers with authorities
+  def initialize mapping
 
-    resolvers = mapping.reduce({}) do |hash, pair|
+    @engines = mapping.reduce({}) do |hash, pair|
       authority, repo = pair
+      # get the resolver for the authority
       resolver = Intertwingler::Resolver.configure repo, authority: authority
 
+      # from there, load the engine
+      engine = Intertwingler::Engine.configure resolver: resolver
+
+      # map the domain aliases as well
       ([resolver.base] + resolver.aliases).each do |uri|
-        hash[uri.authority] = resolver if uri.scheme.downcase.start_with? 'http'
+        hash[uri.authority] = engine if uri.scheme.downcase.start_with? 'http'
       end
 
       hash
     end
 
-    warn resolvers.inspect
-
-    # from there, load the engines
-
-    # map the domain aliases as well
-
-    # (the engines take it from there)
   end
 
   # Dispatch the request to the appropriate engine.
   def handle req
     # read off the Host: header
+    authority = req.get_header('HTTP_HOST').to_s.strip.downcase
+    # get an override map for the authority otherwise assign itself
+    # authority = @override.fetch authority.to_s.strip.downcase, authority
 
     # match the authority to an engine or otherwise 404
+    engine = @engines[authority] or return Rack::Response[404, {}, []]
 
     # forward request to engine
+    engine.handle req
   end
 end

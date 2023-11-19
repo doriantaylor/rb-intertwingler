@@ -178,6 +178,7 @@ class Intertwingler::Resolver
   end
 
   attr_reader :repo, :base, :aliases, :prefixes, :id, :documents, :fragments
+  alias_method :subject, :id
 
   # Create a new URI resolver.
   #
