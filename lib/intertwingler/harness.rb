@@ -11,8 +11,8 @@ class Intertwingler::Harness < Intertwingler::Handler
   # @param mapping [Hash{String=>RDF::Repository}] The relation
   #  mapping authorities (domains) to RDF repositories.
   #
-  def initialize mapping
-
+  def initialize mapping, home: nil
+    @home = home
     @engines = mapping.reduce({}) do |hash, pair|
       authority, repo = pair
       # get the resolver for the authority
@@ -23,7 +23,7 @@ class Intertwingler::Harness < Intertwingler::Handler
 
       # map the domain aliases as well
       ([resolver.base] + resolver.aliases).each do |uri|
-        hash[uri.authority] = engine if uri.scheme.downcase.start_with? 'http'
+        hash[uri.authority] = engine if /^https?$/i.match? uri.scheme
       end
 
       hash
@@ -32,6 +32,8 @@ class Intertwingler::Harness < Intertwingler::Handler
   end
 
   # Dispatch the request to the appropriate engine.
+  #
+  #
   def handle req
     # read off the Host: header
     authority = req.get_header('HTTP_HOST').to_s.strip.downcase

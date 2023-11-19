@@ -10,7 +10,12 @@ class Intertwingler::Engine < Intertwingler::Handler
   # The dispatcher has one job, which is to dispatch an incoming
   # request to the correct handler.
   class Dispatcher
-    # 
+
+    # Give us a new dispatcher.
+    #
+    # @param engine [Intertwingler::Engine]
+    # @param *urns [Intertwingler::RubyURN]
+    #
     def initialize engine, *urns
       @engine   = engine
       @handlers = {}
@@ -20,6 +25,8 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     attr_reader :engine
 
+    # Clear out the handlers
+    #
     def clear
       @handlers.clear
     end
@@ -44,7 +51,12 @@ class Intertwingler::Engine < Intertwingler::Handler
       end
     end
 
-    # find a handler for the request and return the response
+    # Find the appropriate handler for the request and return the response.
+    #
+    # @param req [Rack::Request]
+    #
+    # @return [Rack::Response]
+    #
     def dispatch req
       # XXX right now we just iterate through the handlers until one
       # returns something other than 404 or 405
