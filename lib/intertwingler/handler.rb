@@ -1,7 +1,6 @@
 require 'rack/request'
 require 'rack/response'
 
-
 # Everything in {Intertwingler} is a handler.
 #
 class Intertwingler::Handler

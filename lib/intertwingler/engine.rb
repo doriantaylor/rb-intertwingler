@@ -45,8 +45,11 @@ class Intertwingler::Engine < Intertwingler::Handler
 
           params = urn.q_component_hash
 
+          oldpwd = Pathname.getwd
+          Dir.chdir @engine.home
           # XXX in here is where we would do the manifest stuff
           @handlers[urn] = cls.new(engine, **params)
+          Dir.chdir oldpwd
         end
       end
     end
@@ -106,17 +109,18 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   # Resolve the engine and all of its handlers and transforms and
   # queues and such out of the graph.
-  def self.configure repo: nil, subject: nil, resolver: nil, authority: nil
+  def self.configure repo: nil, subject: nil, resolver: nil,
+      authority: nil, home: nil
     # you either need a resolver, or a repo + { subject or authority }
 
     if resolver
-      self.new resolver: resolver
+      self.new resolver: resolver, home: home
     elsif repo
       if subject
-        self.new repo: repo, subject: subject
+        self.new repo: repo, subject: subject, home: home
       elsif authority
         resolver = Intertwingler::Resolver.configure repo, authority: authority
-        self.new resolver: resolver
+        self.new resolver: resolver, home: home
       else
         raise Intertwingler::Error::Config,
           'A repository must be accompanied by an authority or a subject URI.'
@@ -190,7 +194,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @param subject [RDF::URI]
   # @param resolver [Intertwingler::Resolver] the associated resolver.
   #
-  def initialize repo: nil, subject: nil, resolver: nil
+  def initialize repo: nil, subject: nil, resolver: nil, home: nil
     # step 1: the basics
     if resolver
       @resolver = resolver
@@ -205,6 +209,8 @@ class Intertwingler::Engine < Intertwingler::Handler
         'Must initialize with either a resolver or a repository and subject.'
     end
 
+    @home = Pathname(home.to_s).expand_path
+
     @dispatcher = Dispatcher.new self
 
     # step 2: find the handlers and load them. (incidentally, this
@@ -218,7 +224,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     refresh_queues
   end
 
-  attr_reader :subject, :resolver, :repo, :dispatcher
+  attr_reader :subject, :resolver, :repo, :dispatcher, :home
   alias_method :id, :subject
 
   # No-op to overwrite `engine` member.
@@ -341,9 +347,9 @@ class Intertwingler::Engine < Intertwingler::Handler
       resp = dispatcher.dispatch req
     rescue Intertwingler::Handler::AnyButSuccess => e
       resp = e.response
-    rescue Exception => e
-      resp = Rack::Response[500,
-        { 'content-type' => 'text/plain' }, [e.message]]
+    # rescue Exception => e
+    #   resp = Rack::Response[500,
+    #     { 'content-type' => 'text/plain' }, [e.inspect]]
     end
 
     # run all response transforms

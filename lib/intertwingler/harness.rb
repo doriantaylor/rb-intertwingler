@@ -1,6 +1,7 @@
 require 'intertwingler/handler'
 require 'intertwingler/resolver'
 require 'intertwingler/engine'
+require 'pathname'
 
 # This is the multiplexing harness introduced to partition the
 # bootstrapping configuration
@@ -19,7 +20,7 @@ class Intertwingler::Harness < Intertwingler::Handler
       resolver = Intertwingler::Resolver.configure repo, authority: authority
 
       # from there, load the engine
-      engine = Intertwingler::Engine.configure resolver: resolver
+      engine = Intertwingler::Engine.configure resolver: resolver, home: home
 
       # map the domain aliases as well
       ([resolver.base] + resolver.aliases).each do |uri|

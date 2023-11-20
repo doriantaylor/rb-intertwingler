@@ -504,7 +504,7 @@ EOS
     require 'intertwingler/harness'
 
     # give us a harness
-    harness = Intertwingler::Harness.new authorities
+    harness = Intertwingler::Harness.new authorities, home: config_home
 
     # initialize rack server
     Rackup::Server.start({

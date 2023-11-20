@@ -43,10 +43,11 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'uuidtools',      '>= 2.1.5'
 
   # stuff for handlers/transforms
-  spec.add_runtime_dependency 'md-noko',      '>= 0.1.0'  # mine
-  spec.add_runtime_dependency 'sassc',        '>= 2.2.1'
-  spec.add_runtime_dependency 'store-digest', '>= 0.1.3'  # mine
-  spec.add_runtime_dependency 'xml-mixup',    '>= 0.1.16' # mine
+  spec.add_runtime_dependency 'md-noko',           '>= 0.1.0'  # mine
+  spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
+  spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine
+  spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine
+  spec.add_runtime_dependency 'xml-mixup',         '>= 0.1.16' # mine
 
   # stuff for cli
   spec.add_runtime_dependency 'thor',         '>= 1.2.2'
