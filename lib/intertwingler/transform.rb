@@ -15,8 +15,6 @@ require 'http/negotiate'
 # meant to be congruent with the Transformation Functions Ontology.
 class Intertwingler::Transform
 
-
-
   ### BELOW THIS IS HANDLER/QUEUE STUFF
 
   class ParamError < ::ArgumentError
@@ -62,6 +60,19 @@ class Intertwingler::Transform
 
   # The harness contains transforms and queues thereof.
   class Harness
+
+    def run_queue qhead, message
+      # for each transform in the queue
+      # first we test if it accepts the message body (or is message/http)
+
+      # we gin up a POST subrequest for its uri + params if applicable
+
+      # we use the dispatcher to run the subrequest
+      # we shuck off the response body from the subrequest (TODO full http msg)
+      # if there is a subsequent transform, we repeat
+      # if not we try the next queue
+      # if no queues left, we return the message with the new body
+    end
   end
 
   class Handler < Intertwingler::Handler
@@ -195,7 +206,6 @@ class Intertwingler::Transform
       end
     end
   end
-
 
 end
 

@@ -1,4 +1,4 @@
-2# frozen_string_literal: true
+1# frozen_string_literal: true
 require 'intertwingler/types'
 require 'rdf/repository'
 require 'thor'
@@ -44,6 +44,31 @@ class Intertwingler::CLI < Thor
 
     def error_md message = '', **options
       x_md :error, message, **options
+    end
+
+    # XXX not sure if i want this here
+    def collect_graph_config message: nil
+      # gotta overwrite as a local variable or it will fail method resolution
+      prompt = self
+
+      prompt.collect do
+        key(:driver).ask 'Driver to use',
+          default: STORE unless prompt.no? 'Specify graph driver?'
+
+        prompt.say_md(message) if message
+
+        path = Pathname(?.).expand_path
+        until prompt.no? 'Add an RDF file to initialize the graph with?'
+          path = prompt.ask(?>, value: path.to_s + ?/) or break
+          path = Pathname(path) # okay *now*
+
+          if path.file? && path.readable? or !prompt.no?(
+            "#{path} doesn't seem to be a readable file. Are you sure?")
+            key(:init).values.add_answer path.to_s
+            path = path.parent
+          end
+        end
+      end
     end
 
   end
@@ -299,34 +324,6 @@ EOS
     # end of no_commands region
   end
 
-  private
-
-  def collect_graph_config message: nil
-    # gotta overwrite as a local variable or it will fail method resolution
-    prompt = self.prompt
-
-    prompt.collect do
-      key(:driver).ask 'Driver to use',
-        default: STORE unless prompt.no? 'Specify graph driver?'
-
-      prompt.say_md(message) if message
-
-      path = Pathname(?.).expand_path
-      until prompt.no? 'Add an RDF file to initialize the graph with?'
-        path = prompt.ask(?>, value: path.to_s + ?/) or break
-        path = Pathname(path) # okay *now*
-
-        if path.file? && path.readable? or !prompt.no?(
-          "#{path} doesn't seem to be a readable file. Are you sure?")
-          key(:init).values.add_answer path.to_s
-          path = path.parent
-        end
-      end
-    end
-  end
-
-  public
-
   # first command line, then env, then test ./, then ~/
 
   desc :init, 'Initialize an Intertwingler base configuration.'
@@ -342,8 +339,7 @@ EOS
       exit 1
     end
 
-    me     = self      # copy self so we can refer to the right self
-    prompt = me.prompt # copy prompt for similar reasons
+    prompt = self.prompt # copy prompt
 
     prompt.reader.on(:keyctrl_a) do |event|
       event.line.move_to_start
@@ -387,7 +383,6 @@ EOS
     # TODO maybe someday
     # prompt.say "Taking defaults from #{config_file}..." if base_config
 
-
     # Collect the following prompts into a structure:
     config = prompt.collect do
       if prompt.yes? 'Specify the host and port for the application?'
@@ -412,7 +407,7 @@ subclass of `RDF::Repository`. This defines how and where the graph
 data is stored.
 
 EOS
-        gconf = me.collect_graph_config(message: <<~EOS) if prompt
+        gconf = prompt.collect_graph_config(message: <<~EOS) if prompt
 
 When an empty graph is initialized, we can load it with the contents
 of one or more RDF files.
@@ -425,7 +420,7 @@ EOS
         tmp = {}
         while domain = prompt.ask('Domain name (leave blank to stop):')
           subcol = create_collector.call do
-            gconf = me.collect_graph_config
+            gconf = prompt.collect_graph_config
             key(:graph).add_answer gconf if gconf and !gconf.empty?
 
             unless prompt.no? 'Configure the static site generator?'
@@ -515,6 +510,13 @@ EOS
       Host: options[:host] || base_config[:host],
       Port: options[:port] || base_config[:port],
     })
+  end
+
+  desc :pry, 'run pry lol'
+  def pry
+    require 'intertwingler/harness'
+    require 'pry'
+    binding.pry
   end
 
   default_command :engine

@@ -19,6 +19,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     def initialize engine, *urns
       @engine   = engine
       @handlers = {}
+      @queues   = {}
 
       add(*urns)
     end
@@ -60,11 +61,26 @@ class Intertwingler::Engine < Intertwingler::Handler
     #
     # @return [Rack::Response]
     #
-    def dispatch req
+    def dispatch req, qmgr = nil, run: false
+      # we always want this as a symbol
+      method = req.request_method.to_sym
+      # uuid = engine.resolver.uuid_for
+
+      # strategy:
+      #
+      # * explicit configuration (uri -> method -> handler):
+      #   * terminal (ie exact match)
+      #   * container (ie path prefix match)
+      # * empirical cache (de facto terminal paths)
+      # * poll handlers (that haven't already been attempted)
+
+      # check the empirical cache
+
+      # if a response from a cached entry returns 404/405 then remove it
+
       # XXX right now we just iterate through the handlers until one
       # returns something other than 404 or 405
-      @handlers.values.each do |handler|
-        # warn handler.inspect
+      @handlers.each do |urn, handler|
         begin
           resp = handler.handle req
         rescue => e
@@ -73,7 +89,13 @@ class Intertwingler::Engine < Intertwingler::Handler
           return Rack::Response[500, {}, [e.message]]
         end
         next if [404, 405].include? resp.status
-        return resp
+
+        if qmgr
+          qmgr.adjust_for urn
+          return run ? qmgr.run_response_queue(resp) : resp
+        else
+          return resp
+        end
       end
 
       # default non-response
@@ -329,14 +351,16 @@ class Intertwingler::Engine < Intertwingler::Handler
       req = dup_request orig, uri
     end
 
-    # run all request transforms
-
-    # req = transforms.run_queue :request, req
-
     # transforms can signal that they manipulate the request wholesale
     # by only accepting and returning message/http, meaning that if
     # they accept/return anything *else*, we know only to send the
     # body / manipulate the request/response accordingly.
+
+    # run all request transforms
+
+    # qmgr = transforms.request_instance # scope to request
+    # qmgr.add_addressable pp
+    # req = qmgr.run_request_queue req
 
     # XXX TODO
 
@@ -344,13 +368,22 @@ class Intertwingler::Engine < Intertwingler::Handler
     resp = Rack::Response[404, {}, []]
 
     begin
-      resp = dispatcher.dispatch req
+      # run the request queue
+      req  = qmgr.run_request_queue req
+      # we pass in the queue manager to detect any adjustments from
+      resp = dispatcher.dispatch req, qmgr
     rescue Intertwingler::Handler::AnyButSuccess => e
       resp = e.response
     # rescue Exception => e
     #   resp = Rack::Response[500,
     #     { 'content-type' => 'text/plain' }, [e.inspect]]
     end
+
+
+    begin
+      resp = qmgr.run_response_queue resp
+    end
+
 
     # run all response transforms
 

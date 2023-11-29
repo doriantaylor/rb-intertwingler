@@ -78,9 +78,8 @@ class Intertwingler::Resolver
       subject, ITCV.prefix, only: :resource).reduce({}) do |h, n|
       pfx = repo.objects_for(n, SH.prefix, only: :literal).sort.first
       uri = repo.objects_for(n,
-        SH.prefix, only: :literal, datatype: XSD.anyURI).sort.first
-
-      h[pfx.value] = uri.value if pfx && uri
+        SH.namespace, only: :literal, datatype: XSD.anyURI).sort.first
+      h[pfx.value.to_sym] = uri.value if pfx && uri
 
       h
     end
@@ -89,6 +88,7 @@ class Intertwingler::Resolver
     end.sort.first
 
     prefixes[nil] = vocab.value if vocab
+
 
     # 3) get document and fragment specifications
     documents = repo.objects_for(subject, ITCV.document, only: :uri)
@@ -1030,8 +1030,9 @@ class Intertwingler::Resolver
         return coerce_resource uuid, as: as
       end
 
-      uuid
+      return uuid
     end
+    # nil
   end
 
   # XXX 2022-03-16 A BUNCH OF THIS STUFF WE SHOULD IGNORE I THINK
@@ -1077,6 +1078,9 @@ class Intertwingler::Resolver
 
     # not sure if this is necessary
     host ||= subject if noop
+
+    # XXX THIS NEEDS TO BE HERE
+    return unless host
 
     coerce_resource host, as: as
   end

@@ -39,7 +39,8 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
 
     # otherwise we fall back to the main handler
 
-    doc = Intertwingler::Document.generate_doc resolver, subject
+    doc = Intertwingler::Document.generate_doc resolver, subject,
+      prefixes: engine.resolver.prefixes
 
     # XXX nuke this later
     if base = doc.at_xpath('/html:html/html:head/html:base',

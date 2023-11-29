@@ -32,6 +32,8 @@ class Intertwingler::Harness < Intertwingler::Handler
 
   end
 
+  attr_reader :engines, :home
+
   # Dispatch the request to the appropriate engine.
   #
   #
