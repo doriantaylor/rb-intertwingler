@@ -2,6 +2,8 @@ require 'intertwingler/handler'
 require 'intertwingler/util/clean'
 require 'intertwingler/error'
 
+require 'params/registry'
+
 require 'rack/mock_request' # for env_for
 
 # This is the engine. This is the thing that is run.
@@ -88,6 +90,8 @@ class Intertwingler::Engine < Intertwingler::Handler
           # XXX do something smarter here
           return Rack::Response[500, {}, [e.message]]
         end
+
+        # any other statusc and the handler is considered to have 'handled'
         next if [404, 405].include? resp.status
 
         if qmgr
@@ -234,6 +238,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     @home = Pathname(home.to_s).expand_path
 
     @dispatcher = Dispatcher.new self
+    @transforms = Intertwingler::Transform::Harness.new self
+    @registry   = Params::Registry.new
 
     # step 2: find the handlers and load them. (incidentally, this
     # returns `self`.)
@@ -243,10 +249,11 @@ class Intertwingler::Engine < Intertwingler::Handler
     # the queues are apt to reuse transforms, and the transform
     # handler instances could very well already be in the handler
     # stack.) NB this also returns `self`.
-    refresh_queues
+    refresh_transforms
   end
 
-  attr_reader :subject, :resolver, :repo, :dispatcher, :home
+  attr_reader :subject, :resolver, :repo, :home,
+    :dispatcher, :transforms, :registry
   alias_method :id, :subject
 
   # No-op to overwrite `engine` member.
@@ -293,7 +300,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     # now overwrite the headers
     headers.each do |hdr, val|
       hdr = hdr.to_s.strip.upcase.tr_s(?-, ?_)
-      hdr = "HTTP_#{hdr}" unless hdr.start_with? 'HTTP_'
+      hdr = "HTTP_#{hdr}" unless /^(?:HTTP_|(?:CONTENT_(?:LENGTH|TYPE)))$/ =~ hdr
       val = val.join ', ' if val.is_a? Array
       env[hdr] = val
     end
@@ -302,7 +309,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     Rack::Request.new env
   end
 
-  def replace_response_body resp, body
+  def replace_response_body resp, body, headers: {}
+    
     # why oh why no body=
     Rack::Response[resp.status, resp.headers, body]
   end
@@ -351,27 +359,24 @@ class Intertwingler::Engine < Intertwingler::Handler
       req = dup_request orig, uri
     end
 
+    # duplicate transforms so state changes get wiped
+    transforms = transforms.dup
+
     # transforms can signal that they manipulate the request wholesale
     # by only accepting and returning message/http, meaning that if
     # they accept/return anything *else*, we know only to send the
     # body / manipulate the request/response accordingly.
 
-    # run all request transforms
-
-    # qmgr = transforms.request_instance # scope to request
-    # qmgr.add_addressable pp
-    # req = qmgr.run_request_queue req
-
-    # XXX TODO
-
     # always assume the worst, then you can only be pleasantly surprised.
     resp = Rack::Response[404, {}, []]
 
     begin
+      # set the addressable
+      transforms.set_addressable(*pp) # XXX this may raise
       # run the request queue
-      req  = qmgr.run_request_queue req
+      req  = transforms.run_request req
       # we pass in the queue manager to detect any adjustments from
-      resp = dispatcher.dispatch req, qmgr
+      resp = dispatcher.dispatch req
     rescue Intertwingler::Handler::AnyButSuccess => e
       resp = e.response
     # rescue Exception => e
@@ -381,9 +386,8 @@ class Intertwingler::Engine < Intertwingler::Handler
 
 
     begin
-      resp = qmgr.run_response_queue resp
+      resp = transforms.run_response req, resp
     end
-
 
     # run all response transforms
 

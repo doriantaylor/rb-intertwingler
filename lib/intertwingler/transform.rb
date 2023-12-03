@@ -25,6 +25,21 @@ class Intertwingler::Transform
     # good).
   end
 
+  # A partial invocation is a collection of scalar parameter values
+  # *without* the message body input, such that all that is missing to
+  # complete the invocation is the input itself. These are used to
+  # "curry" the transformation functions, for some interpretation of
+  # the term.
+  class Partial < self
+  end
+
+  # this is intended to mirror `tfo:Invocation`, which is just a
+  # record of a particular invocation of a particular function with
+  # particular parameters and a particular input, which should always
+  # yield a particular output. we will be using this for cache stuff.
+  class Invocation < Partial
+  end
+
   # This class represents an ordered collection of transforms. "Queue"
   # is a slight misnomer as it's more like a _bag_ of transforms that
   # will be sorted topologically when given a request, if not given an
@@ -37,23 +52,140 @@ class Intertwingler::Transform
   # and the content of the client's `Accept` header.
   #
   #
-  # I call the unordered incarnation of a
-  # transform queue a _bag_ rather than a _set_ because some
-  # transforms may not match the payload or the request's `Accept:`
-  # header and will thus not be run. Conversely, two or more
-  # transforms can be *punned* into the same (human-readable)
-  # identifier, implying they do analogous things for different
-  # content-types.
+  # I call the unordered incarnation of a transform queue a _bag_
+  # rather than a _set_ because some transforms may not match the
+  # payload or the request's `Accept:` header and will thus not be
+  # run. Conversely, two or more transforms can be *punned* into the
+  # same (human-readable) identifier, implying they do analogous
+  # things for different content-types.
   class Queue
 
-    # A strict queue differs from its ancestor insofar as all
+    # A strict queue differs from an ordinary queue insofar as *all*
     # transforms in the queue *must* be run. This means a strict queue
     # is liable to generate an error if *any* of its constituent
     # transforms don't match the payload, *including* (and
     # *especially*) transforms that are intended to process the result
     # of a previous one. In general it only makes sense for a strict
-    # queue to be addressable, even though it is possible
+    # queue to be addressable, but we won't prevent you from using
+    # strict queues in other places.
     class Strict < self
+    end
+
+    # An addressable queue is a strict queue that is run in the
+    # addressable phase of response transforms, typically sandwiched
+    # between an early queue and a late queue. If more than one
+    # addressable queue is specified in the chain of transformation
+    # queues, then only the *last* addressable queue will be treated
+    # as such, while any preceding addressable queues will be treated
+    # as ordinary strict queues. This will probably be undesirable, so
+    # ensure that only one addressable queue is present in the chain.
+    class Addressable < Strict
+    end
+
+    def self.configure repo, subject
+    end
+
+    def initialize harness, transforms = []
+      @harness    = harness
+      @transforms = transforms || []
+    end
+
+    attr_reader :harness
+
+    def engine
+      harness.engine
+    end
+
+    def dispatcher
+      engine.dispatcher
+    end
+
+    def resolver
+      engine.resolver
+    end
+
+    def repo
+      resolver.repo
+    end
+
+    private
+
+    def prep_request
+    end
+
+    def prep_response
+    end
+
+    public
+
+    # Run this queue and return the altered message. Both request and res
+    #
+    # @note {::Rack::Response} has no reference back to the
+    #  {::Rack::Request} that it responds to, so the request is always needed.
+    #
+    # @param req [Rack::Request] the request, upon which to base the subrequest.
+    # @param resp [Rack::Response, nil] the response, to use in response queues.
+    #
+    # @return [Rack::Request, Rack::Response] the resulting HTTP message.
+    #
+    def run req, resp = nil
+
+      # if this is a response transform then resp will be non-nil
+      out  = resp || req
+      body = out.body # note the body is different depending on req or resp
+      type = out.get_header( # so is this and that is dumb af
+        out.is_a?(Rack::Request) ? 'CONTENT_TYPE' : 'content-type') ||
+        'application/octet-stream'
+      type = MimeMagic[type].canonical || MimeMagic['application/octet-stream']
+
+      # transforms could be transforms or they could be partials; in
+      # the case that they're partials, we want to pull the parameters
+      # out and append them to the uri
+      @transforms.each do |transform|
+        if transform.is_a? Intertwingler::Transform::Partial
+          params    = transform.params
+          transform = transform.function
+        else
+          params = {}
+        end
+
+        # we just override this in strict
+        next unless type_matches! transform, type
+
+        # this already should be a uuid but eh
+        uuid = resolver.uuid_for transform.subject, as: :uri
+        # first check if the transform matches typewise
+        # XXX TODO handle `message/http`; not doing that one yet lol
+        uri = req.base_url + uuid.uuid
+
+        uri.query = URI.encode_www_form(params) unless params.empty?
+
+        subreq  = engine.dup_request req, uri, method: :POST,
+          headers: { 'content-type' => type.to_s }, body: body
+        subresp = dispatcher.dispatch subreq
+
+        # XXX any failure in here is bad except 304 which is considered a noop
+
+        # reassign content type
+        type = MimeType[subresp.get_header 'content-type']
+
+        # reassign body
+        body = subresp.body
+
+        # here is where we would break if this was an error or redirect
+
+        # XXX content-encoding content-language etc etc
+      end
+
+      # we shouldn't do this if nothing has been run
+      if resp
+        out = engine.replace_response_body out, body,
+          headers: { 'content-type' => type }
+      else
+        out = engine.dup_request req, body: body
+      end
+
+      out
     end
 
   end
@@ -61,7 +193,38 @@ class Intertwingler::Transform
   # The harness contains transforms and queues thereof.
   class Harness
 
-    def run_queue qhead, message
+    def initialize engine
+      @engine = engine
+    end
+
+    # Duplicate the harness and the queues but keep everything else.
+    def dup
+    end
+
+    attr_reader :request_head, :response_head
+
+    # Set the initial request queue. The queue must already exist in
+    # the internal table. The chain of queues will be recalculated.
+    def request_head= uri
+    end
+
+    # Set the initial response queue. Same deal.
+    def response_head= uri
+      # 
+    end
+
+    # Set the contents of the addressable queue based on harvested
+    # path parameters. This will attempt to resolve the
+    # transformations and their parameters.
+    def set_addressable *pairs
+    end
+
+    # Run the request queues.
+    def run_request req
+    end
+
+    # Run the response queues.
+    def run_response req, resp
       # for each transform in the queue
       # first we test if it accepts the message body (or is message/http)
 
@@ -73,6 +236,7 @@ class Intertwingler::Transform
       # if not we try the next queue
       # if no queues left, we return the message with the new body
     end
+
   end
 
   class Handler < Intertwingler::Handler
