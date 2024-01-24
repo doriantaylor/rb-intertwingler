@@ -10,10 +10,19 @@ require 'time'
 require 'intertwingler/handler'
 require 'http/negotiate'
 
-# This class represents an individual service endpoint for a
-# transformation function, and encapsulates the parameters. It is
-# meant to be congruent with the Transformation Functions Ontology.
+# This class represents the metadata about an individual service
+# endpoint for a transformation function, and registers its
+# parameters. It is meant to be congruent with the
+# [`tfo:Transform`](https://vocab.methodandstructure.com/transformation#Transform)
+# class in the [Transformation Functions
+# Ontology](https://vocab.methodandstructure.com/transformation#).
 class Intertwingler::Transform
+
+  def self.configure
+  end
+
+  def initialize
+  end
 
   ### BELOW THIS IS HANDLER/QUEUE STUFF
 
@@ -27,13 +36,19 @@ class Intertwingler::Transform
 
   # A partial invocation is a collection of scalar parameter values
   # *without* the message body input, such that all that is missing to
-  # complete the invocation is the input itself. These are used to
-  # "curry" the transformation functions, for some interpretation of
-  # the term.
-  class Partial < self
+  # complete the invocation is the input body itself. These are used
+  # to "curry" the transformation functions, for some interpretation
+  # of the term.
+  class Partial
+
+    def self.configure
+    end
+
+    def initialize
+    end
   end
 
-  # this is intended to mirror `tfo:Invocation`, which is just a
+  # This is intended to mirror `tfo:Invocation`, which is just a
   # record of a particular invocation of a particular function with
   # particular parameters and a particular input, which should always
   # yield a particular output. we will be using this for cache stuff.
@@ -82,15 +97,17 @@ class Intertwingler::Transform
     class Addressable < Strict
     end
 
-    def self.configure repo, subject
+    def self.configure harness, subject
     end
 
-    def initialize harness, transforms = []
+    def initialize harness, subject, transforms = []
       @harness    = harness
+      @subject    = subject
       @transforms = transforms || []
     end
 
-    attr_reader :harness
+    attr_reader :harness, :subject
+    alias_method :id, :subject
 
     def engine
       harness.engine
@@ -116,9 +133,16 @@ class Intertwingler::Transform
     def prep_response
     end
 
+    # Test if the transform accepts the `Content-Type`. Intended to
+    # provide a hook to subclasses to raise an error if false.
+    def can_serve! transform, type
+      transform.accepts? type
+    end
+
     public
 
-    # Run this queue and return the altered message. Both request and res
+    # Run this queue and return the altered message. Include the
+    # response in the second argument if this is a response queue.
     #
     # @note {::Rack::Response} has no reference back to the
     #  {::Rack::Request} that it responds to, so the request is always needed.
@@ -129,6 +153,19 @@ class Intertwingler::Transform
     # @return [Rack::Request, Rack::Response] the resulting HTTP message.
     #
     def run req, resp = nil
+      # for each transform in the queue
+      # first we test if it accepts the message body (or is message/http)
+
+      # we gin up a POST subrequest for its uri + params if applicable
+
+      # we use the dispatcher to run the subrequest
+      # we shuck off the response body from the subrequest (TODO full http msg)
+      # if there is a subsequent transform, we repeat
+      # if not we try the next queue
+      # if no queues left, we return the message with the new body
+
+      # XXX okay here is where we whine if we run the whole queue and
+      # e.g. the Accept: header does not match
 
       # if this is a response transform then resp will be non-nil
       out  = resp || req
@@ -150,7 +187,7 @@ class Intertwingler::Transform
         end
 
         # we just override this in strict
-        next unless type_matches! transform, type
+        next unless can_serve! transform, type
 
         # this already should be a uuid but eh
         uuid = resolver.uuid_for transform.subject, as: :uri
@@ -190,27 +227,77 @@ class Intertwingler::Transform
 
   end
 
-  # The harness contains transforms and queues thereof.
+  # The transform harness takes a registry of transforms, registers
+  # their handler implementations with the engine's dispatcher,
+  # computes the arrangement of transformation queues, and is also
+  # responsible for running them.
+  #
+  # @note Since its internal state may change over the lifetime of a
+  #  request, the harness must be duplicated at the beginning of every
+  #  request, and that duplicate is the copy that ought to be used.
+  #
   class Harness
+
+    private
+
+
+    public
+
+    def self.configure engine
+    end
 
     def initialize engine
       @engine = engine
+
+      # maps
+      @transforms = {}
+      @queues     = {}
+
+      # chains
+      @request  = []
+      @response = []
     end
 
     # Duplicate the harness and the queues but keep everything else.
     def dup
+      self.class.new engine
     end
 
     attr_reader :request_head, :response_head
 
-    # Set the initial request queue. The queue must already exist in
-    # the internal table. The chain of queues will be recalculated.
+    # @!attribute [rw] request_head
+    #  @note The URI *must* already be known to the harness. The chain
+    #   of queues will be recalculated on assignment.
+    #  @return [RDF::URI] The initial *request* queue's URI.
+    #  @raise [ArgumentError] on assignment, if it doesn't like your URI.
+    #
     def request_head= uri
+      uri = resolver.coerce_resource uri
+      #
     end
 
-    # Set the initial response queue. Same deal.
+    # @!attribute [rw] response_head
+    #  @note The URI *must* already be known to the harness. The chain
+    #   of queues will be recalculated on assignment.
+    #  @return [RDF::URI] The initial *response* queue's URI.
+    #  @raise [ArgumentError] on assignment, if it doesn't like your URI.
+    #
     def response_head= uri
-      # 
+      uri = resolver.coerce_resource uri
+      #
+    end
+
+    # @!attribute [r] resolver
+    #  @return [Intertwingler::Resolver] The resolver from the engine.
+    def resolver
+      @engine.resolver
+    end
+
+    # @!attribute [r] dispatcher
+    #  @return [Intertwingler::Engine::Dispatcher] The dispatcher from
+    #   the engine.
+    def dispatcher
+      @engine.dispatcher
     end
 
     # Set the contents of the addressable queue based on harvested
@@ -221,20 +308,16 @@ class Intertwingler::Transform
 
     # Run the request queues.
     def run_request req
+      @request.each { |queue| req = queue.run req }
+
+      req
     end
 
     # Run the response queues.
     def run_response req, resp
-      # for each transform in the queue
-      # first we test if it accepts the message body (or is message/http)
+      @response.each { |queue| resp = queue.run req, resp }
 
-      # we gin up a POST subrequest for its uri + params if applicable
-
-      # we use the dispatcher to run the subrequest
-      # we shuck off the response body from the subrequest (TODO full http msg)
-      # if there is a subsequent transform, we repeat
-      # if not we try the next queue
-      # if no queues left, we return the message with the new body
+      resp
     end
 
   end

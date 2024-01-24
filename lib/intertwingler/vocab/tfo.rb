@@ -23,6 +23,14 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Bundle
   #
+  #     # This class provides a specification for a transformation function.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Function
+  #
+  #     # A function list is a list that only holds tfo:Function or tfo:Partial entities.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :FunctionList
+  #
   #     # An insertion is a pre-packaged event that manipulates a per-request instance of a transformation queue. When the result of the transform being run matches the condition, the contents of the tfo:Insertion are inserted into the target queue.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Insertion
@@ -47,21 +55,13 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Partial
   #
-  #     # A queue is a collection of tfo:Transform (and/or tfo:Partial) elements, organized either by explicit sequence (via tfo:member-list), or by dynamic sorting at runtime.
+  #     # A queue is a collection of tfo:Function (and/or tfo:Partial) elements, organized either by explicit sequence (via tfo:member-list), or by dynamic sorting at runtime.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Queue
   #
   #     # A strict queue is one for which all its elements must be executed, unlike an ordinary queue which only has to attempt to run its contents.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :StrictQueue
-  #
-  #     # This class provides a specification for a transformation function.
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :Transform
-  #
-  #     # A transform list is a list that only holds tfo:Transform or tfo:Partial entities.
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :TransformList
   #
   #     # Specifies the list of content-types, in order of preference, that the function can process.
   #     # @return [RDF::Vocabulary::Term]
@@ -83,7 +83,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :first
   #
-  #     # Specifies one or more tfo:Transform that the subject must follow in a queue.
+  #     # Specifies one or more tfo:Function that the subject must follow in a queue.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :follows
   #
@@ -115,7 +115,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :parameter
   #
-  #     # Specifies one or more tfo:Transform that the subject must precede in a queue.
+  #     # Specifies one or more tfo:Function that the subject must precede in a queue.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :precedes
   #
@@ -139,7 +139,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :transform
   #
-  #     # A tfo:Transform can trigger an tfo:Insertion event on a certain condition (e.g., successful completion).
+  #     # A tfo:Function can trigger an tfo:Insertion event on a certain condition (e.g., successful completion).
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :triggers
   #
@@ -190,6 +190,24 @@ module Intertwingler::Vocab
       label: {en: "Bundle"},
       subClassOf: ["http://www.w3.org/ns/dcat#Catalog", "http://www.w3.org/ns/prov#SoftwareAgent"],
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :Function,
+      comment: {en: "This class provides a specification for a transformation function."},
+      label: {en: "Function"},
+      subClassOf: ["http://www.w3.org/ns/dcat#DataService", "http://www.w3.org/ns/prov#Entity"],
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :FunctionList,
+      comment: {en: "A function list is a list that only holds tfo:Function or tfo:Partial entities."},
+      label: {en: "FunctionList"},
+      subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#List", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/transformation#FunctionList",
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
+        ), term(
+          allValuesFrom: term(
+            unionOf: list("https://vocab.methodandstructure.com/transformation#Function", "https://vocab.methodandstructure.com/transformation#Partial")
+          ),
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
+        )],
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Insertion,
       comment: {en: "An insertion is a pre-packaged event that manipulates a per-request instance of a transformation queue. When the result of the transform being run matches the condition, the contents of the tfo:Insertion are inserted into the target queue."},
       label: {en: "Insertion"},
@@ -207,7 +225,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/2002/07/owl#deprecated": "true",
       label: {en: "MarkupTransform"},
       note: {en: "\n            This class has been deprecated since it only made sense in 2020 when this vocabulary was being used in a different context.\n          "},
-      subClassOf: "https://vocab.methodandstructure.com/transformation#Transform",
+      subClassOf: "https://vocab.methodandstructure.com/transformation#Function",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Parameter,
       comment: {en: "This class provides a specification for a parameter in a given function."},
@@ -236,7 +254,7 @@ module Intertwingler::Vocab
       subClassOf: "http://www.w3.org/ns/prov#Activity",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Queue,
-      comment: {en: "A queue is a collection of tfo:Transform (and/or tfo:Partial) elements, organized either by explicit sequence (via tfo:member-list), or by dynamic sorting at runtime."},
+      comment: {en: "A queue is a collection of tfo:Function (and/or tfo:Partial) elements, organized either by explicit sequence (via tfo:member-list), or by dynamic sorting at runtime."},
       label: {en: "Queue"},
       note: {en: "\n            Given that tfo:Invocation is a subclass of tfo:Partial, there is nothing in principle preventing the former from being introduced into a queue. If this happens, we ignore any tfo:input or tfo:output statemments associated with the application of the function.\n          "},
       subClassOf: "http://www.w3.org/ns/prov#Activity",
@@ -245,24 +263,6 @@ module Intertwingler::Vocab
       comment: {en: "A strict queue is one for which all its elements must be executed, unlike an ordinary queue which only has to attempt to run its contents."},
       label: {en: "StrictQueue"},
       subClassOf: "https://vocab.methodandstructure.com/transformation#Queue",
-      type: "http://www.w3.org/2002/07/owl#Class"
-    term :Transform,
-      comment: {en: "This class provides a specification for a transformation function."},
-      label: {en: "Transform"},
-      subClassOf: ["http://www.w3.org/ns/dcat#DataService", "http://www.w3.org/ns/prov#Entity"],
-      type: "http://www.w3.org/2002/07/owl#Class"
-    term :TransformList,
-      comment: {en: "A transform list is a list that only holds tfo:Transform or tfo:Partial entities."},
-      label: {en: "TransformList"},
-      subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#List", term(
-          allValuesFrom: "https://vocab.methodandstructure.com/transformation#TransformList",
-          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
-        ), term(
-          allValuesFrom: term(
-            unionOf: list("https://vocab.methodandstructure.com/transformation#Transform", "https://vocab.methodandstructure.com/transformation#Partial")
-          ),
-          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
-        )],
       type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
@@ -277,7 +277,7 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"by-uri",
       comment: {en: "Specifies a regular expression for matching against URIs."},
-      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      domain: "https://vocab.methodandstructure.com/transformation#Function",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "by-uri"},
       range: "https://vocab.methodandstructure.com/transformation#regexp",
@@ -316,17 +316,17 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "first"},
       range: term(
-          unionOf: list("https://vocab.methodandstructure.com/transformation#Transform", "https://vocab.methodandstructure.com/transformation#Partial")
+          unionOf: list("https://vocab.methodandstructure.com/transformation#Function", "https://vocab.methodandstructure.com/transformation#Partial")
         ),
       subPropertyOf: "https://vocab.methodandstructure.com/transformation#member",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :follows,
-      comment: {en: "Specifies one or more tfo:Transform that the subject must follow in a queue."},
-      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      comment: {en: "Specifies one or more tfo:Function that the subject must follow in a queue."},
+      domain: "https://vocab.methodandstructure.com/transformation#Function",
       inverseOf: "https://vocab.methodandstructure.com/transformation#precedes",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "follows"},
-      range: "https://vocab.methodandstructure.com/transformation#Transform",
+      range: "https://vocab.methodandstructure.com/transformation#Function",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :implementation,
       comment: {en: "URI to the implementation of the function."},
@@ -350,7 +350,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "last"},
       range: term(
-          unionOf: list("https://vocab.methodandstructure.com/transformation#Transform", "https://vocab.methodandstructure.com/transformation#Partial")
+          unionOf: list("https://vocab.methodandstructure.com/transformation#Function", "https://vocab.methodandstructure.com/transformation#Partial")
         ),
       subPropertyOf: "https://vocab.methodandstructure.com/transformation#member",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
@@ -360,7 +360,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "member"},
       range: term(
-          unionOf: list("https://vocab.methodandstructure.com/transformation#Transform", "https://vocab.methodandstructure.com/transformation#Partial")
+          unionOf: list("https://vocab.methodandstructure.com/transformation#Function", "https://vocab.methodandstructure.com/transformation#Partial")
         ),
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"member-list",
@@ -368,7 +368,7 @@ module Intertwingler::Vocab
       domain: "https://vocab.methodandstructure.com/transformation#Queue",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "member-list"},
-      range: "https://vocab.methodandstructure.com/transformation#TransformList",
+      range: "https://vocab.methodandstructure.com/transformation#FunctionList",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :next,
       comment: {en: "Specifies the next queue to run after this one."},
@@ -379,7 +379,7 @@ module Intertwingler::Vocab
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :"not-by-uri",
       comment: {en: "Specifies a regular expression for anti-matching against URIs."},
-      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      domain: "https://vocab.methodandstructure.com/transformation#Function",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "not-by-uri"},
       range: "https://vocab.methodandstructure.com/transformation#regexp",
@@ -415,16 +415,16 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/transformation#ParameterList",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :precedes,
-      comment: {en: "Specifies one or more tfo:Transform that the subject must precede in a queue."},
-      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      comment: {en: "Specifies one or more tfo:Function that the subject must precede in a queue."},
+      domain: "https://vocab.methodandstructure.com/transformation#Function",
       inverseOf: "https://vocab.methodandstructure.com/transformation#follows",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "precedes"},
-      range: "https://vocab.methodandstructure.com/transformation#Transform",
+      range: "https://vocab.methodandstructure.com/transformation#Function",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :prefers,
       comment: {en: "Specifies the tfo:content-type the transform prefers to emit in lieu of a preference specified by the request. May be a list."},
-      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      domain: "https://vocab.methodandstructure.com/transformation#Function",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "prefers"},
       range: term(
@@ -461,12 +461,12 @@ module Intertwingler::Vocab
       domain: "https://vocab.methodandstructure.com/transformation#Partial",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "transform"},
-      range: "https://vocab.methodandstructure.com/transformation#Transform",
+      range: "https://vocab.methodandstructure.com/transformation#Function",
       subPropertyOf: "https://vocab.methodandstructure.com/transformation#input",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :triggers,
-      comment: {en: "A tfo:Transform can trigger an tfo:Insertion event on a certain condition (e.g., successful completion)."},
-      domain: "https://vocab.methodandstructure.com/transformation#Transform",
+      comment: {en: "A tfo:Function can trigger an tfo:Insertion event on a certain condition (e.g., successful completion)."},
+      domain: "https://vocab.methodandstructure.com/transformation#Function",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "triggers"},
       range: "https://vocab.methodandstructure.com/transformation#Insertion",

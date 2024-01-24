@@ -1,4 +1,5 @@
 require 'intertwingler/handler'
+require 'intertwingler/transform'
 require 'intertwingler/util/clean'
 require 'intertwingler/error'
 
@@ -28,42 +29,78 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     attr_reader :engine
 
-    # Clear out the handlers
+    # Clear out the handlers.
+    #
+    # @return [self]
     #
     def clear
       @handlers.clear
+
+      self
     end
 
+    # Add handlers by `urn:x-ruby:` identifier. These identifiers are
+    # expected to represent references to {Intertwingler::Handler}
+    # subclasses and any initialization parameters. This method
+    # attempts to change directory to {Intertwingler::Engine#home}
+    # before initializing the handlers, so that if any parameters
+    # contain file system paths, they are resolved relative to it.
+    #
+    # @note The original working directory is unconditionally restored
+    #  before the method completes.
+    #
+    # @param urns [Array<Intertwingler::RubyURN, RDF::URI, #to_s>]
+    #  anything coercible into an {Intertwingler::RubyURN}.
+    #
+    # @return [self]
+    #
     def add *urns
-      urns.each do |urn|
-        urn = @engine.resolver.coerce_resource urn, as: :uri
-        # only attempt to load the right scheme
-        next unless urn.is_a? Intertwingler::RubyURN
+      resolver = @engine.resolver
+      home     = @engine.home
+      oldpwd   = Pathname.getwd
 
-        unless @handlers[urn]
-          cls = urn.object
-          raise Intertwingler::Error::Config,
-            "#{cls} is not a subclass of Intertwingler::Handler" unless
-            cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
+      begin
+        # mkay first change directories
+        Dir.chdir home
 
-          params = urn.q_component_hash
+        # now do the thing
+        urns.each do |urn|
+          urn = resolver.coerce_resource urn, as: :uri
+          # only attempt to load the right scheme
+          next unless urn.is_a? Intertwingler::RubyURN
 
-          oldpwd = Pathname.getwd
-          Dir.chdir @engine.home
-          # XXX in here is where we would do the manifest stuff
-          @handlers[urn] = cls.new(engine, **params)
-          Dir.chdir oldpwd
+          unless @handlers[urn]
+            cls = urn.object
+            raise Intertwingler::Error::Config,
+              "#{cls} is not a subclass of Intertwingler::Handler" unless
+              cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
+
+            params = urn.q_component_hash
+
+            # XXX in here is where we would do the manifest stuff
+            @handlers[urn] = cls.new(engine, **params)
+          end
         end
+      ensure
+        # mkay change directories back
+        Dir.chdir oldpwd
       end
+
+      # why the hell not
+      self
     end
 
     # Find the appropriate handler for the request and return the response.
     #
-    # @param req [Rack::Request]
+    # @param req [Rack::Request] The request to which the response is
+    #  dispatched.
+    # @param transforms [Intertwingler::Transform::Harness] A
+    #  duplicated transform harness scoped to the request.
+    # @param run [false, true] whether to run the response transforms.
     #
     # @return [Rack::Response]
     #
-    def dispatch req, qmgr = nil, run: false
+    def dispatch req, transforms: nil, run: false
       # we always want this as a symbol
       method = req.request_method.to_sym
       # uuid = engine.resolver.uuid_for
@@ -74,7 +111,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       #   * terminal (ie exact match)
       #   * container (ie path prefix match)
       # * empirical cache (de facto terminal paths)
-      # * poll handlers (that haven't already been attempted)
+      # * poll the handlers (that haven't already been attempted)
 
       # check the empirical cache
 
@@ -94,9 +131,9 @@ class Intertwingler::Engine < Intertwingler::Handler
         # any other statusc and the handler is considered to have 'handled'
         next if [404, 405].include? resp.status
 
-        if qmgr
-          qmgr.adjust_for urn
-          return run ? qmgr.run_response_queue(resp) : resp
+        if transforms
+          transforms.response_head = handler.queue if handler.queue
+          return run ? transforms.run_response(req, resp) : resp
         else
           return resp
         end
@@ -171,8 +208,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     list += @repo.objects_for(@subject, ITCV.handler, only: :resource).sort
 
     # wipe out the contents of the dispatcher first
-    @dispatcher.clear
-    @dispatcher.add(*list)
+    @dispatcher.clear.add(*list)
 
     self
   end
@@ -181,7 +217,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   #
   # @return [self]
   #
-  def refresh_queues
+  def refresh_transforms
 
     self
   end
@@ -215,10 +251,20 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   public
 
-  # Initialize the engine.
+  # Initialize the engine. You _must_ pass in _either_ a `subject`
+  # _and_ a `repo` parameter, (from which a resolver will be derived),
+  # _or_ a `resolver` parameter (which contains a subject and a
+  # repository), but not both. The `home` parameter will default to
+  # the current working directory if not otherwise specified.
   #
-  # @param subject [RDF::URI]
-  # @param resolver [Intertwingler::Resolver] the associated resolver.
+  # @param repo [Intertwingler::GraphOps] The RDF repository.
+  # @param subject [RDF::URI, URI, #to_s] a URI or string suitable as
+  #  a subject.
+  # @param resolver [Intertwingler::Resolver] the associated resolver,
+  #  if present.
+  # @param home [Pathname, #to_s] a home directory for the engine from
+  #  which relative file system paths are resolved. Uses the current
+  #  working directory by default.
   #
   def initialize repo: nil, subject: nil, resolver: nil, home: nil
     # step 1: the basics
@@ -228,7 +274,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       @subject  = subject_from_resolver resolver
     elsif repo && subject
       @repo     = repo
-      @subject  = subject
+      @subject  = Intertwingler::Resolver.coerce_resource subject
       @resolver = resolver_from_subject
     else
       raise Intertwingler::Error::Config,
@@ -237,9 +283,9 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     @home = Pathname(home.to_s).expand_path
 
+    @registry   = Params::Registry.new
     @dispatcher = Dispatcher.new self
     @transforms = Intertwingler::Transform::Harness.new self
-    @registry   = Params::Registry.new
 
     # step 2: find the handlers and load them. (incidentally, this
     # returns `self`.)
@@ -273,9 +319,9 @@ class Intertwingler::Engine < Intertwingler::Handler
   #
   # @return [Rack::Request] a new request
   #
-  def dup_request req, uri, method: nil, headers: {}, body: nil
+  def dup_request req, uri: nil, method: nil, headers: {}, body: nil
     # coerce the URI just so we can flatten it again so we can parse again
-    uri = Intertwingler::Resolver.coerce_resource uri, as: :uri
+    uri = Intertwingler::Resolver.coerce_resource(uri || req.url, as: :uri)
 
     # override the method (maybe)
     method ||= req.request_method
@@ -309,10 +355,23 @@ class Intertwingler::Engine < Intertwingler::Handler
     Rack::Request.new env
   end
 
+  # Because {Rack::Response} has no `#body=` method, this does what it
+  # says on the tin: it returns a new {Rack::Response} with the
+  # supplied body, and any replacement headers.
+  #
+  # @param resp [Rack::Response] the response in question
+  # @param body [IO, #call] a suitable body, see Rack spec document.
+  # @param headers [Hash] a hash suitable to be a header set; see Rack
+  #  spec.
+  #
+  # @return [Rack::Response] the new response.
+  #
   def replace_response_body resp, body, headers: {}
-    
+
+    headers = resp.headers.merge headers
+
     # why oh why no body=
-    Rack::Response[resp.status, resp.headers, body]
+    Rack::Response[resp.status, headers, body]
   end
 
   # Fake up a request and run the main handler. Returns the
@@ -320,8 +379,10 @@ class Intertwingler::Engine < Intertwingler::Handler
   # anything but `200 OK`.
   def fetch req, uri: nil, method: :GET, headers: {}, body: nil
     # start with a new request when there is a different URI
-    req = dup_request req, uri, method: method,
+    req = dup_request req, uri: uri, method: method,
       headers: headers, body: body if uri
+
+    resp = dispatcher.dispatch req
 
     # XXX actually do the thing
   end
@@ -356,10 +417,10 @@ class Intertwingler::Engine < Intertwingler::Handler
     # resolve URI and mint a new request if necessary
     if subject = resolver.uuid_for(uri, as: :uri)
       uri = URI(req.base_url) + subject.uuid
-      req = dup_request orig, uri
+      req = dup_request orig, uri: uri
     end
 
-    # duplicate transforms so state changes get wiped
+    # duplicate transforms so state changes get wiped after the request
     transforms = transforms.dup
 
     # transforms can signal that they manipulate the request wholesale
@@ -371,31 +432,24 @@ class Intertwingler::Engine < Intertwingler::Handler
     resp = Rack::Response[404, {}, []]
 
     begin
-      # set the addressable
+      # set the addressable queue
       transforms.set_addressable(*pp) # XXX this may raise
+
       # run the request queue
-      req  = transforms.run_request req
-      # we pass in the queue manager to detect any adjustments from
-      resp = dispatcher.dispatch req
+      req = transforms.run_request req
+
+      # this should tell the transform harness which handler was used
+      # and therefore if it has an initial response queue that differs
+      # from the default
+      resp = dispatcher.dispatch req, transforms: transforms, run: true
+
+      # this can do all sorts of things; it can blow up, it can redirect…
     rescue Intertwingler::Handler::AnyButSuccess => e
       resp = e.response
-    # rescue Exception => e
+    # rescue StandardError => e
     #   resp = Rack::Response[500,
     #     { 'content-type' => 'text/plain' }, [e.inspect]]
     end
-
-
-    begin
-      resp = transforms.run_response req, resp
-    end
-
-    # run all response transforms
-
-    # early-run transforms
-
-    # resp = transforms.run_queue :early, resp
-
-    # resp = transforms.run_queue :addressable, resp
 
     # So here is a situation: I want to make it so direct requests to
     # the content-addressable store are not transformed (except
@@ -434,13 +488,6 @@ class Intertwingler::Engine < Intertwingler::Handler
     # non-matching transform in the addressable queue can blow up the
     # response (either with a 406 or 415 internally which should be
     # translated into a 409 for public consumption).
-
-    # addressable transforms
-    pp.each do |x|
-      warn x.inspect
-    end
-
-    # late-run transforms
 
     # return the response
     resp
