@@ -13,15 +13,88 @@ require 'http/negotiate'
 # This class represents the metadata about an individual service
 # endpoint for a transformation function, and registers its
 # parameters. It is meant to be congruent with the
-# [`tfo:Transform`](https://vocab.methodandstructure.com/transformation#Transform)
+# [`tfo:Function`](https://vocab.methodandstructure.com/transformation#Function)
 # class in the [Transformation Functions
 # Ontology](https://vocab.methodandstructure.com/transformation#).
 class Intertwingler::Transform
 
-  def self.configure
+  # this is meant to be called from a harness
+  def self.configure harness, subject
+    # haul together all the pieces
+
+    # give us the precious
+    new(harness, subject).refresh
   end
 
-  def initialize
+  # Initialize the representation of the transform.
+  #
+  # @param harness [Intertwingler::Transform::Harness] backreference
+  #  to the harness (and by extension all the state data)
+  # @param subject [RDF::URI, URI] the subject URI
+  # @param implementation [RDF::URI, URI] the implementation URI
+  # @param params [Hash, Array, nil] any parameters to the
+  # @param accepts [Array<String,MimeMagic>] media types to accept
+  # @param returns [Array<String,MimeMagic>] media types to return
+  #
+  def initialize harness, subject, implementation: nil,
+      params: {}, accepts: [], returns: []
+    @harness = harness
+    resolver = harness.resolver
+    @subject = resolver.coerce_resource subject
+    @impl    = resolver.coerce_resource implementation if implementation
+
+    # we have to coerce params/accepts/returns
+    @params  = coerce_params params
+    @accepts = coerce_types accepts
+    @returns = coerce_types returns
+  end
+
+  attr_reader :harness, :subject
+  alias_method :id, :subject
+
+  # Return a dereferenceable URI for the transform. This is just a
+  # shorthand for `harness.resolver.uri_for subject`.
+  #
+  # @param as [:uri, :rdf, :str] coerce the return value to some other
+  #  type.
+  #
+  # @return [URI, RDF::URI] the subject URI.
+  #
+  def uri as: :uri
+    @harness.resolver.uri_for @subject, as: as
+  end
+
+  # Return the implementation URI as something that can be passed a
+  # request (or not).
+  #
+  # @param as [:uri, :rdf, :str] cast the result to a type.
+  #
+  # @return [RDF::URI, URI] the address of the implementation.
+  #
+  def implementation as: :uri
+    @harness.resolver.coerce_resource @impl, as: as if @impl
+  end
+
+  # Refresh the state of the transform associated with the subject in
+  # the graph.
+  #
+  # @return [self]
+  #
+  def refresh
+
+    repo = harness.repo
+
+    # get the implementation
+
+    # get the params
+
+    # get the accepts
+
+    # get the returns
+
+    # overwrite members
+
+    self
   end
 
   ### BELOW THIS IS HANDLER/QUEUE STUFF
@@ -41,11 +114,27 @@ class Intertwingler::Transform
   # of the term.
   class Partial
 
-    def self.configure
+    def self.configure transform, subject: nil
     end
 
     def initialize
     end
+  end
+
+  # This is a union type to represent transforms in addressable queues
+  # that have the same name. It is possible that two or more
+  # transforms (represented by path parameters) have the same
+  # identifiers and arity, but different accept/return types. It may
+  # not be known which is viable until the response handler has been
+  # called. This class affords a superposition of transformation
+  # functions that can be determined when the necessary information is
+  # available.
+  #
+  # @note We anticipate this situation to arise when two functions do
+  #  analogous things to different types, or otherwise, e.g., when the
+  #  name of two completely _different_ functions is lexically
+  #  identical when spelled in another language.
+  class Union < Partial
   end
 
   # This is intended to mirror `tfo:Invocation`, which is just a
@@ -263,7 +352,7 @@ class Intertwingler::Transform
       self.class.new engine
     end
 
-    attr_reader :request_head, :response_head
+    attr_reader :engine, :request_head, :response_head
 
     # @!attribute [rw] request_head
     #  @note The URI *must* already be known to the harness. The chain
@@ -285,6 +374,12 @@ class Intertwingler::Transform
     def response_head= uri
       uri = resolver.coerce_resource uri
       #
+    end
+
+    # @!attribute [r] repo
+    #  @return [RDF::Repository] The graph repository from the engine.
+    def repo
+      @engine.repo
     end
 
     # @!attribute [r] resolver
