@@ -17,7 +17,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     # Give us a new dispatcher.
     #
     # @param engine [Intertwingler::Engine]
-    # @param *urns [Intertwingler::RubyURN]
+    # @param urns [Array<Intertwingler::RubyURN>]
     #
     def initialize engine, *urns
       @engine   = engine

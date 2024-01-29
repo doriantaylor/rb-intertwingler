@@ -18,6 +18,31 @@ require 'http/negotiate'
 # Ontology](https://vocab.methodandstructure.com/transformation#).
 class Intertwingler::Transform
 
+  private
+
+  TFO = Intertwingler::Vocab::TFO
+  CI  = Intertwingler::Vocab::CI
+  OWL = RDF::OWL
+
+  def literals subject, predicate, entail: false, datatype: nil
+    harness.repo.objects_for subject, predicate,
+      entail: entail, only: :literal, datatype: datatype
+  end
+
+  def numeric_objects subject, predicate, entail: false, datatype: nil
+    literals(
+      subject, predicate, entail: entail, datatype: datatype
+    ).select { |o| o.object.is_a? Numeric }.sort
+  end
+
+  def coerce_params
+  end
+
+  def coerce_types
+  end
+
+  public
+
   # this is meant to be called from a harness
   def self.configure harness, subject
     # haul together all the pieces
@@ -85,12 +110,53 @@ class Intertwingler::Transform
     repo = harness.repo
 
     # get the implementation
+    impl = repo.objects_for(subject, TFO.implementation,
+                            only: :resource).map do |o|
+      /^urn:x-ruby:/i.match? o.to_s
+    end.sort.first
 
-    # get the params
+    # add the implementation to the dispatcher (via engine via
+    # harness; will be a noop if it's already in there)
+
+    # get the params. XXX this isn't exactly right. it should get the
+    # first tfo:parameter-list (there could be more than one of those,
+    # so it should disambiguate) and then look at tfo:parameter
+    # (though sorting those is an issue) if there are any that aren't
+    # defined in the list.
+    params = if pl = repo.objects_for(subject, TFO['parameter-list']).sort.first
+               RDF::List.new(subject: pl, graph: repo).to_a.uniq
+             else
+               repo.objects_for(subject, TFO.parameter, only: :resource).sort
+             end.reduce({}) do |hash, node|
+      # prepare the parameter spec
+      spec = {}
+
+      # slug, aliases
+      slug    = literals(subject, CI['canonical-slug']).sort.first
+      aliases = literals(subject, CI.slug) - [slug]
+
+      # datatype
+      dt = repo.objects_for(subject, RDF::RDFS.range)
+
+      # cardinality
+      if c1 = numeric_objects(node, OWL.cardinality)
+        spec[:min] = spec[:max] = c1
+      else
+        c1 = numeric_objects(node, OWL.minCardinality)
+        c2 = numeric_objects(node, OWL.maxCardinality)
+        spec[:min] = c1 if c1
+        spec[:max] = c2 if c2
+      end
+
+      hash[node] = spec
+      hash
+    end
 
     # get the accepts
+    accepts = literals(subject, TFO.accepts, datatype: TFO['content-type'])
 
     # get the returns
+    returns = literals(subject, TFO.returns, datatype: TFO['content-type'])
 
     # overwrite members
 
@@ -114,10 +180,18 @@ class Intertwingler::Transform
   # of the term.
   class Partial
 
-    def self.configure transform, subject: nil
+    def self.configure transform, subject: nil, **rest
+      new(transform, subject: subject, **rest).refresh
     end
 
-    def initialize
+    def initialize transform, subject: nil, slug: nil, aliases: [], params: {}
+    end
+
+    def refresh
+      if subject
+      end
+
+      self
     end
   end
 
@@ -417,6 +491,7 @@ class Intertwingler::Transform
 
   end
 
+  # This is the actual transform _handler_ class, that includes a number
   class Handler < Intertwingler::Handler
 
     private
@@ -464,6 +539,8 @@ class Intertwingler::Transform
       return resp unless func
 
       # XXX this next bit is where we would have the thing like Params::Registry
+
+      # XXX well dingdong we now have Params::Registry so maybe use it??
 
       # harvest params from uri
       params = URI.decode_www_form(uri.query.to_s).reduce({}) do |hash, pair|

@@ -1,14 +1,12 @@
 # -*- encoding: utf-8 -*-
 # frozen_string_literal: true
 # This file generated automatically using rdf vocabulary format from https://vocab.methodandstructure.com/content-inventory#
-require 'intertwingler/vocab'
+require 'rdf'
 module Intertwingler::Vocab
   # @!parse
   #   # Vocabulary for <https://vocab.methodandstructure.com/content-inventory#>
   #   #
   #   # A Content Inventory Vocabulary
-  #   #
-  #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
   #   # @version 0.14
   #   class CI < RDF::StrictVocabulary
   #     # This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware.
@@ -284,19 +282,26 @@ module Intertwingler::Vocab
 
     # Ontology definition
     ontology :"https://vocab.methodandstructure.com/content-inventory#",
-      comment: {en: "This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies."},
       "http://purl.org/dc/terms/created": "2012-01-23T11:52:00-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
       "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z"],
-      "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy", "http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://vocab.org/frbr/core", "http://vocab.org/frbr/extended", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
-      "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/content-inventory#",
+      "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
+      "http://purl.org/dc/terms/subject": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", "https://www.w3.org/TR/vocab-org/", term(
+          comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
+          "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy","http://vocab.org/frbr/core","http://vocab.org/frbr/extended","https://www.w3.org/TR/prov-o/"],
+          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
+        )],
       "http://purl.org/dc/terms/title": {en: "A Content Inventory Vocabulary"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci",
       "http://www.w3.org/1999/xhtml/vocab#license": "http://creativecommons.org/licenses/by/2.5/ca/",
-      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/NET/c4dm/event.owl#", "http://purl.org/dc/terms/", "http://purl.org/linked-data/cube#", "http://purl.org/ontology/bibo/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2004/02/skos/core#", "http://xmlns.com/foaf/0.1/"],
+      "http://www.w3.org/2002/07/owl#imports": ["http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#"],
       "http://www.w3.org/2002/07/owl#versionInfo": "0.14",
-      "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/content-inventory#",
+      "http://xmlns.com/foaf/0.1/primaryTopic": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", "https://www.w3.org/TR/vocab-org/", term(
+          comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
+          "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy","http://vocab.org/frbr/core","http://vocab.org/frbr/extended","https://www.w3.org/TR/prov-o/"],
+          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
+        )],
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       type: ["http://purl.org/ontology/bibo/Webpage", "http://www.w3.org/2002/07/owl#Ontology"]
 
@@ -316,7 +321,7 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Advertisement,
       comment: {en: "In general there is no programmatic way to tell whether a resource is an advertisement, since advertisements on the Web look (to a machine) like any other resource. This is intended to be a decorator class to indicate that the subject is an advertisement. It can therefore be combined with other classes such as foaf:Image, or bibo:AudioVisualDocument."},
-      "http://www.w3.org/2004/02/skos/core#example": {en: "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\n  dct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\n  dct:hasPart <https://adtech.biz/assets/punch-the-monkey> .\n\n<https://adtech.biz/assets/punch-the-monkey> a foaf:Image, ci:Advertisement ;\n  dct:title \"Punch The Monkey And WIN!\#@$!%%^!\"@en ."},
+      "http://www.w3.org/2004/02/skos/core#example": {en: "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\ndct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\ndct:hasPart <https://adtech.biz/assets/punch-the-monkey> .\n\n<https://adtech.biz/assets/punch-the-monkey> a foaf:Image, ci:Advertisement ;\ndct:title \"Punch The Monkey And WIN!\#@$!%%^!\"@en ."},
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "Advertisement",
       subClassOf: "http://xmlns.com/foaf/0.1/Document",
@@ -356,7 +361,7 @@ module Intertwingler::Vocab
     term :Variable,
       comment: {en: "Identifies a variable which can be embedded into a document and assigned an rdf:value."},
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": "http://www.w3.org/1999/02/22-rdf-syntax-ns#value",
-      "http://www.w3.org/2004/02/skos/core#example": {en: "\n            Consider the markup:\n            <p about=\"https://example.biz/ratecard#\">Shingy's bill-out rate is <span rel=\"dct:references\">\n  <var about=\"#rate\" typeof=\"ci:Variable\" property=\"rdf:value\" datatype=\"xsd:decimal\">100.00</var>\n  <var about=\"#unit\" typeof=\"ci:Variable\" property=\"rdf:value\" datatype=\"xsd:token\">USD</var>\n</span> per hour.</p>\n            …which when parsed will produce the statements:\n            @base <https://example.biz/ratecard#> .\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n@prefix dct: <http://purl.org/dc/terms/> .\n@prefix ci:  <https://vocab.methodandstructure.com/content-inventory#> .\n\n<> dct:references <#rate>, <#unit> .\n\n<#rate> a ci:Variable ; rdf:value \"100.00\"^^xsd:decimal .\n<#unit> a ci:Variable ; rdf:value \"USD\"^^xsd:token .\n            \n          "},
+      "http://www.w3.org/2004/02/skos/core#example": {en: "\n            Consider the markup:\n            <p about=\"https://example.biz/ratecard#\">Shingy's bill-out rate is <span rel=\"dct:references\">\n<var about=\"#rate\" typeof=\"ci:Variable\" property=\"rdf:value\" datatype=\"xsd:decimal\">100.00</var>\n<var about=\"#unit\" typeof=\"ci:Variable\" property=\"rdf:value\" datatype=\"xsd:token\">USD</var>\n</span> per hour.</p>\n            …which when parsed will produce the statements:\n            @base <https://example.biz/ratecard#> .\n@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n@prefix dct: <http://purl.org/dc/terms/> .\n@prefix ci:  <https://vocab.methodandstructure.com/content-inventory#> .\n\n<> dct:references <#rate>, <#unit> .\n\n<#rate> a ci:Variable ; rdf:value \"100.00\"^^xsd:decimal .\n<#unit> a ci:Variable ; rdf:value \"USD\"^^xsd:token .\n          "},
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "Variable",
       type: "http://www.w3.org/2002/07/owl#Class"
@@ -442,7 +447,7 @@ module Intertwingler::Vocab
     property :"desired-outcome",
       comment: {en: "This property is intended to indicate what the document is supposed to do—what material effect it is supposed to produce. It is intentionally open-ended, and as such can point to something like a skos:Concept, another document, or a literal string of text describing the outcome."},
       domain: "http://xmlns.com/foaf/0.1/Document",
-      "http://www.w3.org/2004/02/skos/core#example": {en: "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .\n@prefix eg:   <https://backoffice.example.club/concepts/> .\n\n# we can extend our article metadata the following way:\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\n  dct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\n  ci:desired-outcome eg:maximize-clicks .\n\n# and create a corresponding resource to unambiguously identify the goal:\n\neg:maximize-clicks a skos:Concept ;\n  skos:prefLabel \"Maximize Clicks\"@en ;\n  skos:description \"Moar clicks means moar monies.\"@en .\n            "},
+      "http://www.w3.org/2004/02/skos/core#example": {en: "@prefix bibo: <http://purl.org/ontology/bibo/> .\n@prefix dct:  <http://purl.org/dc/terms/> .\n@prefix foaf: <http://xmlns.com/foaf/0.1/> .\n@prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .\n@prefix eg:   <https://backoffice.example.club/concepts/> .\n\n# we can extend our article metadata the following way:\n\n<https://example.club/17-mindblowing-ways-to-write-listicles> a bibo:Article ;\ndct:title \"17 Mindblowing Ways to Write Listicles!\"@en ;\nci:desired-outcome eg:maximize-clicks .\n\n# and create a corresponding resource to unambiguously identify the goal:\n\neg:maximize-clicks a skos:Concept ;\nskos:prefLabel \"Maximize Clicks\"@en ;\nskos:description \"Moar clicks means moar monies.\"@en .\n            "},
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "desired-outcome",
       subPropertyOf: "http://purl.org/dc/terms/type",
