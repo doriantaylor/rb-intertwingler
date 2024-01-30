@@ -1,3 +1,4 @@
+require 'intertwingler/error'
 require 'rack/request'
 require 'rack/response'
 
