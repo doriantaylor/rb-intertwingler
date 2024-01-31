@@ -668,10 +668,16 @@ it eventually has implementations in as many languages as it can.
 
 ### Data Flow
 
-<figure>
-  <img src="example/internal-access.svg" alt="Data flow"/>
-  <figcaption>This diagram attempts how running instances of Intertwingler classes interact with each other. Solid lines represent that one instance (the base) has the other instance (the arrowhead) as a member. Bidirectional arrows signify a backreference. Dotted arrows are ephemeral links, e.g. URIs. 3D boxes represent (potentially) multiple instances. Green boxes are handlers or subclasses thereof. (Transform handlers are undifferentiated from normal handlers in this view.)</figcaption>
-</figure>
+![how instances can "see" each other](example/internal-access.svg)
+
+> This diagram attempts how running instances of Intertwingler classes
+> interact with each other. Solid lines represent that one instance
+> (the base) has the other instance (the arrowhead) as a
+> member. Bidirectional arrows signify a backreference. Dotted arrows
+> are ephemeral links, e.g. URIs. 3D boxes represent (potentially)
+> multiple instances. Green boxes are handlers or subclasses
+> thereof. (Transform handlers are undifferentiated from normal
+> handlers in this view.)
 
 # Installation
 
