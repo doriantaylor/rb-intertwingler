@@ -283,7 +283,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     @home = Pathname(home.to_s).expand_path
 
-    @registry   = Params::Registry.new
+    @registry   = Intertwingler::Params.new self
     @dispatcher = Dispatcher.new self
     @transforms = Intertwingler::Transform::Harness.new self
 

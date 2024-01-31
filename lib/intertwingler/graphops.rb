@@ -1530,8 +1530,9 @@ module Intertwingler
       entailment = case
                    when !term.is_a?(RDF::Vocabulary::Term)
                      nil
-                   when term.property? then :subPropertyOf
-                   when term.class? then :subClassOf
+                   when term.property?  then :subPropertyOf
+                   when term.class?     then :subClassOf
+                   when term.datatype?  then :subClassOf
                    else
                      nil
                    end

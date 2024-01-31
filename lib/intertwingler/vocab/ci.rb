@@ -295,7 +295,7 @@ module Intertwingler::Vocab
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci",
       "http://www.w3.org/1999/xhtml/vocab#license": "http://creativecommons.org/licenses/by/2.5/ca/",
-      "http://www.w3.org/2002/07/owl#imports": ["http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#"],
+      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#"],
       "http://www.w3.org/2002/07/owl#versionInfo": "0.14",
       "http://xmlns.com/foaf/0.1/primaryTopic": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", "https://www.w3.org/TR/vocab-org/", term(
           comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
@@ -680,6 +680,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "slug",
       range: "http://www.w3.org/2001/XMLSchema#string",
+      subPropertyOf: "http://purl.org/dc/terms/identifier",
       type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :stylesheets,
       comment: {en: "The number of stylesheets in the document."},

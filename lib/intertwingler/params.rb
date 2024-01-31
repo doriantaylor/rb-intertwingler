@@ -34,8 +34,12 @@ class Intertwingler::Params < Params::Registry
   T   = Params::Registry::Types
   XSD = RDF::Vocab::XSD
 
+  # XXX need a solution for object properties, relative URIs, also
+  # (compact) UUIDs.
   MAPPING = {
     nil                    => T::String,
+    RDF::RDFV.Literal      => T::String,
+    RDF::RDFV.langString   => T::String,
     XSD.string             => T::String,
     XSD.token              => T::Token,
     XSD.integer            => T::DecimalInteger,
@@ -43,6 +47,8 @@ class Intertwingler::Params < Params::Registry
     XSD.positiveInteger    => T::PositiveInteger,
     XSD.nonNegativeInteger => T::NonNegativeInteger,
     XSD.nonPositiveInteger => T::NonPositiveInteger,
+    XSD.date               => T::Date,
+    XSD.dateTime           => T::Time,
   }
 
   public
@@ -67,6 +73,6 @@ class Intertwingler::Params < Params::Registry
   #
   attr_reader :engine
 
-  
+
 
 end

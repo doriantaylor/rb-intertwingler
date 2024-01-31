@@ -1,0 +1,60 @@
+digraph {
+    graph [bgcolor=transparent,rankdir=LR];
+    // graph [rankdir=TB];
+    node [shape=box,color="#808080",fontcolor="#808080",fontname="Lucida Grande, Lucida Sans Unicode, sans-serif"];
+    edge [color="#808080",fontcolor="#808080",fontname="Lucida Grande, Lucida Sans Unicode, sans-serif"];
+
+    subgraph multiples {
+        node [shape=box3d];
+
+        subgraph multihandlers {
+            node [color="darkgreen",fontcolor="darkgreen"];
+            Handler;
+            Engine;
+        }
+
+        Resource;
+        Parameter [label="Parameter\nTemplate"];
+        P_Group [label="Parameter\nGroup"];
+        Queue [label="Transform\nQueue"];
+        Entry [label="Transform\n(Metadata)"];
+    }
+
+    GraphDB [label="Graph\nDatabase", shape=cylinder];
+    T_Harness [label="Transform\nHarness"];
+    P_Registry [label="Parameter\nRegistry"];
+
+    subgraph handlers {
+        node [color="darkgreen",fontcolor="darkgreen"];
+        Harness;
+    }
+
+    subgraph backrefs {
+        edge [dir=both];
+
+        Engine -> Dispatcher;
+        Engine -> T_Harness;
+        Engine -> P_Registry -> P_Group;
+        P_Registry -> Parameter;
+    }
+
+    subgraph ephemeral {
+        edge [style=dotted];
+        // T_Harness -> P_Registry;
+        // Dispatcher -> P_Registry;
+        // Queue -> Dispatcher -> Resolver;
+        // T_Harness -> GraphDB;
+        // P_Registry -> GraphDB;
+        Entry -> Resource;
+        Entry -> P_Group;
+        // Handler -> GraphDB;
+    }
+
+    CLI -> Harness -> Engine -> Resolver -> GraphDB;
+    Engine -> GraphDB;
+    Dispatcher -> Handler -> Resource;
+    Handler -> Engine;
+    T_Harness -> Queue -> Entry;
+    T_Harness -> P_Registry;
+    P_Group -> Parameter;
+}

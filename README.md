@@ -170,20 +170,22 @@ handler instance is a callable object that accepts a request object
 and returns a response object. A handler is expected to contain at
 least one URI that will respond to at least one request method.
 
-## The `Intertwingler` Engine
+## The `Intertwingler` Harness and Engine(s)
 
-The `Intertwingler` engine imagines itself one day turned into a
+The `Intertwingler` harness imagines itself one day turned into a
 high-performance, stand-alone reverse proxy, with hot-pluggable
 handlers (and by extension, transforms) that can be written in any
 language, and interface internally over HTTP. That is the lens with
-which to view the design. The engine is meant to be put at the edge of
-an organization's Web infrastructure and manage the Web address space
-for all of the organization's (DNS) domains.
+which to view the design. The harness is meant to be put at the edge
+of an organization's Web infrastructure and manage the Web address
+space, with an engine assigned to each of the organization's (DNS)
+domains.
 
-When an HTTP transaction occurs completely within the engine's process
-space (i.e., it does not try to access handlers running in other
-processes/engines), the engine has strategies to mitigate the amount
-of extraneous parsing and serialization that would otherwise occur.
+> When an HTTP transaction occurs completely within an engine's
+> process space (i.e., it does not try to access handlers running in
+> other processes/engines), the engine has strategies to mitigate the
+> amount of extraneous parsing and serialization that would otherwise
+> occur.
 
 ## `Intertwingler` Handler Manifests (In Progress)
 
@@ -652,7 +654,7 @@ Manipulates an image's contrast.
 
 Manipulates an image's gamma value.
 
-## Implementation Note
+## Implementation Notes
 
 Parts of `Intertwingler`, notably the URI resolver and markup
 generation handlers, depend on a
@@ -663,6 +665,13 @@ implementations of reasoners were in Java and Ruby (which still
 appears to more or less be the case). I chose Ruby because it was
 easier for prototyping. My vision for `Intertwingler`, though, is that
 it eventually has implementations in as many languages as it can.
+
+### Data Flow
+
+<figure>
+  <img src="example/internal-access.svg" alt="Data flow"/>
+  <figcaption>This diagram attempts how running instances of Intertwingler classes interact with each other. Solid lines represent that one instance (the base) has the other instance (the arrowhead) as a member. Bidirectional arrows signify a backreference. Dotted arrows are ephemeral links, e.g. URIs. 3D boxes represent (potentially) multiple instances. Green boxes are handlers or subclasses thereof. (Transform handlers are undifferentiated from normal handlers in this view.)</figcaption>
+</figure>
 
 # Installation
 
