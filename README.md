@@ -79,9 +79,10 @@ An information resource is a _relation_ between one or more
 _identifiers_ (in this case URIs) and one or more _representations_. A
 familiar type of information resource is a _file_, which has exactly
 one representation and usually one, but possibly more than one
-identifier (file name/path). Web resources have an additional
-dimension, which is the _request method_ or _verb_ with which the
-resource was requested.
+identifier (file name/path). Web resources have several additional
+dimensions, including content type, natural language, character sets,
+other encoding and compression schemes, and even the _request
+method_ or _verb_ by which the resource was requested.
 
 #### Opaque Resource
 
