@@ -32,8 +32,10 @@ way:
   identifier](#canonical-identifiers) that doesn't budge,
 * It _overlays_ human-friendly address components (slugs) on top,
 * It _remembers_ prior values for these address components if you change them,
-* It uses a custom _resolver_ to do everything in its power to match a
-  requested URL to _exactly one_ resource,
+* It uses a custom [_resolver_](#resolver) to do everything in its
+  power to match a requested URL to _exactly one_ resource,
+* It _controls_ what URLs are exposed to the outside world, through an
+  aggressive redirection policy
 * It also has a mechanism for the principled handling _parametrized_
   and _derived resources_, maintaining a registry of parameter names,
   syntaxes, semantics, and other metadata.
