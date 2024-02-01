@@ -125,9 +125,21 @@ requests to the correct handler.
 
 ### Engine
 
-The `Intertwingler` _engine_ is a special-purpose handler that
-marshals all other handlers and transforms, resolves URIs, and routes
-requests to handlers. This is the part that faces the external network.
+An `Intertwingler` _engine_ is a special-purpose handler that marshals
+all other handlers and transforms, resolves URIs, and routes requests
+to handlers. This is the part that faces the external network, if it
+isn't multiplexed through a harness.
+
+### Harness
+
+The term "harness" is used to refer to two separate entities within
+Intertwingler, and both of them do some kind of multiplexing. The
+undecorated term "harness" refers to a specialized handler that
+bootstraps the whole system's configuration and affords one or more
+engines to manage different sites with different configurations. The
+other, the _transform_ harness, yokes together all the transformation
+queues for a given engine, prepares the transformation subrequests and
+collects their results.
 
 ### Transform
 
@@ -191,14 +203,61 @@ domains.
 
 ![how instances can "see" each other](example/internal-access.svg)
 
-> This diagram attempts to show how the parts of the Intertwingler
-> engine's anatomy interact with each other. Solid lines represent
-> that one instance (the base) has the other instance (the arrowhead)
-> as a member. Bidirectional arrows signify a backreference. Dotted
-> arrows are ephemeral links, e.g. URIs. 3D boxes represent
-> (potentially) multiple instances. Green boxes are handlers or
-> subclasses thereof. (Transform handlers are undifferentiated from
-> ordinary handlers in this view.)
+This diagram attempts to show how the parts of the Intertwingler
+engine's anatomy interact with each other. Functionality can therefore
+be accessed from any point, _by_ any point that can trace a path to
+it. Solid lines therefore represent that one instance (the base) has
+the other instance (the arrowhead) as a member. Bidirectional arrows
+signify a backreference. Dotted arrows are ephemeral links,
+e.g. URIs. 3D boxes represent (potentially) multiple instances. Green
+boxes are handlers or subclasses thereof.
+
+> The _Transform_ entity in the diagram is simply metadata _about_ a
+> transform (such as its parametrization), and ultimately points to a
+> _resource_, implemented as part of a _transform handler_. Transform
+> handlers are nevertheless undifferentiated from ordinary handlers in
+> this view.
+
+What follows is a set of definitions for the parts of the system
+anatomy not discussed elsewhere.
+
+#### Dispatcher
+
+The dispatcher is the part of the engine that takes an HTTP request,
+selects an appropriate handler for it, feeds the request to the
+handler, and passes the response back to the caller (usually the
+engine itself).
+
+#### Parameter Registry
+
+The Intertwingler engine has a site-wide registry for URL query (and
+path) parameters, their types (and type coercions), cardinalities,
+ordering, conflicts, formatting, names (and aliases), and other
+behaviour. This is mainly a thin wrapper around
+[`Params::Registry`](https://rubydoc.info/gems/params-registry), with
+the additional capability of fetching its configuration data out of
+the graph.
+
+#### Resolver
+
+The Intertwingler URI resolver is one of the first substantive
+accomplishments of this project, created back in 2019. This is the
+part of the system responsible for translating between human-friendly
+yet _mutable_ addresses to the more durable, yet less _pronounceable_
+identifiers ([UUIDs](https://datatracker.ietf.org/doc/html/rfc4122)
+and [RFC6920](https://datatracker.ietf.org/doc/html/rfc6920) hash URIs).
+
+#### Transform Harness
+
+The transform harness organizes _chains_ of transform _queues_, i.e.,
+request queues and response queues. Typically, there is a single
+request queue associated with the engine, but handlers may specify
+their own response queues besides the engine default (e.g. the
+content-addressable store has a null queue so nothing interferes with
+the integrity of the message bodies it emits). The transform harness
+is also responsible for translating path parameters into partial
+invocations that get added to a per-request [addressable response
+queue](#addressable-transforms).
 
 ## `Intertwingler` Handler Manifests (In Progress)
 
