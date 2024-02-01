@@ -187,6 +187,19 @@ domains.
 > amount of extraneous parsing and serialization that would otherwise
 > occur.
 
+### Interactions Between Engine Components
+
+![how instances can "see" each other](example/internal-access.svg)
+
+> This diagram attempts how running instances of Intertwingler classes
+> interact with each other. Solid lines represent that one instance
+> (the base) has the other instance (the arrowhead) as a
+> member. Bidirectional arrows signify a backreference. Dotted arrows
+> are ephemeral links, e.g. URIs. 3D boxes represent (potentially)
+> multiple instances. Green boxes are handlers or subclasses
+> thereof. (Transform handlers are undifferentiated from ordinary
+> handlers in this view.)
+
 ## `Intertwingler` Handler Manifests (In Progress)
 
 Still in progress at the time of this writing is a finalized design
@@ -665,19 +678,6 @@ implementations of reasoners were in Java and Ruby (which still
 appears to more or less be the case). I chose Ruby because it was
 easier for prototyping. My vision for `Intertwingler`, though, is that
 it eventually has implementations in as many languages as it can.
-
-### Data Flow
-
-![how instances can "see" each other](example/internal-access.svg)
-
-> This diagram attempts how running instances of Intertwingler classes
-> interact with each other. Solid lines represent that one instance
-> (the base) has the other instance (the arrowhead) as a
-> member. Bidirectional arrows signify a backreference. Dotted arrows
-> are ephemeral links, e.g. URIs. 3D boxes represent (potentially)
-> multiple instances. Green boxes are handlers or subclasses
-> thereof. (Transform handlers are undifferentiated from normal
-> handlers in this view.)
 
 # Installation
 
