@@ -189,15 +189,10 @@ high-performance, stand-alone reverse proxy, with hot-pluggable
 handlers (and by extension, transforms) that can be written in any
 language, and interface internally over HTTP. That is the lens with
 which to view the design. The harness is meant to be put at the edge
-of an organization's Web infrastructure and manage the Web address
-space, with an engine assigned to each of the organization's (DNS)
-domains.
-
-> When an HTTP transaction occurs completely within an engine's
-> process space (i.e., it does not try to access handlers running in
-> other processes/engines), the engine has strategies to mitigate the
-> amount of extraneous parsing and serialization that would otherwise
-> occur.
+of an organization's Web infrastructure — or at least _very_ close to
+it — and manage the Web address space, with an engine assigned to each
+distinct site under the organization's control (each of which can
+coalesce multiple DNS domains).
 
 ### Interactions Between Engine Components
 
@@ -393,7 +388,14 @@ to transforms _must_ include a `Content-Type` header and _should_
 include an `Accept:` header to tell the transform what it prefers as a
 response. The `Content-Length`, `Content-Type`, `Content-Language`,
 and `Content-Encoding` headers of the transform's response will be
-automatically merged into the original HTTP message.
+automatically merged into the original HTTP message. _Queues_ of
+transforms can therefore be _composed_, to perform complex operations.
+
+> When an HTTP transaction occurs completely within an engine's
+> process space (i.e., it does not try to access handlers running in
+> other processes/engines), the engine has strategies to mitigate the
+> amount of extraneous parsing and serialization that would otherwise
+> occur.
 
 ### Entire-Message Transforms
 
