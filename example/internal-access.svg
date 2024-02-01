@@ -35,10 +35,10 @@
 <!-- Resource -->
 <g id="node3" class="node">
 <title>Resource</title>
-<polygon fill="none" stroke="#808080" points="751.5,-76 676.5,-76 672.5,-72 672.5,-40 747.5,-40 751.5,-44 751.5,-76"/>
-<polyline fill="none" stroke="#808080" points="747.5,-72 672.5,-72 "/>
-<polyline fill="none" stroke="#808080" points="747.5,-72 747.5,-40 "/>
-<polyline fill="none" stroke="#808080" points="747.5,-72 751.5,-76 "/>
+<polygon fill="none" stroke="#808080" stroke-dasharray="1,5" points="751.5,-76 676.5,-76 672.5,-72 672.5,-40 747.5,-40 751.5,-44 751.5,-76"/>
+<polyline fill="none" stroke="#808080" stroke-dasharray="1,5" points="747.5,-72 672.5,-72 "/>
+<polyline fill="none" stroke="#808080" stroke-dasharray="1,5" points="747.5,-72 747.5,-40 "/>
+<polyline fill="none" stroke="#808080" stroke-dasharray="1,5" points="747.5,-72 751.5,-76 "/>
 <text text-anchor="middle" x="712" y="-54.3" font-family="Lucida Grande, Lucida Sans Unicode, sans-serif" font-size="14.00" fill="#808080">Resource</text>
 </g>
 <!-- Handler&#45;&gt;Resource -->

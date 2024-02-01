@@ -13,7 +13,7 @@ digraph {
             Engine;
         }
 
-        Resource;
+        Resource [style=dotted];
         Parameter [label="Parameter\nTemplate"];
         P_Group [label="Parameter\nGroup"];
         Queue [label="Transform\nQueue"];

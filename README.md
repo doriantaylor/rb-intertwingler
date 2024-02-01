@@ -35,7 +35,7 @@ way:
 * It uses a custom [_resolver_](#resolver) to do everything in its
   power to match a requested URL to _exactly one_ resource,
 * It _controls_ what URLs are exposed to the outside world, through an
-  aggressive redirection policy
+  aggressive redirection policy,
 * It also has a mechanism for the principled handling _parametrized_
   and _derived resources_, maintaining a registry of parameter names,
   syntaxes, semantics, and other metadata.
@@ -120,7 +120,7 @@ other words, a single request-response pair.
 An `Intertwingler` handler is a microservice with certain
 characteristics. All handlers are designed to be run as stand-alone
 units for bench testing and system segmentation. A handler responds to
-at least one request method for at least one URI. Handlers have a
+at least one URI via at least one request method. Handlers have a
 _manifest_ that lists the URIs, request methods, parameters, content
 types, etc. under their control. This enables the `Intertwingler`
 engine to perform preemptive input sanitation, and efficiently route
@@ -130,8 +130,14 @@ requests to the correct handler.
 
 An `Intertwingler` _engine_ is a special-purpose handler that marshals
 all other handlers and transforms, resolves URIs, and routes requests
-to handlers. This is the part that faces the external network, if it
-isn't multiplexed through a harness.
+to handlers for a particular site. This is the part, albeit wrapped in
+a multiplexing harness, that faces the external network.
+
+> "Site" here is a logical entity relating a pool of content to a set
+> of domain names. An organization may have multiple sites that don't
+> share content—or indeed, Intertwingler is flexible enough that they
+> _can_ share content, but each engine has its own
+> [resolver](#resolver), independent of the others.
 
 ### Harness
 
@@ -176,7 +182,7 @@ sandwiched between them.
 Everything in `Intertwingler` is a handler, including the engine
 itself. At root, a handler is a _microservice_ created in compliance
 with the host language's lightweight Web server interface ([in our
-case with Ruby](#implementation-note), [that would be
+case with Ruby](#implementation-notes), [that would be
 Rack](https://github.com/rack/rack)).
 
 A handler is intended to be only interfaced with using HTTP (or,
@@ -475,51 +481,51 @@ support to one or more document roots on the local file system.
 
 This handler generates
 (X)HTML+[RDFa](https://www.w3.org/TR/rdfa-primer/) (or other markup)
-documents from subjects in the graph. Pluggable sub-handlers can be
+documents from subjects in the graph. Pluggable markup generators can be
 attached to different URIs or RDF classes.
 
-#### Generic Markup Generation Sub-Handler
+#### Generic Markup Generator
 
 This creates a simple (X)HTML document with embedded RDFa intended for
-subsequente manipulation downstream. This sub-handler and others will
+subsequente manipulation downstream. This generator and others will
 eventually be supplanted by a hot-configurable
 [Loupe](https://vocab.methodandstructure.com/loupe#) handler.
 
-#### Atom Feed Sub-Handler
+#### Atom Feed Generator
 
 This will map resources typed with certain RDF classes to Atom feeds
 when the request's content preference is for `application/atom+xml`.
 
-#### Google Site Map Sub-Handler
+#### Google Site Map Generator
 
 This will generate a Google site map at the designated address.
 
-#### `skos:ConceptScheme` Sub-Handler
+#### `skos:ConceptScheme` Generator
 
 This is a special alphabetized list handler for
 [SKOS](https://www.w3.org/TR/skos-primer/) concept schemes.
 
-#### `sioct:ReadingList` Sub-Handler
+#### `sioct:ReadingList` Generator
 
 This is a special alphabetized list handler for bibliographies.
 
-#### Person/Organization List Sub-Handler
+#### Person/Organization List Generator
 
 This is a special alphabetized list handler for people, groups, and
 organizations.
 
-#### All Classes Sub-Handler
+#### All Classes Generator
 
 This handler will generate a list of all RDF/OWL classes known to
 `Intertwingler`. Useful for composing into interactive interfaces.
 
-#### Adjacent Property Sub-Handler
+#### Adjacent Property Generator
 
 This handler will generate a resource containing a list of RDF
 properties that are in the domain of the subject's RDF type(s).
 Useful for composing into interactive interfaces.
 
-#### Adjacent Class Sub-Handler
+#### Adjacent Class Generator
 
 This handler will generate a resource containing a list of subjects
 with `?s rdf:type ?Class .` statements where `?Class` is in the range
