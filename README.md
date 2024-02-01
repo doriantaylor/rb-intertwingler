@@ -191,14 +191,14 @@ domains.
 
 ![how instances can "see" each other](example/internal-access.svg)
 
-> This diagram attempts how running instances of Intertwingler classes
-> interact with each other. Solid lines represent that one instance
-> (the base) has the other instance (the arrowhead) as a
-> member. Bidirectional arrows signify a backreference. Dotted arrows
-> are ephemeral links, e.g. URIs. 3D boxes represent (potentially)
-> multiple instances. Green boxes are handlers or subclasses
-> thereof. (Transform handlers are undifferentiated from ordinary
-> handlers in this view.)
+> This diagram attempts to show how the parts of the Intertwingler
+> engine's anatomy interact with each other. Solid lines represent
+> that one instance (the base) has the other instance (the arrowhead)
+> as a member. Bidirectional arrows signify a backreference. Dotted
+> arrows are ephemeral links, e.g. URIs. 3D boxes represent
+> (potentially) multiple instances. Green boxes are handlers or
+> subclasses thereof. (Transform handlers are undifferentiated from
+> ordinary handlers in this view.)
 
 ## `Intertwingler` Handler Manifests (In Progress)
 
