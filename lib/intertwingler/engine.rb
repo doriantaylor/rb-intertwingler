@@ -1,4 +1,5 @@
 require 'intertwingler/handler'
+require 'intertwingler/params'
 require 'intertwingler/transform'
 require 'intertwingler/util/clean'
 require 'intertwingler/error'

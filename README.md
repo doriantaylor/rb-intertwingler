@@ -382,10 +382,10 @@ and its use in server modules like Apache's
 In this configuration, the main server issues a subrequest to a
 FastCGI daemon, and then uses the response, in this case, to determine
 if the outermost request is authorized. The reasoning goes that this
-behaviour can be generalized to ordinary HTTP (in our era of reverse
-proxies, FastCGI is an extra step), as well as handle other concerns
-in addition to authorization. (Indeed, FastCGI itself [also specifies
-a _filter_
+behaviour can be generalized to ordinary HTTP (in our era of liberal
+use of reverse proxies, FastCGI is an extra step), as well as handle
+other concerns in addition to authorization. (Indeed, FastCGI itself
+[also specifies a _filter_
 role](https://fastcgi-archives.github.io/FastCGI_Specification.html#S6.4),
 but I have not seen a server module that can take advantage of it.)
 
@@ -625,6 +625,10 @@ This transform will take Markdown and turn it into (X)HTML.
 
 This transform will take [Sass](https://sass-lang.org/) content and
 turn it into CSS.
+
+> Since `libsass` development has been discontinued in favour of a
+> [Dart](https://dart.dev/) implementation, the Sass transform is a
+> candidate for the first cross-language handler.
 
 #### Tidy Transform
 

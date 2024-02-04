@@ -23,7 +23,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = %w[lib]
 
   # ruby
-  spec.required_ruby_version = '>= 2.7'
+  spec.required_ruby_version = '>= 3.1'
 
   # dev/test dependencies
   spec.add_development_dependency 'bundler', '>= 2.4'
@@ -44,7 +44,7 @@ Gem::Specification.new do |spec|
 
   # stuff for handlers/transforms
   spec.add_runtime_dependency 'md-noko',           '>= 0.1.0'  # mine
-  spec.add_runtime_dependency 'params-registry',   '>= 0.1.0'  # mine
+  spec.add_runtime_dependency 'params-registry',   '>= 0.1.5'  # mine
   spec.add_runtime_dependency 'rdf-sak',           '>= 0.1.0'  # mine
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
   spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine

@@ -17,6 +17,7 @@ require 'http/negotiate'
 # class in the [Transformation Functions
 # Ontology](https://vocab.methodandstructure.com/transformation#).
 class Intertwingler::Transform
+  include Intertwingler::GraphOps::Addressable
 
   private
 
@@ -24,21 +25,22 @@ class Intertwingler::Transform
   CI  = Intertwingler::Vocab::CI
   OWL = RDF::OWL
 
-  def literals subject, predicate, entail: false, datatype: nil
-    harness.repo.objects_for subject, predicate,
-      entail: entail, only: :literal, datatype: datatype
+  def repo; harness.resolver.repo; end
+
+  def coerce_params params
+    Intertwingler::Params.validate(params || {})
   end
 
-  def numeric_objects subject, predicate, entail: false, datatype: nil
-    literals(
-      subject, predicate, entail: entail, datatype: datatype
-    ).select { |o| o.object.is_a? Numeric }.sort
+  def coerce_types types
+    types ||= []
+    types = [types] unless types.is_a? Array
+    types.map { |t| t.is_a?(MimeMagic) ? t : MimeMagic[t.to_s] }
   end
 
-  def coerce_params
-  end
-
-  def coerce_types
+  def fetch_types predicate
+    literals(predicate, datatype: TFO['content-type']).map do |x|
+      MimeMagic[x.to_s]
+    end
   end
 
   public
@@ -69,7 +71,7 @@ class Intertwingler::Transform
     @impl    = resolver.coerce_resource implementation if implementation
 
     # we have to coerce params/accepts/returns
-    @params  = coerce_params params
+    @params  = harness.registry[@subject] = coerce_params params
     @accepts = coerce_types accepts
     @returns = coerce_types returns
   end
@@ -107,11 +109,8 @@ class Intertwingler::Transform
   #
   def refresh
 
-    repo = harness.repo
-
     # get the implementation
-    impl = repo.objects_for(subject, TFO.implementation,
-                            only: :resource).map do |o|
+    @impl = resources(TFO.implementation).select do |o|
       /^urn:x-ruby:/i.match? o.to_s
     end.sort.first
 
@@ -123,42 +122,23 @@ class Intertwingler::Transform
     # so it should disambiguate) and then look at tfo:parameter
     # (though sorting those is an issue) if there are any that aren't
     # defined in the list.
-    params = if pl = repo.objects_for(subject, TFO['parameter-list']).sort.first
+
+    params = if pl = blanks(TFO['parameter-list']).sort.first
                RDF::List.new(subject: pl, graph: repo).to_a.uniq
              else
-               repo.objects_for(subject, TFO.parameter, only: :resource).sort
-             end.reduce({}) do |hash, node|
-      # prepare the parameter spec
-      spec = {}
+               resources(TFO.parameter).sort
+             end
 
-      # slug, aliases
-      slug    = literals(subject, CI['canonical-slug']).sort.first
-      aliases = literals(subject, CI.slug) - [slug]
-
-      # datatype
-      dt = repo.objects_for(subject, RDF::RDFS.range)
-
-      # cardinality
-      if c1 = numeric_objects(node, OWL.cardinality)
-        spec[:min] = spec[:max] = c1
-      else
-        c1 = numeric_objects(node, OWL.minCardinality)
-        c2 = numeric_objects(node, OWL.maxCardinality)
-        spec[:min] = c1 if c1
-        spec[:max] = c2 if c2
-      end
-
-      hash[node] = spec
-      hash
-    end
+    @params = harness.registry[subject] = params
 
     # get the accepts
-    accepts = literals(subject, TFO.accepts, datatype: TFO['content-type'])
+    @accepts = fetch_types TFO.accepts
 
     # get the returns
-    returns = literals(subject, TFO.returns, datatype: TFO['content-type'])
+    @returns = fetch_types TFO.returns
 
-    # overwrite members
+    # get the preferred serialization
+    @prefers = fetch_types(TFO.prefers).sort.first
 
     self
   end
@@ -178,17 +158,37 @@ class Intertwingler::Transform
   # complete the invocation is the input body itself. These are used
   # to "curry" the transformation functions, for some interpretation
   # of the term.
+  #
+  # Queues can accommodate either {Intertwingler::Transform}s or
+  # {Intertwingler::Transform::Partial}s. We use the latter when we
+  # want to statically configure a set of scalar parameters for a
+  # given transform. Indeed, the only time we would invoke this
+  # class's constructor directly is in the construction of addressable
+  # queues, when the parameters would be read off the request-URI.
+  #
   class Partial
+    include Intertwingler::GraphOps::Addressable
 
-    def self.configure transform, subject: nil, **rest
+    def self.configure transform, subject = nil, **rest
       new(transform, subject: subject, **rest).refresh
     end
 
-    def initialize transform, subject: nil, slug: nil, aliases: [], params: {}
+    def initialize transform, subject: nil, slug: nil, aliases: [], values: {}
+      @transform = transform
+      resolver   = transform.harness.resolver
+      @subject   = resolver.coerce_resource subject if subject
+      @slug      = slug.to_s.to_sym if slug
+      @aliases   = aliases.map { |a| a.to_s.to_sym }.sort.uniq
+      @params    = transform.process(values) unless values.empty?
     end
+
+    attr_reader :transform, :subject
 
     def refresh
       if subject
+
+        
+
       end
 
       self
@@ -214,7 +214,8 @@ class Intertwingler::Transform
   # This is intended to mirror `tfo:Invocation`, which is just a
   # record of a particular invocation of a particular function with
   # particular parameters and a particular input, which should always
-  # yield a particular output. we will be using this for cache stuff.
+  # yield a particular output. There is almost no role for this beyond
+  # resolving cached transformations.
   class Invocation < Partial
   end
 
@@ -261,6 +262,7 @@ class Intertwingler::Transform
     end
 
     def self.configure harness, subject
+      new(harness, subject).refresh
     end
 
     def initialize harness, subject, transforms = []
@@ -271,6 +273,10 @@ class Intertwingler::Transform
 
     attr_reader :harness, :subject
     alias_method :id, :subject
+
+    def refresh
+      self
+    end
 
     def engine
       harness.engine
@@ -286,6 +292,16 @@ class Intertwingler::Transform
 
     def repo
       resolver.repo
+    end
+
+    # Determine if the queue is strict.
+    def strict?
+      is_a? Strict
+    end
+
+    # Determine if the queue is addressable.
+    def addressable?
+      is_a? Addressable
     end
 
     private
