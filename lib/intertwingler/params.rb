@@ -1,4 +1,5 @@
 require 'intertwingler/engine'
+require 'intertwingler/graphops'
 require 'intertwingler/vocab/ci'
 require 'intertwingler/vocab/tfo'
 require 'intertwingler/vocab/itcv'

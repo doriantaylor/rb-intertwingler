@@ -2438,63 +2438,76 @@ module Intertwingler
       subject = assert_resource subject
       process_shacl_path_internal subject
     end
-  end
 
-  # This is a bag of convenient mixin methods to `include` into
-  # resource-oriented classes.
-  #
-  # This module assumes you have a `repo` that returns a repository
-  # with {Intertwingler::Graphops} mixed in, and a `subject` which is
-  # an {RDF::Resource}.
-  module Addressable
+    # This is a bag of convenient mixin methods to `include` into
+    # resource-oriented classes.
+    #
+    # This module assumes you have a `repo` that returns a repository
+    # with {Intertwingler::Graphops} mixed in, and a `subject` which is
+    # an {RDF::Resource}.
+    module Addressable
 
-    # Get the resources adjacent to the subject.
-    #
-    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
-    # @param entail [false, true] whether to entail
-    #
-    # @return [Array] the resulting nodes.
-    #
-    def resources predicate, entail: false
-      repo.objects_for subject, predicate, entail: entail, only: :resource
-    end
+      # Get the objects adjacent to the subject.
+      #
+      # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
+      # @param entail [false, true] whether to entail
+      #
+      # @return [Array] the resulting nodes.
+      #
+      def objects predicate, graph: nil, entail: true, only: [],
+          language: nil, datatype: nil, swap: false, &block
+        repo.objects_for subject, predicate, graph: graph, entail: entail,
+          only: only, language: language, datatype: datatype, &block
+      end
 
-    # Get the blank nodes adjacent to the subject.
-    #
-    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
-    # @param entail [false, true] whether to entail
-    #
-    # @return [Array] the resulting nodes.
-    #
-    def blanks predicate, entail: false
-      repo.objects_for subject, predicate, entail: entail, only: :blank
-    end
+      # Get the resources adjacent to the subject.
+      #
+      # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
+      # @param entail [false, true] whether to entail
+      #
+      # @return [Array] the resulting nodes.
+      #
+      def resources predicate, entail: false
+        repo.objects_for subject, predicate, entail: entail, only: :resource
+      end
 
-    # Get the literals adjacent to the subject.
-    #
-    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
-    # @param entail [false, true] whether to entail
-    # @param datatype [nil, RDF::URI] a datatype, if applicable
-    #
-    # @return [Array] the resulting nodes.
-    #
-    def literals predicate, entail: false, datatype: nil
-      repo.objects_for subject, predicate, entail: entail,
-        only: :literal, datatype: datatype
-    end
+      # Get the blank nodes adjacent to the subject.
+      #
+      # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
+      # @param entail [false, true] whether to entail
+      #
+      # @return [Array] the resulting nodes.
+      #
+      def blanks predicate, entail: false
+        repo.objects_for subject, predicate, entail: entail, only: :blank
+      end
 
-    # Get the _numeric_ literals adjacent to the subject.
-    #
-    # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
-    # @param entail [false, true] whether to entail
-    # @param datatype [nil, RDF::URI] a datatype, if applicable
-    #
-    # @return [Array] the resulting nodes.
-    #
-    def numeric_literals predicate, entail: false, datatype: nil
-      literals(predicate, entail: entail, datatype: datatype).select do |o|
-        o.object.is_a? Numeric
-      end.sort
+      # Get the literals adjacent to the subject.
+      #
+      # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
+      # @param entail [false, true] whether to entail
+      # @param datatype [nil, RDF::URI] a datatype, if applicable
+      #
+      # @return [Array] the resulting nodes.
+      #
+      def literals predicate, entail: false, datatype: nil
+        repo.objects_for subject, predicate, entail: entail,
+          only: :literal, datatype: datatype
+      end
+
+      # Get the _numeric_ literals adjacent to the subject.
+      #
+      # @param predicate [RDF::URI, Array<RDF::URI>] the predicate(s)
+      # @param entail [false, true] whether to entail
+      # @param datatype [nil, RDF::URI] a datatype, if applicable
+      #
+      # @return [Array] the resulting nodes.
+      #
+      def numeric_literals predicate, entail: false, datatype: nil
+        literals(predicate, entail: entail, datatype: datatype).select do |o|
+          o.object.is_a? Numeric
+        end.sort
+      end
     end
   end
 

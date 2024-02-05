@@ -172,6 +172,7 @@
 <urn:uuid:06bb8a91-7257-476d-96f4-601f7dbdbf5d> a tfo:Function ;
   ci:canonical-slug "amazon-tag"^^xsd:token ;
   tfo:implementation <urn:x-ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:parameter <urn:uuid:3a890ec0-6161-4d52-b9e5-5b826bd099db> ;
   tfo:accepts "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type ;
   tfo:returns "application/xml"^^tfo:content-type, "text/html"^^tfo:content-type .
 
@@ -285,3 +286,16 @@
   rdfs:comment "The height of an image, in pixels."@en ;
   owl:cardinality 1 ;
   rdfs:range xsd:positiveInteger .
+
+<urn:uuid:3a890ec0-6161-4d52-b9e5-5b826bd099db> a tfo:Parameter ;
+  ci:canonical-slug "tag"^^xsd:token ;
+  skos:prefLabel "Tag"@en ;
+  rdfs:comment "The affiliate tag to attach to Amazon links."@en ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:token .
+
+# Partial invocations
+
+<urn:uuid:2f0877fa-955d-4ce7-9505-24a80e04ca37> a tfo:Partial ;
+  tfo:transform <urn:uuid:06bb8a91-7257-476d-96f4-601f7dbdbf5d> ;
+  <urn:uuid:3a890ec0-6161-4d52-b9e5-5b826bd099db> "doriantaylor-20"^^xsd:token .

@@ -76,7 +76,7 @@ class Intertwingler::Transform
     @returns = coerce_types returns
   end
 
-  attr_reader :harness, :subject
+  attr_reader :harness, :subject, :params
   alias_method :id, :subject
 
   # Return a dereferenceable URI for the transform. This is just a
@@ -143,6 +143,15 @@ class Intertwingler::Transform
     self
   end
 
+  # Process a set of parameters.
+  #
+  # @param values [Object] can't remember what the type is
+  #
+  # @return [Params::Registry::Instance]
+  def process values
+    @params.process values
+  end
+
   ### BELOW THIS IS HANDLER/QUEUE STUFF
 
   class ParamError < ::ArgumentError
@@ -169,6 +178,12 @@ class Intertwingler::Transform
   class Partial
     include Intertwingler::GraphOps::Addressable
 
+    private
+
+    def repo; transform.harness.resolver.repo; end
+
+    public
+
     def self.configure transform, subject = nil, **rest
       new(transform, subject: subject, **rest).refresh
     end
@@ -185,10 +200,22 @@ class Intertwingler::Transform
     attr_reader :transform, :subject
 
     def refresh
-      if subject
+      if @subject
+        # get slug
+        @slug = literals(
+          CI['canonical-slug']).sort.map { |o| o.to_s.to_sym }.first
 
-        
+        # get aliases
+        @aliases = literals(CI.slug).sort.map { |a| a.to_s.to_sym } - [@slug]
 
+        # get properties
+        @params = transform.process transform.params.keys.reduce({}) do |hash, k|
+          hash[k] = objects(k, entail: false).map do |o|
+            o.literal? ? o.object : o.to_s
+          end
+
+          hash
+        end
       end
 
       self
