@@ -244,6 +244,24 @@ behaviour. This is mainly a thin wrapper around
 the additional capability of fetching its configuration data out of
 the graph.
 
+#### Partial Invocation
+
+Transformation functions may take additional scalar parameters. These
+are represented by [partial
+invocations](https://vocab.methodandstructure.com/transformation#Partial)
+that effectively [curry](https://en.wikipedia.org/wiki/Currying) the
+function so that only the message body is outstanding. Partial
+invocations are either statically configured in transform queues, or
+inserted on the fly into addressable queues.
+
+#### Queue Chain
+
+The most recent addition to the transform infrastructure is a
+disposable queue-of-queues that manages the state of the
+transformation process over the lifetime of an HTTP request loop, in a
+manner that insulates longer-lived objects from any longer-lived
+changes.
+
 #### Resolver
 
 The Intertwingler URI resolver is one of the first substantive
@@ -276,21 +294,21 @@ queue](#addressable-transforms).
 > 3. The initial response queue _itself_ is not known until the
 >    dispatcher selects a handler.
 >
-> The transform harness itself was initially conceived as the part
-> that marshals all things transformation, but its role of hanging
-> onto a bunch of long-lived data structures conflicted with the chaos
-> of what happens during a request. Also, it only interacts with the
+> The transform harness was initially conceived as the part that
+> marshals all things transformation, but its role of hanging onto a
+> bunch of long-lived data structures conflicted with the chaos of
+> what happens during a request. Also, it only interacts with the
 > dispatcher (indeed, it needs to know what handler the dispatcher
 > chose to resolve a response queue) and does not need to be in the
 > engine's main execution context. As such, I introduced a new entity,
-> _queue chain_ — sort of disposable queue of queues — that manages
+> a _queue chain_ — sort of disposable queue of queues — that manages
 > the transformation state over the lifetime of the request, and is
-> designed to be used by the dispatcher as it handles the request. The
-> chain shallow-copies the prototypical transform queues so it doesn't
-> matter what happens to them. The transform harness need only be
-> concerned, then, with loading and hanging onto the relevant data
-> structures. Indeed, it is starting to look a little redundant, and I
-> may eventually just dissolve it into the dispatcher.
+> designed to be used by the dispatcher. The chain shallow-copies the
+> prototypical transform queues so it doesn't matter what happens to
+> them. The transform _harness_ need only be concerned, then, with
+> loading and hanging onto the relevant data structures. Indeed, it is
+> starting to look a little redundant, and I may eventually just
+> dissolve it into the dispatcher.
 
 ## `Intertwingler` Handler Manifests (In Progress)
 
