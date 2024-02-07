@@ -250,17 +250,17 @@ Transformation functions may take additional scalar parameters. These
 are represented by [partial
 invocations](https://vocab.methodandstructure.com/transformation#Partial)
 that effectively [curry](https://en.wikipedia.org/wiki/Currying) the
-function so that only the message body is outstanding. Partial
-invocations are either statically configured in transform queues, or
-inserted on the fly into addressable queues.
+function so that they only need to take a single outstanding
+parameter: the HTTP message body. Partial invocations are either
+statically configured in transform queues, or inserted on the fly into
+addressable queues.
 
 #### Queue Chain
 
 The most recent addition to the transform infrastructure is a
 disposable queue-of-queues that manages the state of the
 transformation process over the lifetime of an HTTP request loop, in a
-manner that insulates longer-lived objects from any longer-lived
-changes.
+manner that insulates longer-lived objects from destructive changes.
 
 #### Resolver
 
