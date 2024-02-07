@@ -517,6 +517,115 @@ class Intertwingler::Transform
 
   end
 
+  # A queue chain is like a disposable queue of queues. When a chain
+  # is created (e.g., with each HTTP request), it collects its
+  # constituent queues and creates shallow copies, enabling them to be
+  # manipulated over the course of the request without damaging the
+  # originals. The basic {Intertwingler::Transform::Chain} is an
+  # abstract class, with the (marginally) more specialized request and
+  # response chains building off of it.
+  #
+  class Chain
+
+    # Initialize a new queue chain. The `head` is the leading queue in
+    # the chain. We successively call `next` on the queues to build up
+    # a sequence and check for cycles.
+    #
+    # @param harness [Intertwingler::Transform::Harness] the transform
+    #  harness that has all the master copies of everything.
+    # @param head [RDF::URI, Intertwingler::Transform::Queue] the
+    #  initial queue to traverse to construct the chain.
+    #
+    def initialize harness, head
+      @harness = harness
+      @queues  = [harness.resolve(head).dup]
+      while queue = queue.next
+        @queues << queue.dup
+      end
+    end
+
+    # Run the queues in the chain over the message and get back the
+    # transformed message.
+    #
+    # @note Unfortunately {Rack::Response} does not include a
+    #  reference to the {Rack::Request} that called it, so we have to
+    #  pass in both even if we only need one.
+    #
+    # @param request  [Rack::Request] the HTTP request.
+    # @param response [nil, Rack::Request] the HTTP response, if
+    # applicable.
+    #
+    # @return [Rack::Request, Rack::Response] the transformed message.
+    #
+    def run request, response = nil
+      message = response || request
+      @queues.each do |q|
+        message = q.run request, response do |event|
+          # do stuff with side effects
+        end
+      end
+
+      message
+    end
+
+    # A request chain differs from a response chain insofar as it
+    # stores up state from request transforms to pass on to the
+    # response transforms. A factory method {#response_chain} then
+    # produces the appropriate chain to complete the response
+    # transforms.
+    class Request < self
+
+      # Transform the request.
+      #
+      # @param message [Rack::Request] an HTTP request.
+      #
+      # @return [Rack::Request] the transformed request.
+      #
+      def run request
+        super request
+      end
+
+      # Return the appropriate response chain for the given handler.
+      #
+      # @param handler [RDF::URI] the address of the handler selected
+      #  by the dispatcher.
+      #
+      # @return [Intertwingler::Transform::Chain::Response] the response chain.
+      #
+      def response_chain handler
+        head = harness.queue_for handler
+        Intertwingler::Transform::Chain::Response.new @harness, head
+      end
+    end
+
+    # A response chain extends the abstract chain class with methods
+    # used to manipulate
+    class Response < self
+
+      # Transform the response.
+      #
+      # @param message [Rack::Response] an HTTP response.
+      #
+      # @return [Rack::Response] the transformed response.
+      #
+      def run response
+        super response
+      end
+
+      # Determine if the chain contains an addressable queue.
+      #
+      # @return [false, true] whether or not the chain has an
+      #  addressable queue.
+      #
+      def has_addressable?
+      end
+
+      # Set the addressable queue in the chain.
+      def set_addressable *pp
+      end
+    end
+  end
+
   # The transformation harness is the part of the
   # {Intertwingler::Engine} responsible for organizing and running the
   # sequence of {Transform}s that manipulate the HTTP message on its
