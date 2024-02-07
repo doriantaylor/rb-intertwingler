@@ -753,6 +753,87 @@ appears to more or less be the case). I chose Ruby because it was
 easier for prototyping. My vision for `Intertwingler`, though, is that
 it eventually has implementations in as many languages as it can.
 
+### Graph-Based Configuration Policy
+
+Most of Intertwingler's configuration, which is much more detailed
+than could be adequately served by an ordinary configuration file,
+comes from the RDF graph. On principle, I would prefer to make
+graph-based configuration _optional_ to the extent that it can
+be. This translates to writing object constructors that are for the
+most part ignorant of (or at least agnostic to) RDF, such that
+Intertwingler's innards can be nominally constructed _without_ having
+to procure a bunch of graph data.
+
+> Storing the configuration in the graph also makes Intertwingler
+> hot-configurable.
+
+This situation entails that a common vocabulary and interface be
+established for initializing objects from the graph. Many, but
+importantly not _all_ instances of classes in the running code have
+counterparts in the graph.
+
+> In particular, the [dispatcher](#dispatcher) and the [transform
+> harness](#transform-harness) are parts of the engine that do not
+> have their own identities, but due to an earlier design, the
+> [resolver](#resolver) _does_ (which may no longer be necessary). The
+> [parameter registry](#parameter-registry), likewise, currently does
+> not, but may in a future revision.
+
+Every class that gets its configuration from the graph should exhibit
+the following characteristics:
+
+* It needs a _path_ (i.e., by tracing instance members) to the graph
+  database—_not_ (necessarily) passing it in directly to the
+  constructor.
+* It needs a _subject_ (if it doesn't have its own subject, it can
+  borrow its "parent's").
+* It needs a _static method_ that has a standardized name which
+  downstream users can associate with constructing an instance out of
+  the graph (this used to be `resolve`, which I then changed to
+  `configure`, which I think I'll change back to `resolve` again).
+* The actual `initialize` method should have a minimal footprint of
+  required members in positional arguments (usually this is the
+  "parent" thing that has a connection to the graph, and the subject
+  URI), and everything optional should be in keyword parameters (some
+  exceptions apply).
+  * The entire initial state of the object should be able to be passed
+    into the constructor; i.e., if the object is initialized with its
+    state in the constructor, there should be nothing "extra" that has
+    to be fetched from the graph.
+* There should be a `refresh` instance method that will, potentially
+  recursively, sync the entity with the current state of the graph.
+  * For nested objects it is entirely possible that some instances may
+    disappear while others are initialized anew, as well as changing
+    connections between objects.
+* Many classes represent _container-like_ entities, and the entities
+  they contain are also subjects in the graph.
+  * It is important that these objects can have members added and
+    removed at runtime, and not have to do a full refresh to update
+    their state.
+  * Therefore, create an _instance_ method `resolve` (or some
+    disambiguating derivation if there is more than one kind of
+    membership) that expects the subject URI.
+
+I have furthermore found it useful to mix in some graph-manipulating
+shorthand methods to these classes (in the form of
+`Intertwingler::GraphOps::Addressable`) to facilitate loading their
+configuration. These methods will work as long as there is a `repo`
+member which points to the graph (I usually keep this `private` to
+control where the graph is accessed from), and a `subject`.
+
+Here are the classes that could currently (as of 2024-02-06) use this
+treatment:
+
+* [ ] `Intertwingler::Engine`
+* [ ] `Intertwingler::Resolver` (may be coalesced into the engine)
+* [ ] `Intertwingler::Engine::Dispatcher` (as a proxy)
+* [ ] `Intertwingler::Transform::Harness` (as a proxy)
+* [ ] `Intertwingler::Transform::Queue`
+* [ ] `Intertwingler::Transform::Partial`
+* [ ] `Intertwingler::Transform::Invocation` (eventually, when we do caching)
+* [ ] `Intertwingler::Params::Group`
+* [ ] `Intertwingler::Params::Template`
+
 # Installation
 
 For now I recommend just running the library out of its source tree:
@@ -765,7 +846,10 @@ For now I recommend just running the library out of its source tree:
 
 # Configuration
 
-`Intertwingler` is effectively a form of middleware, meaning it's effectively useless without mounds of content.  Until further notice, my recommendation is to monitor the [Getting Started](CONFIGURATION.md) guide.
+`Intertwingler` is effectively a form of middleware, meaning it's
+effectively useless without mounds of content.  Until further notice,
+my recommendation is to monitor the [Getting
+Started](CONFIGURATION.md) guide.
 
 # Sponsorship
 

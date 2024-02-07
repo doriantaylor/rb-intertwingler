@@ -97,7 +97,7 @@
 
 <urn:uuid:ef66ea73-af2b-42c4-abb3-44d3101e287a> a tfo:Queue ;
   rdfs:label "Main Queue"@en ;
-  tfo:member-list ( <urn:uuid:46be5c11-fbcb-4dfc-a486-9ac3344a0308> <urn:uuid:b15e1970-9d1f-4ed1-b6cc-2a382d804dda> <urn:uuid:937b4f68-b29e-4d54-84ce-144348248686> <urn:uuid:cdd7b9fb-c43a-48d1-a6ae-6a53f19146a4> <urn:uuid:775636e5-51c1-41e8-a5c8-eb1173f67735> <urn:uuid:fb680265-b62f-4fb5-af35-52f18c186d01> <urn:uuid:582b691a-6e57-4704-aaab-17ab25a30527> <urn:uuid:12c028fc-d780-4496-ab82-5b8fd82c5d65> <urn:uuid:06bb8a91-7257-476d-96f4-601f7dbdbf5d> <urn:uuid:7713493a-617a-4980-80a5-3eaa9e441da1> <urn:uuid:8c7dd87f-c236-4218-8028-e6c8692d7846> <urn:uuid:4c817a44-005d-48cb-83be-d962604cddda> ) .
+  tfo:member-list ( <urn:uuid:46be5c11-fbcb-4dfc-a486-9ac3344a0308> <urn:uuid:b15e1970-9d1f-4ed1-b6cc-2a382d804dda> <urn:uuid:937b4f68-b29e-4d54-84ce-144348248686> <urn:uuid:cdd7b9fb-c43a-48d1-a6ae-6a53f19146a4> <urn:uuid:775636e5-51c1-41e8-a5c8-eb1173f67735> <urn:uuid:982e771a-98d2-4023-938b-bde29e278c5b> <urn:uuid:582b691a-6e57-4704-aaab-17ab25a30527> <urn:uuid:12c028fc-d780-4496-ab82-5b8fd82c5d65> <urn:uuid:2f0877fa-955d-4ce7-9505-24a80e04ca37> <urn:uuid:7713493a-617a-4980-80a5-3eaa9e441da1> <urn:uuid:8c7dd87f-c236-4218-8028-e6c8692d7846> <urn:uuid:4c817a44-005d-48cb-83be-d962604cddda> ) .
 
 # raw byte segment transforms
 
@@ -154,6 +154,8 @@
 <urn:uuid:fb680265-b62f-4fb5-af35-52f18c186d01> a tfo:Function ;
   ci:canonical-slug "stylesheet-pi"^^xsd:token ;
   tfo:implementation <urn:x-ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:parameter <urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f>, <urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253> ;
+  tfo:parameter-list ( <urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f> <urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253>  ) ;
   tfo:accepts "application/xml"^^tfo:content-type ;
   tfo:returns "application/xml"^^tfo:content-type .
 
@@ -294,8 +296,27 @@
   owl:cardinality 1 ;
   rdfs:range xsd:token .
 
+<urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f> a tfo:Parameter ;
+  ci:canonical-slug "type"^^xsd:token ;
+  skos:prefLabel "Content Type"@en ;
+  rdfs:comment "Asserted content (media) type."@en ;
+  owl:cardinality 1 ;
+  rdfs:range tfo:content-type .
+
+<urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253> a tfo:Parameter ;
+  ci:canonical-slug "href"^^xsd:token ;
+  skos:prefLabel "Hyperlink Reference"@en ;
+  rdfs:comment "The target URI for a link."@en ;
+  owl:cardinality 1 ;
+  rdfs:range xsd:anyURI . # do we want that or a resource?
+
 # Partial invocations
 
 <urn:uuid:2f0877fa-955d-4ce7-9505-24a80e04ca37> a tfo:Partial ;
   tfo:transform <urn:uuid:06bb8a91-7257-476d-96f4-601f7dbdbf5d> ;
   <urn:uuid:3a890ec0-6161-4d52-b9e5-5b826bd099db> "doriantaylor-20"^^xsd:token .
+
+<urn:uuid:982e771a-98d2-4023-938b-bde29e278c5b> a tfo:Partial ;
+  tfo:transform <urn:uuid:fb680265-b62f-4fb5-af35-52f18c186d01> ;
+  <urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f> "text/xsl"^^tfo:content-type ;
+  <urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253> <https://doriantaylor.com/transform> .

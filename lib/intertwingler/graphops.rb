@@ -2445,6 +2445,7 @@ module Intertwingler
     # This module assumes you have a `repo` that returns a repository
     # with {Intertwingler::Graphops} mixed in, and a `subject` which is
     # an {RDF::Resource}.
+    #
     module Addressable
 
       # Get the objects adjacent to the subject.

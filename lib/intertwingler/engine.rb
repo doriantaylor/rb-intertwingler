@@ -23,7 +23,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     def initialize engine, *urns
       @engine   = engine
       @handlers = {}
-      @queues   = {}
+      @queues   = {} # XXX we may eventually merge the transform harness here?
 
       add(*urns)
     end
@@ -52,10 +52,12 @@ class Intertwingler::Engine < Intertwingler::Handler
     #
     # @param urns [Array<Intertwingler::RubyURN, RDF::URI, #to_s>]
     #  anything coercible into an {Intertwingler::RubyURN}.
+    # @param queues [true, false] also register any transformation
+    #  queues associated with a given handler.
     #
     # @return [self]
     #
-    def add *urns
+    def add *urns, queues: true
       resolver = @engine.resolver
       home     = @engine.home
       oldpwd   = Pathname.getwd
@@ -80,6 +82,14 @@ class Intertwingler::Engine < Intertwingler::Handler
 
             # XXX in here is where we would do the manifest stuff
             @handlers[urn] = cls.new(engine, **params)
+
+          end
+
+          # run this here unconditionally
+          if queues
+            queue = @engine.repo.objects_for(RDF::URI(urn.to_s),
+              Intertwingler::Vocab::ITCV.queue, only: :resource).sort.first
+            engine.transforms.register? queue if queue
           end
         end
       ensure
