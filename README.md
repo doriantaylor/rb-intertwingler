@@ -208,13 +208,15 @@ coalesce multiple DNS domains).
 ![how instances can "see" each other](example/internal-access.svg)
 
 This diagram attempts to show how the parts of the Intertwingler
-engine's anatomy interact with each other. Functionality can therefore
-be accessed from any point, _by_ any point that can trace a path to
-it. Solid lines therefore represent that one instance (the base) has
-the other instance (the arrowhead) as a member. Bidirectional arrows
-signify a backreference. Dotted arrows are ephemeral links,
-e.g. URIs. 3D boxes represent (potentially) multiple instances. Green
-boxes are handlers or subclasses thereof.
+engine's anatomy interact with each other. Functionality encapsulated
+within a particular node can therefore be accessed by any node that
+can trace a path to it. Solid lines therefore represent that one
+instance (the base) has the other instance (the arrowhead) as a
+member. Bidirectional arrows signify a backreference. Dotted arrows
+are ephemeral links, e.g. URIs. 3D boxes represent (potentially)
+multiple instances. Green boxes are handlers or subclasses thereof,
+blue is the parameter subsystem, and red is the transformation
+infrastructure.
 
 > The _Transform_ entity in the diagram is simply metadata _about_ a
 > transform (such as its parametrization), and ultimately points to a
@@ -262,6 +264,33 @@ the integrity of the message bodies it emits). The transform harness
 is also responsible for translating path parameters into partial
 invocations that get added to a per-request [addressable response
 queue](#addressable-transforms).
+
+> The transform harness was originally a member of the _engine_, but
+> this turned out to be awkward in a number of ways:
+>
+> 1. The contents of addressable queues are not known until the time
+>    of the request.
+> 2. The invocation of a transform in an earlier queue can cause
+>    changes to the contents of subsequent queues (see
+>    [`tfo:Insertion`](https://vocab.methodandstructure.com/transformation#Insertion)).
+> 3. The initial response queue _itself_ is not known until the
+>    dispatcher selects a handler.
+>
+> The transform harness itself was initially conceived as the part
+> that marshals all things transformation, but its role of hanging
+> onto a bunch of long-lived data structures conflicted with the chaos
+> of what happens during a request. Also, it only interacts with the
+> dispatcher (indeed, it needs to know what handler the dispatcher
+> chose to resolve a response queue) and does not need to be in the
+> engine's main execution context. As such, I introduced a new entity,
+> _queue chain_ — sort of disposable queue of queues — that manages
+> the transformation state over the lifetime of the request, and is
+> designed to be used by the dispatcher as it handles the request. The
+> chain shallow-copies the prototypical transform queues so it doesn't
+> matter what happens to them. The transform harness need only be
+> concerned, then, with loading and hanging onto the relevant data
+> structures. Indeed, it is starting to look a little redundant, and I
+> may eventually just dissolve it into the dispatcher.
 
 ## `Intertwingler` Handler Manifests (In Progress)
 

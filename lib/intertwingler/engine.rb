@@ -21,9 +21,9 @@ class Intertwingler::Engine < Intertwingler::Handler
     # @param urns [Array<Intertwingler::RubyURN>]
     #
     def initialize engine, *urns
-      @engine   = engine
-      @handlers = {}
-      @queues   = {} # XXX we may eventually merge the transform harness here?
+      @engine     = engine
+      @handlers   = {}
+      @transforms = Intertwingler::Transform::Harness.configure self
 
       add(*urns)
     end

@@ -553,7 +553,7 @@ class Intertwingler::Transform
     #
     # @param request  [Rack::Request] the HTTP request.
     # @param response [nil, Rack::Request] the HTTP response, if
-    # applicable.
+    #  applicable.
     #
     # @return [Rack::Request, Rack::Response] the transformed message.
     #
@@ -664,23 +664,26 @@ class Intertwingler::Transform
     # Inititalize the harness and populate it with configuration from
     # the graph.
     #
-    # @param engine [Intertwingler::Engine]
+    # @param dispatcher [Intertwingler::Engine::Dispatcher]
     #
     # @return [Intertwingler::Transform::Harness]
     #
-    def self.configure engine
-      new(engine).refresh
+    def self.configure dispatcher
+      new(dispatcher).refresh
     end
 
     # Initialize an empty harness. This will do nothing and it must be
     # populated separately.
     #
-    # @param engine [Intertwingler::Engine]
+    # @param dispatcher [Intertwingler::Engine::Dispatcher]
+    # @param queues [Array]
+    # @param request_head [RDF::URI] the default request queue head
+    # @param response_head [RDF::URI] the default response queue head
     #
-    def initialize engine, queues: [], request_head: nil, response_head: nil
-      # the engine
-      @engine  = engine
-      resolver = engine.resolver
+    def initialize dispatcher, queues: [], request_head: nil, response_head: nil
+      # the dispatcher
+      @dispatcher = dispatcher
+      resolver    = dispatcher.engine.resolver
 
       # maps
       @queues     = {}
@@ -772,7 +775,10 @@ class Intertwingler::Transform
         request_head: @request_head, response_head: @response_head
     end
 
-    attr_reader :engine, :request_head, :response_head
+    attr_reader :dispatcher, :request_head, :response_head
+    # @!attribute [r] dispatcher
+    #  @return [Intertwingler::Engine::Dispatcher] The dispatcher from
+    #   the engine.
 
     # @!attribute [rw] request_head
     #  @note The URI *must* already be known to the harness. The chain
@@ -805,27 +811,19 @@ class Intertwingler::Transform
     # @!attribute [r] repo
     #  @return [RDF::Repository] The graph repository from the engine.
     def repo
-      @engine.repo
+      @dispatcher.engine.repo
     end
 
     # @!attribute [r] subject
     #  @return [RDF::URI] The subject URI of the engine.
     def subject
-      @engine.subject
+      @dispatcher.engine.subject
     end
-
 
     # @!attribute [r] resolver
     #  @return [Intertwingler::Resolver] The resolver from the engine.
     def resolver
-      @engine.resolver
-    end
-
-    # @!attribute [r] dispatcher
-    #  @return [Intertwingler::Engine::Dispatcher] The dispatcher from
-    #   the engine.
-    def dispatcher
-      @engine.dispatcher
+      @dispatcher.engine.resolver
     end
 
     # Set the contents of the addressable queue based on harvested

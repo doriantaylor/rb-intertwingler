@@ -1,40 +1,59 @@
 digraph {
     graph [bgcolor=transparent,rankdir=LR];
     // graph [rankdir=TB];
-    node [shape=box,color="#808080",fontcolor="#808080",fontname="Lucida Grande, Lucida Sans Unicode, sans-serif"];
-    edge [color="#808080",fontcolor="#808080",fontname="Lucida Grande, Lucida Sans Unicode, sans-serif"];
+    node [shape=box,color="#777777",fontcolor="#777777",fontname="Lucida Grande, Lucida Sans Unicode, sans-serif"];
+    edge [color="#777777",fontcolor="#777777",fontname="Lucida Grande, Lucida Sans Unicode, sans-serif"];
 
     subgraph multiples {
         node [shape=box3d];
 
         subgraph multihandlers {
-            node [color="darkgreen",fontcolor="darkgreen"];
+            node [color="#5e8052",fontcolor="#5e8052"];
             Handler;
             Engine;
         }
 
+        subgraph multiparam {
+            node [color="#5a7a98",fontcolor="#5a7a98"];
+            Parameter [label="Parameter\nTemplate"];
+            P_Group [label="Parameter\nGroup"];
+        }
+
+        subgraph multitransform {
+            node [color="#bc566e",fontcolor="#bc566e"];
+            Queue [label="Transform\nQueue"];
+            Entry [label="Transform\n(Metadata)"];
+            Partial [label="Partial\nInvocation"];
+        }
+
         Resource [style=dotted];
-        Parameter [label="Parameter\nTemplate"];
-        P_Group [label="Parameter\nGroup"];
-        Queue [label="Transform\nQueue"];
-        Entry [label="Transform\n(Metadata)"];
     }
 
     GraphDB [label="Graph\nDatabase", shape=cylinder];
-    T_Harness [label="Transform\nHarness"];
-    P_Registry [label="Parameter\nRegistry"];
 
     subgraph handlers {
-        node [color="darkgreen",fontcolor="darkgreen"];
+        node [color="#5e8052",fontcolor="#5e8052"];
         Harness;
+    }
+
+    subgraph params {
+        node [color="#5a7a98",fontcolor="#5a7a98"];
+        P_Registry [label="Parameter\nRegistry"];
+        P_Instance [label="Parameters\n(Instance)"];
+    }
+
+    subgraph transforms {
+        node [color="#bc566e",fontcolor="#bc566e"];
+        T_Harness [label="Transform\nHarness"];
+        Chain [label="Queue\nChain"];
     }
 
     subgraph backrefs {
         edge [dir=both];
 
-        Engine -> Dispatcher;
-        Engine -> T_Harness;
-        Engine -> P_Registry -> P_Group;
+        Engine -> Dispatcher -> T_Harness -> Chain;
+        T_Harness -> Queue;
+        Engine -> P_Registry -> P_Group -> P_Instance;
         P_Registry -> Parameter;
     }
 
@@ -54,7 +73,9 @@ digraph {
     Engine -> GraphDB;
     Dispatcher -> Handler -> Resource;
     Handler -> Engine;
-    T_Harness -> Queue -> Entry;
+    Queue -> Entry -> T_Harness;
     T_Harness -> P_Registry;
+    Chain -> Queue -> Partial -> Entry;
+    Partial -> P_Instance;
     P_Group -> Parameter;
 }
