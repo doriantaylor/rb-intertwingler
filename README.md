@@ -800,6 +800,11 @@ the following characteristics:
     into the constructor; i.e., if the object is initialized with its
     state in the constructor, there should be nothing "extra" that has
     to be fetched from the graph.
+  * There may also be some value in punning the initialization
+    parameters (as well as those of other methods) such that a subject
+    URI passed in will autovivify into the object (as in instance) it
+    stands for. I'm not sure if I want this behaviour everywhere so
+    I'm still on the fence.
 * There should be a `refresh` instance method that will, potentially
   recursively, sync the entity with the current state of the graph.
   * For nested objects it is entirely possible that some instances may
@@ -815,7 +820,7 @@ the following characteristics:
     membership) that expects the subject URI.
 
 I have furthermore found it useful to mix in some graph-manipulating
-shorthand methods to these classes (in the form of
+shorthand methods to these classes (from
 `Intertwingler::GraphOps::Addressable`) to facilitate loading their
 configuration. These methods will work as long as there is a `repo`
 member which points to the graph (I usually keep this `private` to
@@ -829,10 +834,46 @@ treatment:
 * [ ] `Intertwingler::Engine::Dispatcher` (as a proxy)
 * [ ] `Intertwingler::Transform::Harness` (as a proxy)
 * [ ] `Intertwingler::Transform::Queue`
+* [ ] `Intertwingler::Transform`
 * [ ] `Intertwingler::Transform::Partial`
 * [ ] `Intertwingler::Transform::Invocation` (eventually, when we do caching)
 * [ ] `Intertwingler::Params::Group`
 * [ ] `Intertwingler::Params::Template`
+
+> Note: the handlers themselves (`Intertwingler::Handler` and
+> `Intertwingler::Transform::Handler`) currently get their
+> configuration from `urn:x-ruby:` URNs, in lieu of having to come up
+> with an entire regime for configuring those too.
+
+### The `urn:x-ruby:` Scheme
+
+It was determined that it would be useful to have a way to represent a
+a Ruby module (or, indeed, a module in any programming language that
+has them) as a URI. The handlers, in particular, are configured and
+loaded this way. The representation looks like this:
+
+    urn:x-ruby:path/to/module;Constant::Name?=arbitrary=param
+
+> Using the URN scheme was not my first choice (an `x-ruby:` scheme on
+> its own is more appropriate), but Ruby's inbuilt `URI` module is
+> written such that you can't register a URI scheme that contains a
+> hyphen (despite that being legal, and the `x-` prefix being the
+> standing recommendation for non-standard URI schemes). The
+> third-party URN module, however, does not have this constraint.
+
+The class, provisionally titled `Intertwingler::RubyURN` does not
+impose any semantic constraints, although it does provide a mechanism
+to `require` the file and (if successful) return the identified
+constant. Query parameters (actually [the URN
+_Q-Component_](https://datatracker.ietf.org/doc/html/rfc8141#section-2.3.2))
+have their keys normalized to symbols; no other manipulation is done
+besides. The application is free to interpret the components of the
+`x-ruby` URN however it likes, e.g., by treating the constant as a
+class and the query as initialization parameters.
+
+> If, however, you are minting URNs which represent code you intend to
+> subsequently load and run, you should probably take some steps to
+> mitigate all the myriad bad things that can happen as a result.
 
 # Installation
 
@@ -869,7 +910,7 @@ Bug reports and pull requests are welcome at
 
 # Copyright & License
 
-©2018-2023 [Dorian Taylor](https://doriantaylor.com/)
+©2018-2024 [Dorian Taylor](https://doriantaylor.com/)
 
 This software is provided under
 the [Apache License, 2.0](https://www.apache.org/licenses/LICENSE-2.0).

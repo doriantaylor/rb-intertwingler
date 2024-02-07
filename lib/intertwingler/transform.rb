@@ -300,6 +300,10 @@ class Intertwingler::Transform
     # queue to be addressable, but we won't prevent you from using
     # strict queues in other places.
     class Strict < self
+      #
+      def can_serve! uri, type
+        raise "nope can't serve, lol"
+      end
     end
 
     # An addressable queue is a strict queue that is run in the
@@ -312,6 +316,12 @@ class Intertwingler::Transform
     # ensure that only one addressable queue is present in the chain.
     class Addressable < Strict
     end
+
+    private
+
+    def repo; harness.engine.repo; end
+
+    public
 
     # Configure the queue out of the graph.
     #
@@ -348,39 +358,41 @@ class Intertwingler::Transform
     # @return [self]
     #
     def refresh
-      
+      # deal with list
+      if list = blanks(TFO['member-list']).sort.first
+        list = RDF::List.new(graph: repo, subject: list).to_a
+        @transforms = list.map do |member|
+          harness.resolve member, queue: false, partial: true, refresh: true
+        end
+      else
+        @transforms = []
+      end
+
+      # deal with next queue
+      if qnext = resources(TFO.next).sort.first
+        qnext = harness.resolve qnext,
+          transform: false, partial: false, refresh: true
+        # XXX here is where we should check for cycles
+        @next = qnext
+      else
+        @next = nil
+      end
+
       self
     end
 
-    # @!attribute [r] engine
-    #  @return [Intertwingler::Engine] a backreference to the engine
+    # Push
     #
-    def engine
-      harness.engine
+    # @param member [Intertwingler::Transform,
+    #  Intertwingler::Transform::Partial, RDF::URI]
+    #
+    def push member
+      # XXX this may blow up?
+      member = harness.resolve member
+      @transforms << member
     end
 
-    # @!attribute [r] engine
-    #  @return [Intertwingler::Engine::Dispatcher] a backreference to
-    #   the dispatcher
-    #
-    def dispatcher
-      engine.dispatcher
-    end
-
-    # @!attribute [r] engine
-    #  @return [Intertwingler::Resolver] a backreference to the
-    #   resolver
-    #
-    def resolver
-      engine.resolver
-    end
-
-    # @!attribute [r] engine
-    #  @return [Intertwingler::GraphOps] a backreference to the graph
-    #
-    def repo
-      resolver.repo
-    end
+    alias_method :<<, :push
 
     # Determine if the queue is strict.
     #
@@ -426,6 +438,11 @@ class Intertwingler::Transform
     # @return [Rack::Request, Rack::Response] the resulting HTTP message.
     #
     def run req, resp = nil
+      # get some shortcuts
+      engine     = harness.engine
+      resolver   = engine.resolver
+      dispatcher = engine.dispatcher
+
       # for each transform in the queue
       # first we test if it accepts the message body (or is message/http)
 
@@ -453,7 +470,7 @@ class Intertwingler::Transform
       # out and append them to the uri
       @transforms.each do |transform|
         if transform.is_a? Intertwingler::Transform::Partial
-          params    = transform.params.content
+          params    = transform.params.content.to_h slugs: true
           transform = transform.function
         else
           params = {}
@@ -579,7 +596,11 @@ class Intertwingler::Transform
       @response_head = resources(TFO['response-queue']).sort.first
 
       # this is probably enough to get things started, actually
-      register! @request_head, @response_head
+      [@request_head, @response_head].each do |q|
+        resolve q, transforms: false, partials: false, refresh: true
+      end
+
+      #
 
       self
     end
@@ -608,38 +629,28 @@ class Intertwingler::Transform
     def resolve_one uri, state, force: nil
       ts = repo.asserted_types uri
       if repo.type_is?(ts, TFO.Partial) and !repo.type_is?(ts, TFO.Invocation)
-        register_partial uri, state, force: force
+        resolve_partial uri, state, force: force
       elsif repo.type_is? ts, TFO.Transform
-        register_transform uri, state, force: force
+        resolve_transform uri, state, force: force
       elsif repo.type_is? ts, TFO.Queue
-        register_queue uri, state, force: force
+        resolve_queue uri, state, force: force
       end
     end
 
     public
 
-    def resolve *uris, force: nil
-      uris = engine.resolver.coerce_resources uris
-
-      state = {
-        queues:     [],
-        transforms: [],
-        partials:   [],
-        handlers:   [],
-      }
-
-      uris.each { |qu| resolve_one qu, state, force: force }
+    def queue_for uri, refresh: false
     end
 
-    # force the refresh
-    def resolve! *uris
-      resolve(*uris, force: true)
+    def transform_for uri, partials: true, refresh: false
     end
 
-    # This will attempt to register queues (or transforms, or
-    # partials). Will skip
-    def resolve? *uris
-      resolve(*uris, force: false)
+    def partial_for uri, refresh: false
+    end
+
+    def resolve uri, queues: true, transforms: true, partials: true,
+        refresh: false
+      uri = engine.resolver.coerce_resource uri
     end
 
     # Duplicate the harness and the queues but keep everything else.
