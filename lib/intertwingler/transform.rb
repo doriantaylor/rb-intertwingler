@@ -765,16 +765,6 @@ class Intertwingler::Transform
       uri = engine.resolver.coerce_resource uri
     end
 
-    # Duplicate the harness and the queues but keep everything else.
-    def dup
-      # dup the queues but not their contents
-      queues = []
-
-      # start a new instance
-      self.class.new engine, queues: queues,
-        request_head: @request_head, response_head: @response_head
-    end
-
     attr_reader :dispatcher, :request_head, :response_head
     # @!attribute [r] dispatcher
     #  @return [Intertwingler::Engine::Dispatcher] The dispatcher from

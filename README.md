@@ -244,6 +244,10 @@ behaviour. This is mainly a thin wrapper around
 the additional capability of fetching its configuration data out of
 the graph.
 
+> The parameter registry could probably be rolled into the resolver,
+> since it primarily concerns managing URI query parameter names,
+> values, constraints, type coercions, canonicalization, etc.
+
 #### Partial Invocation
 
 Transformation functions may take additional scalar parameters. These
@@ -254,6 +258,11 @@ function so that they only need to take a single outstanding
 parameter: the HTTP message body. Partial invocations are either
 statically configured in transform queues, or inserted on the fly into
 addressable queues.
+
+> I consternated over the computer-sciencey term _invocation_ rather
+> than the more precise mathy term _application_, but I decided this
+> is a computer and people will probably confuse it for an _app_ or
+> something.
 
 #### Queue Chain
 
@@ -301,9 +310,8 @@ queue](#addressable-transforms).
 > dispatcher (indeed, it needs to know what handler the dispatcher
 > chose to resolve a response queue) and does not need to be in the
 > engine's main execution context. As such, I introduced a new entity,
-> a _queue chain_ — sort of disposable queue of queues — that manages
-> the transformation state over the lifetime of the request, and is
-> designed to be used by the dispatcher. The chain shallow-copies the
+> a [_queue chain_](#queue-chain), that is designed to be used
+> exclusively by the dispatcher. The chain shallow-copies the
 > prototypical transform queues so it doesn't matter what happens to
 > them. The transform _harness_ need only be concerned, then, with
 > loading and hanging onto the relevant data structures. Indeed, it is

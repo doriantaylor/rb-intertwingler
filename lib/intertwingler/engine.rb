@@ -11,33 +11,228 @@ require 'rack/mock_request' # for env_for
 # This is the engine. This is the thing that is run.
 class Intertwingler::Engine < Intertwingler::Handler
 
+  ITCV = Intertwingler::Vocab::ITCV
+
   # The dispatcher has one job, which is to dispatch an incoming
   # request to the correct handler.
   class Dispatcher
+    include Intertwingler::GraphOps::Addressable
 
-    # Give us a new dispatcher.
-    #
-    # @param engine [Intertwingler::Engine]
-    # @param urns [Array<Intertwingler::RubyURN>]
-    #
-    def initialize engine, *urns
-      @engine     = engine
-      @handlers   = {}
-      @transforms = Intertwingler::Transform::Harness.configure self
+    private
 
-      add(*urns)
+    # https://www.iana.org/assignments/http-methods/http-methods.xhtml
+    HTTP = %i[ACL BASELINE-CONTROL BIND CHECKIN CHECKOUT CONNECT COPY DELETE
+              GET HEAD LABEL LINK LOCK MERGE MKACTIVITY MKCALENDAR MKCOL
+              MKREDIRECTREF MKWORKSPACE MOVE OPTIONS ORDERPATCH PATCH POST
+              PRI PROPFIND PROPPATCH PUT REBIND REPORT SEARCH TRACE UNBIND
+              UNCHECKOUT UNLINK UNLOCK UPDATE UPDATEREDIRECTREF VERSION-CONTROL]
+
+    def repo ; engine.repo ; end
+    def subject ; engine.subject; end
+
+    # It turns out that HTTP request methods are case-_sensitive_, but
+    # the standard ones just happen to be all uppercase.
+    def coerce_http_method arg
+      unless arg.nil?
+        arg = arg.to_s
+        arg = arg.upcase if HTTP.include? arg.upcase.to_sym
+        arg = arg.to_sym
+      end
+
+      arg
     end
 
-    attr_reader :engine
+    # Load a handler (if not already loaded).
+    #
+    # @param urn [URI, RDF::URI] the `urn:x-ruby:` URN.
+    # @param chdir [false, true] whether to change directories to the
+    #  engine home.
+    #
+    # @raise [Intertwingler::Error::Config] when the URN represents
+    #  something other than an {Intertwingler::Handler} subclass.
+    #
+    # @return [nil, Intertwingler::Handler] `nil` if the URI is not a
+    #  `urn:x-ruby:`, {Intertwingler::Handler} instance otherwise.
+    #
+    def load_handler urn, chdir: false
+      urn = engine.resolver.coerce_resource urn, as: :uri
+      return unless urn.is_a? Intertwingler::RubyURN
 
-    # Clear out the handlers.
+      # already cached
+      return @handlers[urn] if @handlers[urn]
+
+      cls = urn.object
+      raise Intertwingler::Error::Config,
+        "#{cls} is not a subclass of Intertwingler::Handler" unless
+        cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
+                  # get the initialization params from the URN
+
+      params = urn.q_component_hash
+
+      begin
+        if chdir
+          oldpwd = Pathname.getwd
+          Dir.chdir engine.home
+        end
+
+        @handlers[urn] = cls.new(engine, **params)
+      ensure
+        Dir.chdir oldpwd if chdir
+      end
+
+      @handlers[urn]
+    end
+
+    public
+
+    # Configure the dispatcher out of the graph.
+    #
+    # @param engine [Intertwingler::Engine]
+    #
+    # @return [Intertwingler::Engine::Dispatcher]
+    #
+    def self.configure engine
+      new(engine).refresh
+    end
+
+    # Give us a new (potentially empty) dispatcher.
+    #
+    # @param engine [Intertwingler::Engine]
+    # @param handlers [Array<RDF::URI, Intertwingler::RubyURN>]
+    #
+    def initialize engine, handlers: []
+      @engine     = engine
+      @handlers   = {} # this is just urn:x-ruby -> handler instance
+      @routes     = {} # this is uri -> method -> handler (or other way i dunno)
+      @transforms = Intertwingler::Transform::Harness.new self
+
+      handlers.each { |handler| add handler }
+    end
+
+    attr_reader :engine, :transforms
+
+    def refresh
+      # give us the list of handlers or otherwise sort any directly-attached
+      list = blanks(ITCV['handler-list']).sort.first
+      list = list ? RDF::List.new(subject: list, graph: repo).to_a : []
+      list += resources(ITCV.handler).sort
+
+      add(*list)
+
+      # the transforms are encapsulated
+      @transforms.refresh
+
+      self
+    end
+
+    # Clear out the handlers and routes.
     #
     # @return [self]
     #
     def clear
       @handlers.clear
+      @routes.clear
 
       self
+    end
+
+    private
+
+    # Set up the route but don't process any of the input and don't
+    # try to load the handler so we don't recurse.
+    #
+    # @param path [String] URI path
+    # @param urn [Intertwingler::RubyURN] the handler URN
+    # @param handler [Intertwingler::Handler] the handler instance
+    # @param method [nil, Symbol, Array<nil, Symbol>] the request method(s)
+    #
+    # @return
+    #
+    def add_route_internal path, urn, handler, method
+      # There is furthermore the issue of request methods. We're
+      # putting the request method in the second rung of the data
+      # structure rather than the first because they're symbols and
+      # they're small, whereas URIs are relatively big, and we would
+      # likely have a copy for each request method. The spec also
+      # requires that any resource that answers to GET should also
+      # answer to HEAD, and we also have to account for unspecified
+      # methods which we will just assign to `nil`.
+      #
+      # Note as well methods are case *sensitive* (cf RFC9110 §9.1),
+      # however the standard methods are all uppercase.
+      method = method.respond_to?(:to_a) ? method.to_a : [method]
+      method = method.map { |m| coerce_http_method m }
+      method += %i[GET HEAD] unless (method & %i[GET HEAD]).empty?
+      # (nil stands for all methods so specific methods are redundant)
+      method = [nil] if method.empty? or method.include? nil
+      method.uniq!
+
+      # now add a mapping for each request method
+      route = @routes[path] ||= {}
+      method.each { |m| (route[m] ||= {})[urn] = handler }
+
+      # might as well return the handler instance
+      handler
+    end
+
+    public
+
+    # Associate a specific URI and set of request methods with a
+    # handler instance.
+    #
+    # @note This method is in lieu of the handler manifest
+    #  infrastructure, so we can map routes directly to transform
+    #  handlers without having to poll the whole list of them.
+    #
+    # @param uri [URI, RDF::URI] the target URI (inside the handler)
+    # @param handler [URI, RDF::URI] the handler URI
+    # @param method [Symbol, Array<Symbol>, nil] request methods, if
+    #  applicable
+    #
+    def add_route uri, handler, method: nil
+      # really thinking the resolver should have something like
+      # "durable" vs "dereferenceable" rather than just `uri_for` and
+      # `uuid_for`, mainly so we can handle durable URIs other than
+      # UUIDs.
+      resolver = engine.resolver
+      uri      = resolver.coerce_resource uri,     as: :uri
+      handler  = resolver.coerce_resource handler, as: :uri
+
+      # okay so here is a potential issue: which URI do we put in the
+      # key? if we want this to have the effect that URL paths work
+      # like people expect them to (ie entire subtrees mapped to
+      # a given handler), then we're going to have to iron this out.
+      #
+      # My instinct is to put the UUID where possible, but problem is
+      # "containers" also get assigned UUIDs, and their container-ness
+      # is not clearly defined. Plus there is no reason why we
+      # shouldn't be able to have one handler handle a URI path that
+      # is "under" a path handled by a different handler.
+      #
+      # Note as well that UUID URNs get translated to the single path
+      # segment `/<uuid>` if they don't have a human-readable overlay.
+      # _Also_ note that ci:canonical overlay URIs can terminate with
+      # a slash even though the resource is not a "container" per se.
+      #
+      # The other thing to consider is that a handler matching a route
+      # is not dispositive. It's just a _candidate_. It may 404 or
+      # 405, and then the dispatcher is supposed to try the next-best
+      # handler (which indeed may be in the same route).
+
+      path = if uri.respond_to? :uuid
+               uri.uuid.downcase.freeze
+             elsif uri.path
+               uri, _ = resolver.split_pp uri
+               uri.path.delete_prefix(?/).freeze
+             else
+               # XXX not sure about this one
+               uri.to_s.freeze
+             end
+
+      # get the handler instance (or die trying)
+      instance = load_handler handler, chdir: true
+
+      add_route_internal path, urn, instance, method
     end
 
     # Add handlers by `urn:x-ruby:` identifier. These identifiers are
@@ -50,6 +245,9 @@ class Intertwingler::Engine < Intertwingler::Handler
     # @note The original working directory is unconditionally restored
     #  before the method completes.
     #
+    # @note Not sure if this method is going to stick around since I
+    #  wrote it before I started thinking about more complex routing.
+    #
     # @param urns [Array<Intertwingler::RubyURN, RDF::URI, #to_s>]
     #  anything coercible into an {Intertwingler::RubyURN}.
     # @param queues [true, false] also register any transformation
@@ -57,9 +255,9 @@ class Intertwingler::Engine < Intertwingler::Handler
     #
     # @return [self]
     #
-    def add *urns, queues: true
-      resolver = @engine.resolver
-      home     = @engine.home
+    def add *urns, path: nil, queues: true
+      resolver = engine.resolver
+      home     = engine.home
       oldpwd   = Pathname.getwd
 
       begin
@@ -69,27 +267,15 @@ class Intertwingler::Engine < Intertwingler::Handler
         # now do the thing
         urns.each do |urn|
           urn = resolver.coerce_resource urn, as: :uri
-          # only attempt to load the right scheme
-          next unless urn.is_a? Intertwingler::RubyURN
-
-          unless @handlers[urn]
-            cls = urn.object
-            raise Intertwingler::Error::Config,
-              "#{cls} is not a subclass of Intertwingler::Handler" unless
-              cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
-
-            params = urn.q_component_hash
-
-            # XXX in here is where we would do the manifest stuff
-            @handlers[urn] = cls.new(engine, **params)
-
-          end
+          handler = load_handler(urn) or next
+          # handlers added this way (XXX are we just making a mess?)
+          add_route_internal '', urn, handler, nil
 
           # run this here unconditionally
           if queues
             queue = @engine.repo.objects_for(RDF::URI(urn.to_s),
               Intertwingler::Vocab::ITCV.queue, only: :resource).sort.first
-            engine.transforms.register? queue if queue
+            transforms.register? queue if queue
           end
         end
       ensure
@@ -105,16 +291,19 @@ class Intertwingler::Engine < Intertwingler::Handler
     #
     # @param req [Rack::Request] The request to which the response is
     #  dispatched.
-    # @param transforms [Intertwingler::Transform::Harness] A
-    #  duplicated transform harness scoped to the request.
-    # @param run [false, true] whether to run the response transforms.
+    # @param subrequest [false, true] if true, skip the transforms.
     #
-    # @return [Rack::Response]
+    # @return [Rack::Response] the response.
     #
-    def dispatch req, transforms: nil, run: false
-      # we always want this as a symbol
-      method = req.request_method.to_sym
-      # uuid = engine.resolver.uuid_for
+    def dispatch req, subrequest: false
+      resolver = engine.resolver
+      method   = req.request_method.to_sym # we always want this as a symbol
+      uri, pp  = resolver.split_pp req.url # split out the path parameters
+      uri      = resolver.uri_for uri as: :uri # canonicalize the uri
+      uuid     = engine.resolver.uuid_for uri, as: :uri # also get the uuid
+
+      # default response
+      resp = Rack::Response[404, {}, []]
 
       # strategy:
       #
@@ -124,37 +313,74 @@ class Intertwingler::Engine < Intertwingler::Handler
       # * empirical cache (de facto terminal paths)
       # * poll the handlers (that haven't already been attempted)
 
-      # check the empirical cache
-
+      # check the empirical cache XXX MAYBE LATER LOL
       # if a response from a cached entry returns 404/405 then remove it
 
-      # XXX right now we just iterate through the handlers until one
-      # returns something other than 404 or 405
-      @handlers.each do |urn, handler|
-        begin
-          resp = handler.handle req
-        rescue => e
-          # quit now in case this blows up
-          # XXX do something smarter here
-          return Rack::Response[500, {}, [e.message]]
-        end
-
-        # any other statusc and the handler is considered to have 'handled'
-        next if [404, 405].include? resp.status
-
-        if transforms
-          transforms.response_head = handler.queue if handler.queue
-          return run ? transforms.run_response(req, resp) : resp
-        else
-          return resp
+      # build up a list of paths to check. this will do explicit
+      # checks on uuids and paths and then shorter and shorter paths
+      # until the empty string
+      paths = []
+      paths << uuid.uuid if uuid
+      if uri.path
+        paths << uri.path # as-is
+        # minus leading and trailing slashes
+        ps = uri.path.split(/\/+/).drop 1
+        until ps.empty?
+          ps.pop
+          paths << (ps + ['']).join(?/)
         end
       end
 
-      # default non-response
-      Rack::Response[404, {}, []]
+      # now build up a list of candidate handlers. first we try the
+      # full stack of paths with the actual request method, then we
+      # try the same with the wildcard (nil).
+      candidates = []
+      [method, nil].each do |m|
+        paths.each do |a|
+          h = @routes.fetch(a, {})[m] or next
+          h.values.each do |i|
+            candidates << i if i and !candidates.include? i
+          end
+        end
+      end
+
+      # an empty list of handlers means nothing to see here
+      return resp if candidates.empty?
+
+      # the transform harness may not return a chain if there is no queue head
+      chain = transforms.request_chain unless subrequest
+      req   = chain.run req if chain
+
+      candidates.each do |handler|
+        begin
+          resp = handler.handle req
+        rescue Intertwingler::Handler::AnyButSuccess => e
+          resp = e.response
+        rescue => e
+          # quit now in case this blows up
+          # XXX do something smarter here
+          return Intertwingler::Handler::Error::Server.new(e.message).response
+        end
+
+        # only proceed if the status is one of these
+        next if [404, 405].include? resp.status
+
+        if chain
+          # generate the response chain with addressable queue
+          chain = chain.response_chain pp: pp
+          # again, there may not be a response chain so we check again
+          resp  = chain.run req, resp if chain
+        end
+
+        # if we get to this point we stop
+        break
+      end
+
+      # whatever's in here is what we are returning
+      resp
     end
 
-  end
+  end # END Dispatcher
 
   private
 
@@ -296,7 +522,6 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     @registry   = Intertwingler::Params.new self
     @dispatcher = Dispatcher.new self
-    @transforms = Intertwingler::Transform::Harness.new self
 
     # step 2: find the handlers and load them. (incidentally, this
     # returns `self`.)
