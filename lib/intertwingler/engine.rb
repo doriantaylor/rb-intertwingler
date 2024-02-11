@@ -266,6 +266,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
         # now do the thing
         urns.each do |urn|
+          # XXX all this might be dumb
           urn = resolver.coerce_resource urn, as: :uri
           handler = load_handler(urn) or next
           # handlers added this way (XXX are we just making a mess?)
@@ -338,8 +339,8 @@ class Intertwingler::Engine < Intertwingler::Handler
       [method, nil].each do |m|
         paths.each do |a|
           h = @routes.fetch(a, {})[m] or next
-          h.values.each do |i|
-            candidates << i if i and !candidates.include? i
+          h.each do |pair|
+            candidates << pair unless candidates.include? pair
           end
         end
       end
@@ -347,11 +348,13 @@ class Intertwingler::Engine < Intertwingler::Handler
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
-      # the transform harness may not return a chain if there is no queue head
-      chain = transforms.request_chain unless subrequest
-      req   = chain.run req if chain
+      # the transform harness may return an empty chain; that's fine
+      unless subrequest
+        chain = transforms.request_chain
+        req   = chain.run req
+      end
 
-      candidates.each do |handler|
+      candidates.each do |urn, handler|
         begin
           resp = handler.handle req
         rescue Intertwingler::Handler::AnyButSuccess => e
@@ -365,15 +368,15 @@ class Intertwingler::Engine < Intertwingler::Handler
         # only proceed if the status is one of these
         next if [404, 405].include? resp.status
 
-        if chain
-          # generate the response chain with addressable queue
-          chain = chain.response_chain pp: pp
-          # again, there may not be a response chain so we check again
-          resp  = chain.run req, resp if chain
-        end
-
         # if we get to this point we stop
         break
+      end
+
+      # again, skip this part on subrequest or it'll recurse forever
+      unless subrequest
+        # generate the response chain with addressable queue
+        chain = chain.response_chain urn, pp: pp
+        resp  = chain.run req, resp
       end
 
       # whatever's in here is what we are returning

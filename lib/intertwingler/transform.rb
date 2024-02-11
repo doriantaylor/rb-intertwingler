@@ -587,20 +587,35 @@ class Intertwingler::Transform
 
       # Return the appropriate response chain for the given handler.
       #
-      # @param handler [RDF::URI] the address of the handler selected
+      # @param handler [RDF::URI, URI] the address of the handler selected
       #  by the dispatcher.
+      # @param pp [nil, Array] optional path parameters
       #
       # @return [Intertwingler::Transform::Chain::Response] the response chain.
       #
-      def response_chain handler
+      def response_chain handler, pp: nil
         head = harness.queue_for handler
-        Intertwingler::Transform::Chain::Response.new @harness, head
+        Intertwingler::Transform::Chain::Response.new @harness, head,
+          pp: pp, insertions: @insertions
       end
     end
 
     # A response chain extends the abstract chain class with methods
-    # used to manipulate
+    # used to manipulate insertion events and addressable queues.
     class Response < self
+
+      # Initialize a response chain.
+      #
+      # @param harness [Intertwingler::Transform::Harness]
+      # @param head [RDF::URI]
+      # @param pp [nil, Array]
+      # @param insertions [nil, Array]
+      #
+      def initialize harness, head, pp: nil, insertions: nil
+        super harness, head
+        set_addressable(*pp) if pp
+        apply_insertions insertions if insertions
+      end
 
       # Transform the response.
       #
@@ -622,6 +637,7 @@ class Intertwingler::Transform
 
       # Set the addressable queue in the chain.
       def set_addressable *pp
+        self
       end
     end
   end
