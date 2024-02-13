@@ -75,7 +75,6 @@ class Intertwingler::Params < Params::Registry
   # @note The mapping of XSD tpes
   #
   class Template < ::Params::Registry::Template
-
     include Intertwingler::GraphOps::Addressable
 
     private
@@ -112,6 +111,8 @@ class Intertwingler::Params < Params::Registry
     end
 
     public
+
+    alias_method :subject, :id
 
     # Refresh the template from the graph. Currently manages `slug`,
     # `aliases`, `type` (mapped from XSD), and cardinality.

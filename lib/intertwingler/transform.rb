@@ -22,11 +22,16 @@ class Intertwingler::Transform
 
   private
 
-  TFO = Intertwingler::Vocab::TFO
-  CI  = Intertwingler::Vocab::CI
-  OWL = RDF::OWL
+  ITCV = Intertwingler::Vocab::ITCV
+  TFO  = Intertwingler::Vocab::TFO
+  CI   = Intertwingler::Vocab::CI
+  OWL  = ::RDF::OWL
 
-  def repo; harness.resolver.repo; end
+  def repo; harness.dispatcher.engine.repo; end
+
+  def resolver ; harness.dispatcher.engine.resolver ; end
+
+  def registry ; harness.dispatcher.engine.registry ; end
 
   def coerce_params params
     Intertwingler::Params.validate(params || {})
@@ -85,12 +90,11 @@ class Intertwingler::Transform
   def initialize harness, subject, implementation: nil,
       params: {}, accepts: [], returns: []
     @harness = harness
-    resolver = harness.resolver
     @subject = resolver.coerce_resource subject
     @impl    = resolver.coerce_resource implementation if implementation
 
     # we have to coerce params/accepts/returns
-    @params  = harness.registry[@subject] = coerce_params params
+    @params  = registry[@subject] = coerce_params params
     @accepts = coerce_types accepts
     @returns = coerce_types returns
   end
@@ -118,7 +122,7 @@ class Intertwingler::Transform
   # @return [RDF::URI, URI] the address of the implementation.
   #
   def implementation as: :uri
-    @harness.resolver.coerce_resource @impl, as: as if @impl
+    resolver.coerce_resource @impl, as: as if @impl
   end
 
   # Refresh the state of the transform associated with the subject in
@@ -148,7 +152,7 @@ class Intertwingler::Transform
                resources(TFO.parameter).sort
              end
 
-    @params = harness.registry[subject] = params
+    @params = registry[subject] = params
 
     # get the accepts
     @accepts = fetch_types TFO.accepts
@@ -203,7 +207,17 @@ class Intertwingler::Transform
 
     public
 
-    def self.configure transform, subject = nil, **rest
+    def self.configure harness, subject, **rest
+      # get transform URI
+      transform = harness.repo.objects_for(
+        subject, TFO.transform, only: :resource).sort.first
+
+      raise Intertwingler::Error::Config,
+        "partial #{subject} has no transform" unless transform
+
+      # get transform object
+      transform = harness.resolve transform
+
       new(transform, subject: subject, **rest).refresh
     end
 
@@ -319,7 +333,12 @@ class Intertwingler::Transform
 
     private
 
-    def repo; harness.engine.repo; end
+    def repo; harness.dispatcher.engine.repo; end
+
+    def initialize_copy
+      warn 'sup lol'
+      @transforms = @transforms.dup
+    end
 
     public
 
@@ -347,7 +366,6 @@ class Intertwingler::Transform
       @subject    = subject
       @transforms = transforms || []
       @next       = binding.local_variable_get :next # next is a keyword
-
     end
 
     attr_reader :harness, :subject
@@ -360,9 +378,9 @@ class Intertwingler::Transform
     def refresh
       # deal with list
       if list = blanks(TFO['member-list']).sort.first
-        list = RDF::List.new(graph: repo, subject: list).to_a
+        list = ::RDF::List.new(graph: repo, subject: list).to_a
         @transforms = list.map do |member|
-          harness.resolve member, queue: false, partial: true, refresh: true
+          harness.resolve member, queues: false, partials: true, refresh: true
         end
       else
         @transforms = []
@@ -371,7 +389,7 @@ class Intertwingler::Transform
       # deal with next queue
       if qnext = resources(TFO.next).sort.first
         qnext = harness.resolve qnext,
-          transform: false, partial: false, refresh: true
+          transforms: false, partials: false, refresh: true
         # XXX here is where we should check for cycles
         @next = qnext
       else
@@ -381,7 +399,7 @@ class Intertwingler::Transform
       self
     end
 
-    # Push
+    # This is like Array#push.
     #
     # @param member [Intertwingler::Transform,
     #  Intertwingler::Transform::Partial, RDF::URI]
@@ -411,12 +429,6 @@ class Intertwingler::Transform
     end
 
     private
-
-    def prep_request
-    end
-
-    def prep_response
-    end
 
     # Test if the transform accepts the `Content-Type`. Intended to
     # provide a hook to subclasses to raise an error if false.
@@ -536,11 +548,15 @@ class Intertwingler::Transform
     # @param head [RDF::URI, Intertwingler::Transform::Queue] the
     #  initial queue to traverse to construct the chain.
     #
-    def initialize harness, head
+    def initialize harness, head = nil
       @harness = harness
-      @queues  = [harness.resolve(head).dup]
-      while queue = queue.next
-        @queues << queue.dup
+      @queues  = []
+
+      if head
+        @queues  = [harness.resolve(head).dup]
+        while queue = queue.next
+          @queues << harness.resolve(queue).dup
+        end
       end
     end
 
@@ -559,6 +575,7 @@ class Intertwingler::Transform
     #
     def run request, response = nil
       message = response || request
+
       @queues.each do |q|
         message = q.run request, response do |event|
           # do stuff with side effects
@@ -575,9 +592,10 @@ class Intertwingler::Transform
     # transforms.
     class Request < self
 
-      # Transform the request.
+      # Apply all the request queues to the request (and collect any
+      # side effects).
       #
-      # @param message [Rack::Request] an HTTP request.
+      # @param request [Rack::Request] an HTTP request.
       #
       # @return [Rack::Request] the transformed request.
       #
@@ -594,7 +612,7 @@ class Intertwingler::Transform
       # @return [Intertwingler::Transform::Chain::Response] the response chain.
       #
       def response_chain handler, pp: nil
-        head = harness.queue_for handler
+        head = @harness.queue_head_for handler
         Intertwingler::Transform::Chain::Response.new @harness, head,
           pp: pp, insertions: @insertions
       end
@@ -619,12 +637,13 @@ class Intertwingler::Transform
 
       # Transform the response.
       #
-      # @param message [Rack::Response] an HTTP response.
+      # @param request [Rack::Request] an HTTP request.
+      # @param response [Rack::Response] an HTTP response.
       #
       # @return [Rack::Response] the transformed response.
       #
-      def run response
-        super response
+      def run request, response
+        super request, response
       end
 
       # Determine if the chain contains an addressable queue.
@@ -677,6 +696,14 @@ class Intertwingler::Transform
   class Harness
     include Intertwingler::GraphOps::Addressable
 
+    private
+
+    def repo ; dispatcher.engine.repo ; end
+    def subject ; dispatcher.engine.subject ; end
+    def resolver ; dispatcher.engine.resolver ; end
+
+    public
+
     # Inititalize the harness and populate it with configuration from
     # the graph.
     #
@@ -699,20 +726,16 @@ class Intertwingler::Transform
     def initialize dispatcher, queues: [], request_head: nil, response_head: nil
       # the dispatcher
       @dispatcher = dispatcher
-      resolver    = dispatcher.engine.resolver
 
       # maps
-      @queues     = {}
-      @transforms = {}
-      @partials   = {}
+      @queues      = {}
+      @transforms  = {}
+      @partials    = {}
+      @handler_map = {}
 
       # queue heads
       @request_head  = resolver.coerce_resource request_head  if request_head
       @response_head = resolver.coerce_resource response_head if response_head
-
-      # chains, keyed by queue head
-      @request  = {}
-      @response = {}
     end
 
     # Refresh (recursively) the configuration in the graph.
@@ -720,8 +743,8 @@ class Intertwingler::Transform
     # @return [self]
     #
     def refresh
-      @request_head  = resources(TFO['request-queue']).sort.first
-      @response_head = resources(TFO['response-queue']).sort.first
+      @request_head  = resources(ITCV['request-queue']).sort.first
+      @response_head = resources(ITCV['response-queue']).sort.first
 
       # this is probably enough to get things started, actually
       [@request_head, @response_head].each do |q|
@@ -738,47 +761,57 @@ class Intertwingler::Transform
     # just making a mess here really
 
     def resolve_queue uri, state, force: nil
+      return @queues[uri] if @queues.key? uri and !force
+      @queues[uri] = Intertwingler::Transform::Queue.configure self, uri
     end
 
     def resolve_transform uri, state, force: nil
-      # check for associated handler implementation
-      impl = repo.objects_for(uri,
-        TFO.implementation, only: :resource).sort.first
-      raise unless impl
+      return @transforms[uri] if @transforms.key? uri and !force
+
+      tfi = @transforms[uri] = Intertwingler::Transform.configure self, uri
+
+      # XXX this will not be necessary with manifest protocol; the
+      # dispatcher will just ask for the handler's manifest.
+      dispatcher.add_route uri, tfi.implementation, method: :POST
+
+      tfi
     end
 
     def resolve_partial uri, state, force: nil
+      return @partials[uri] if @partials.key? uri and !force
+
+      @partials[uri] = Intertwingler::Transform::Partial.configure self, uri
     end
 
     def resolve_handler uri, state, force: nil
       engine.dispatcher.add uri, queues: false
+      if queue = repo.objects_for(uri, ITCV.queue, only: :resource).sort.first
+        queue = resolve_queue queue, state
+        @handlers[uri] = queue
+      end
     end
 
     def resolve_one uri, state, force: nil
       ts = repo.asserted_types uri
       if repo.type_is?(ts, TFO.Partial) and !repo.type_is?(ts, TFO.Invocation)
         resolve_partial uri, state, force: force
-      elsif repo.type_is? ts, TFO.Transform
+      elsif repo.type_is? ts, TFO.Function
         resolve_transform uri, state, force: force
       elsif repo.type_is? ts, TFO.Queue
         resolve_queue uri, state, force: force
+      else
+        raise ArgumentError,
+          "Not sure what to do with #{uri} of type #{ts.join}"
       end
     end
 
     public
 
-    def queue_for uri, refresh: false
-    end
-
-    def transform_for uri, partials: true, refresh: false
-    end
-
-    def partial_for uri, refresh: false
-    end
-
     def resolve uri, queues: true, transforms: true, partials: true,
         refresh: false
-      uri = engine.resolver.coerce_resource uri
+      uri = resolver.coerce_resource uri
+      state = {}
+      resolve_one uri, state
     end
 
     attr_reader :dispatcher, :request_head, :response_head
@@ -814,44 +847,18 @@ class Intertwingler::Transform
       end
     end
 
-    # @!attribute [r] repo
-    #  @return [RDF::Repository] The graph repository from the engine.
-    def repo
-      @dispatcher.engine.repo
+    # Return the request transform chain.
+    #
+    # @return [Intertwingler:Transform::Chain::Request]
+    #
+    def request_chain
+      Intertwingler::Transform::Chain::Request.new self, request_head
     end
 
-    # @!attribute [r] subject
-    #  @return [RDF::URI] The subject URI of the engine.
-    def subject
-      @dispatcher.engine.subject
+    def queue_head_for handler
+      handler = resolver.coerce_resource handler
+      @handler_map[handler] || response_head
     end
-
-    # @!attribute [r] resolver
-    #  @return [Intertwingler::Resolver] The resolver from the engine.
-    def resolver
-      @dispatcher.engine.resolver
-    end
-
-    # Set the contents of the addressable queue based on harvested
-    # path parameters. This will attempt to resolve the
-    # transformations and their parameters.
-    def set_addressable *pairs
-    end
-
-    # Run the request queues.
-    def run_request req
-      @request.each { |queue| req = queue.run req }
-
-      req
-    end
-
-    # Run the response queues.
-    def run_response req, resp
-      @response.each { |queue| resp = queue.run req, resp }
-
-      resp
-    end
-
   end
 
   # This is the actual transform _handler_ class, that includes a number

@@ -232,7 +232,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       # get the handler instance (or die trying)
       instance = load_handler handler, chdir: true
 
-      add_route_internal path, urn, instance, method
+      add_route_internal path, handler, instance, method
     end
 
     # Add handlers by `urn:x-ruby:` identifier. These identifiers are
@@ -247,6 +247,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     #
     # @note Not sure if this method is going to stick around since I
     #  wrote it before I started thinking about more complex routing.
+    #
+    # @note 2024-02-12 yeah I don't like this method anymore.
     #
     # @param urns [Array<Intertwingler::RubyURN, RDF::URI, #to_s>]
     #  anything coercible into an {Intertwingler::RubyURN}.
@@ -276,7 +278,8 @@ class Intertwingler::Engine < Intertwingler::Handler
           if queues
             queue = @engine.repo.objects_for(RDF::URI(urn.to_s),
               Intertwingler::Vocab::ITCV.queue, only: :resource).sort.first
-            transforms.register? queue if queue
+            warn queue
+            # transforms.register? queue if queue
           end
         end
       ensure
@@ -299,12 +302,13 @@ class Intertwingler::Engine < Intertwingler::Handler
     def dispatch req, subrequest: false
       resolver = engine.resolver
       method   = req.request_method.to_sym # we always want this as a symbol
-      uri, pp  = resolver.split_pp req.url # split out the path parameters
-      uri      = resolver.uri_for uri as: :uri # canonicalize the uri
+      uri, *pp = resolver.split_pp req.url # split out the path parameters
+      uri      = resolver.uri_for uri, as: :uri # canonicalize the uri
       uuid     = engine.resolver.uuid_for uri, as: :uri # also get the uuid
 
       # default response
-      resp = Rack::Response[404, {}, []]
+      resp = Rack::Response[404,
+        { 'content-type' => 'text/plain' }, ['legit nothing bro']]
 
       # strategy:
       #
@@ -323,14 +327,17 @@ class Intertwingler::Engine < Intertwingler::Handler
       paths = []
       paths << uuid.uuid if uuid
       if uri.path
-        paths << uri.path # as-is
+        path = uri.path.sub(/^\/+/, '') # XXX do we really wanna do this?
+        paths << path # as-is
         # minus leading and trailing slashes
-        ps = uri.path.split(/\/+/).drop 1
+        ps = path.split(/\/+/)
         until ps.empty?
           ps.pop
           paths << (ps + ['']).join(?/)
         end
       end
+
+      warn paths.inspect
 
       # now build up a list of candidate handlers. first we try the
       # full stack of paths with the actual request method, then we
@@ -345,6 +352,8 @@ class Intertwingler::Engine < Intertwingler::Handler
         end
       end
 
+      warn candidates.inspect
+
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
@@ -354,9 +363,15 @@ class Intertwingler::Engine < Intertwingler::Handler
         req   = chain.run req
       end
 
+      hurn = nil
+
       candidates.each do |urn, handler|
+        hurn = urn
+
         begin
-          resp = handler.handle req
+          # we're adding a smidge of logic here to not supplant a 405 with a 404
+          tmp  = handler.handle req
+          resp = tmp unless resp.status == 405 and tmp.status == 404
         rescue Intertwingler::Handler::AnyButSuccess => e
           resp = e.response
         rescue => e
@@ -365,21 +380,19 @@ class Intertwingler::Engine < Intertwingler::Handler
           return Intertwingler::Handler::Error::Server.new(e.message).response
         end
 
-        # only proceed if the status is one of these
-        next if [404, 405].include? resp.status
-
-        # if we get to this point we stop
-        break
+        # All response codes besides 404 and 405 are considered
+        # authoritative. (XXX a 404 followed by a 405 followed by a
+        # 404 will be represented as a 404, rather than 405, though
+        # a 405 kinda tells you more than a 404 does.)
+        break unless [404, 405].include? resp.status
       end
 
-      # again, skip this part on subrequest or it'll recurse forever
       unless subrequest
         # generate the response chain with addressable queue
-        chain = chain.response_chain urn, pp: pp
+        chain = chain.response_chain hurn, pp: pp
         resp  = chain.run req, resp
       end
 
-      # whatever's in here is what we are returning
       resp
     end
 
@@ -634,16 +647,8 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @return [Rack::Response]
   #
   def handle req
-    # cache the original request
-    orig = req
 
     # XXX handle OPTIONS *
-
-    # get the uri as given (hostname/authority may be an alias)
-    uri = URI(req.url)
-
-    # split out the path parameters
-    uri, *pp = resolver.split_pp uri, parse: true
 
     # cut a per-request instance of the transform harness
     # transforms = @transform_harness.dup
@@ -652,15 +657,6 @@ class Intertwingler::Engine < Intertwingler::Handler
     # blow up unless transforms.construct_queue(:addressable, pp)
 
     # XXX TODO normalize query parameters (à la Params::Registry)
-
-    # resolve URI and mint a new request if necessary
-    if subject = resolver.uuid_for(uri, as: :uri)
-      uri = URI(req.base_url) + subject.uuid
-      req = dup_request orig, uri: uri
-    end
-
-    # duplicate transforms so state changes get wiped after the request
-    transforms = transforms.dup
 
     # transforms can signal that they manipulate the request wholesale
     # by only accepting and returning message/http, meaning that if
@@ -671,16 +667,10 @@ class Intertwingler::Engine < Intertwingler::Handler
     resp = Rack::Response[404, {}, []]
 
     begin
-      # set the addressable queue
-      transforms.set_addressable(*pp) # XXX this may raise
-
-      # run the request queue
-      req = transforms.run_request req
-
       # this should tell the transform harness which handler was used
       # and therefore if it has an initial response queue that differs
       # from the default
-      resp = dispatcher.dispatch req, transforms: transforms, run: true
+      resp = dispatcher.dispatch req
 
       # this can do all sorts of things; it can blow up, it can redirect…
     rescue Intertwingler::Handler::AnyButSuccess => e
