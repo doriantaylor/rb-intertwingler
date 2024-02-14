@@ -352,7 +352,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         end
       end
 
-      warn candidates.inspect
+      warn candidates.map(&:first).inspect
 
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
@@ -448,33 +448,6 @@ class Intertwingler::Engine < Intertwingler::Handler
     end
   end
 
-  # Refresh the handler stack associated with this engine.
-  #
-  # @return [self]
-  #
-  def refresh_handlers
-
-    # get the list of handlers
-    list = @repo.objects_for(subject,
-      ITCV['handler-list'], only: :resource).sort.first
-    list = list ? RDF::List.new(subject: list, graph: @repo).to_a : []
-    list += @repo.objects_for(@subject, ITCV.handler, only: :resource).sort
-
-    # wipe out the contents of the dispatcher first
-    @dispatcher.clear.add(*list)
-
-    self
-  end
-
-  # Refresh the transform queues associated with this engine.
-  #
-  # @return [self]
-  #
-  def refresh_transforms
-
-    self
-  end
-
   private
 
   def subject_from_resolver resolver
@@ -539,15 +512,16 @@ class Intertwingler::Engine < Intertwingler::Handler
     @registry   = Intertwingler::Params.new self
     @dispatcher = Dispatcher.new self
 
+
     # step 2: find the handlers and load them. (incidentally, this
     # returns `self`.)
-    refresh_handlers
-
     # step 3: construct the transform queues and their contents. (note
     # the queues are apt to reuse transforms, and the transform
     # handler instances could very well already be in the handler
     # stack.) NB this also returns `self`.
-    refresh_transforms
+
+    # XXX i don't actually want to refresh in the constructor
+    @dispatcher.refresh
   end
 
   attr_reader :subject, :resolver, :repo, :home,

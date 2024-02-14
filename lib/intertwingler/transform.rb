@@ -152,7 +152,10 @@ class Intertwingler::Transform
                resources(TFO.parameter).sort
              end
 
-    @params = registry[subject] = params
+    # note overloaded assignments do not return values so you can't
+    # just daisy-chain these two statements
+    registry[subject] = params
+    @params = registry[subject]
 
     # get the accepts
     @accepts = fetch_types TFO.accepts
@@ -166,14 +169,61 @@ class Intertwingler::Transform
     self
   end
 
+  # Determine if the _transform_ accepts the message body's content
+  # type.
+  #
+  # @param type [#to_s] the message body content type
+  #
+  # @return [false, true] whether the transform can parse it.
+  #
+  def accepts? type
+    type     = type.to_s.downcase
+    headers  = { Accept: @accepts.map { |t| t.to_s.downcase } }
+    variants = { type => { type: type } }
+
+    warn headers.inspect, variants.inspect
+
+    !!HTTP::Negotiate.negotiate(headers, variants)
+  end
+
+  # Determine if the transform is capable of producing content the
+  # _caller_ will accept.
+  #
+  # @param types [Array<#to_s>] content types, either an `Accept:`
+  #  header or split into an array.
+  #
+  # @return [false, true] whether the transform can satisfy the caller.
+  #
+  def returns? *types
+    headers  = { Accept: types }
+    variants = @returns.map do |t|
+      t = t.to_s.downcase
+      [t, { type: t }]
+    end.to_h
+
+    !!HTTP::Negotiate.negotiate(headers, variants)
+  end
+
+  # Determine in one shot if the transform can process the message.
+  #
+  # @param header [#to_s, Array<#to_s>] the `Accept:` header, either
+  #  whole or split into an array.
+  # @param type [#to_s] the message body `Content-Type`.
+  #
+  def can_process? header, type
+    returns?(header) and accepts?(type)
+  end
+
   # Process a set of parameters.
   #
   # @param values [Object] can't remember what the type is
   #
   # @return [Params::Registry::Instance]
   def process values
+    warn @params.inspect
     @params.process values
   end
+
 
   ### BELOW THIS IS HANDLER/QUEUE STUFF
 
@@ -203,13 +253,15 @@ class Intertwingler::Transform
 
     private
 
-    def repo; transform.harness.repo; end
+    def repo; transform.harness.dispatcher.engine.repo; end
+
+    def resolver ; transform.harness.dispatcher.engine.resolver ; end
 
     public
 
     def self.configure harness, subject, **rest
       # get transform URI
-      transform = harness.repo.objects_for(
+      transform = harness.dispatcher.engine.repo.objects_for(
         subject, TFO.transform, only: :resource).sort.first
 
       raise Intertwingler::Error::Config,
@@ -223,7 +275,6 @@ class Intertwingler::Transform
 
     def initialize transform, subject: nil, slug: nil, aliases: [], values: {}
       @transform = transform
-      resolver   = transform.harness.resolver
       @subject   = resolver.coerce_resource subject if subject
       @slug      = slug.to_s.to_sym if slug
       @aliases   = aliases.map { |a| a.to_s.to_sym }.sort.uniq
@@ -242,13 +293,14 @@ class Intertwingler::Transform
         @aliases = literals(CI.slug).sort.map { |a| a.to_s.to_sym } - [@slug]
 
         # get properties
-        @params = transform.process transform.params.keys.reduce({}) do |hash, k|
-          hash[k] = objects(k, entail: false).map do |o|
-            o.literal? ? o.object : o.to_s
-          end
+        @params = transform.process(
+          transform.params.keys.reduce({}) do |hash, k|
+            hash[k] = objects(k, entail: false).map do |o|
+              o.literal? ? o.object : o.to_s
+            end
 
-          hash
-        end
+            hash
+          end)
       end
 
       self
@@ -335,9 +387,10 @@ class Intertwingler::Transform
 
     def repo; harness.dispatcher.engine.repo; end
 
-    def initialize_copy
+    def initialize_copy *args
       warn 'sup lol'
       @transforms = @transforms.dup
+      super
     end
 
     public
@@ -368,7 +421,7 @@ class Intertwingler::Transform
       @next       = binding.local_variable_get :next # next is a keyword
     end
 
-    attr_reader :harness, :subject
+    attr_reader :harness, :subject, :next
     alias_method :id, :subject
 
     # Refresh the queue against the graph.
@@ -388,8 +441,8 @@ class Intertwingler::Transform
 
       # deal with next queue
       if qnext = resources(TFO.next).sort.first
-        qnext = harness.resolve qnext,
-          transforms: false, partials: false, refresh: true
+        # qnext = harness.resolve qnext,
+        #   transforms: false, partials: false, refresh: true
         # XXX here is where we should check for cycles
         @next = qnext
       else
@@ -433,6 +486,7 @@ class Intertwingler::Transform
     # Test if the transform accepts the `Content-Type`. Intended to
     # provide a hook to subclasses to raise an error if false.
     def can_serve! transform, type
+      # XXX change this when we have a regime we can stand
       transform.accepts? type
     end
 
@@ -451,9 +505,9 @@ class Intertwingler::Transform
     #
     def run req, resp = nil
       # get some shortcuts
-      engine     = harness.engine
+      dispatcher = harness.dispatcher
+      engine     = dispatcher.engine
       resolver   = engine.resolver
-      dispatcher = engine.dispatcher
 
       # for each transform in the queue
       # first we test if it accepts the message body (or is message/http)
@@ -480,10 +534,10 @@ class Intertwingler::Transform
       # transforms could be transforms or they could be partials; in
       # the case that they're partials, we want to pull the parameters
       # out and append them to the uri
-      @transforms.each do |transform|
+      @transforms.each_with_index do |transform, i|
         if transform.is_a? Intertwingler::Transform::Partial
-          params    = transform.params.content.to_h slugs: true
-          transform = transform.function
+          params    = transform.params.to_h
+          transform = transform.transform
         else
           params = {}
         end
@@ -495,23 +549,45 @@ class Intertwingler::Transform
         uuid = resolver.uuid_for transform.subject, as: :uri
         # first check if the transform matches typewise
         # XXX TODO handle `message/http`; not doing that one yet lol
-        uri = req.base_url + uuid.uuid
+        uri = URI(req.base_url) + uuid.uuid
 
         uri.query = URI.encode_www_form(params) unless params.empty?
 
-        subreq  = engine.dup_request req, uri, method: :POST,
-          headers: { 'content-type' => type.to_s }, body: body
-        subresp = dispatcher.dispatch subreq
+        warn "about to POST #{type} to #{uri}"
 
-        # XXX any failure in here is bad except 304 which is considered a noop
+        subreq  = engine.dup_request req, uri: uri, method: :POST,
+          headers: { 'content-type' => type.to_s }, body: body
+        subresp = dispatcher.dispatch subreq, subrequest: true
+
+        # here is where we would break if this was an error or redirect
+        unless subresp.successful?
+          # XXX any failure in here is bad except 304 which is considered a noop
+          next if subresp.status == 304
+
+          # basically no matter what the situation is here it's a
+          # misconfiguration
+          raise Intertwingler::Handler::Error::Server,
+            "Transform #{uuid} returned error #{subresp.status}"
+
+          # XXX HANDLE REDIRECTS WITH DEPTH LIMIT/CYCLE DETECTION: a
+          # redirect that is to the same URI but different
+          # parameters/values is legitimate and should bubble up IF
+          # AND ONLY IF the queue is addressable, otherwise we should
+          # silently follow the redirects (and blow up if it loops).
+
+        end
+
+        warn "dios mio: " + subresp.inspect
 
         # reassign content type
-        type = MimeType[subresp.get_header 'content-type']
+        unless type = subresp.get_header('content-type')
+          raise Intertwingler::Handler::Error::Server,
+            'Transform #{uuid} did not return a Content-Type header'
+        end
+        type = MimeMagic[type]
 
         # reassign body
         body = subresp.body
-
-        # here is where we would break if this was an error or redirect
 
         # XXX content-encoding content-language etc etc
       end
@@ -519,9 +595,10 @@ class Intertwingler::Transform
       # we shouldn't do this if nothing has been run
       if resp
         out = engine.replace_response_body out, body,
-          headers: { 'content-type' => type }
+          headers: { 'content-type' => type.to_s }
       else
-        out = engine.dup_request req, body: body
+        out = engine.dup_request req, body: body,
+          headers: { 'content-type' => type.to_s }
       end
 
       out
@@ -548,14 +625,18 @@ class Intertwingler::Transform
     # @param head [RDF::URI, Intertwingler::Transform::Queue] the
     #  initial queue to traverse to construct the chain.
     #
-    def initialize harness, head = nil
+    def initialize harness, queue = nil
       @harness = harness
-      @queues  = []
+      @queues  = {}
 
-      if head
-        @queues  = [harness.resolve(head).dup]
-        while queue = queue.next
-          @queues << harness.resolve(queue).dup
+      if queue and qobj = harness.resolve(queue)
+        @queues[queue] = qobj.dup
+        while queue = qobj.next
+          qobj = harness.resolve(queue)
+
+          raise Intertwingler::Error::Config,
+            "Cycle detected in queue #{queue}" if @queues.key? queue
+          @queues[queue] = qobj.dup
         end
       end
     end
@@ -576,7 +657,7 @@ class Intertwingler::Transform
     def run request, response = nil
       message = response || request
 
-      @queues.each do |q|
+      @queues.values.each do |q|
         message = q.run request, response do |event|
           # do stuff with side effects
         end
@@ -613,6 +694,7 @@ class Intertwingler::Transform
       #
       def response_chain handler, pp: nil
         head = @harness.queue_head_for handler
+        warn "generating response chain for #{handler} lol: #{head.inspect}"
         Intertwingler::Transform::Chain::Response.new @harness, head,
           pp: pp, insertions: @insertions
       end
@@ -801,7 +883,7 @@ class Intertwingler::Transform
         resolve_queue uri, state, force: force
       else
         raise ArgumentError,
-          "Not sure what to do with #{uri} of type #{ts.join}"
+          "Not sure what to do with #{uri} of type #{ts.join ?,}"
       end
     end
 
@@ -852,6 +934,7 @@ class Intertwingler::Transform
     # @return [Intertwingler:Transform::Chain::Request]
     #
     def request_chain
+      warn "request head: #{request_head.inspect}"
       Intertwingler::Transform::Chain::Request.new self, request_head
     end
 
@@ -897,7 +980,7 @@ class Intertwingler::Transform
       resp = Rack::Response[404, {}, []]
 
       # get the resolver for this request or bail out
-      resolver = resolver_for(req) or return resp
+      resolver = engine.resolver
 
       uri  = URI(resolver.preproc req.url) # annoying that isn't already a URI
       uuid = resolver.split_pp(uri).first.path.split(?/)[1].downcase

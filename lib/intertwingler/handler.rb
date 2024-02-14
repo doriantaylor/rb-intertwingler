@@ -55,12 +55,12 @@ class Intertwingler::Handler
   class Error < AnyButSuccess
     class Client < self
       def initialize message, status: nil
-        super message, status || 403
+        super message, status: status || 403
       end
     end
     class Server < self
       def initialize message, status: nil
-        super message, status || 500
+        super message, status: status || 500
       end
     end
   end

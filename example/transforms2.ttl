@@ -73,7 +73,7 @@
 
 <urn:uuid:d62dfddf-9e84-45b8-8da9-8fd3d830a1bc> a itcv:Engine ;
   rdfs:label "The Intertwingler Engine"@en ;
-  itcv:handler-list ( <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem?=root=~/projects/active/doriantaylor.com/trunk&root=~/projects/active/summer-of-protocols/source&root=~/clients/me/extranet-boilerplate> <urn:x-ruby:intertwingler/handler/generated;Intertwingler::Handler::Generated> <urn:x-ruby:intertwingler/handler/cas;Intertwingler::Handler::CAS?=driver=LMDB&dir=cas&mapsize=128M> <urn:x-ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> <urn:x-ruby:intertwingler/transform/raster;Intertwingler::Transform::Raster> <urn:x-ruby:intertwingler/transform/rdf;Intertwingler::Transform::RDF> <urn:x-ruby:intertwingler/transform/text;Intertwingler::Transform::Text> <urn:x-ruby:intertwingler/transform/sass;Intertwingler::Transform::Sass> ) ;
+  itcv:handler-list ( <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem?=root=~/projects/active/doriantaylor.com/trunk&root=~/projects/active/summer-of-protocols/source&root=~/clients/me/extranet-boilerplate> <urn:x-ruby:intertwingler/handler/generated;Intertwingler::Handler::Generated> <urn:x-ruby:intertwingler/handler/cas;Intertwingler::Handler::CAS?=driver=LMDB&dir=cas&mapsize=128M> ) ;
   itcv:request-queue <urn:uuid:9696ee94-b6d3-441e-83cd-9181987488a4> ;
   itcv:resolver <urn:uuid:3b7f95f0-5eea-4f86-adc7-27ad18be1979> ;
   itcv:response-queue <urn:uuid:4474528f-0345-4fcb-9437-aea24667f2ca> .

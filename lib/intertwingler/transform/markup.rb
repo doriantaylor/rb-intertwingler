@@ -6,6 +6,11 @@ require 'intertwingler/document'
 # the representation
 require 'intertwingler/representation/nokogiri'
 
+# these are also handy
+require 'xml-mixup'
+require 'md-noko'
+require 'tidy_ffi'
+
 # This class will probably be the template for
 # {Intertwingler::Transform} going forward.
 # {Intertwingler::Transform::Harness} is probably still useful for
@@ -29,7 +34,7 @@ require 'intertwingler/representation/nokogiri'
 class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   private
 
-  # XXX do we actually need this?
+  # XXX do we actually need this rather than a `representation` method?
   REPRESENTATION = Intertwingler::Representation::Nokogiri
 
   # This map routes URIs (UUIDs as single path segment) to internal
@@ -78,7 +83,11 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # XXX redcarpet accepts a string and returns a representation
   def parse_markdown req, params
-    doc = MD::Noko.new.ingest req.body
+    body = req.body
+    doc  = MD::Noko.new.ingest body
+    body = representation.coerce doc, type: 'application/xhtml+xml'
+
+    body
   end
 
   # same deal with tidy actually
@@ -95,6 +104,11 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # add back to invalidate
     body.object = doc
     body
+  end
+
+  def rewrite_head req, params
+    warn "rewriting head lol"
+    req.body
   end
 
   # not sure what i actually intended this to do; probably scan for
@@ -143,6 +157,27 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # add a stylesheet processing instruction to the top of the document
   def stylesheet_pi req, params
+    warn "lol stylesheet pi: #{params.inspect}"
+    body = req.body
+    doc = body.object
+
+    # resolve this if need be
+    params[:href] = engine.resolver.uri_for params[:href], as: :uri if
+      params[:href]
+
+    if doc.root
+      doc.xpath("/processing-instruction('xml-stylesheet')").each do |c|
+        c.unlink
+      end
+
+      node = doc.external_subset || doc.internal_subset || doc.root
+
+      XML::Mixup.markup before: node,
+        spec: { '#pi' => 'xml-stylesheet' }.merge(params.slice :type, :href)
+    end
+
+    body.object = doc
+    body
   end
 
   # normalize the indentation
