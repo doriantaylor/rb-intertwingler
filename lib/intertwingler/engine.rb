@@ -278,7 +278,7 @@ class Intertwingler::Engine < Intertwingler::Handler
           if queues
             queue = @engine.repo.objects_for(RDF::URI(urn.to_s),
               Intertwingler::Vocab::ITCV.queue, only: :resource).sort.first
-            warn queue
+            # warn queue
             # transforms.register? queue if queue
           end
         end
@@ -409,8 +409,6 @@ class Intertwingler::Engine < Intertwingler::Handler
       self
     end
   end
-
-  ITCV = Intertwingler::Vocab::ITCV
 
   public
 
