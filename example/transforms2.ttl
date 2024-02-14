@@ -85,6 +85,7 @@
 
 <urn:uuid:4474528f-0345-4fcb-9437-aea24667f2ca> a tfo:Queue ;
   rdfs:label "Early Queue"@en ;
+  tfo:member-list ( <urn:uuid:6d7a49e8-5b33-44f2-b7c9-588816b98a04> ) ;
   tfo:next <urn:uuid:99edbb4e-33cf-480b-bfbc-4482b91005bb> .
 
 <urn:uuid:99edbb4e-33cf-480b-bfbc-4482b91005bb> a tfo:AddressableQueue ;
@@ -112,6 +113,12 @@
   tfo:implementation <urn:x-ruby:intertwingler/transform/text;Intertwingler::Transform::Text> ;
   tfo:accepts "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type ;
   tfo:returns "text/html"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type .
+
+<urn:uuid:6d7a49e8-5b33-44f2-b7c9-588816b98a04> a tfo:Function ;
+  ci:canonical-slug "fix-xml-content-type"^^xsd:token ;
+  tfo:implementation <urn:x-ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
+  tfo:accepts "application/xml"^^tfo:content-type ;
+  tfo:returns "application/xml"^^tfo:content-type, "application/rdf+xml"^^tfo:content-type, "application/xhtml+xml"^^tfo:content-type, "application/xslt+xml"^^tfo:content-type, "application/atom+xml"^^tfo:content-type, "image/svg+xml"^^tfo:content-type .
 
 # markup transforms
 

@@ -177,11 +177,18 @@ class Intertwingler::Transform
   # @return [false, true] whether the transform can parse it.
   #
   def accepts? type
-    type     = type.to_s.downcase
+    type     = MimeMagic[type.to_s.downcase]
     headers  = { Accept: @accepts.map { |t| t.to_s.downcase } }
-    variants = { type => { type: type } }
+    variants = { type.to_s => { type: type.to_s } }
 
-    warn headers.inspect, variants.inspect
+    headers[:Accept] << type.to_s if !headers[:Accept].include?(type.to_s) and
+      headers[:Accept].any? { |t| type.descendant_of? t }
+    # don't forget the magic bullet
+    headers[:Accept] << '*/*;q=0'
+
+    warn "headers: #{headers.inspect}, variants: #{variants.inspect}"
+
+    warn "negotiated: #{HTTP::Negotiate.negotiate(headers, variants).inspect}"
 
     !!HTTP::Negotiate.negotiate(headers, variants)
   end
@@ -567,7 +574,7 @@ class Intertwingler::Transform
           # basically no matter what the situation is here it's a
           # misconfiguration
           raise Intertwingler::Handler::Error::Server,
-            "Transform #{uuid} returned error #{subresp.status}"
+            "Transform #{uuid} returned error #{subresp.status}: #{subresp.body}"
 
           # XXX HANDLE REDIRECTS WITH DEPTH LIMIT/CYCLE DETECTION: a
           # redirect that is to the same URI but different
@@ -580,11 +587,15 @@ class Intertwingler::Transform
         warn "dios mio: " + subresp.inspect
 
         # reassign content type
-        unless type = subresp.get_header('content-type')
+        if type = subresp.get_header('content-type')
+          type  = MimeMagic[type]
+          btype = subresp.body.type if subresp.body.respond_to? :type
+          type = btype if btype and btype != type and btype.descendant_of? type
+          warn "btype: #{btype.inspect} #{btype.descendant_of? type}"
+        else
           raise Intertwingler::Handler::Error::Server,
             'Transform #{uuid} did not return a Content-Type header'
         end
-        type = MimeMagic[type]
 
         # reassign body
         body = subresp.body
@@ -592,13 +603,15 @@ class Intertwingler::Transform
         # XXX content-encoding content-language etc etc
       end
 
+      # these headers are the same for either request or response
+      hdr = { 'content-type' => type.to_s, 'content-length' => nil }
+      hdr['content-length'] = body.size.to_s if body.respond_to? :size
+
       # we shouldn't do this if nothing has been run
       if resp
-        out = engine.replace_response_body out, body,
-          headers: { 'content-type' => type.to_s }
+        out = engine.replace_response_body out, body, headers: hdr
       else
-        out = engine.dup_request req, body: body,
-          headers: { 'content-type' => type.to_s }
+        out = engine.dup_request req, body: body, headers: hdr
       end
 
       out
@@ -661,6 +674,15 @@ class Intertwingler::Transform
         message = q.run request, response do |event|
           # do stuff with side effects
         end
+
+        # don't forget to reassign
+        if response
+          response = message
+        else
+          request = message
+        end
+
+        warn "in chain loop (#{q.subject}): #{message.content_type}"
       end
 
       message
@@ -976,6 +998,8 @@ class Intertwingler::Transform
         return Rack::Response[409, {}, ['Missing Content-Type header']]
       type = MimeMagic[type].canonical # XXX do we preserve type parameters??
 
+      warn "from inside transform handler: #{type}"
+
       # give us a default response
       resp = Rack::Response[404, {}, []]
 
@@ -1062,8 +1086,12 @@ class Intertwingler::Transform
         # note `out` can be nil which should be interpreted as 304
         return Rack::Response[304, {}, []] unless out
 
+        warn "still inside: #{out.type}"
+
         # this should be it
-        return Rack::Response[200, { 'content-type' => out.type.to_s }, out]
+        return Rack::Response[200, {
+          'content-type'   => out.type.to_s,
+          'content-length' => out.size.to_s }, out]
 
       rescue Intertwingler::Transform::ParamError
         return Rack::Response[409, {}, []]

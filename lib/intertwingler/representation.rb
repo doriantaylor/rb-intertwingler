@@ -256,4 +256,8 @@ class Intertwingler::Representation
     @object ||= parse @io
   end
 
+  def inspect
+    "<#{self.class} type: #{type}, object: #{object.class}>"
+  end
+
 end

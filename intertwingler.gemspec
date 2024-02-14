@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rspec',   '>= 3.12'
 
   # stuff we use pretty universally
-  spec.add_runtime_dependency 'http-negotiate', '>= 0.2.1' # mine
+  spec.add_runtime_dependency 'http-negotiate', '>= 0.2.2' # mine
   spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
   spec.add_runtime_dependency 'mimemagic',      '>= 0.5.0' # my patch
   spec.add_runtime_dependency 'rack',           '~> 3'

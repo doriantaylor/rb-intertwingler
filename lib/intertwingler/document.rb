@@ -1389,7 +1389,7 @@ class Intertwingler::Document
   #
   # @return [Nokogiri::XML::Node] the node in `elem`
   #
-  def reindent elem, depth = 0, indent = '  '
+  def self.reindent elem, depth = 0, indent = '  '
     kids = elem.children
     if kids and child = kids.first
       loop do

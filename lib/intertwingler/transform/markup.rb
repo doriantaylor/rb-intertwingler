@@ -50,6 +50,9 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       %w[text/markdown], %w[application/xhtml+xml text/html] ],
     'ca069a8a-dd73-423d-b4c2-77777c049f36' => [:tidy,
       %w[text/html application/xhtml+xml], %w[text/html application/xhtml+xml] ],
+    '6d7a49e8-5b33-44f2-b7c9-588816b98a04' => [:fix_xml_content_type,
+      %w[application/xml text/xml], %w[application/xml application/atom+xml
+        application/rdf+xml application/xhtml+xml image/svg+xml]] ,
     '46be5c11-fbcb-4dfc-a486-9ac3344a0308' => [:strip_comments,
       %w[application/xml text/html], %w[application/xml text/html] ],
     'b15e1970-9d1f-4ed1-b6cc-2a382d804dda' => [:rewrite_head,
@@ -94,6 +97,44 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   def tidy req, params
   end
 
+  # idea here is we test root element name AND namespace, then just
+  # namespace, then just root element.
+  NAMESPACES = {
+    [nil, 'http://www.w3.org/2005/Atom'] =>
+      'application/atom+xml',
+    [nil, 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'] =>
+      'application/rdf+xml',
+    [:rss, nil] => 'application/rss+xml',
+    [nil, 'http://www.w3.org/1999/xhtml'] =>
+      'application/xhtml+xml',
+    [nil, 'http://www.w3.org/2000/svg'] =>
+      'image/svg+xml',
+  }
+
+  # I would rather not do this this way, but it's expedient. Any
+  # header manipulation other than `Content-Type` should really be
+  # done in a `message/http` transform (which aren't implemented yet).
+  def fix_xml_content_type req, params
+    body = req.body
+    doc  = body.object
+    type = body.type
+
+    if root = doc.root
+      name = root.name.to_sym
+      ns   = root.namespace.href if root.namespace
+      type = if ns
+               NAMESPACES[[name, ns]] || NAMESPACES[[nil, ns]] || type
+             else
+               NAMESPACES[[name, nil]] || type
+             end
+      warn "changed type fromm #{body.type} to #{type}"
+      body.type = type
+    end
+
+    # XXX we are smuggling out the type and i would prefer not to do it this way
+    body
+  end
+
   def strip_comments req, params
     body = req.body
     doc  = body.object
@@ -118,8 +159,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # this one relinks
   def rehydrate req, params
-    req.body.object
-    Intertwingler::Document.rehydrate
+    #req.body.object
+    #Intertwingler::Document.rehydrate
+    warn "rehydrating lol"
+    req.body
   end
 
   # what would be really sneaky is to do this exclusively based on
@@ -128,31 +171,43 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # add schema dot org
     # add ogp
     # add twitter meta
+    warn "adding social media metadata lol"
+    req.body
   end
 
   # stick a wad of backlinks everywhere they fit
   def add_backlinks req, params
     # backlinks = Intertwingler::Document.backlinks
     # XML::Mixup.markup
+    warn "adding backlinks lol"
+    req.body
   end
 
   # rewrite uuids and crap to their http(s or whatever other scheme)
   # counterparts
   def rewrite_links req, params
     # engine.resolver_for params[:subject]
+    warn "rewriting links lol"
+    req.body
   end
 
   # mangle mailto: URIs according to house style
   def mangle_mailto req, params
+    warn "mangling mailto: lol"
+    req.body
   end
 
   # traverse the document body looking for amazon links, add `?tag=youknowwho`
   def amazon_tag req, params
+    warn "amazon taggin', lol"
+    req.body
   end
 
   # read the RDFa and prune unnecessary prefix declarations, also
   # bundle them all up to the outermost bit
   def normalize_prefixes req, params
+    warn "normalizing rdfa prefixes lol"
+    req.body
   end
 
   # add a stylesheet processing instruction to the top of the document
@@ -185,11 +240,15 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     body = req.body
     doc  = body.object
 
+    warn "reindenting lol"
+
     # this reindents in place
     Intertwingler::Document.reindent doc
 
     # spur the invalidation of the embedded io object
     body.object = doc
+
+    # warn body.inspect
 
     body
   end
