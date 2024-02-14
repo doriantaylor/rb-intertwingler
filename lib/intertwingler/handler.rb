@@ -47,12 +47,17 @@ class Intertwingler::Handler
 
     def response
       hdr = {}
-      hdr['Location'] = location.to_s if location
+      hdr['location'] = location.to_s if location
       Rack::Response[status, hdr, [message]]
     end
   end
 
   class Error < AnyButSuccess
+    def response
+      Rack::Response[status, { 'content-type' => 'text/plain' },
+        [message, (backtrace || []).join("\n")]]
+    end
+
     class Client < self
       def initialize message, status: nil
         super message, status: status || 403

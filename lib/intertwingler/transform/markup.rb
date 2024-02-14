@@ -155,6 +155,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   # not sure what i actually intended this to do; probably scan for
   # missing prefixes or something
   def repair_rdfa req, params
+    warn "repairing rdfa lol"
+    req.body
   end
 
   # this one relinks
@@ -212,9 +214,12 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # add a stylesheet processing instruction to the top of the document
   def stylesheet_pi req, params
-    warn "lol stylesheet pi: #{params.inspect}"
+    # warn "lol stylesheet pi: #{params.inspect}"
     body = req.body
     doc = body.object
+
+    # coerce Params::Registry::Instance to plain hash
+    params = params.to_h
 
     # resolve this if need be
     params[:href] = engine.resolver.uri_for params[:href], as: :uri if
@@ -231,6 +236,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
         spec: { '#pi' => 'xml-stylesheet' }.merge(params.slice :type, :href)
     end
 
+    # goose the body by assigning the doc
     body.object = doc
     body
   end

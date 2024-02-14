@@ -186,9 +186,9 @@ class Intertwingler::Transform
     # don't forget the magic bullet
     headers[:Accept] << '*/*;q=0'
 
-    warn "headers: #{headers.inspect}, variants: #{variants.inspect}"
+    # warn "headers: #{headers.inspect}, variants: #{variants.inspect}"
 
-    warn "negotiated: #{HTTP::Negotiate.negotiate(headers, variants).inspect}"
+    # warn "negotiated: #{HTTP::Negotiate.negotiate(headers, variants).inspect}"
 
     !!HTTP::Negotiate.negotiate(headers, variants)
   end
@@ -682,7 +682,7 @@ class Intertwingler::Transform
           request = message
         end
 
-        warn "in chain loop (#{q.subject}): #{message.content_type}"
+        # warn "in chain loop (#{q.subject}): #{message.content_type}"
       end
 
       message
@@ -851,8 +851,13 @@ class Intertwingler::Transform
       @response_head = resources(ITCV['response-queue']).sort.first
 
       # this is probably enough to get things started, actually
-      [@request_head, @response_head].each do |q|
-        resolve q, transforms: false, partials: false, refresh: true
+      qs = [@request_head, @response_head]
+
+      while q = qs.shift
+        # warn "resolving queue #{q}"
+        qobj = resolve q, transforms: false, partials: false, refresh: true
+        qs << qobj.next if
+          qobj.next and !qs.include?(qobj.next) and !@queues.key?(qobj.next)
       end
 
       #
@@ -956,7 +961,7 @@ class Intertwingler::Transform
     # @return [Intertwingler:Transform::Chain::Request]
     #
     def request_chain
-      warn "request head: #{request_head.inspect}"
+      # warn "request head: #{request_head.inspect}"
       Intertwingler::Transform::Chain::Request.new self, request_head
     end
 
@@ -998,7 +1003,7 @@ class Intertwingler::Transform
         return Rack::Response[409, {}, ['Missing Content-Type header']]
       type = MimeMagic[type].canonical # XXX do we preserve type parameters??
 
-      warn "from inside transform handler: #{type}"
+      # warn "from inside transform handler: #{type}"
 
       # give us a default response
       resp = Rack::Response[404, {}, []]
@@ -1027,6 +1032,12 @@ class Intertwingler::Transform
         v = NUMBER_RE === v ? v.to_f : v
         (hash[k] ||= []) << v
         hash
+      end
+
+      urn = RDF::URI('urn:uuid:' + uuid)
+      if pgroup = engine.registry[urn]
+        # warn "params: #{params.inspect}"
+        params = pgroup.process params
       end
 
       # check request content type and return 415 if no match
@@ -1086,7 +1097,7 @@ class Intertwingler::Transform
         # note `out` can be nil which should be interpreted as 304
         return Rack::Response[304, {}, []] unless out
 
-        warn "still inside: #{out.type}"
+        # warn "still inside: #{out.type}"
 
         # this should be it
         return Rack::Response[200, {
@@ -1098,7 +1109,7 @@ class Intertwingler::Transform
       rescue Intertwingler::Handler::Redirect => r
         # umm i dunno
         # r.location
-        warn r
+        return r.response
       rescue Intertwingler::Handler::Error => r
         # umm i dunno
         # r.location

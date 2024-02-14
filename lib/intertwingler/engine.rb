@@ -377,7 +377,8 @@ class Intertwingler::Engine < Intertwingler::Handler
         rescue => e
           # quit now in case this blows up
           # XXX do something smarter here
-          return Intertwingler::Handler::Error::Server.new(e.message).response
+          return Intertwingler::Handler::Error::Server.new(
+            e.message + e.backtrace.join("\n")).response
         end
 
         # All response codes besides 404 and 405 are considered
