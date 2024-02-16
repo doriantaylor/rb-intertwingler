@@ -1,5 +1,3 @@
-require 'bundler/setup'
-
 source 'https://rubygems.org'
 
 # do this until upstream merges

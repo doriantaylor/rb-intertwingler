@@ -31,7 +31,7 @@ module Intertwingler
     private
 
     HOSTRE =
-      /[0-9a-z](?:[-0-9a-z]*[0-9a-z])(?:\.[0-9a-z](?:[-0-9a-z]*[0-9a-z])?)*/i
+      /[0-9a-z](?:[-0-9a-z]*[0-9a-z])?(?:\.[0-9a-z](?:[-0-9a-z]*[0-9a-z])?)*/i
     AUTHRE = /#{HOSTRE}(:\d+)?/o
 
     UNITS = { nil => 1 }
