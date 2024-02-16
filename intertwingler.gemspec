@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
   # stuff we use pretty universally
   spec.add_runtime_dependency 'http-negotiate', '>= 0.2.2' # mine
   spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
-  spec.add_runtime_dependency 'mimemagic',      '>= 0.5.0' # my patch
+  spec.add_runtime_dependency 'mimemagic',      '>= 0.5.3' # my patch
   spec.add_runtime_dependency 'rack',           '~> 3'
   spec.add_runtime_dependency 'rackup',         '~> 2'
   spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
@@ -45,7 +45,6 @@ Gem::Specification.new do |spec|
   # stuff for handlers/transforms
   spec.add_runtime_dependency 'md-noko',           '>= 0.1.0'  # mine
   spec.add_runtime_dependency 'params-registry',   '>= 0.1.7'  # mine
-  spec.add_runtime_dependency 'rdf-sak',           '>= 0.1.0'  # mine
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
   spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine
   spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine
@@ -53,7 +52,8 @@ Gem::Specification.new do |spec|
 
   # stuff for cli
   spec.add_runtime_dependency 'thor',         '>= 1.2.2'
-  spec.add_runtime_dependency 'tty-markdown', '>= 0.9.0' # my patch
+  spec.add_runtime_dependency 'tty-markdown', '>= 0.7.2'
+  spec.add_runtime_dependency 'tty-reader',   '>= 0.9.0' # my patch
   spec.add_runtime_dependency 'tty-prompt',   '>= 0.23.1'
 
   # stuff for urlrunner

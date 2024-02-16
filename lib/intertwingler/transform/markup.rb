@@ -222,8 +222,17 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     params = params.to_h
 
     # resolve this if need be
-    params[:href] = engine.resolver.uri_for params[:href], as: :uri if
-      params[:href]
+    if params[:href]
+      r = engine.resolver
+      href = params[:href] = r.uri_for params[:href]
+      ruri = RDF::URI(req.url) # RDF::URI has authority= but URI does not
+
+      if r.authorities.include? href.authority and
+          r.authorities.include? ruri.authority
+        href.authority = ruri.authority
+      end
+
+    end
 
     if doc.root
       doc.xpath("/processing-instruction('xml-stylesheet')").each do |c|

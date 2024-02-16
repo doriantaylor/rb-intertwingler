@@ -1034,7 +1034,8 @@ class Intertwingler::Document
         # just assume plain text is markdown
         doc = ::MD::Noko.new.ingest doc
       else
-        raise "Don't know what to do with #{uuid} (#{type})"
+        warn doc.path if doc.respond_to? :path
+        raise "Don't know what to do with #{doc.inspect} (#{type.inspect})"
       end
     end
 

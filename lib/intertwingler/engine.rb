@@ -352,7 +352,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         end
       end
 
-      warn candidates.map(&:first).inspect
+      # warn candidates.map(&:first).inspect
 
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?

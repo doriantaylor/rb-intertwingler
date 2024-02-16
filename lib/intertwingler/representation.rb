@@ -225,7 +225,7 @@ class Intertwingler::Representation
   end
 
   def io
-    warn "hi lol #{caller}"
+    # warn "hi lol #{caller}"
 
     if @object
       @io = serialize @object, tempfile

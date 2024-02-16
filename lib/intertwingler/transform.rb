@@ -675,7 +675,7 @@ class Intertwingler::Transform
           # do stuff with side effects
         end
 
-        # don't forget to reassign
+        # don't forget to reassign or this hands the unchanged one down the line
         if response
           response = message
         else
@@ -716,7 +716,7 @@ class Intertwingler::Transform
       #
       def response_chain handler, pp: nil
         head = @harness.queue_head_for handler
-        # warn "generating response chain for #{handler} lol: #{head.inspect}"
+         warn "generating response chain for #{handler} lol: #{head.inspect}"
         Intertwingler::Transform::Chain::Response.new @harness, head,
           pp: pp, insertions: @insertions
       end
@@ -756,10 +756,12 @@ class Intertwingler::Transform
       #  addressable queue.
       #
       def has_addressable?
+        @queues.values.any? { |q| q.addressable? }
       end
 
       # Set the addressable queue in the chain.
       def set_addressable *pp
+        warn "path parameters: #{pp}"
         self
       end
     end
