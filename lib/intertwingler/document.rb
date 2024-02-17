@@ -23,6 +23,9 @@ class Intertwingler::Document
   include Intertwingler::NLP
   include Intertwingler::Util::Clean
 
+  CI  = Intertwingler::Vocab::CI
+  XHV = RDF::Vocab::XHV
+
   private
 
   # this grabs a subset of the class methods defined herein and turns
@@ -126,12 +129,12 @@ class Intertwingler::Document
         ] }
 
         # get published date first
-        published = (objects_for uu,
+        published = (@repo.objects_for uu,
                      [RDF::Vocab::DC.issued, RDF::Vocab::DC.created],
                      datatype: RDF::XSD.dateTime)[0]
 
         # get latest updated date
-        updated = (objects_for uu, RDF::Vocab::DC.modified,
+        updated = (@repo.objects_for uu, RDF::Vocab::DC.modified,
                    datatype: RDF::XSD.dateTime).sort[-1]
         updated ||= published || RDF::Literal::DateTime.new(DateTime.now)
         updated = Time.parse(updated.to_s).utc
@@ -253,10 +256,19 @@ class Intertwingler::Document
 
   class Stats < Intertwingler::Document
 
+    private
+
+    DSD_SEQ = %i[characters words blocks sections
+      min low-quartile median high-quartile max mean sd].freeze
+    TH_SEQ = %w[Document Abstract Created Modified Characters Words Blocks
+      Sections Min Q1 Median Q3 Max Mean SD].map { |t| { [t] => :th } }
+
+    public
+
     def generate published: true
       base  = @resolver.uri_for @subject, as: :uri
-      types = @resolver.abbreviate @graph.asserted_types(@subject)
-      title = if t = @graph.label_for(@subject)
+      types = @resolver.abbreviate @repo.asserted_types(@subject)
+      title = if t = @repo.label_for(@subject)
                 [t[1].to_s, @resolver.abbreviate(t[0])]
               end
       cache = {}
@@ -302,7 +314,7 @@ class Intertwingler::Document
       cache.keys.sort(&sl).each do |k|
         c = cache[k]
         href = base.route_to @resolver.uri_for(c[:doc], as: :uri)
-        dt = @resolver.abbreviate @graph.asserted_types(c[:doc])
+        dt = @resolver.abbreviate @repo.asserted_types(c[:doc])
         uu = URI(k.to_s).uuid
         nc = UUID::NCName.to_ncname uu, version: 1
         tp, tt = c[:title] || []
@@ -338,11 +350,11 @@ class Intertwingler::Document
       end
 
       # XXX add something to the vocab so this can be controlled in the data
-      xf = config.dig(:stats, :transform) || config[:transform]
+      # xf = config.dig(:stats, :transform) || config[:transform]
 
-      xhtml_stub(base: base, title: title, transform: xf, attr: {
-        id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
-                 prefix: @resolver.prefixes, content: {
+      XML::Mixup.xhtml_stub(base: base, title: title, attr: {
+        id: UUID::NCName.to_ncname_64(@subject.to_s),
+        about: '', typeof: types }, prefix: @resolver.prefixes, content: {
                    [{ [{ [{ ['About'] => :th, colspan: 4 },
                           { ['Counts'] => :th, colspan: 4 },
                           { ['Words per Block'] => :th, colspan: 7 }] => :tr },
@@ -384,7 +396,7 @@ class Intertwingler::Document
       ].each do |pa, rel, meth, args|
         next if pa.empty?
 
-        send meth, *args, only: :resource do |n, pfwd, prev|
+        repo.send meth, *args, only: :resource do |n, pfwd, prev|
           # skip if we've already got this (eg with fwd then reverse)
           next if seen[n]
           # make a dummy so as not to incur calling published? multiple times
@@ -468,7 +480,7 @@ class Intertwingler::Document
         spec.unshift para
       end
 
-      xhtml_stub(base: base, title: title, transform: transform,
+      XML::Mixup.xhtml_stub(base: base, title: title, transform: transform,
         prefix: pfx, vocab: XHV, link: links, meta: meta,
         attr: { id: UUID::NCName.to_ncname_64(subject.to_s.dup),
           about: '', typeof: types }, content: spec
@@ -478,9 +490,13 @@ class Intertwingler::Document
     bind_instance_methods
   end
 
-  class AddressBook < Index
-    # XXX do we use this mechanism or something else
-    CLASSES = [RDF::Vocab::SiocTypes.AddressBook]
+  # This will generate an (X)HTML+RDFa page containing either a
+  # SKOS concept scheme or a collection, ordered or otherwise.
+  #
+  # XXX later on we should consider conneg for languages
+  #
+  class ConceptScheme < Index
+    CLASSES = [RDF::Vocab::SKOS.ConceptScheme, RDF::Vocab::SKOS.Collection]
 
     def generate published: true
       # stick some logic here to sort out what kind of thing it is
@@ -496,14 +512,12 @@ class Intertwingler::Document
 
       skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }.freeze
 
-      ucache = {}
-      scache = {}
       struct = @repo.struct_for subject
       neighbours = { subject => struct }
 
       types = @repo.types_for(subject, struct: struct)
 
-      if @graph.type_is?(types, RDF::Vocab::SKOS.OrderedCollection)
+      if @repo.type_is?(types, RDF::Vocab::SKOS.OrderedCollection)
         # sort
         list = if head = @repo.objects_for(
                  subject, RDF::Vocab::SKOS.memberList, only: :blank).sort.first
@@ -537,37 +551,35 @@ class Intertwingler::Document
 
         pfx = @resolver.prefix_subset neighbours
 
-        xhtml_stub(base: base, title: title, transform: @transform,
+        XML::Mixup.xhtml_stub(base: base, title: title, transform: @transform,
           prefix: pfx, vocab: XHV, link: links, meta: meta,
           attr: { id: UUID::NCName.to_ncname_64(subject, version: 1),
                  about: '', typeof: @resolver.abbreviate(types) },
           content: spec).document
-      elsif @graph.type_is?(types, RDF::Vocab::SKOS.Collection)
+      elsif @repo.type_is?(types, RDF::Vocab::SKOS.Collection)
         # make a flat list of just transclusions
-        alphabetized_list subject, fwd: RDF::Vocab::SKOS.member,
-          published: published,
-          ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
+        alphabetized_list fwd: RDF::Vocab::SKOS.member,
+          published: published do |s, fp, rp, struct, base, seen|
             # just return the sections i guess lol
             { [''] => :script, type: 'application/xhtml+xml',
               src: @resolver.uri_for(s, slugs: true),
               rel: @resolver.abbreviate(fp),
               typeof: @resolver.abbreviate(
-                @graph.types_for(s, struct: struct)) }
+                @repo.types_for(s, struct: struct)) }
         end
-      elsif @graph.type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
+      elsif @repo.type_is?(types, RDF::Vocab::SKOS.ConceptScheme)
         # note i'm not sure about this whole 'seen' business
 
         # WOOF lol
-        alphabetized_list subject, rev: RDF::Vocab::SKOS.inScheme,
-          published: published,
-          ucache: ucache, scache: scache do |s, fp, rp, struct, base, seen|
+        alphabetized_list rev: RDF::Vocab::SKOS.inScheme,
+          published: published do |s, fp, rp, struct, base, seen|
 
           # may as well bag this while we're at it
           neighbours[s] ||= struct
 
           # sequence of elements beginning with the heading
           el = begin
-                 lp, lo = @graph.label_for(s, struct: struct)
+                 lp, lo = @repo.label_for(s, struct: struct)
                  if lp
                    [literal_tag(lo, name: :h3, property: lp,
                                 prefixes: @resolver.prefixes)]
@@ -577,8 +589,8 @@ class Intertwingler::Document
                end
 
           # now we do definitions
-          cmp = @graph.cmp_term
-          el += @graph.find_in_struct(struct, RDF::Vocab::SKOS.definition,
+          cmp = @repo.cmp_term
+          el += @repo.find_in_struct(struct, RDF::Vocab::SKOS.definition,
                                entail: true, invert: true).sort do |a, b|
               cmp.(a.first, b.first)
           end.map do |o, ps|
@@ -595,7 +607,7 @@ class Intertwingler::Document
           end
 
           # do alternate labels
-          dl = @graph.find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
+          dl = @repo.find_in_struct(struct, RDF::Vocab::SKOS.altLabel,
                               entail: true, invert: true).sort do |a, b|
             a.first <=> b.first
           end.map do |o, ps|
@@ -612,7 +624,7 @@ class Intertwingler::Document
           dl += rels.map do |pred, dt|
             # this will give us a map of neighbours to the predicates
             # actually used to relate them
-            objs = @graph.find_in_struct struct, pred, invert: true
+            objs = @repo.find_in_struct struct, pred, invert: true
             # plump up the structs
             objs.keys.each do |k|
               # neighbours[k] goes first or it is short circuited
@@ -622,13 +634,13 @@ class Intertwingler::Document
 
             # only show relations to concepts in this scheme
             objs.select! do |k, _|
-              x = @graph.find_in_struct neighbours[k],
+              x = @repo.find_in_struct neighbours[k],
                 RDF::Vocab::SKOS.inScheme, entail: true, invert: true
               x.key? subject
             end
 
             unless objs.empty?
-              lcmp = @graph.cmp_label
+              lcmp = @repo.cmp_label
               [{ [dt] => :dt }] + objs.sort do |a, b|
                 lcmp.(a.first, b.first)
               end.map do |o, ps|
@@ -636,11 +648,11 @@ class Intertwingler::Document
                 # just "know" to do this (also this will fail if
                 # this is not a uuid)
                 id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
-                olp, olo = @graph.label_for(o, struct: neighbours[o])
+                olp, olo = @repo.label_for(o, struct: neighbours[o])
                 href = base.dup
                 href.fragment = id
                 { link_tag(href, rel: ps, base: base,
-                  typeof: @graph.asserted_types(o, struct: struct),
+                  typeof: @repo.asserted_types(o, struct: struct),
                   property: olp, label: olo,
                   prefixes: @resolver.prefixes ) => :dd }
               end
@@ -649,7 +661,7 @@ class Intertwingler::Document
 
           # do backreferences
 
-          op = @graph.query([nil, nil, s]).to_a.select do |stmt|
+          op = @repo.query([nil, nil, s]).to_a.select do |stmt|
             sj = stmt.subject
 
             if sj.uri? and sj != subject
@@ -663,11 +675,11 @@ class Intertwingler::Document
                        else
                          true
                        end
-              ref_ok and (!published or published?(sj))
+              ref_ok and (!published or @repo.published?(sj))
             end
           end.reduce({}) do |hash, stmt|
             sj = stmt.subject
-            seen[sj] ||= neighbours[sj] ||= @graph.struct_for(sj, inverses: true)
+            seen[sj] ||= neighbours[sj] ||= @repo.struct_for(sj, inverses: true)
             unless skospreds.include? stmt.predicate
               (hash[sj] ||= []) << stmt.predicate
             end
@@ -679,38 +691,38 @@ class Intertwingler::Document
           unless op.empty?
             dl << { ['Referenced By'] => :dt }
             op.sort do |a, b|
-              al = (label_for(a.first,
-                candidates: neighbours[a.first]) || [a.first]).last
-              bl = (label_for(b.first,
-                candidates: neighbours[b.first]) || [b.first]).last
+              al = (@repo.label_for(a.first,
+                struct: neighbours[a.first]) || [a.first]).last
+              bl = (@repo.label_for(b.first,
+                struct: neighbours[b.first]) || [b.first]).last
               al.value.upcase <=> bl.value.upcase
             end.each do |sj, ps|
               st   = neighbours[sj]
               href = @resolver.uri_for sj, slugs: true
-              olp, olo = @graph.label_for(sj, struct: st)
+              olp, olo = @repo.label_for(sj, struct: st)
 
               dl << { link_tag(href, rev: ps, base: base,
-                typeof: @graph.asserted_types(sj, struct: st),
+                typeof: @repo.asserted_types(sj, struct: st),
                 property: olp, label: olo,
                 prefixes: @resolver.prefixes) => :dd }
             end
           end
 
           # add see also
-          sa = @graph.find_in_struct(
+          sa = @repo.find_in_struct(
             struct, RDF::RDFS.seeAlso, invert: true).each do |o, _|
-            seen[o] ||= neighbours[o] ||= @graph.struct_for(o, inverses: true)
+            seen[o] ||= neighbours[o] ||= @repo.struct_for(o, inverses: true)
           end
 
           unless sa.empty?
             dl << { ['See Also'] => :dt }
-            lcmp = @graph.cmp_label cache: neighbours
+            lcmp = @repo.cmp_label cache: neighbours
             sa.keys.sort(&lcmp).each do |o|
               href = @resolver.uri_for o, slugs: true
               if st = neighbours[o]
-                olp, olo = @graph.label_for(o, struct: st)
+                olp, olo = @repo.label_for(o, struct: st)
                 dl << { link_tag(href, rel: sa[o], base: base,
-                  typeof: @graph.types_for(o, struct: st),
+                  typeof: @repo.types_for(o, struct: st),
                   property: olp, label: olo,
                   prefixes: @resolver.prefixes) => :dd }
               else
@@ -726,7 +738,7 @@ class Intertwingler::Document
           id = @resolver.uri_for s, slugs: true
           id = id.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
           sec = { el => :section, id: id, resource: "##{id}" }
-          if typ = @graph.asserted_types(s, struct: struct)
+          if typ = @repo.asserted_types(s, struct: struct)
             sec[:typeof] = @resolver.abbreviate typ
           end
           sec[:rel] = @resolver.abbreviate(fp) if rp
@@ -740,14 +752,9 @@ class Intertwingler::Document
     end
   end
 
-  # This will generate an (X)HTML+RDFa page containing either a
-  # SKOS concept scheme or a collection, ordered or otherwise.
-  #
-  # XXX later on we should consider conneg for languages
-  #
-  #
-  class ConceptScheme < Index
-    CLASSES = [RDF::Vocab::SKOS.ConceptScheme, RDF::Vocab::SKOS.Collection]
+  class AddressBook < Index
+    # XXX do we use this mechanism or something else
+    CLASSES = [RDF::Vocab::SiocTypes.AddressBook]
   end
 
   class ReadingList < Index
@@ -781,7 +788,9 @@ class Intertwingler::Document
     end
 
     REGOP  = -> opmap, seen, published do
-      opmap.map { |x| x + [struct_for(x.first, uuids: true)] }.sort do |a, b|
+      opmap.map do |x|
+        x + [@repo.struct_for(x.first)]
+      end.sort do |a, b|
         al = (@repo.label_for(a.first, struct: a.last) || [nil, a.first])
         bl = (@repo.label_for(b.first, struct: b.last) || [nil, b.first])
         al.last.value <=> bl.last.value
@@ -791,7 +800,7 @@ class Intertwingler::Document
         lab = @repo.label_for item, struct: st
         typ = @repo.types_for item, struct: st
         a = { [lab.last] => :span, about: item,
-             typeof: @respolver.abbreviate(typ),
+             typeof: @resolver.abbreviate(typ),
              property: @resolver.abbreviate(lab.first) }
         { a => :dd, rel: @resolver.abbreviate(preds) }
       end.compact
@@ -830,16 +839,20 @@ class Intertwingler::Document
 
       # uggh put these somewhere
       preds = {
-        hp:    @graph.predicate_set(RDF::Vocab::DC.hasPart),
-        sa:    @graph.predicate_set(RDF::RDFS.seeAlso),
-        canon: @graph.predicate_set([RDF::OWL.sameAs, CI.canonical]),
-        ref:   @graph.predicate_set(RDF::Vocab::DC.references),
-        al:    @graph.predicate_set(RDF::Vocab::BIBO.contributorList),
-        cont:  @graph.predicate_set(RDF::Vocab::DC.contributor),
+        hp:    @repo.predicate_set(RDF::Vocab::DC.hasPart),
+        sa:    @repo.predicate_set(RDF::RDFS.seeAlso),
+        canon: @repo.predicate_set([RDF::OWL.sameAs, CI.canonical]),
+        ref:   @repo.predicate_set(RDF::Vocab::DC.references),
+        al:    @repo.predicate_set(RDF::Vocab::BIBO.contributorList),
+        cont:  @repo.predicate_set(RDF::Vocab::DC.contributor),
       }
 
-      alphabetized_list fwd: RDF::Vocab::DC.hasPart,
-        published: published do |s, fp, rp, struct, base, seen|
+      alphabetized_list(
+        fwd: RDF::Vocab::DC.hasPart, published: published
+      ) do |s, fp, rp, struct, base, seen|
+
+        # this somehow got turned into an RDF::URI
+        base = URI(base.to_s)
 
         here << s
 
@@ -874,7 +887,7 @@ class Intertwingler::Document
 
           span = { [lo.value] => :span, about: s.value }.merge lh
           kids << { { span => :a,
-            rel: @resolver.abbreviate(sap), href: sao.value } => :h3 }
+                     rel: @resolver.abbreviate(sap), href: sao.value } => :h3 }
         else
           kids << { [lo.value] => :h3 }.merge(lh)
         end
@@ -901,7 +914,7 @@ class Intertwingler::Document
         structs = {}
         refs = ([s] + sa.keys + sa.keys.map { |k|
             @repo.subjects_for(preds[:canon], k, only: :uri, entail: false)
-          }).flatten.uniq.map do |u|
+                }).flatten.uniq.map do |u|
           # get the subjects that point
           @repo.subjects_for(preds[:ref], u, only: :uri) do |rs, pfwd, prev|
             # maybe this structure will correctly communicate upstream
@@ -915,13 +928,13 @@ class Intertwingler::Document
           sb = structs[b.first]
           al = (@repo.label_for(a.first, struct: sa) || [nil, a.first])
           bl = (@repo.label_for(a.first, struct: sb) || [nil, b.first])
-        #   warn [al.last.to_s.upcase, bl.last.to_s.upcase].inspect
+          #   warn [al.last.to_s.upcase, bl.last.to_s.upcase].inspect
           al.last.to_s.upcase <=> bl.last.to_s.upcase
         end.map do |k, v|
           st = structs[k]
           pfwd, prev = *v
           uri = @resolver.uri_for k, as: :uri
-          lp, lo = (@repo.label_for(k, candidates: st) || [nil, k])
+          lp, lo = (@repo.label_for(k, struct: st) || [nil, k])
 
           if %w[http https].include? uri.scheme
             span = if lp
@@ -973,6 +986,8 @@ class Intertwingler::Document
     RDF::Vocab::SKOS.ConceptScheme    => Intertwingler::Document::ConceptScheme,
     RDF::Vocab::SKOS.Collection       => Intertwingler::Document::ConceptScheme,
     RDF::Vocab::SiocTypes.ReadingList => Intertwingler::Document::ReadingList,
+    RDF::Vocab::DCAT.Distribution     => Intertwingler::Document::Feed,
+    Intertwingler::Vocab::QB.DataSet  => Intertwingler::Document::Stats,
   }
 
   # Default `generate` method generates the doc from triples
@@ -1193,7 +1208,7 @@ class Intertwingler::Document
         end
 
         # add type attribute
-        unless (mts = @repo.formats_for k).empty?
+        unless (mts = repo.formats_for k).empty?
           ln[:type] = mts.first.to_s
 
           if ln[:type] =~ /(java|ecma)script/i ||
@@ -1293,7 +1308,7 @@ class Intertwingler::Document
     ]
 
     # get abstract
-    if desc = label_for(subject, desc: true)
+    if desc = repo.label_for(subject, desc: true)
       out.push({ nil => :meta, name: 'twitter:description',
         content: desc[1].to_s })
     end
@@ -2317,6 +2332,9 @@ class Intertwingler::Document
       prefixes: {}, vocab: nil, title: false
 
     repo = resolver.repo
+
+    # XXX i dunno lol
+    prefixes = resolver.prefixes.merge prefixes
 
     # we will need to cache nodes and properties
     ncache = Set.new

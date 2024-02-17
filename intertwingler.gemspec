@@ -40,7 +40,7 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
   spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
   spec.add_runtime_dependency 'uri-urn',        '>= 0.0.3'
-  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4'   # mine
+  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4.1' # mine
   spec.add_runtime_dependency 'uuidtools',      '>= 2.1.5'
 
   # stuff for handlers/transforms
@@ -50,7 +50,6 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine
   spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine
   spec.add_runtime_dependency 'vips',              '>= 8.12.2'
-
   spec.add_runtime_dependency 'xml-mixup',         '>= 0.1.16' # mine
 
   # stuff for cli

@@ -7,6 +7,10 @@ require 'uri'
 
 class Intertwingler::Handler::Generated < Intertwingler::Handler
 
+  private
+
+  public
+
   def handle req
 
     # warn req.url.inspect
@@ -39,8 +43,11 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
 
     # otherwise we fall back to the main handler
 
-    doc = Intertwingler::Document.generate_doc resolver, subject,
-      prefixes: engine.resolver.prefixes
+    # doc = Intertwingler::Document.generate_doc resolver, subject,
+    #   prefixes: engine.resolver.prefixes
+    generator = Intertwingler::Document.new resolver, subject
+
+    doc = generator.doc
 
     # XXX nuke this later
     if base = doc.at_xpath('/html:html/html:head/html:base',

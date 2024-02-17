@@ -27,11 +27,13 @@ class Intertwingler::Transform
   CI   = Intertwingler::Vocab::CI
   OWL  = ::RDF::OWL
 
-  def repo; harness.dispatcher.engine.repo; end
+  def engine ; harness.dispatcher.engine ; end
 
-  def resolver ; harness.dispatcher.engine.resolver ; end
+  def repo; engine.repo; end
 
-  def registry ; harness.dispatcher.engine.registry ; end
+  def resolver ; engine.resolver ; end
+
+  def registry ; engine.registry ; end
 
   def coerce_params params
     Intertwingler::Params.validate(params || {})

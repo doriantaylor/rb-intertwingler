@@ -179,9 +179,12 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # stick a wad of backlinks everywhere they fit
   def add_backlinks req, params
-    # backlinks = Intertwingler::Document.backlinks
+    # r = engine.resolver
+    # base =
+    # backlinks = Intertwingler::Document.backlinks engine.resolver
     # XML::Mixup.markup
     warn "adding backlinks lol"
+    
     req.body
   end
 
@@ -195,7 +198,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # mangle mailto: URIs according to house style
   def mangle_mailto req, params
-    warn "mangling mailto: lol"
+   warn "mangling mailto: lol"
     req.body
   end
 
@@ -230,6 +233,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       if r.authorities.include? href.authority and
           r.authorities.include? ruri.authority
         href.authority = ruri.authority
+        href.scheme    = ruri.scheme
       end
 
     end

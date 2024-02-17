@@ -36,11 +36,14 @@ COPY . /tmp/src/intertwingler
 WORKDIR /tmp/src/intertwingler
 
 RUN gem install pry pry-byebug puma engtagger
-RUN find /usr/local/bundle/gems/engtagger* -type f -print0  | xargs -0 chmod 644
+# this one, i mean wtf
+RUN find /usr/local/bundle/gems/engtagger* -type f -print0 | xargs -0 chmod 644
 RUN bundle install
 RUN gem build ; gem install *.gem
 
 RUN rm -rf /tmp/src
+
+EXPOSE 10101
 
 WORKDIR /var/lib/intertwingler
 
