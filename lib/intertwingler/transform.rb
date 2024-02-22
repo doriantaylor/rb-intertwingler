@@ -517,6 +517,7 @@ class Intertwingler::Transform
       dispatcher = harness.dispatcher
       engine     = dispatcher.engine
       resolver   = engine.resolver
+      log        = engine.log
 
       # for each transform in the queue
       # first we test if it accepts the message body (or is message/http)
@@ -535,10 +536,17 @@ class Intertwingler::Transform
       # if this is a response transform then resp will be non-nil
       out  = resp || req
       body = out.body # note the body is different depending on req or resp
-      type = out.get_header( # so is this and that is dumb af
-        out.is_a?(Rack::Request) ? 'CONTENT_TYPE' : 'content-type') ||
-        'application/octet-stream'
+      type = out.content_type || 'application/octet-stream'
+      # type = out.get_header( # so is this and that is dumb af
+      #   out.is_a?(Rack::Request) ? 'CONTENT_TYPE' : 'content-type') ||
+      #   'application/octet-stream'
+
       type = MimeMagic[type].canonical || MimeMagic['application/octet-stream']
+
+      log.debug "#{resp ? 'response' : 'request'} type #{type.inspect}"
+
+      # don't screw around dupping the message if there are no transforms
+      return out if @transforms.empty?
 
       # transforms could be transforms or they could be partials; in
       # the case that they're partials, we want to pull the parameters
@@ -562,7 +570,7 @@ class Intertwingler::Transform
 
         uri.query = URI.encode_www_form(params) unless params.empty?
 
-        warn "about to POST #{type} to #{uri}"
+        log.debug "about to POST #{type} to #{uri}"
 
         subreq  = engine.dup_request req, uri: uri, method: :POST,
           headers: { 'content-type' => type.to_s }, body: body

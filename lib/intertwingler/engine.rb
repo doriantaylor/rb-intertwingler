@@ -3,6 +3,7 @@ require 'intertwingler/params'
 require 'intertwingler/transform'
 require 'intertwingler/util/clean'
 require 'intertwingler/error'
+require 'intertwingler/loggable'
 
 require 'params/registry'
 
@@ -10,6 +11,7 @@ require 'rack/mock_request' # for env_for
 
 # This is the engine. This is the thing that is run.
 class Intertwingler::Engine < Intertwingler::Handler
+  include Intertwingler::Loggable
 
   ITCV = Intertwingler::Vocab::ITCV
 
@@ -357,6 +359,8 @@ class Intertwingler::Engine < Intertwingler::Handler
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
+      warn "dispatcher #{subrequest ? '(subrequest) ' : ''}sees content type: #{req.content_type.inspect}"
+
       # the transform harness may return an empty chain; that's fine
       unless subrequest
         chain = transforms.request_chain
@@ -491,7 +495,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   #  which relative file system paths are resolved. Uses the current
   #  working directory by default.
   #
-  def initialize repo: nil, subject: nil, resolver: nil, home: nil
+  def initialize repo: nil, subject: nil, resolver: nil, home: nil, log: nil
     # step 1: the basics
     if resolver
       @resolver = resolver
@@ -507,10 +511,10 @@ class Intertwingler::Engine < Intertwingler::Handler
     end
 
     @home = Pathname(home.to_s).expand_path
+    @log  = log || resolver.log
 
     @registry   = Intertwingler::Params.new self
     @dispatcher = Dispatcher.new self
-
 
     # step 2: find the handlers and load them. (incidentally, this
     # returns `self`.)
@@ -524,7 +528,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   end
 
   attr_reader :subject, :resolver, :repo, :home,
-    :dispatcher, :transforms, :registry
+    :dispatcher, :transforms, :registry, :log
   alias_method :id, :subject
 
   # No-op to overwrite `engine` member.
@@ -552,6 +556,8 @@ class Intertwingler::Engine < Intertwingler::Handler
     method ||= req.request_method
     # same deal with with the body
     body ||= req.env['rack.input']
+
+    log.debug headers.inspect
 
     # fake up an environment
     env = req.env.merge Rack::MockRequest.env_for uri.to_s,

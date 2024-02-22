@@ -12,7 +12,19 @@ Gem::Specification.new do |spec|
   spec.homepage      = 'https://github.com/doriantaylor/rb-intertwingler'
   spec.summary       = 'An engine for dense hypermedia.'
   spec.description   = <<~DESC
+Intertwingler is an engine for making and managing websites that have
+a characteristically large number of very small pages, that are very
+densely interlinked. It can run as a stand-alone application server,
+or use any other Web server interface that Rack supports.
 
+Intertwingler has three closely-related goals:
+
+* Effective custody of accurate information,
+* Reducing the overhead of communicating said information,
+* Artistic and narrative forms that exploit these dynamics.
+
+Consult the README in this distribution for a more involved
+discussion of the problems Intertwingler was designed to solve.
   DESC
 
   spec.files         = `git ls-files -z`.split("\x0").reject do |f|
@@ -46,6 +58,7 @@ Gem::Specification.new do |spec|
   # stuff for handlers/transforms
   spec.add_runtime_dependency 'md-noko',           '>= 0.1.0'  # mine
   spec.add_runtime_dependency 'params-registry',   '>= 0.1.7'  # mine
+  spec.add_runtime_dependency 'rdf-kv',            '>= 0.1.2'  # mine
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
   spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine
   spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine

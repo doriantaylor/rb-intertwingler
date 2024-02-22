@@ -5,6 +5,7 @@ require 'rack/response'
 # Everything in {Intertwingler} is a handler.
 #
 class Intertwingler::Handler
+
   # do this to declare the symbol
   class ::Intertwingler::Engine < self
   end
@@ -120,5 +121,13 @@ class Intertwingler::Handler
   #
   def repo
     @engine.repo
+  end
+
+  # Get the engine's logger.
+  #
+  # @return [Logger] the logger object.
+  #
+  def log
+    @engine.log
   end
 end

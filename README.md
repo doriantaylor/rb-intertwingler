@@ -64,7 +64,7 @@ creating websites with dense hypermedia characteristics:
 
 # Architecture
 
-![flow diagram](flow-diagram.svg)
+![flow diagram](example/flow-diagram.svg)
 
 ## Concepts
 

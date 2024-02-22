@@ -498,8 +498,14 @@ EOS
     require 'rackup'
     require 'intertwingler/harness'
 
+    require 'logger'
+
+    # XXX
+    log = Logger.new $stderr
+
     # give us a harness
-    harness = Intertwingler::Harness.new authorities, home: config_home
+    harness = Intertwingler::Harness.new authorities,
+      home: config_home, log: log
 
     # initialize rack server
     Rackup::Server.start({
@@ -517,6 +523,41 @@ EOS
     require 'intertwingler/harness'
     require 'pry'
     binding.pry
+  end
+
+  desc :load, 'Load one or more RDF files.'
+  def load
+  end
+
+  desc :dump, 'Dump the graph database to a file.'
+  def load
+  end
+
+  desc :nuke, 'Wipe out the contents of the graph database.'
+  def nuke
+    # we imagine detecting whether the configuration has been initialized
+    unless base_config
+      warn "Can't nuke anything if there isn't anything to nuke."
+      exit 1
+    end
+
+    unless interactive?
+      warn "Can't nuke except for interactively."
+      exit 1
+    end
+
+    unless prompt.no? 'Really?'
+      require 'intertwingler/harness'
+
+      # give us a harness
+      harness = Intertwingler::Harness.new authorities, home: config_home
+
+      harness.engines.values.each do |engine|
+        engine.repo.clear
+      end
+
+      say "\u{2622}\u{FE0F} \u{1F480} \u{2622}\u{FE0F}"
+    end
   end
 
   default_command :engine

@@ -1,6 +1,7 @@
 require 'intertwingler/error'
 require 'intertwingler/graphops'
 require 'intertwingler/vocab'
+require 'intertwingler/loggable'
 require 'intertwingler/util/clean'
 
 require 'uri'
@@ -11,6 +12,7 @@ require 'uuid/ncname'
 # resolver, intended to persist only as long as it needs to, as the
 # cache is not very sophisticated.
 class Intertwingler::Resolver
+  include Intertwingler::Loggable
   include Intertwingler::Util::Clean
 
   private
@@ -65,7 +67,7 @@ class Intertwingler::Resolver
   XSD  = RDF::XSD
   SH   = RDF::Vocab::SH
 
-  def self.configure_one repo, subject
+  def self.configure_one repo, subject, log: nil
     # 0) assert that the subject is indeed a resource
     subject = coerce_resource subject
 
@@ -114,7 +116,7 @@ class Intertwingler::Resolver
     end
 
     self.new repo, base, aliases: aliases, prefixes: prefixes,
-      subject: subject, documents: documents, fragments: fragments
+      subject: subject, documents: documents, fragments: fragments, log: log
   end
 
   public
@@ -153,7 +155,7 @@ class Intertwingler::Resolver
     repo.all_of_type Intertwingler::Vocab::ITCV.Resolver
   end
 
-  def self.configure repo, subject: nil, authority: nil
+  def self.configure repo, subject: nil, authority: nil, log: nil
     if subject
       return subject.map { |s| configure_one repo, s} if subject.is_a? Array
 
@@ -173,7 +175,7 @@ class Intertwingler::Resolver
           [authority, candidates.join(', ')]
       end
     else
-      locate(repo).map { |s| configure_one repo, r }
+      locate(repo).map { |s| configure_one repo, r, log: log }
     end
   end
 
@@ -189,7 +191,7 @@ class Intertwingler::Resolver
   # @param prefixes [Hash{Symbol, nil => RDF::Term}] the prefix map
   #
   def initialize repo, base, aliases: [], prefixes: {}, subject: nil,
-      documents: [], fragments: []
+      documents: [], fragments: [], log: nil
 
     @repo = repo
     raise ArgumentError, 'repo must be RDF::Queryable' unless
@@ -216,6 +218,8 @@ class Intertwingler::Resolver
     @uris  = {}
     # map uri.to_s to rdf vocab
     @vocabs = {}
+
+    @log = log
   end
 
   # Clear the resolver's caches but otherwise keep its configuration.

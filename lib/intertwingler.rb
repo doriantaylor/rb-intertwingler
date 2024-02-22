@@ -13,8 +13,11 @@ require 'uri'
 require 'uri/urn'
 require 'cgi/util'
 require 'rdf'
+require 'rdf/turtle'
+require 'rdf/vocab'
 require 'rdf/reasoner'
-require 'linkeddata'
+# this done broke lol: rdf-n3 -> sxp ~1.3 vs everything else -> sxp ~2.0
+# require 'linkeddata'
 
 # my stuff
 require 'xml-mixup'

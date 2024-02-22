@@ -1,10 +1,14 @@
 # bring in the namespace
 require 'intertwingler/version'
 
-
 require 'mimemagic'
-# XXX this is not strictly correct but good enough for now
+# XXX this is not strictly correct but good enough for now, also
+# application/x-www-form-urlencoded is not in the mime types (and thus
+# has no `canonical)`, so that was fun to debug (oh look turns out
+# multipart/form-data isn't in there either)
 [
+ ['application/x-www-form-urlencoded', [], %w(text/plain), []],
+ ['multipart/form-data', [], %w(application/octet-stream), []],
  ['text/n3', %w(n3 ttl nt), %w(text/plain), [[0..256, '@prefix']]],
  ['application/x-vnd.sass', %w(sass), %w(text/plain), []],
  ['application/x-vnd.sass.scss', %w(scss), %w(text/css), []],
