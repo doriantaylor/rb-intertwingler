@@ -1,0 +1,23 @@
+version: "3"
+
+services:
+  web:
+    build:
+      network: host
+      context: .
+    command: intertwingler
+    volumes:
+      # Set the source volume to whatever your preference.
+      - /tmp/intertwingler:/var/lib/intertwingler
+    networks:
+      - web
+    ports:
+      # Set the port if you want it to be something else, but it
+      # should match the one inside the image since the engine keys
+      # off the Host: header which will contain the port number.
+      - "10101:10101"
+    # There is currently nothing special in the environment.
+    # environment:
+
+networks:
+  web:

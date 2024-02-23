@@ -1,8 +1,8 @@
 FROM ruby:latest
 
 # installing headers will implicitly install libraries
-RUN apt update
-RUN apt install -y liblmdb-dev libvips-dev libxml2-dev libxslt1-dev libsass-dev less vim
+RUN apt-get -y update
+RUN apt-get install -y liblmdb-dev libvips-dev libxml2-dev libxslt1-dev libsass-dev less vim
 
 RUN adduser --ingroup users --home /var/lib/intertwingler intertwingler
 
@@ -53,4 +53,4 @@ ENV INTERTWINGLER_HOME=/var/lib/intertwingler
 RUN mkdir root
 COPY --chown=intertwingler:users example/transforms2.ttl config.ttl
 
-CMD bash
+CMD intertwingler engine -z
