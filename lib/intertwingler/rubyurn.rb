@@ -30,7 +30,9 @@ class Intertwingler::RubyURN < URI::URN::Generic
   # these are just character classes so we can merge them into actual regexes
   UNRESERVED = %[-0-9A-Za-z._~].freeze
   SUB_DELIMS = %[!$&'()*+,;=].freeze
+  MY_SUBS    = %[!$&'()*+,=].freeze # same minus semicolon
   PCHAR_STR  = %[[#{UNRESERVED}#{SUB_DELIMS}:@]|%[0-9A-Fa-f]{2}].freeze
+  MY_PCHAR   = %[[#{UNRESERVED}#{MY_SUBS}:@]|%[0-9A-Fa-f]{2}].freeze
 
   # like this one
   PCHAR  = /(?:#{PCHAR_STR})/o
@@ -40,7 +42,8 @@ class Intertwingler::RubyURN < URI::URN::Generic
   FRAG   = /(?:#{PCHAR_STR}|[\/\?])*/o
   OPAQUE = /\A(#{NID}):(#{NSS})(?:\?\+(#{RQ})?)?(?:\?\=(#{RQ})?)?\z/o
   CONST  = /[A-Z]\w*(?:::[A-Z]\w*)*/o
-  MY_NSS = /\A([#{UNRESERVED}!$&'()*+,=\/]+)?;(#{CONST})\z/o
+  PATH   = /(?:\/*(?:#{MY_PCHAR})+(?:\/+(?:#{MY_PCHAR})+)*)/o
+  MY_NSS = /\A(?:(#{PATH})(?:;(#{CONST})?)?|;(#{CONST}))\z/o
 
   def check_nss value
     MY_NSS.match? value or raise URI::InvalidComponentError,

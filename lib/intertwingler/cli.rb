@@ -257,6 +257,17 @@ class Intertwingler::CLI < Thor
         begin
           @raw_config  = Psych.load_file config_file
           @base_config = Intertwingler::Types::HarnessConfig[@raw_config]
+
+          # preload libraries
+          if libs = @base_config[:libs]
+            libs[:path].each do |rel|
+              lp = config_home + rel
+              $LOAD_PATH.unshift lp.to_s
+            end if libs.key? :path
+
+            libs[:preload].each {|urn| urn.require } if libs[:preload]
+          end
+
         rescue Psych::SyntaxError
           prompt.error_md <<~EOS
 There is a problem with the syntax of #{config_file}. You'll need to
@@ -379,19 +390,7 @@ EOS
       end.map { |x| x.to_s + (x.directory? ? ?/ : '') }
     end
 
-    prompt.say 'Initializing...'
-    # TODO maybe someday
-    # prompt.say "Taking defaults from #{config_file}..." if base_config
-
-    # Collect the following prompts into a structure:
-    config = prompt.collect do
-      if prompt.yes? 'Specify the host and port for the application?'
-        key(:host).ask 'Host:', default: HOST
-        key(:port).ask 'Port:', default: PORT
-      end
-
-      if prompt.yes? 'Configure a global default graph database?'
-        prompt.say_md(<<~EOS)
+    urn_msg = <<~EOS
 
 _Intertwingler_ uses a provisional `x-ruby` URN scheme (also known as a
 NID) to identify pluggable modules. These take the following form:
@@ -401,6 +400,44 @@ urn:x-ruby:module/path;Class::Name?=constructor=parameter&other=param
 
 
 ```
+    EOS
+
+    prompt.say 'Initializing...'
+    # TODO maybe someday
+    # prompt.say "Taking defaults from #{config_file}..." if base_config
+
+    # annoyingly this blows up otherwise
+    home = config_home
+
+    # Collect the following prompts into a structure:
+    config = prompt.collect do
+      if prompt.yes? 'Specify the host and port for the application?'
+        key(:host).ask 'Host:', default: HOST
+        key(:port).ask 'Port:', default: PORT
+      end
+
+      saw_urn_msg = false
+      if prompt.yes? 'Load any libraries?'
+        prompt.say_md urn_msg
+        saw_urn_msg = true
+        key :libs do
+          lpdefault = 'lib/ruby'
+          while lp = prompt.ask('Additional load path' +
+            "(relative to #{home}, leave blank to stop):",
+          value: lpdefault)
+            lpdefault = ''
+            key(:path).values.add_answer lp.strip if lp and !lp.strip.empty?
+          end
+
+          while lu = prompt.ask('Module URN (leave blank to stop):')
+            key(:preload).values.add_answer lu.strip if lu and !lu.strip.empty?
+          end
+        end
+      end
+
+      if prompt.yes? 'Configure a global default graph database?'
+        prompt.say_md urn_msg unless saw_urn_msg
+        prompt.say_md(<<~EOS)
 
 In this case, the class identified by the URN is expected to be a
 subclass of `RDF::Repository`. This defines how and where the graph
@@ -530,7 +567,7 @@ EOS
   end
 
   desc :dump, 'Dump the graph database to a file.'
-  def load
+  def dump
   end
 
   desc :nuke, 'Wipe out the contents of the graph database.'
@@ -556,7 +593,7 @@ EOS
         engine.repo.clear
       end
 
-      say "\u{2622}\u{FE0F} \u{1F480} \u{2622}\u{FE0F}"
+      say "\u{2622}\u{FE0F}\u{1F480}\u{2622}\u{FE0F}"
     end
   end
 

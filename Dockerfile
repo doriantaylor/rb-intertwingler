@@ -53,4 +53,4 @@ ENV INTERTWINGLER_HOME=/var/lib/intertwingler
 RUN mkdir root
 COPY --chown=intertwingler:users example/transforms2.ttl config.ttl
 
-CMD intertwingler engine -z
+CMD intertwingler

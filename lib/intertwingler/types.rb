@@ -153,6 +153,9 @@ module Intertwingler
 
     # this is the harness configuration
 
+    LibsConfig = SymbolHash.schema path?: Array.of(RelativePathname),
+      preload?: Array.of(RubyURN)
+
     GraphConfig = SymbolHash.schema driver?: RubyURN,
       init?: Array.of(ExtantPathname)
 
@@ -163,7 +166,8 @@ module Intertwingler
     # DevConfig = SymbolHash.schema map?: Hash.map(Authority, Authority)
 
     HarnessConfig = SymbolHash.schema host?: Hostname, port?: Port,
-      graph?: GraphConfig, authorities?: Hash.map(Hostname, DomainConfig) #,
+      libs?: LibsConfig, graph?: GraphConfig,
+      authorities?: Hash.map(Hostname, DomainConfig) #,
     # development?: DevConfig
 
   end

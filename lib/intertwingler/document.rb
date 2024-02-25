@@ -1337,22 +1337,28 @@ class Intertwingler::Document
   def self.backlinks resolver, subject, published: true, ignore: nil
     repo = resolver.repo
 
-    uri = @resolver.uri_for(
-      subject, as: :uri, slugs: true) || URI(@resolver.preproc subject)
+    uri = resolver.uri_for(
+      subject, as: :uri, slugs: true) || URI(resolver.preproc subject)
 
     ignore ||= Set.new
     raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
     ignore = ignore.to_set
+
+    structs = {}
     nodes  = {}
-    labels = {}
-    types  = {}
+
     repo.query([nil, nil, subject]).each do |stmt|
       next if ignore.include?(sj = stmt.subject)
+      # this collects the predicates by which the neighbour is
+      # connected to the subject
       preds = nodes[sj] ||= Set.new
-      preds << (pr = stmt.predicate)
-      types[sj]  ||= repo.types_for sj
-      labels[sj] ||= repo.label_for sj
-      labels[pr] ||= repo.label_for pr
+      preds << stmt.predicate
+
+      # now we'll just grab the literals and type(s)
+      unless structs.key? sj
+        struct = structs[sj] = repo.struct_for sj, only: :literal
+        struct[RDF.type] = repo.types_for(sj)
+      end
     end
 
     # prune out unpublished resources if we are relegating to published
@@ -1360,13 +1366,15 @@ class Intertwingler::Document
 
     return if nodes.empty?
 
-    lcmp = repo.cmp_label
+    lcmp = repo.cmp_label(cache: structs) { |comparand| comparand.first }
 
     li = nodes.sort(&lcmp).map do |rsrc, preds|
       cu  = resolver.uri_for(rsrc, as: :uri) or next
-      lab = labels[rsrc] || [nil, rsrc]
-      lp  = resolver.abbreviate(lab.first) if lab.first
-      ty  = resolver.abbreviate(types[rsrc]) if types[rsrc]
+      st  = structs[rsrc]
+      lab = repo.label_for(rsrc, struct: st, noop: true)
+      lp  = resolver.abbreviate(lab.first) if lab
+      tt  = repo.types_for rsrc, struct: st
+      ty  = resolver.abbreviate(tt) unless tt.empty?
 
       { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
         href: uri.route_to(cu), typeof: ty,

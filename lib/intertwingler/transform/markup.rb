@@ -127,7 +127,9 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
              else
                NAMESPACES[[name, nil]] || type
              end
-      warn "changed type fromm #{body.type} to #{type}"
+
+      engine.log.debug "changed type fromm #{body.type} to #{type}"
+
       body.type = type
     end
 
@@ -139,6 +141,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     body = req.body
     doc  = body.object
 
+    engine.log.debug "stripping comments lol"
+
     # easy peasy
     doc.xpath('//comment()').each { |c| c.unlink }
 
@@ -148,14 +152,15 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   end
 
   def rewrite_head req, params
-    warn "rewriting head lol"
+    engine.log.debug "rewriting head lol"
+
     req.body
   end
 
   # not sure what i actually intended this to do; probably scan for
   # missing prefixes or something
   def repair_rdfa req, params
-    warn "repairing rdfa lol"
+    engine.log.debug "repairing rdfa lol"
     req.body
   end
 
@@ -163,7 +168,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   def rehydrate req, params
     #req.body.object
     #Intertwingler::Document.rehydrate
-    warn "rehydrating lol"
+    engine.log.debug "rehydrating lol"
     req.body
   end
 
@@ -173,18 +178,42 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # add schema dot org
     # add ogp
     # add twitter meta
-    warn "adding social media metadata lol"
+    engine.log.debug "adding social media metadata lol"
     req.body
   end
 
   # stick a wad of backlinks everywhere they fit
   def add_backlinks req, params
-    # r = engine.resolver
-    # base =
-    # backlinks = Intertwingler::Document.backlinks engine.resolver
-    # XML::Mixup.markup
-    warn "adding backlinks lol"
-    
+    # have i mentioned it's remarkable that Rack::Request has a
+    # different regime for header names than Rack::Response?
+    loc = req.get_header 'HTTP_CONTENT_LOCATION'
+
+    engine.log.debug "adding backlinks to #{loc}"
+
+    resolver = engine.resolver
+
+    if subject = resolver.uuid_for(loc)
+      # don't get this unless we have a subject since it autovivifies
+      doc = req.body.object
+
+      # we should have already determined this is an html document
+      body = doc.at_xpath '/html:html/html:body|/html/body',
+        { html: 'http://www.w3.org/1999/xhtml' }
+
+      # don't touch it if there are no backlinks
+      if body and links = Intertwingler::Document.backlinks(
+        resolver, subject, published: false)
+
+        # decided the magic word to include backlinks in a way that
+        # can be picked up by a transform but still comply with the
+        # spec is <noscript>.
+        XML::Mixup.markup parent: body, spec: { '#noscript' => links }
+
+        # again, reassigning the object resets the faux-nad
+        req.body.object = doc
+      end
+    end
+
     req.body
   end
 
@@ -192,26 +221,26 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   # counterparts
   def rewrite_links req, params
     # engine.resolver_for params[:subject]
-    warn "rewriting links lol"
+    engine.log.debug "rewriting links lol"
     req.body
   end
 
   # mangle mailto: URIs according to house style
   def mangle_mailto req, params
-   warn "mangling mailto: lol"
+    engine.log.debug "mangling mailto: lol"
     req.body
   end
 
   # traverse the document body looking for amazon links, add `?tag=youknowwho`
   def amazon_tag req, params
-    warn "amazon taggin', lol"
+    engine.log.debug "amazon taggin', lol"
     req.body
   end
 
   # read the RDFa and prune unnecessary prefix declarations, also
   # bundle them all up to the outermost bit
   def normalize_prefixes req, params
-    warn "normalizing rdfa prefixes lol"
+    engine.log.debug "normalizing rdfa prefixes lol"
     req.body
   end
 
@@ -245,6 +274,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
       node = doc.external_subset || doc.internal_subset || doc.root
 
+      engine.log.debug "adding stylesheet PI: #{params[:href]}"
+
       XML::Mixup.markup before: node,
         spec: { '#pi' => 'xml-stylesheet' }.merge(params.slice :type, :href)
     end
@@ -259,7 +290,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     body = req.body
     doc  = body.object
 
-    warn "reindenting lol"
+    engine.log.debug "reindenting lol"
 
     # this reindents in place
     Intertwingler::Document.reindent doc
