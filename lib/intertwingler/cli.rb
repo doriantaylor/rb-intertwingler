@@ -229,6 +229,30 @@ class Intertwingler::CLI < Thor
     repo
   end
 
+  FORMATS = %w[rdf/turtle rdf/rdfxml rdf/ntriples rdf/nquads rdf/trig json/ld]
+
+  def load_formats
+    FORMATS.each { |f| require f }
+  end
+
+  def default_authority candidate
+    if auth = candidate
+      auth = auth.strip.downcase
+      unless authorities.key? auth
+        prompt.error_md "Can't find repository for authority `#{auth}`."
+        exit 1
+      end
+    elsif authorities.count == 1
+      auth = authorities.keys.first
+    else
+      auths = authorities.keys.map { |a| "`#{a}`" }.join ', '
+      prompt.error_md "Please choose one of #{auths}."
+      exit 1
+    end
+
+    auth
+  end
+
   # eh deal with this later
   CTRL_W = %[[:space:]/\\'+=_.,:;-]
   CW_RE  = /\A.*?[#{CTRL_W}]\z/o
@@ -562,12 +586,117 @@ EOS
     binding.pry
   end
 
+  desc :sparql, 'Execute a SPARQL query.'
+  def sparql file = nil
+  end
+
   desc :load, 'Load one or more RDF files.'
-  def load
+  option :authority, aliases: %w[-a], type: :string,
+    desc: 'Authority (domain) whose graph we are loading into'
+  def load *files
+
+    if files.empty?
+      prompt.error_md 'No files speicfied. Quitting.'
+      exit 1
+    end
+
+    auth = default_authority options[:authority]
+    repo = authorities[auth]
+
+    # load all the parsers
+    load_formats
+
+    pairs = files.map do |file|
+      file = Pathname(file).expand_path
+      [file, RDF::Reader.for(file.basename.to_s)]
+    end
+
+    if bad = pairs.detect { |pair| pair.last.nil? }
+      prompt.error_md "Cannot find a reader for `#{bad.first}`."
+      exit 1
+    end
+
+    # load this here
+    require 'tty-progressbar'
+
+    cwd = Pathname.getwd
+
+    pairs.each do |file, reader|
+      # XXX progress thingy?
+      pb = TTY::ProgressBar.new "Loading #{file.basename}\u{2026} [:bar]",
+        total: nil, hide_cursor: true
+      ctr = 0
+      reader.open file do |r|
+        r.each_statement do |s|
+          repo << s
+
+          ctr += 1
+
+          if ctr % 1000 == 0
+            #prompt.warn_md "_#{ctr}_: _#{pb.current}_ "
+            ctr = 0
+            pb.advance 1000
+          end
+        end
+      end
+      # prompt.warn_md "_#{ctr}_: _#{pb.current}_ "
+      pb.advance ctr if ctr > 0
+      pb.finish
+
+      rel = file.relative_path_from cwd
+      rel = rel.to_s.length > file.to_s.length ? file : rel
+      prompt.say_md "Loaded _#{pb.current}_ statements from `#{rel}`."
+    end
   end
 
   desc :dump, 'Dump the graph database to a file.'
-  def dump
+  option :authority, aliases: %w[-a], type: :string,
+    desc: 'Authority (domain) for the graph being dumped'
+  option :format, aliases: %w[-f], type: :string,
+    enum: %i[turtle ttl jsonld rdfxml ntriples nquads trig],
+    desc: 'Output format for data dump (overrides file extension)'
+  def dump file = nil
+    # load all the serializers
+    load_formats
+
+    auth = default_authority options[:authority]
+    repo = authorities[auth]
+
+    # get us the resolver so we can get the prefix mapping
+    resolver = Intertwingler::Resolver.configure repo, authority: auth
+
+    if file
+      file = Pathname(file)
+      if file.basename == ?-
+        file = nil # same as stdout
+      else
+        file = file.expand_path
+        unless !file.exists? && file.dirname.writable? or file.writable?
+          prompt.error_md "Cannot write to #{file}."
+          exit 1
+        end
+      end
+    end
+
+    # an explicit format supersedes any file extension
+
+    if options[:format]
+      writer = RDF::Writer.for options[:format]
+    elsif file
+      unless writer = RDF::Writer.for(file.basename.to_s)
+        prompt.error_md "No writer found for `#{file}`."
+        exit 1
+      end
+    else
+      prompt.warn_md "Serializing to Turtle; override with `--format`."
+      writer = RDF::Writer.for :turtle
+    end
+
+    fh = file ? file.open('wb') : $stdout
+
+    writer.new(fh, prefixes: resolver.prefixes ) do |writer|
+      repo.each_statement { |s| writer << s }
+    end
   end
 
   desc :nuke, 'Wipe out the contents of the graph database.'

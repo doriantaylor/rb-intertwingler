@@ -13,7 +13,7 @@ require 'tempfile'
 # response, it works on both), and associating it with a parser
 # (via parser-specific subclasses).
 #
-# 
+#
 # This is a base class for what are called "representations" in [the
 # Fielding dissertation](https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm).
 #
@@ -25,7 +25,7 @@ require 'tempfile'
 # set](https://www.iana.org/assignments/character-sets/) and a
 # content-encoding (i.e. compression).
 #
-# 
+#
 #
 # Of additional interest to us is the fact that a resource's
 # representation has to *come* from somewhere: say a file system or
@@ -80,7 +80,7 @@ require 'tempfile'
 # 406, or of course 200. Ranged requests are probably not the best
 # idea, but they might be okay. Redirects are definitely off-limits.
 #
-# 1. use 
+# 1. use (???)
 #
 class Intertwingler::Representation
   extend Forwardable
@@ -165,6 +165,19 @@ class Intertwingler::Representation
     const_get(:VALID_TYPES).map { |t| MimeMagic[t] }
   end
 
+  # Determine if this representation handles a given content type.
+  #
+  # @param type [MimeMagic, String]
+  #
+  # @return [Bool]
+  #
+  def self.handles? type
+    type  = MimeMagic[type]
+    types = valid_types
+
+    types.any? { |t| type.descendant_of? t }
+  end
+
   def object_class
     self.class.object_class
   end
@@ -175,6 +188,10 @@ class Intertwingler::Representation
 
   def valid_types
     self.class.valid_types
+  end
+
+  def handles? type
+    self.class.handles? type
   end
 
   attr_reader :type

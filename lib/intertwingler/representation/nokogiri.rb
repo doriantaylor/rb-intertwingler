@@ -13,7 +13,7 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
 
   public
 
-  # 
+  #
   def each &block
     io.each(&block)
   end

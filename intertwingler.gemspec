@@ -66,10 +66,11 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_runtime_dependency 'xml-mixup',         '>= 0.1.16' # mine
 
   # stuff for cli
-  spec.add_runtime_dependency 'thor',         '>= 1.2.2'
-  spec.add_runtime_dependency 'tty-markdown', '>= 0.7.2'
-  spec.add_runtime_dependency 'tty-reader',   '>= 0.9.0' # my patch
-  spec.add_runtime_dependency 'tty-prompt',   '>= 0.23.1'
+  spec.add_runtime_dependency 'thor',            '>= 1.2.2'
+  spec.add_runtime_dependency 'tty-markdown',    '>= 0.7.2'
+  spec.add_runtime_dependency 'tty-prompt',      '>= 0.23.1'
+  spec.add_runtime_dependency 'tty-progressbar', '>= 0.18.2'
+  spec.add_runtime_dependency 'tty-reader',      '>= 0.9.0' # my patch
 
   # stuff for urlrunner
   spec.add_runtime_dependency 'concurrent-ruby',      '>= 1.1.6'

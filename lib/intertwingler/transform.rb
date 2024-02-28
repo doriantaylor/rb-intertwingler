@@ -1110,7 +1110,11 @@ class Intertwingler::Transform
       # okay now we actually run the thing
       begin
         # it is so dumb you can't just set the body
-        req.env['rack.input'] = representation.coerce req.body, type: type.to_s
+        req.env['rack.input'] = representation.coerce req.body,
+          type: type.to_s if representation.handles? type
+        # note that some of the transforms in the handler may *emit*
+        # the representation but not *consume* it, so trying to coerce
+        # unconditionally would actually be bad.
 
         # run the transform, get back the body
         out = send func, req, params

@@ -86,8 +86,9 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # XXX redcarpet accepts a string and returns a representation
   def parse_markdown req, params
+    loc  = req.get_header 'HTTP_CONTENT_LOCATION'
     body = req.body
-    doc  = MD::Noko.new.ingest body
+    doc  = MD::Noko.new.ingest body, loc
     body = representation.coerce doc, type: 'application/xhtml+xml'
 
     body
