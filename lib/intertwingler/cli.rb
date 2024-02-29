@@ -587,7 +587,46 @@ EOS
   end
 
   desc :sparql, 'Execute a SPARQL query.'
+  option :authority, aliases: %w[-a], type: :string,
+    desc: 'Authority (domain) whose graph we are querying'
+  option :output, aliases: %w[-o], type: :string,
+    desc: 'File to output to'
+  option :update, aliases: %w[-u], type: :boolean,
+    desc: 'Update the graph instead of query it'
   def sparql file = nil
+    auth = default_authority options[:authority]
+    repo = authorities[auth]
+
+    resolver = Intertwingler::Resolver.configure repo, authority: auth
+
+    require 'sparql'
+
+    msg = "Proceed with SPARQL #{options[:update] ? 'update' : 'query'}: "
+    raw = prompt.multiline(msg).join('')
+
+    if raw.strip.empty?
+      prompt.say_md "Exited without SPARQL."
+      exit 0
+    end
+
+    begin
+      query = SPARQL.parse raw, update: options[:update],
+        prefixes: resolver.prefixes
+
+      solution = query.execute repo
+
+      prompt.say solution.to_csv
+    rescue EBNF::LL1::Parser::Error => e
+      prompt.error_md "Failed to parse query `#{e.production}` on token" +
+        " `#{e.token}` at line _#{e.lineno}_"
+      exit 1
+    end
+
+    # if file
+    #   file = Pathname(file)
+    #   file = file.basename == ?- ? nil : file.expand_path
+    # end
+
   end
 
   desc :load, 'Load one or more RDF files.'
@@ -671,7 +710,7 @@ EOS
         file = nil # same as stdout
       else
         file = file.expand_path
-        unless !file.exists? && file.dirname.writable? or file.writable?
+        unless !file.exist? && file.dirname.writable? or file.writable?
           prompt.error_md "Cannot write to #{file}."
           exit 1
         end

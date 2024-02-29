@@ -68,8 +68,8 @@ discussion of the problems Intertwingler was designed to solve.
   # stuff for cli
   spec.add_runtime_dependency 'thor',            '>= 1.2.2'
   spec.add_runtime_dependency 'tty-markdown',    '>= 0.7.2'
-  spec.add_runtime_dependency 'tty-prompt',      '>= 0.23.1'
   spec.add_runtime_dependency 'tty-progressbar', '>= 0.18.2'
+  spec.add_runtime_dependency 'tty-prompt',      '>= 0.23.1'
   spec.add_runtime_dependency 'tty-reader',      '>= 0.9.0' # my patch
 
   # stuff for urlrunner
