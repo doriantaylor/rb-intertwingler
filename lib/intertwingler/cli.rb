@@ -8,6 +8,7 @@ require 'psych'
 
 require 'tty-prompt'
 require 'tty-markdown'
+require 'tty-progressbar'
 
 # The Intertwingler command line tool.
 class Intertwingler::CLI < Thor
@@ -174,7 +175,7 @@ class Intertwingler::CLI < Thor
       "there should be a repo at #{urn}"
 
     if repo.empty?
-      require 'rdf/turtle'
+      load_formats
 
       default = base_config.dig(:graph, :driver) == urn
       files = {}
@@ -199,11 +200,9 @@ class Intertwingler::CLI < Thor
         end
 
         fs.each do |f|
-          prompt.say "#{f} …" if interactive?
-          repo.load f
+          load_one repo, f, interactive: interactive?
         end
       end
-
     end
 
     repo
@@ -317,7 +316,8 @@ EOS
 
     def prompt
       # TODO maybe propagate/merge parameters in a sensible way
-      @prompt ||= Prompt.new help_color: :cyan, interrupt: :exit
+      @prompt ||= Prompt.new output: $stderr,
+        help_color: :cyan, interrupt: :exit
     end
 
     def repo_for authority
@@ -354,6 +354,77 @@ EOS
       base_config.fetch(:authorities, {}).keys.map do |k|
         [k, repo_for(k)]
       end.to_h
+    end
+
+    def display_path path
+      # get this absolute but not tooo absolute
+      path = Pathname(path).expand_path
+
+      # make initial candidates including against pwd
+      candidates = [path, path.relative_path_from(Pathname.getwd)]
+
+      # now try against home
+      hrel = path.relative_path_from Pathname(Dir.home)
+      candidates << (Pathname(?~) + hrel) unless hrel.to_s.start_with? ?.
+
+      # now give us the shortest one
+      candidates.sort { |a, b| a.to_s.length <=> b.to_s.length }.first
+    end
+
+    # load one file, maybe with a reader already selected
+    def load_one repo, file, reader = nil, interactive: false
+      if file.is_a? IO
+        unless reader
+          raise ArgumentError,
+            "Can't infer reader from an IO that isn't a File." unless
+            file.respond_to? :path
+
+          path   = Pathname(file.path).expand_path
+          reader = RDF::Reader.for path.basename.to_s
+        end
+      else
+        path = Pathname(file).expand_path
+        file = path.open # reassign file
+        reader ||= RDF::Reader.for path.basename.to_s
+      end
+
+      raise ArgumentError, "Can't infer reader from #{path}." unless reader
+
+      reader.new file do |r|
+
+        changeset = RDF::Changeset.new
+
+        if interactive
+          # give us a nice path
+          rel = path ? self.display_path(path) : Pathname(?-)
+
+          pb = TTY::ProgressBar.new(
+            "Loading #{rel.basename}\u{2026} :current/:total (:rate/s)",
+            total: nil, hide_cursor: true, frequency: 5)
+        end
+
+        r.each_statement do |s|
+          changeset.inserts << s
+
+          if changeset.inserts.size >= 1000
+            changeset.apply repo
+            changeset = RDF::Changeset.new
+          end
+
+          pb.advance if interactive
+        end
+
+        changeset.apply repo unless changeset.inserts.empty?
+
+        if interactive
+          pb.finish
+
+          prompt.say_md "Loaded _#{pb.current}_ statements from `#{rel}`."
+        end
+      end
+
+      # like what else do we do?
+      self
     end
 
     # end of no_commands region
@@ -579,7 +650,7 @@ EOS
     })
   end
 
-  desc :pry, 'run pry lol'
+  desc :pry, 'Run a debugging REPL (pry)'
   def pry
     require 'intertwingler/harness'
     require 'pry'
@@ -597,29 +668,48 @@ EOS
     auth = default_authority options[:authority]
     repo = authorities[auth]
 
-    resolver = Intertwingler::Resolver.configure repo, authority: auth
-
+    require 'intertwingler/resolver'
     require 'sparql'
+
+    resolver = Intertwingler::Resolver.configure repo, authority: auth
 
     msg = "Proceed with SPARQL #{options[:update] ? 'update' : 'query'}: "
     raw = prompt.multiline(msg).join('')
 
     if raw.strip.empty?
-      prompt.say_md "Exited without SPARQL."
+      prompt.warn_md "Exited without a SPARQL command."
       exit 0
     end
 
     begin
       query = SPARQL.parse raw, update: options[:update],
         prefixes: resolver.prefixes
-
-      solution = query.execute repo
-
-      prompt.say solution.to_csv
     rescue EBNF::LL1::Parser::Error => e
       prompt.error_md "Failed to parse query `#{e.production}` on token" +
         " `#{e.token}` at line _#{e.lineno}_"
       exit 1
+    end
+
+    # now that we have the parsed query we can figure out how to handle it
+
+    # warn query.class
+
+    solution = query.execute repo
+
+    case solution
+    when RDF::Query::Solution, RDF::Query::Solutions
+      prompt.say solution.to_csv
+    when RDF::Graph
+      load_formats
+
+      writer = RDF::Writer.for :turtle
+      writer.new($stdout, prefixes: resolver.prefixes) do |writer|
+        solution.each_statement do |stmt|
+          writer << stmt
+        end
+      end
+    else
+      warn solution.class
     end
 
     # if file
@@ -655,36 +745,8 @@ EOS
       exit 1
     end
 
-    # load this here
-    require 'tty-progressbar'
-
-    cwd = Pathname.getwd
-
     pairs.each do |file, reader|
-      # XXX progress thingy?
-      pb = TTY::ProgressBar.new "Loading #{file.basename}\u{2026} [:bar]",
-        total: nil, hide_cursor: true
-      ctr = 0
-      reader.open file do |r|
-        r.each_statement do |s|
-          repo << s
-
-          ctr += 1
-
-          if ctr % 1000 == 0
-            #prompt.warn_md "_#{ctr}_: _#{pb.current}_ "
-            ctr = 0
-            pb.advance 1000
-          end
-        end
-      end
-      # prompt.warn_md "_#{ctr}_: _#{pb.current}_ "
-      pb.advance ctr if ctr > 0
-      pb.finish
-
-      rel = file.relative_path_from cwd
-      rel = rel.to_s.length > file.to_s.length ? file : rel
-      prompt.say_md "Loaded _#{pb.current}_ statements from `#{rel}`."
+      load_one repo, file, reader, interactive: interactive?
     end
   end
 

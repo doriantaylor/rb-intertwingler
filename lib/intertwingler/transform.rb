@@ -572,14 +572,13 @@ class Intertwingler::Transform
 
         log.debug "about to POST #{type} to #{uri}"
 
+        headers = { 'content-type' => type.to_s }
         # note we pun the content-location header to communicate to
         # the subrequest what entity it's looking at; this is totally
         # legal to use this header in a request, go look it up:
         # https://datatracker.ietf.org/doc/html/rfc9110#section-8.7
-        headers = {
-          'content-type'     => type.to_s,
-          'content-location' => req.url,
-        }
+        # but we only add this for response transforms
+        headers['content-location'] = req.url if resp
 
         subreq  = engine.dup_request req, uri: uri, method: :POST,
           headers: headers, body: body

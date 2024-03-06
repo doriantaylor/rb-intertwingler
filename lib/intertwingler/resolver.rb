@@ -17,51 +17,6 @@ class Intertwingler::Resolver
 
   private
 
-  # we make this a lambda so we can implicitly pass in the cache in
-  # the instance method but also have it as a static method too;
-  # also `self.class.whatever` is *insanely* slow
-  SANITIZE_VOCAB = -> vocab, cache: nil do
-    cache = {} unless cache.is_a? Hash
-    # 2022-05-18 XXX THIS IS A CLUSTERFUCK
-    #
-    # what we want is the official vocab if it exists, an
-    # on-the-fly vocab if it doesn't, and to use RDF::RDFV
-    # instead of RDF if it shows up
-    #
-    # we notice that bibo:status/ resolves to bibo: with .find
-    # so we need to check if the uri is the same before accepting it
-    vocab = RDF::URI(vocab) unless vocab.is_a? RDF::URI
-    vocab = if cache[vocab.to_s]
-              cache[vocab.to_s]
-            elsif vocab.is_a?(Class) and
-                vocab.ancestors.include?(RDF::Vocabulary)
-              vocab # arrrrghhh
-            elsif vv = RDF::Vocabulary.find(vocab) # XXX SLOW AF hence cache
-              vv.to_uri == vocab ? vv : Class.new(RDF::Vocabulary(vocab))
-            else
-              Class.new(RDF::Vocabulary(vocab))
-            end
-    # GRRRR
-    vocab = RDF::RDFV if vocab == RDF
-
-    cache[vocab.to_s] = vocab
-  end
-  # XXX uhh maybe coalesce this with `coerce_resource`?
-
-  SANITIZE_PREFIXES = -> prefixes, nonnil: false, cache: nil do
-    prefixes = {} unless prefixes         # noop prefixes
-    cache    = {} unless cache.is_a? Hash # noop cache
-    raise ArgumentError, 'prefixes must be a hash' unless
-      prefixes.is_a? Hash or prefixes.respond_to? :to_h
-    prefixes = prefixes.to_h.map do |k, v|
-      k = k.to_s.to_sym unless k.nil?
-      [k, SANITIZE_VOCAB.(v, cache: cache)] if v
-    end.compact.to_h
-
-    prefixes.reject! { |k, _| k.nil? } if nonnil
-    prefixes
-  end
-
   ITCV = Intertwingler::Vocab::ITCV
   TFO  = Intertwingler::Vocab::TFO
   XSD  = RDF::XSD
@@ -121,25 +76,6 @@ class Intertwingler::Resolver
 
   public
 
-  # Sanitize a term as an {RDF::Vocabulary}.
-  #
-  # @param term [#to_s,RDF::URI,URI] the term to sanitize.
-  # @param cache [Hash] an optional cache.
-  #
-  # @return [RDF::Vocabulary]
-  #
-  define_singleton_method :sanitize_vocab, SANITIZE_VOCAB
-
-  # Return a hash mapping a set of RDF prefixes to their vocabularies.
-  #
-  # @param prefixes [Hash, #to_h] the input prefixes
-  # @param nonnil [false, true] whether to remove the nil prefix
-  # @param cache [Hash] an optional cache for the slowness
-  #
-  # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
-  #
-  define_singleton_method :sanitize_prefixes, SANITIZE_PREFIXES
-
   # Return a hash mapping a set of RDF prefixes to their vocabularies.
   #
   # @param prefixes [Hash, #to_h] the input prefixes
@@ -148,7 +84,8 @@ class Intertwingler::Resolver
   # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
   #
   def sanitize_prefixes prefixes, nonnil: false
-    SANITIZE_PREFIXES.call prefixes, nonnil: nonnil, cache: @vocabs
+    Intertwingler::Util::Clean.sanitize_prefixes prefixes,
+      nonnil: nonnil, cache: @vocabs
   end
 
   def self.locate repo
@@ -809,7 +746,8 @@ class Intertwingler::Resolver
   #
   def self.resolve_curie curie,
       as: :term, scalar: true, base: nil, prefixes: {}, noop: false
-    prefixes = { rdf: RDF::RDFV }.merge(sanitize_prefixes prefixes)
+    prefixes = { rdf: RDF::RDFV }.merge(
+      Intertwingler::Util::Clean.sanitize_prefixes prefixes)
 
     out = (curie.respond_to?(:to_a) ? curie.to_a : [curie]).map do |c|
       Intertwingler::Util::Clean.normalize_space(c.to_s).split

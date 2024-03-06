@@ -1031,7 +1031,7 @@ module Intertwingler
           [score, paths, classes, except]
         end.compact.uniq
 
-        warn tests.inspect
+        # warn tests.inspect
 
         attempt = 0 # attempt score
         # accumulate candidates

@@ -323,5 +323,61 @@ module Intertwingler::Util::Clean
     string.gsub(WS_RE, ' ').strip
   end
 
+  # Sanitize a term as an {RDF::Vocabulary}.
+  #
+  # @param term [#to_s,RDF::URI,URI] the term to sanitize.
+  # @param cache [Hash] an optional cache.
+  #
+  # @return [RDF::Vocabulary]
+  #
+  def self.sanitize_vocab vocab, cache: nil
+    cache = {} unless cache.is_a? Hash
+    # 2022-05-18 XXX THIS IS A CLUSTERFUCK
+    #
+    # what we want is the official vocab if it exists, an
+    # on-the-fly vocab if it doesn't, and to use RDF::RDFV
+    # instead of RDF if it shows up
+    #
+    # we notice that bibo:status/ resolves to bibo: with .find
+    # so we need to check if the uri is the same before accepting it
+    vocab = RDF::URI(vocab) unless vocab.is_a? RDF::URI
+    vocab = if cache[vocab.to_s]
+              cache[vocab.to_s]
+            elsif vocab.is_a?(Class) and
+                vocab.ancestors.include?(RDF::Vocabulary)
+              vocab # arrrrghhh
+            elsif vv = RDF::Vocabulary.find(vocab) # XXX SLOW AF hence cache
+              vv.to_uri == vocab ? vv : Class.new(RDF::Vocabulary(vocab))
+            else
+              Class.new(RDF::Vocabulary(vocab))
+            end
+    # GRRRR
+    vocab = RDF::RDFV if vocab == RDF
+
+    cache[vocab.to_s] = vocab
+  end
+
+  # Return a hash mapping a set of RDF prefixes to their vocabularies.
+  #
+  # @param prefixes [Hash, #to_h] the input prefixes
+  # @param nonnil [false, true] whether to remove the nil prefix
+  # @param cache [Hash] an optional cache for the slowness
+  #
+  # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
+  #
+  def self.sanitize_prefixes prefixes, nonnil: false, cache: nil
+    prefixes = {} unless prefixes         # noop prefixes
+    cache    = {} unless cache.is_a? Hash # noop cache
+    raise ArgumentError, 'prefixes must be a hash' unless
+      prefixes.is_a? Hash or prefixes.respond_to? :to_h
+    prefixes = prefixes.to_h.map do |k, v|
+      k = k.to_s.to_sym unless k.nil?
+      [k, sanitize_vocab(v, cache: cache)] if v
+    end.compact.to_h
+
+    prefixes.reject! { |k, _| k.nil? } if nonnil
+    prefixes
+  end
+
   extend self
 end

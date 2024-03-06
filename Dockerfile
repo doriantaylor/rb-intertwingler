@@ -1,3 +1,5 @@
+#FROM --platform=linux/amd64 ruby:latest
+#FROM --platform=linux/arm64 arm64v8/ruby:latest
 FROM ruby:latest
 
 # installing headers will implicitly install libraries
@@ -26,7 +28,7 @@ RUN git clone https://github.com/doriantaylor/rb-store-digest-http.git && cd rb-
 
 RUN git clone https://github.com/doriantaylor/rb-md-noko.git && cd rb-md-noko && gem build && gem install *.gem && cd -
 
-RUN git clone -b numeric-keys https://github.com/doriantaylor/rb-rdf-lmdb.git && cd rb-rdf-lmdb && gem build && gem install *.gem && cd -
+RUN git clone https://github.com/doriantaylor/rb-rdf-lmdb.git && cd rb-rdf-lmdb && gem build && gem install *.gem && cd -
 
 # RUN --mount=type=bind,src=.,dst=/tmp/src bundle install --gemfile /tmp/src/Gemfile
 COPY . /tmp/src/intertwingler

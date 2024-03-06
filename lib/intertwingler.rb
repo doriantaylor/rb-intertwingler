@@ -214,7 +214,7 @@ module Intertwingler
 
       # deal with prefix map
       config[:prefixes] =
-        Intertwingler::Resolver.sanitize_prefixes config[:prefixes] if
+        Intertwingler::Util::Clean.sanitize_prefixes config[:prefixes] if
         config[:prefixes]
 
       # XXX 2022-03-17 gotta get rid of or otherwise resolve all these curie

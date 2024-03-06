@@ -1,10 +1,10 @@
-require 'intertwingler/resolver'
 
 require 'dry-schema'
 require 'uri'
 require 'pathname'
 require 'mimemagic'
 
+require_relative 'util/clean'
 require_relative 'rubyurn'
 
 module Intertwingler
@@ -130,7 +130,7 @@ module Intertwingler
 
     # A single RDF vocabulary
     Vocab = Types::Constructor(RDF::Vocabulary) do |vocab|
-      Intertwingler::Resolver.sanitize_vocab vocab
+      Intertwingler::Util::Clean.sanitize_vocab vocab
     end
 
     RubyURN = URI.constrained format: /\Aurn:x-ruby:/i
@@ -148,7 +148,7 @@ module Intertwingler
 
     # RDF vocabularies
     Vocabs = SymbolHash.constructor do |x|
-      Intertwingler::Resolver.sanitize_prefixes x, nonnil: true
+      Intertwingler::Util::Clean.sanitize_prefixes x, nonnil: true
     end
 
     # this is the harness configuration

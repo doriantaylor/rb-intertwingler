@@ -107,7 +107,7 @@
 
 <urn:uuid:8307ac09-670b-48b9-b08d-3eacc1f51f43> a tfo:Function ;
   ci:canonical-slug "parse-markdown"^^xsd:token ;
-  tfo:implementation <urn:x-ruby:intertwingler/transform/text;Intertwingler::Transform::Text> ;
+  tfo:implementation <urn:x-ruby:intertwingler/transform/markup;Intertwingler::Transform::Markup> ;
   tfo:accepts "text/markdown"^^tfo:content-type ;
   tfo:returns "application/xhtml+xml"^^tfo:content-type, "text/html"^^tfo:content-type .
 
