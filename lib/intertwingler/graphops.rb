@@ -1017,6 +1017,8 @@ module Intertwingler
       isdoc = type_is? types, documents
       frags = type_is? types, ft
 
+      # warn "#{host} #{isdoc} #{frags}"
+
       # none of this block gets run if we already have an explicit
       # host or the subject has been asserted to be a document and
       # *not* also asserted to be a fragment.

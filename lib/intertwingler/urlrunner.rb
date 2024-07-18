@@ -11,6 +11,8 @@ require 'rdf/rdfa'
 #require 'rdf/vocab'
 require 'rdf/vocab/dc'
 require 'rdf/vocab/prov'
+require 'sparql'
+require 'intertwingler/vocab'
 require 'intertwingler/vocab/ci'
 require 'intertwingler/vocab/tfo'
 require 'tidy_ffi'
@@ -19,6 +21,15 @@ require 'nokogiri'
 require 'crass'
 
 class Intertwingler::URLRunner
+  NS = {
+    dct:  RDF::Vocab::DC,
+    ci:   Intertwingler::Vocab::CI,
+    tfo:  Intertwingler::Vocab::TFO,
+    prov: RDF::Vocab::PROV,
+    rdf: RDF::RDFV,
+    xsd: RDF::XSD,
+  }
+
   private
 
   UA = 'Intertwingler::URLRunner/0.1'.freeze
@@ -87,10 +98,11 @@ class Intertwingler::URLRunner
   end
 
   def title_term title
-    title = title.first if title.is_a? Array
-    return unless title
+    # title = title.first if title.respond_to? :first
+    # return unless title
 
     text = title.content.strip
+    warn text.inspect
     unless text.empty?
       lang = if title.lang and LANG_RE.match? title.lang.strip
                title.lang.strip.downcase.tr_s '_-', ?-
@@ -106,7 +118,8 @@ class Intertwingler::URLRunner
       rs = RDF::URI(uri.to_s)
 
       # lol we have done this a million times before
-      if title = content.xpath('/html:html/html:head/html:title', XPATHNS)
+      if title = content.xpath('/html:html/html:head/html:title', XPATHNS).first
+
         if title = title_term(title)
           @repo << [rs, RDF::Vocab::DC.title, title]
         end
@@ -210,6 +223,36 @@ class Intertwingler::URLRunner
     'application/xml'
   end
 
+  STORED = SPARQL.parse <<~EOQ, prefixes: NS
+SELECT ?s ?v WHERE {
+  { ?s ci:canonical+/dct:hasVersion ?v . } UNION
+  { ?s dct:hasVersion ?v . }
+  FILTER (isIRI(?v))
+}
+EOQ
+
+  TIDIED = SPARQL.parse <<~EOQ, prefixes: NS
+SELECT DISTINCT ?o WHERE {
+  ?x tfo:input ?s ; tfo:output ?o ; tfo:transform <urn:x-dummy:tidy> .
+  FILTER (isIRI(?o))
+}
+EOQ
+
+  def stored_object uri
+    warn "checking storage for #{uri}"
+    b = RDF::Query::Solution.new({ s: RDF::URI(uri.to_s) })
+    vals = STORED.execute(@repo, bindings: b).map do |v|
+      # warn "#{v[:s]} => #{v[:v]}"
+      URI(v[:v].to_s)
+    end.select { |v| v.scheme.downcase == 'ni' }
+
+    return if vals.empty?
+
+    # warn vals.inspect
+
+    @store.get vals.first
+  end
+
   public
 
   # NS = {
@@ -231,7 +274,7 @@ class Intertwingler::URLRunner
   #   bibo: RDF::Vocab::BIBO,
   #   qb:   RDF::Vocabulary.new('http://purl.org/linked-data/cube#'),
   # }.freeze
-  
+
   def initialize store: nil, repo: nil, ua: nil, ignore: nil, traverse: nil
     @store  = store
     @repo   = repo
@@ -342,7 +385,6 @@ class Intertwingler::URLRunner
                 # lol god two Last-Modified headers no that's not messed up
                 lm.gsub!(/^([^,]*(?:,[^,]*)?)(?:\s*,.*)?$/, "\\1")
                 delta = now - date
-                      
                 Time.httpdate(lm).getgm + delta rescue nil
               end
     lang    = if resp['Content-Language']
@@ -361,15 +403,14 @@ class Intertwingler::URLRunner
       charset = params['charset'] if TOKEN.match? params['charset']
     end
 
-    
-    # obj = @store.add resp.body, strict: false,
-    #   type: type, charset: charset, language: lang, mtime: mtime
+    obj = @store.add resp.body, strict: false,
+      type: type, charset: charset, language: lang, mtime: mtime
 
     s  = RDF::URI(resp.uri.to_s) # - the subject
     cs = RDF::Changeset.new      # - a receptacle for statements
 
     cs << [s, RDF::Vocab::DC.modified, obj.mtime.getgm]
-    #cs << [s, RDF::Vocab::DC.hasVersion, RDF::URI(obj[:"sha-256"].to_s)]
+    cs << [s, RDF::Vocab::DC.hasVersion, RDF::URI(obj[:"sha-256"].to_s)]
 
     cs.apply @repo
 
@@ -413,7 +454,7 @@ class Intertwingler::URLRunner
         if q.execute(@repo).empty?
           s  = RDF::URI(UUIDTools::UUID.random_create.to_uri)
           cs = RDF::Changeset.new
-          cs << [s, RDF.type, Intertwingler::Vocab::TFO.Application]
+          cs << [s, RDF.type, Intertwingler::Vocab::TFO.Invocation]
           cs << [s, RDF::Vocab::PROV.startedAtTime, start]
           cs << [s, RDF::Vocab::PROV.endedAtTime, stop]
           cs << [s, Intertwingler::Vocab::TFO.transform, TIDY_U]
@@ -425,12 +466,14 @@ class Intertwingler::URLRunner
 
         newobj
       end
-    end      
+    end
   end
 
   def sponge obj
     return unless obj
     #if obj and /xml/.match? obj.type
+
+    # warn "sponging #{obj.inspect}"
 
     # get rdf stuff
     ru  = RDF::URI(obj[:"sha-256"].to_s)
@@ -441,14 +484,19 @@ class Intertwingler::URLRunner
       pattern [:s, RDF::Vocab::DC.hasVersion, :a]
     end.execute(@repo) + RDF::Query.new do
       pattern [:s, RDF::Vocab::DC.hasVersion, ru]
-    end.execute(@repo).uniq.map do |sol|
+    end.execute(@repo)
+
+    uri = uri.uniq.map do |sol|
       u = sol[:s]
       u if u.uri? and u.scheme and %w[http https].include? u.scheme.downcase
     end.compact.first
 
+    warn "sponging #{uri}"
+
     uuri    = URI(uri ? uri_pp(uri.to_s) : ru)
     content = obj.content
-    sponge  = SPONGE[obj.type]
+    type    = obj.type
+    sponge  = SPONGE[type.to_s.to_sym]
 
     if /xml/.match? type
       content = Nokogiri.XML(content, uuri.to_s)
@@ -466,6 +514,16 @@ class Intertwingler::URLRunner
 
   end
 
+  def maybe_tidy obj
+    # warn obj.type
+    if obj and /html/i.match? obj.type
+      warn "tidying #{obj[:"sha-256"]}"
+      tidy(obj) || obj
+    else
+      obj
+    end
+  end
+
   def enqueue uri
     uri = URI(uri_pp uri.to_s).normalize
 
@@ -475,26 +533,31 @@ class Intertwingler::URLRunner
     warn "enqueuing #{uri}"
 
     @fthrot.future(uri) do |u|
-      fr = fetch u
-      fr.on_rejection { |reason| warn "fetch fail: #{reason.inspect}" }
-      fs = fr.then do |resp|
-        begin
-          store resp
-        rescue Exception => e
-          warn e
+      if stored = stored_object(u)
+        warn "#{u} => #{stored[:'sha-256']}"
+        fs = Concurrent::Promises.future(stored) do |obj|
+          maybe_tidy obj
+        end.then do |obj|
+          sponge obj
+        end.on_rejection { |wah| warn wah.inspect }.wait
+      else
+        warn "fetching #{u}"
+        fr = fetch u
+        fr.on_rejection { |reason| warn "fetch fail: #{reason.inspect}" }
+        fs = fr.then do |resp|
+          begin
+            store resp
+          rescue Exception => e
+            warn e
+          end
         end
-      end
-      fs.on_rejection { |reason| warn "store fail: #{reason.inspect}" }
-      ft = fs.then do |obj|
-        if obj and /html/i.match? obj.type
-          warn "tidying #{obj[:"sha-256"]}"
-          tidy obj
-        else
-          obj
+        fs.on_rejection { |reason| warn "store fail: #{reason.inspect}" }
+        ft = fs.then do |obj|
+          maybe_tidy obj
         end
+        ft.on_rejection { |reason| warn "tidy fail: #{reason.inspect}" }
+        ft.then { |obj| sponge obj }.wait
       end
-      ft.on_rejection { |reason| warn "tidy fail: #{reason.inspect}" }
-      ft.then { |obj| sponge obj }
     end.on_rejection { |reason| warn "throttle fail: #{reason.inspect}" }
   end
 
@@ -517,7 +580,7 @@ class Intertwingler::URLRunner
   end
 
   def run urls, shuffle: false
-    # ingest URLs and prune 
+    # ingest URLs and prune
     urls = urls.map { |u| URI(uri_pp u).normalize }.reject { |u| ignored? u }
 
     # optionally randomize
@@ -525,7 +588,7 @@ class Intertwingler::URLRunner
 
     # now add the queue
     urls.map { |url| enqueue url }.map(&:wait)
-    
+
     # while job = @jobs.shift
     #   job.wait
     # end
@@ -544,7 +607,7 @@ if __FILE__ == $0
 
   Commander.configure do
     program :name, 'URLRunner'
-    program :version, '0.0.0'
+    program :version, '0.0.1'
     program :description, 'snarf a bunch of URLs for great justice'
 
     command :process do |c|
@@ -587,7 +650,7 @@ if __FILE__ == $0
         ).run urls, shuffle: options.shuffle
 
         if options.print
-          print repo.dump :turtle #, prefixes: URLRunner::NS
+          print repo.dump :turtle, prefixes: Intertwingler::URLRunner::NS
         end
       end
     end

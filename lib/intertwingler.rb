@@ -16,6 +16,7 @@ require 'rdf'
 require 'rdf/turtle'
 require 'rdf/vocab'
 require 'rdf/reasoner'
+require 'rdf/rdfa'
 # this done broke lol: rdf-n3 -> sxp ~1.3 vs everything else -> sxp ~2.0
 # require 'linkeddata'
 
@@ -287,14 +288,13 @@ module Intertwingler
 
       # warn base.inspect
 
-      @graph    = coerce_graph graph, type: type
-      @resolver = Intertwingler::Resolver.new @graph, base,
-        prefixes: @config[:prefixes], aliases: @config[:aliases]
-
-      # warn @config[:fragment]
-
+      @graph = coerce_graph graph, type: type
       @graph.document_types = @config[:documents]
       @graph.fragment_spec  = @config[:fragment]
+
+      @resolver = Intertwingler::Resolver.new @graph, base,
+        prefixes: @config[:prefixes], aliases: @config[:aliases],
+        documents: @graph.document_types, fragments: @graph.fragment_spec
 
       @ucache = RDF::Util::Cache.new(-1)
       @scache = {} # wtf rdf util cache doesn't like booleans
@@ -2647,7 +2647,8 @@ module Intertwingler
         # slurp up any rdfa, swapping in canonical uuids; note that if
         # we're doing this here then we assume they are authoritative
         # and don't check them against the graph
-        RDF::RDFa::Reader.new(html).each do |stmt|
+        RDF::RDFa::Reader.new(html, host_language: :xhtml5,
+                              version: :'rdfa1.1').each do |stmt|
           if stmt.subject.iri? and
               su = @resolver.uuid_for(stmt.subject, verify: false)
             stmt.subject = su
@@ -3610,7 +3611,8 @@ module Intertwingler
         # slurp up any rdfa, swapping in canonical uuids; note that if
         # we're doing this here then we assume they are authoritative
         # and don't check them against the graph
-        RDF::RDFa::Reader.new(html, base_uri: @uri.to_s).each do |stmt|
+        RDF::RDFa::Reader.new(html, base_uri: @uri.to_s, host_language: :xhtml5,
+                              version: :'rdfa1.1').each do |stmt|
           s, o = stmt.subject, stmt.object
 
           stmt.subject = res.uuid_for s, verify: false, noop: true if s.iri?

@@ -80,6 +80,6 @@ discussion of the problems Intertwingler was designed to solve.
 
   # stuff for docstats
   spec.add_runtime_dependency 'descriptive_statistics', '>= 2.5.1'
-  spec.add_runtime_dependency 'engtagger',              '>= 0.3.2'
+  spec.add_runtime_dependency 'engtagger',              '>= 0.4.1'
   spec.add_runtime_dependency 'lemmatizer',             '>= 0.2.2'
 end

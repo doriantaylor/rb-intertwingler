@@ -371,7 +371,7 @@ class Intertwingler::Document
     # we'll make this a class method
     def self.alphabetized_list resolver, subject, fwd: nil, rev: nil,
         published: true, preamble: RDF::Vocab::DC.description,
-        transform: nil, &block
+        transform: nil, key: nil, cmp: nil, &block
       raise ArgumentError,
         'We need a block to render the markup! it is not optional!' unless block
 
@@ -383,6 +383,7 @@ class Intertwingler::Document
 
       raise ArgumentError, 'Must have either a fwd or a rev defined' if
         fwd.empty? and rev.empty?
+
 
       # first we get them, then we sort them
       frels = {} # forward relations
@@ -755,6 +756,28 @@ class Intertwingler::Document
   class AddressBook < Index
     # XXX do we use this mechanism or something else
     CLASSES = [RDF::Vocab::SiocTypes.AddressBook]
+
+    private
+
+    def do_org subject, struct, seen: nil
+      # if organization, gather up sub-organizations
+      #   separate sub-organizations from true units
+      # gather up members (distinct from sub-organizations)
+      # separate members into people and organizations
+      #   separate headOf
+
+      # we will deal with posts, sites, temporal (memberships, change
+      # events etc) later
+    end
+
+    def do_person subject, struct, seen: nil
+    end
+
+    public
+
+    def generate published: true
+      
+    end
   end
 
   class ReadingList < Index

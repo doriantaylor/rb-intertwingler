@@ -408,6 +408,8 @@ class Intertwingler::Resolver
       # unconditionally overwrite the URI
       uri = RDF::URI(tu.to_s)
 
+      # warn "hmm #{uri}"
+
       # now we check for a compact UUID fragment or UUID URN
       if tu.fragment and
           (uu = UUID::NCName.from_ncname(tu.fragment, validate: true))
@@ -426,6 +428,8 @@ class Intertwingler::Resolver
         end
       end
     end
+
+    # warn "test #{uri}"
 
     # return our result from cache if present
     if out = @uuids[orig]
@@ -635,6 +639,8 @@ class Intertwingler::Resolver
              RDF::URI(UUID::NCName.from_ncname(
                term.fragment, version: v, format: :urn))
            end
+
+    # warn "wat #{uuid} -> #{term}"
 
     # now we do the round trip if called for
     if tmp = roundtrip ? uuid_for(uuid || term) : uuid
