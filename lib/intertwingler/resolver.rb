@@ -820,11 +820,14 @@ class Intertwingler::Resolver
   # @return [String, Array<String>, nil] the CURIE(s) in question
   #
   def abbreviate term, scalar: true, noop: true, sort: true,
-      prefixes: {}, vocab: nil, cache: nil
+      prefixes: nil, vocab: nil, cache: nil
 
     term  = coerce_resources term
     as    = assert_uri_coercion as
     cache = {} unless cache.is_a? Hash
+
+    # why was this not already like this?
+    prefixes ||= self.prefixes.dup
 
     # this returns a duplicate that we can mess with
     if vocab

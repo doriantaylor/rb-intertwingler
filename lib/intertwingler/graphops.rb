@@ -93,7 +93,9 @@ module Intertwingler
       RDF::Vocab::FOAF.Agent => {
         label: [
           # main (will get cloned into alt)
-          [RDF::Vocab::FOAF.name],
+          [RDF::Vocab::SKOS.prefLabel, RDF::Vocab::FOAF.name],
+          # alt (this was an ugly decision but this will go away soon)
+          [RDF::Vocab::SKOS.altLabel, RDF::Vocab::FOAF.nick],
         ],
         desc: [
           # main cloned into alt
@@ -1384,6 +1386,17 @@ module Intertwingler
       !!type_is?(asserted, type)
     end
 
+    # Determine if a property is a subproperty or equivalent to the referent.
+    #
+    # @param property [RDF::URI] the property to test
+    # @param referent [RDF::URI] the referent property
+    #
+    # @return [true, false]
+    #
+    def property? property, referent
+      !(property_set(property) & property_set(referent)).empty?
+    end
+
     # Return all RDF types (that is, all `?t` for `?s rdf:type ?t`)
     # present in the graph.
     #
@@ -2019,7 +2032,7 @@ module Intertwingler
           lcache[x] ||= (label_for(x, struct: cache[x]) || [nil, x]).last
         end
 
-        # now run the label cmp
+        # now run the literal cmp
         cmp.(lcache[a], lcache[b])
       end
     end

@@ -62,7 +62,7 @@ class Intertwingler::Document
   public
 
   class Feed < Intertwingler::Document
-    def generate published: true
+    def generate published: true, backlinks: false
       # get related feeds
       related = @repo.objects_for(
         @subject, RDF::RDFS.seeAlso, only: :uri) - [@subject]
@@ -233,7 +233,7 @@ class Intertwingler::Document
 
   class SiteMap < Intertwingler::Document
 
-    def generate published: true
+    def generate published: true, backlinks: false
       base = resolver.base
       urls = {}
 
@@ -368,7 +368,12 @@ class Intertwingler::Document
   # reading lists, etc.
   class Index < Intertwingler::Document
 
-    # we'll make this a class method
+    # Generate an alphabetized list with headings for each letter.
+    #
+    #
+    #
+    # @return [Nokogiri::XML::Document] the generated document.
+    #
     def self.alphabetized_list resolver, subject, fwd: nil, rev: nil,
         published: true, preamble: RDF::Vocab::DC.description,
         transform: nil, key: nil, cmp: nil, &block
@@ -416,7 +421,7 @@ class Intertwingler::Document
           rel.last[n]  |= prev
 
           lab = (repo.label_for(n, struct: st) || [nil, n]).last.value.strip
-
+          # find the ifrst letter that isn't an article
           lab.gsub!(/\A[[:punct:][:space:]]*(?:An?|The)[[:space:]]+/i, '')
 
           # get the index character which will be unicode, hence these
@@ -499,7 +504,7 @@ class Intertwingler::Document
   class ConceptScheme < Index
     CLASSES = [RDF::Vocab::SKOS.ConceptScheme, RDF::Vocab::SKOS.Collection]
 
-    def generate published: true
+    def generate published: true, backlinks: false
       # stick some logic here to sort out what kind of thing it is
       # (concept scheme, collection, ordered collection)
 
@@ -759,24 +764,193 @@ class Intertwingler::Document
 
     private
 
-    def do_org subject, struct, seen: nil
-      # if organization, gather up sub-organizations
-      #   separate sub-organizations from true units
-      # gather up members (distinct from sub-organizations)
-      # separate members into people and organizations
-      #   separate headOf
+    FOAF = RDF::Vocab::FOAF
+    ORG  = RDF::Vocab::ORG
+    SKOS = RDF::Vocab::SKOS
 
-      # we will deal with posts, sites, temporal (memberships, change
-      # events etc) later
+    def org_cmp
     end
 
-    def do_person subject, struct, seen: nil
+    # we expect to add the result of this to an array
+    def dl_entry struct, label, predicate: nil, type: nil, reversed: false
+      struct = repo.find_in_struct struct, predicate, entail: true if predicate
+
+      struct = struct.transform_values do |v|
+        v.select { |w| repo.rdf_type? w, type }
+      end.reject { |_, v| v.empty? } if type
+
+      return [] if struct.empty?
+      out = [{ [label] => :dt }]
+
+      # warn struct.inspect
+
+      # deal with multiple entries
+      inv   = repo.invert_struct struct
+      cache = {}
+      lcmp = repo.cmp_label nocase: true, cache: cache
+
+      inv.keys.sort(&lcmp).each do |k|
+        preds = resolver.abbreviate inv[k]
+        out << if k.uri?
+                  rel, rev = nil, nil
+                  reversed ? rev = preds : rel = preds
+                  t = repo.types_for k
+                  u = resolver.uri_for k, slugs: true
+                  lp, lv = repo.label_for k, struct: cache[k]
+                  # warn [lp, lv].inspect
+                  tag = link_tag(u, rel: rel, rev: rev, typeof: t,
+                                 property: lp, label: lv)
+                  { [tag] => :dd }
+                else
+                  literal_tag k, name: :dd, property: preds
+                end
+      end
+
+      out
+    end
+
+    def outer_tag subject, rel, rev, struct, base, body,
+        id: true, resource: false, tag: :section
+
+      rel  = resolver.coerce_resources rel
+      rev  = resolver.coerce_resources rev
+      base = resolver.coerce_resource base, as: :uri
+      uri  = resolver.uri_for subject, slugs: true, as: :uri
+      frag = uri.fragment
+
+      # id, rel, resource, typeof
+      out = { body => tag }
+      out[:id] = frag if id and frag and !frag.empty?
+      out[resource ? :resource : :about] = base.route_to uri
+      out[:rel] = resolver.abbreviate rel if rel
+      out[:rev] = resolver.abbreviate rev if rev
+      types = repo.types_for subject, struct: struct
+      out[:typeof] = resolver.abbreviate(types) unless types.empty?
+
+      # punt it
+      out
+    end
+
+    # if organization, gather up sub-organizations
+    #   separate sub-organizations from true units
+    # gather up members (distinct from sub-organizations)
+    # separate members into people and organizations
+    #   separate headOf
+    #
+    # we will deal with posts, sites, temporal (memberships, change
+    # events etc) later
+    def do_org subject, rel, rev, struct, base, seen, published: false,
+        bl: false, tag: :section, depth: 0, id: true, resource: false
+
+      # zeroth we have the heading
+      h = depth > 3 ? 3 : depth + 3
+      lp, lv = repo.label_for subject, struct: struct, noop: true
+      out = [literal_tag(
+        lv, name: "h#{h}".to_sym, property: lp, prefixes: resolver.prefixes)]
+
+      # first we have a dl with names and website and stuff
+      # * foaf:name if the heading was not foaf:name
+      # * skos:altLabel and foaf:nick
+      # * foaf:homepage
+      # * org:subOrganizationOf but not org:unitOf if this is a unit
+      names = []
+      if lp and repo.property? lp, SKOS.prefLabel
+        # we'll treat foaf:name as the official name while skos:prefLabel
+        names += dl_entry struct, 'Official Name', predicate: FOAF.name
+      end
+      names += dl_entry struct, 'Also Known As', predicate: SKOS.altLabel
+      names += dl_entry struct, 'Website', predicate: FOAF.homepage
+
+      # only add dl if there's something in it
+      out << { names => :dl } unless names.empty?
+
+      # then we have a description if present
+      dp, dv = repo.label_for subject, struct: struct, desc: true
+      out << literal_tag(dv, name: :p, property: dp,
+                         prefixes: resolver.prefixes) if dp
+
+      # get a reverse struct with inverses because headOf is only person -> org
+      rs  = repo.struct_for subject, rev: true, inverses: true
+      inv = repo.invert_struct struct # also the "inverse forward" struct
+      cmp = repo.cmp_label nocase: true, cache: seen
+
+      # then we have a thing for key people (not doing posts yet tho
+      # so no titles or whatever, just headOf and members
+      people  = dl_entry rs, 'Head', predicate: ORG.headOf, reversed: true
+      people += dl_entry struct, 'Members',
+        predicate: ORG.hasMember, type: FOAF.Person
+      out << { people => :dl } unless people.empty?
+
+      # then we have a section for departments
+      nosub = depts = repo.find_in_struct(
+        struct, ORG.hasUnit, entail: true).values.flatten
+      depts = inv.select { |k, _| depts.include? k }.sort do |a, b|
+        cmp.call a.first, b.first
+      end.map do |s, ps|
+        st = seen[s] ||= repo.struct_for s, inverses: true
+        do_org s, ps.to_a.sort, [], st, base, seen, published: published,
+          bl: bl, tag: :li, depth: depth + 2, resource: true
+      end
+      out << { '#section' => [{ "#h#{h+1}" => 'Departments' },
+                              { '#ul' => depts }] } unless depts.empty?
+
+      # then a section for sub-organizations (none of these are nested, just links
+      {
+        ORG.hasSubOrganization => 'Subordinate Organizations',
+        ORG.hasMember          => 'Member Organizations',
+        ORG.linkedTo           => 'Also Connected To',
+      }.each do |pred, label|
+        st = repo.find_in_struct struct, pred, entail: true
+        li = repo.invert_struct(st).sort do |a, b|
+          cmp.(a.first, b.first)
+        end.map do |o, ps|
+          unless nosub.include? o
+            u = resolver.uri_for o, slugs: true
+            t = repo.types_for o, struct: seen[o]
+            lp, lv = repo.label_for o
+            { link_tag(u, base: base, rel: ps.to_a.sort, typeof: t,
+                       property: lp, label: lv) => :li }
+          end
+        end.compact
+        out << { '#section' => [
+          { "#h#{h + 1}" => label }, { li => :ul }] } unless li.empty?
+      end
+
+      # finally we have backlinks, if selected
+      if bl
+        hed =  { "#h#{h + 1}" => 'What Links Here' }
+        out.unshift backlinks(resource: subject, published: published,
+                         ignore: seen.keys, label: hed)
+      end
+
+      # punt it
+      outer_tag subject, rel, rev, struct, base, out,
+        id: id, resource: resource, tag: tag
+    end
+
+    # XXX TODO
+    def do_person subject, rel, rev, struct, base, seen, published: false,
+        bl: false, tag: :section, depth: 0, id: true, resource: false
+      { out => :section }
     end
 
     public
 
-    def generate published: true
-      
+    # 
+    def generate published: true, backlinks: false
+      alphabetized_list fwd: RDF::Vocab::DC.hasPart,
+        published: published do |s, fp, rp, struct, base, seen|
+          if repo.rdf_type? s, ORG.Organization
+            # skip non-sovereign orgs
+            #warn seen[s].inspect
+            do_org s, fp, rp, struct, base, seen, published: published,
+              bl: backlinks, resource: true unless
+              repo.rdf_type?(s, ORG.OrganizationalUnit)
+          else
+            do_person s, fp, rp, struct, base, seen, published: published,
+              bl: backlinks, resource: true
+          end
+      end
     end
   end
 
@@ -856,7 +1030,7 @@ class Intertwingler::Document
 
     public
 
-    def generate published: true
+    def generate published: true, backlinks: false
 
       here = Set[@subject]
 
@@ -1014,7 +1188,7 @@ class Intertwingler::Document
   }
 
   # Default `generate` method generates the doc from triples
-  def generate published: true
+  def generate published: true, backlinks: false
     generate_doc
   end
 
@@ -1146,7 +1320,7 @@ class Intertwingler::Document
   # @param doc
   #
   def initialize resolver, subject, uri: nil, doc: nil, mtime: nil,
-      type: nil, lang: nil
+      type: nil, lang: nil, published: true, backlinks: false
     @resolver = resolver
     @repo     = resolver.repo
     @subject  = subject
@@ -1157,7 +1331,8 @@ class Intertwingler::Document
     @types = type ? resolver.coerce_resources(type) : @repo.types_for(subject)
 
     # if a document is handed in, we read it, otherwise we generate it
-    @doc = doc ? self.class.coerce_doc(doc) : generate
+    @doc = doc ? self.class.coerce_doc(doc) :
+      generate(published: published, backlinks: backlinks)
   end
 
   # Transform the document and return it.
@@ -1357,20 +1532,28 @@ class Intertwingler::Document
   def self.sdo resolver, subject
   end
 
-  def self.backlinks resolver, subject, published: true, ignore: nil
+  def self.backlinks resolver, subject, resource: nil,
+      published: true, ignore: nil, label: nil, tag: :nav
     repo = resolver.repo
 
+    resource ||= subject
+
     uri = resolver.uri_for(
-      subject, as: :uri, slugs: true) || URI(resolver.preproc subject)
+      resource, as: :uri, slugs: true) || URI(resolver.preproc resource)
 
     ignore ||= Set.new
-    raise 'ignore must be amenable to a set' unless ignore.respond_to? :to_set
-    ignore = ignore.to_set
+    unless ignore.is_a? Proc
+      raise 'ignore must either be a Proc or be amenable to a set' unless
+        ignore.respond_to? :to_set
+      ignore = ignore.to_set
+    end
 
     structs = {}
     nodes  = {}
 
-    repo.query([nil, nil, subject]).each do |stmt|
+    repo.query([nil, nil, resource]).each do |stmt|
+      sj = stmt.subject
+      next if ignore.is_a?(Proc) ? ignore.call(sj) : ignore.include?(sj)
       next if ignore.include?(sj = stmt.subject)
       # this collects the predicates by which the neighbour is
       # connected to the subject
@@ -1399,12 +1582,15 @@ class Intertwingler::Document
       tt  = repo.types_for rsrc, struct: st
       ty  = resolver.abbreviate(tt) unless tt.empty?
 
-      { [{ [{ [lab[1].to_s] => :span, property: lp }] => :a,
+      { { { [lab[1].to_s] => :span, property: lp } => :a,
         href: uri.route_to(cu), typeof: ty,
-        rev: resolver.abbreviate(preds) }] => :li }
+        rev: resolver.abbreviate(preds) } => :li }
     end.compact
 
-    { [{ li => :ul }] => :nav }
+    out = [{ li => :ul }]
+    out.unshift label if label
+
+    { out => tag }
   end
 
   def add_rdfa
@@ -2039,7 +2225,10 @@ class Intertwingler::Document
   # @return [Hash] the element spec
   #
   def self.literal_tag resolver, value, name: :span, property: nil, text: nil,
-      prefixes: {}, vocab: nil
+    prefixes: {}, vocab: nil
+
+    prefixes ||= resolver.prefixes
+
     # literal text content if different from the value
     content = if value.literal? and text and text != value.value
                 value.value
