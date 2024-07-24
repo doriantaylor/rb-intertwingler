@@ -2551,6 +2551,7 @@ module Intertwingler::Util::Messy
     graph = resolver.repo
     # collect all the literals
     graph.each_object do |o|
+      next if o.node?
       lemma = Intertwingler::NLP.lemmatize o.value
       (cache[lemma.downcase] ||= Set.new) << o if o.literal?
     end

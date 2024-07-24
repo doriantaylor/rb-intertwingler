@@ -918,8 +918,8 @@ class Intertwingler::Document
 
       # finally we have backlinks, if selected
       if bl
-        hed =  { "#h#{h + 1}" => 'What Links Here' }
-        out.unshift backlinks(resource: subject, published: published,
+        hed = { "#h#{h + 1}" => 'What Links Here' }
+        out << backlinks(resource: subject, published: published,
                          ignore: seen.keys, label: hed)
       end
 
@@ -994,11 +994,11 @@ class Intertwingler::Document
       end.map do |item, preds, struct|
         next if seen[item] or (published and @repo.published?(item))
         st = seen[item] = @repo.struct_for item
-        lab = @repo.label_for item, struct: st
+        labp, labo = @repo.label_for item, struct: st, noop: true
         typ = @repo.types_for item, struct: st
-        a = { [lab.last] => :span, about: item,
-             typeof: @resolver.abbreviate(typ),
-             property: @resolver.abbreviate(lab.first) }
+        a = { [labo] => :span, about: item }
+        a[:typeof] = @resolver.abbreviate(typ) if typ
+        a[:property] = @resolver.abbreviate(labp) if labp
         { a => :dd, rel: @resolver.abbreviate(preds) }
       end.compact
     end
@@ -1028,9 +1028,98 @@ class Intertwingler::Document
       ['Translated by:', [RDF::Vocab::BIBO.translator]],
     ].freeze
 
+    # XXX this is basically cribbing the address book
+    def do_one subject, rel, rev, struct, base, seen, published: false,
+        bl: false, tag: :section, depth: 0, id: true, resource: false
+
+      base = resolver.coerce_resource base, as: :uri
+
+      u = resolver.uri_for subject, as: :uri, slugs: true, roundtrip: false
+
+      h = depth > 3 ? 3 : depth + 3
+
+      out = []
+
+      # do the heading which includes a link
+      hp, hv = repo.label_for subject, struct: struct, noop: true
+      out << if /^https?$/i =~ u.scheme
+               { "#h#{h}" => link_tag(u, base: base, property: hp, label: hv) }
+             else
+               literal_tag hv, name: "h#{h}", property: hp
+             end
+
+      # now do authorship stuff
+      authors = []
+      AUTHOR_SPEC.each do |label, preds|
+        # aseen = Set[]
+        recs = preds.map do |p|
+          repo.objects_for(subject, p) do |o, ps|
+            # warn ps.inspect
+            case o
+            when RDF::Node
+              # probably a list but you never know
+              generate_fragment o, rel: ps, tag: :dd, wrap_list: true
+            when RDF::Literal
+              literal_tag o, name: :dd, property: ps
+            else
+              if /^urn:uuid:/i =~ o.to_s
+                u = resolver.uri_for o, slugs: true
+              else
+                u = o
+                o = resolver.uuid_for o, verify: false, noop: true
+              end
+              # uri
+              lp, lv = repo.label_for o
+              { link_tag(u, rel: ps, typeof: repo.types_for(o),
+                         property: lp, label: lv) => :dd }
+            end
+          end
+        end.flatten 1
+
+        warn recs.inspect
+        unless recs.empty?
+          authors += [{ [label] => :dt }] + recs
+        end
+      end
+
+      warn authors.inspect
+
+      out << { authors => :dl } unless authors.empty?
+
+      # next is nested fragments/sections
+
+      # optional backlinks floater
+      if bl
+        # out << { '#p' => 'wat' }
+        hed = { "#h#{h + 1}" => 'What Links Here' }
+        wtf = backlinks(resource: subject, published: published,
+                        ignore: seen.keys, label: hed)
+        # warn "WTF #{wtf.inspect}"
+        out << wtf if wtf
+      end
+
+      # and punt it
+      outer_tag out, rel: RDF::Vocab::DC.hasPart, resource: u,
+        typeof: repo.types_for(subject), tag: tag
+    end
+
     public
 
+    # Generate a `sioct:ReadingList`.
+    #
+    #
+    #
     def generate published: true, backlinks: false
+      alphabetized_list fwd: RDF::Vocab::DC.hasPart, published: published do |s, fp, rp, struct, base, seen|
+        do_one s, fp, rp, struct, base, seen, published: published, bl: backlinks
+      end
+    end
+
+    # Generate a sioct:ReadingList.
+    #
+    #
+    #
+    def generate0 published: true, backlinks: false
 
       here = Set[@subject]
 
@@ -1062,10 +1151,13 @@ class Intertwingler::Document
         sec[:rel] = @resolver.abbreviate(fp) if fp
         sec[:rev] = @resolver.abbreviate(rp) if rp
 
-        lp, lo = @repo.label_for(s, struct: struct)
-        lh = { property: @resolver.abbreviate(lp) }
-        lh[:datatype]  = lo.datatype if lo.datatype?
-        lh['xml:lang'] = lo.language if lo.language?
+        lp, lo = @repo.label_for(s, struct: struct, noop: true)
+        lh = {}
+        if lp
+          lh[:property] = @resolver.abbreviate(lp)
+          lh[:datatype]  = lo.datatype if lo.datatype?
+          lh['xml:lang'] = lo.language if lo.language?
+        end
 
         # rdfs:seeAlso -> amazon (or whatever) link
         sa = @repo.find_in_struct(struct, RDF::RDFS.seeAlso, invert: true)
@@ -1552,6 +1644,10 @@ class Intertwingler::Document
     nodes  = {}
 
     repo.query([nil, nil, resource]).each do |stmt|
+      # XXX clutter
+      next if [
+        RDF.type, Intertwingler::Vocab::CI.canonical].include? stmt.predicate
+
       sj = stmt.subject
       next if ignore.is_a?(Proc) ? ignore.call(sj) : ignore.include?(sj)
       next if ignore.include?(sj = stmt.subject)
@@ -1575,6 +1671,7 @@ class Intertwingler::Document
     lcmp = repo.cmp_label(cache: structs) { |comparand| comparand.first }
 
     li = nodes.sort(&lcmp).map do |rsrc, preds|
+      next unless rsrc.uri?
       cu  = resolver.uri_for(rsrc, as: :uri) or next
       st  = structs[rsrc]
       lab = repo.label_for(rsrc, struct: st, noop: true)
@@ -1587,8 +1684,11 @@ class Intertwingler::Document
         rev: resolver.abbreviate(preds) } => :li }
     end.compact
 
+
     out = [{ li => :ul }]
     out.unshift label if label
+
+    # warn "WTF #{out.inspect}"
 
     { out => tag }
   end
@@ -2234,7 +2334,7 @@ class Intertwingler::Document
                 value.value
               end
 
-    out = { [text || value.value] => name }
+    out = { [text || value.value] => name.to_sym }
     out[:content]  = content if content
     out[:property] = resolver.abbreviate(
       property, prefixes: prefixes, vocab: vocab) if property
@@ -2295,6 +2395,48 @@ class Intertwingler::Document
         prefixes: prefixes, vocab: vocab if term
     end
 
+    out
+  end
+
+  # Generate a tag for wrapping other tags.
+  #
+  # @return [Hash] the element spec
+  #
+  def self.outer_tag resolver, body, about: nil, rel: nil, rev: nil,
+      property: nil, resource: nil, href: nil, src: nil, typeof: nil,
+      content: nil, lang: nil, datatype: nil, id: nil, tag: :section
+
+    # coerce all the things
+    rel      = resolver.coerce_resources rel
+    rev      = resolver.coerce_resources rev
+    property = resolver.coerce_resources property
+    typeof   = resolver.coerce_resources typeof
+    about    = resolver.coerce_resource about if about
+    resource = resolver.coerce_resource resource if resource
+    href     = resolver.coerce_resource href, as: :uri if href
+    src      = resolver.coerce_resource src,  as: :uri if src
+
+    # flatten out the content attribute
+    if content and content.is_a? RDF::Literal
+      lang     ||= content.language if content.language?
+      datatype ||= content.datatype if content.datatype?
+      content = content.value
+    end
+
+    out = { [body] => tag.to_sym }
+    out[:about]     = resolver.abbreviate about    if about
+    out[:resource]  = resolver.abbreviate resource if resource
+    out[:typeof]    = resolver.abbreviate typeof   unless typeof.empty?
+    out[:rel]       = resolver.abbreviate rel      unless rel.empty?
+    out[:rev]       = resolver.abbreviate rev      unless rev.empty?
+    out[:property]  = resolver.abbreviate property unless property.empty?
+    out[:href]      = href if href # uri.route_to href if href
+    out[:src]       = src if src # uri.route_to src if src
+    out['xml:lang'] = lang if lang
+    out[:datatype]  = datatype if datatype
+    out[:content]   = content  if content
+
+    # punt it
     out
   end
 
@@ -2412,22 +2554,22 @@ class Intertwingler::Document
   #  is going to have to be controlled by something like Loupe.
   #
   # @param repo [RDF::Repository]
-  # @param subject [RDF::Resource, RDF::Node]
+  # @param term [RDF::Resource, RDF::Node]
   # @param struct [Hash, nil]
   # @param base [RDF::URI, URI]
   # @param langs [Hash, Array, String] a representation of `Accept-Language`
   # @param rel [RDF::Resource, Array, nil]
   # @param rev [RDF::Resource, Array, nil]
   # @param prefixes [Hash]
-  # @param tag [Symbol]
-  # @param ptag [Symbol] the html tag
-  # @param otag [Symbol]
+  # @param tag [Symbol] the html tag of the fragment itself
+  # @param ptag [Symbol] ??? unused?
+  # @param otag [Symbol] the html tag of the fragment's immediate members
   # @param pskip [#to_set] a set of _edges_ (not nodes) to skip
   # @param oskip [#to_set] a set of _nodes_ (not edges) to skip
   # @param wrap_list [false, true] whether to wrap a list with an element
   # @return [Array] pair containing the markup spec and the string value
   #
-  def self.generate_fragment resolver, subject, struct: nil, base: nil, langs: [],
+  def self.generate_fragment resolver, term, struct: nil, base: nil, langs: [],
       rel: nil, rev: nil, prefixes: {}, ncache: Set.new,
       tag: :div, ptag: :div, otag: :div, pskip: [], oskip: [], wrap_list: false
 
@@ -2436,14 +2578,14 @@ class Intertwingler::Document
     # we need to collate the strings
     strings = []
 
-    ncache << subject if ncache
+    ncache << term if ncache
 
     # determine if subject is a list and return early
-    if repo.query([subject, RDF.first, nil]).first
+    if repo.query([term, RDF.first, nil]).first
       if wrap_list
-        out, lstr = generate_list resolver, subject, base: base, ncache: ncache,
+        out, lstr = generate_list resolver, term, base: base, ncache: ncache,
           langs: langs, prefixes: prefixes
-        out = { "##{name}" => out }
+        out = { "##{tag}" => out }
 
         # append list strings to meta
         strings << lstr
@@ -2455,7 +2597,7 @@ class Intertwingler::Document
         return [out, strings.join(' ').strip]
       else
         # otherwise just pass it along
-        out, lstr = generate_list resolver, subject, base: base, ncache: ncache,
+        out, lstr = generate_list resolver, term, base: base, ncache: ncache,
           langs: langs, rel: rel, rev: rev, prefixes: prefixes
         strings << lstr
 
@@ -2464,7 +2606,7 @@ class Intertwingler::Document
     end
 
     # okay now we get to the actual thing
-    struct ||= repo.struct_for subject, base: base
+    struct ||= repo.struct_for term #, base: base
 
     ncache |= repo.smush_struct struct
 

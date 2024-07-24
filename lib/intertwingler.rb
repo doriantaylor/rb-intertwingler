@@ -700,250 +700,7 @@ module Intertwingler
 
     # KILL OK
     def generate_twitter_meta subject
-      # get author
-      author = @graph.authors_for(subject, unique: true) or return []
-
-      # get author's twitter account
-      twitter = @graph.objects_for(author, RDF::Vocab::FOAF.account,
-        only: :resource).select { |t| t.to_s =~ /twitter\.com/
-      }.sort.first or return []
-      twitter = URI(twitter.to_s).path.split(/\/+/)[1]
-      twitter = ?@ + twitter unless twitter.start_with? ?@
-
-      # get title
-      title = @graph.label_for(subject) or return []
-
-      out = [
-        { nil => :meta, name: 'twitter:card', content: :summary },
-        { nil => :meta, name: 'twitter:site', content: twitter },
-        { nil => :meta, name: 'twitter:title', content: title[1].to_s }
-      ]
-
-      # get abstract
-      if desc = label_for(subject, desc: true)
-        out.push({ nil => :meta, name: 'twitter:description',
-          content: desc[1].to_s })
-      end
-
-      # get image (foaf:depiction)
-      img = @graph.objects_for(
-        subject, RDF::Vocab::FOAF.depiction, only: :resource)
-      unless img.empty?
-        img = @resolver.uri_for img.first
-        out.push({ nil => :meta, name: 'twitter:image', content: img })
-        out.first[:content] = :summary_large_image
-      end
-
-      # return the appropriate xml-mixup structure
-      out
-    end
-
-    # KILL OK
-    AUTHOR_SPEC = [
-      ['By:', [RDF::Vocab::BIBO.authorList, RDF::Vocab::DC.creator]],
-      ['With:', [RDF::Vocab::BIBO.contributorList, RDF::Vocab::DC.contributor]],
-      ['Edited by:', [RDF::Vocab::BIBO.editorList, RDF::Vocab::BIBO.editor]],
-      ['Translated by:', [RDF::Vocab::BIBO.translator]],
-    ].freeze
-
-    # KILL OK
-    def generate_bibliography id, published: true
-      id  = @resolver.uuid_for id
-      uri = @resolver.uri_for id
-      struct = @graph.struct_for id
-      nodes     = Set[id] + @graph.smush_struct(struct)
-      bodynodes = Set.new
-      parts     = {}
-      referents = {}
-      labels    = { id => @graph.label_for(id, struct: struct) }
-      canon     = {}
-
-      # uggh put these somewhere
-      preds = {
-        hp:    @graph.predicate_set(RDF::Vocab::DC.hasPart),
-        sa:    @graph.predicate_set(RDF::RDFS.seeAlso),
-        canon: @graph.predicate_set([RDF::OWL.sameAs, CI.canonical]),
-        ref:   @graph.predicate_set(RDF::Vocab::DC.references),
-        al:    @graph.predicate_set(RDF::Vocab::BIBO.contributorList),
-        cont:  @graph.predicate_set(RDF::Vocab::DC.contributor),
-      }
-
-      # collect up all the parts (as in dct:hasPart)
-      @graph.objects_for(
-        id, preds[:hp], entail: false, only: :resource).each do |part|
-        bodynodes << part
-
-        # gather up all the possible alias urls this thing can have
-        sa = ([part] + @graph.objects_for(part,
-          preds[:sa], only: :uri, entail: false)).map do |x|
-          [x] + @graph.subjects_for(preds[:canon], x, only: :uri, entail: false)
-        end.flatten.uniq
-
-        # collect all the referents
-        reftmp = {}
-        sa.each do |u|
-          @graph.subjects_for preds[:ref], u, only: :uri,
-            entail: false do |s, *p|
-            reftmp[s] ||= Set.new
-            reftmp[s] += p.first.to_set
-          end
-        end
-
-        # if we are producing a list of references identified by only
-        # published resources, prune out all the unpublished referents
-        reftmp.select! { |x, _| @graph.published? x } if published
-
-        # unconditionally skip this item if nothing references it
-        next if reftmp.empty?
-
-        referents[part] = reftmp
-
-        reftmp.each do |r, _|
-          labels[r] ||= @graph.label_for r
-          canon[r]  ||= @resolver.uri_for r
-        end
-
-        # collect all the authors and author lists
-
-        @graph.objects_for(
-          part, preds[:al], only: :resource, entail: false) do |o|
-          RDF::List.new(subject: o, graph: @graph).each do |a|
-            labels[a] ||= @graph.label_for a
-          end
-        end
-
-        @graph.objects_for(part, preds[:cont], only: :uri, entail: false) do |a|
-          labels[a] ||= @graph.label_for a
-        end
-
-        ps = @graph.struct_for part
-        labels[part] = @graph.label_for part, struct: ps
-        nodes |= @graph.smush_struct ps
-
-        parts[part] = ps
-      end
-
-      bmap = @graph.prepare_collation struct
-      pf = -> x {
-        @resolver.abbreviate bmap[x.literal? ? :literals : :resources][x] }
-
-      lcmp = @graph.cmp_label
-      body = []
-      parts.sort(&lcmp).each do |k, v|
-        mapping = @graph.prepare_collation v
-        p = -> x {
-          @resolver.abbreviate mapping[x.literal? ? :literals : :resources][x] }
-        t = @resolver.abbreviate mapping[:types]
-
-        lp = @graph.label_for k, struct: v
-        h2c = [lp[1].to_s]
-        h2  = { h2c => :h2 }
-        cu  = @resolver.uri_for k
-        rel = nil
-        unless cu.scheme.downcase.start_with? 'http'
-          if sa = v[RDF::RDFS.seeAlso]
-            rel = p.call sa[0]
-            cu = @resolver.uri_for sa[0]
-          else
-            cu = nil
-          end
-        end
-
-        if cu
-          h2c[0] = { [lp[1].to_s] => :a, rel: rel,
-            property: p.call(lp[1]), href: cu.to_s }
-        else
-          h2[:property] = p.call(lp[1])
-        end
-
-        # authors &c
-        # authors contributors editors translators
-        al = []
-        AUTHOR_SPEC.each do |label, pl|
-          dd = []
-          seen = Set.new
-          pl.each do |pred|
-            # first check if the struct has the predicate
-            next unless v[pred]
-            li = []
-            ul = { li => :ul, rel: @resolver.abbreviate(pred) }
-            v[pred].sort(&lcmp).each do |o|
-              # check if this is a list
-              tl = RDF::List.new subject: o, graph: @graph
-              if tl.empty? and !seen.include? o
-                seen << o
-                lab = labels[o] ? { [labels[o][1]] => :span,
-                  property: @resolver.abbreviate(labels[o][0]) } : o
-                li << { [lab] => :li, resource: o }
-              else
-                # XXX this will actually not be right if there are
-                # multiple lists but FINE FOR NOW
-                ul[:inlist] ||= ''
-                tl.each do |a|
-                  seen << a
-                  lab = labels[a] ? { [labels[a][1]] => :span,
-                    property: @resolver.abbreviate(labels[a][0]) } : a
-                  li << { [lab] => :li, resource: a }
-                end
-              end
-            end
-            dd << ul unless li.empty?
-          end
-          al += [{ [label] => :dt }, { dd => :dd }] unless dd.empty?
-        end
-
-        # ref list
-        rl = referents[k].sort(&lcmp).map do |ref, pset|
-          lab = labels[ref] ? { [labels[ref][1]] => :span,
-            property: @resolver.abbreviate(labels[ref][0]) } : ref
-
-          { [{ [lab] => :a, rev: @resolver.abbreviate(pset),
-              href: canon[ref] }] => :li }
-        end
-
-        contents = [h2, {
-          al + [{ ['Referenced in:'] => :dt },
-            { [{ rl => :ul }] => :dd }] => :dl }]
-
-        body << { contents => :section,
-          rel: pf.call(k), resource: k.to_s, typeof: t }
-      end
-
-      # prepend abstract to body if it exists
-      abs = @graph.label_for id, struct: struct, desc: true
-      if abs
-        tag = { '#p' => abs[1], property: @resolver.abbreviate(abs[0]) }
-        body.unshift tag
-      end
-
-      # add labels to nodes
-      nodes += @graph.smush_struct labels
-
-      # get prefixes
-      pfx = @resolver.prefix_subset nodes
-
-      # get title tag
-      title = title_tag labels[id][0], labels[id][1],
-        prefixes: @resolver.prefixes, lang: 'en'
-
-      # get links
-      link = head_links id, struct: struct, ignore: bodynodes,
-        labels: labels, vocab: XHV, rev: Intertwingler::Vocab::CI.document
-
-      # get metas
-      mn = {}
-      mn[abs[1]] = :description if abs
-      mi = Set.new
-      mi << labels[id][1] if labels[id]
-      meta = head_meta id,
-        struct: struct, lang: 'en', ignore: mi, meta_names: mn, vocab: XHV
-
-      meta += generate_twitter_meta(id) || []
-
-      xhtml_stub(base: uri, prefix: pfx, lang: 'en', title: title, vocab: XHV,
-        link: link, meta: meta, transform: @config[:transform],
-        body: { body => :body, about: '',
-          typeof: @resolver.abbreviate(struct[RDF::RDFV.type] || []) }).document
+      Intertwingler::Document.twitter_meta @resolver, subject
     end
 
     # generate skos concept schemes
@@ -1221,177 +978,7 @@ module Intertwingler
     # KILL OK
     def generate_atom_feed id, published: true, related: []
       raise 'ID must be a resource' unless id.is_a? RDF::Resource
-
-      # prepare relateds
-      raise 'related must be an array' unless related.is_a? Array
-      related -= [id]
-
-      # feed audiences
-      faudy = @graph.audiences_for id
-      faudn = @graph.audiences_for id, invert: true
-      faudy -= faudn
-
-      warn 'feed %s has audiences %s and non-audiences %s' %
-        [id, faudy.inspect, faudn.inspect]
-
-      docs = all_internal_docs published: published
-      #
-
-      # now we create a hash keyed by uuid containing the metadata
-      authors = {}
-      titles  = {}
-      dates   = {}
-      entries = {}
-      latest  = nil
-      docs.each do |uu|
-        # basically make a jsonld-like structure
-        #rsrc = struct_for uu
-
-        # skip unless the entry is indexed
-        next unless @graph.indexed? uu
-
-        # get audiences
-        audy = @graph.audiences_for uu, proximate: true
-        audn = @graph.audiences_for uu, proximate: true, invert: true
-        audy -= audn
-
-        # warn 'doc %s has audiences %s and non-audiences %s' %
-        #   [uu, audy.inspect, audn.inspect]
-
-        # we begin by assuming the document is *not* included in the
-        # feed, and then we try to prove otherwise
-        skip = true
-        if audy.empty?
-          # if both the feed and the document audiences are
-          # unspecified, then include it, as both are for "everybody"
-          skip = false if faudy.empty?
-        elsif faudy.empty?
-          # if the feed is for everybody but the document is for
-          # somebody in particular, only include it if its audience is
-          # in the list of the feed's non-audiences
-          skip = false unless (audy - faudn).empty?
-        else
-          # now we deal with the case where both the feed and the
-          # document have explicit audiences
-
-          # if the document hasn't been explicitly excluded by the
-          # feed, then include it if it has explicitly been included
-          skip = false if !(audy - faudn).empty? && !(faudy & audy).empty?
-        end
-
-        next if skip
-
-        canon = @resolver.uri_for uu, as: :uri
-
-        xml = { '#entry' => [
-          { '#link' => nil, rel: :alternate, href: canon, type: 'text/html' },
-          { '#id' => uu.to_s }
-        ] }
-
-        # get published date first
-        published = (objects_for uu,
-                     [RDF::Vocab::DC.issued, RDF::Vocab::DC.created],
-                     datatype: RDF::XSD.dateTime)[0]
-
-        # get latest updated date
-        updated = (objects_for uu, RDF::Vocab::DC.modified,
-                   datatype: RDF::XSD.dateTime).sort[-1]
-        updated ||= published || RDF::Literal::DateTime.new(DateTime.now)
-        updated = Time.parse(updated.to_s).utc
-        latest = updated if !latest or latest < updated
-
-        # warn ">>> #{uu} #{updated}"
-
-        xml['#entry'].push({ '#updated' => updated.iso8601 })
-
-        if published
-          published = Time.parse(published.to_s).utc
-          xml['#entry'].push({ '#published' => published.iso8601 })
-          dates[uu] = [published, updated]
-        else
-          dates[uu] = [updated, updated]
-        end
-
-        # get author(s)
-        al = []
-        @graph.authors_for(uu).each do |a|
-          unless authors[a]
-            n = label_for a
-            x = authors[a] = { '#author' => [{ '#name' => n[1].to_s }] }
-
-            if hp = @graph.objects_for(
-              a, RDF::Vocab::FOAF.homepage, only: :resource).sort.first
-              hp = @resolver.uri_for hp
-            end
-
-            hp ||= @resolver.uri_for a
-
-            x['#author'].push({ '#uri' => hp.to_s }) if hp
-          end
-
-          al.push authors[a]
-        end
-
-        xml['#entry'] += al unless al.empty?
-
-        # get title (note unshift)
-        if (t = label_for uu)
-          titles[uu] = t[1].to_s
-          xml['#entry'].unshift({ '#title' => t[1].to_s })
-        else
-          titles[uu] = uu.to_s
-        end
-
-        # get abstract
-        if (d = label_for uu, desc: true)
-          xml['#entry'].push({ '#summary' => d[1].to_s })
-        end
-
-        entries[uu] = xml
-      end
-
-      # note we overwrite the entries hash here with a sorted array
-      entrycmp = -> a, b {
-        # first we sort by published date
-        p = dates[a][0] <=> dates[b][0]
-        # if the published dates are the same, sort by updated date
-        u = dates[a][1] <=> dates[b][1]
-        # to break any ties, finally sort by title
-        p == 0 ? u == 0 ? titles[a] <=> titles[b] : u : p }
-      entries = entries.values_at(
-        *entries.keys.sort { |a, b| entrycmp.call(a, b) })
-      # ugggh god forgot the asterisk and lost an hour
-
-      # now we punt out the doc
-
-      latest ||= Time.now
-
-      preamble = [
-        { '#id' => id.to_s },
-        { '#updated' => latest.iso8601 },
-        { '#generator' => 'Intertwingler', version: Intertwingler::VERSION,
-          uri: "https://github.com/doriantaylor/rb-intertwingler" },
-        { nil => :link, rel: :self, type: 'application/atom+xml',
-          href: @resolver.uri_for(id) },
-        { nil => :link, rel: :alternate, type: 'text/html',
-          href: @base },
-      ] + related.map do |r|
-        { nil => :link, rel: :related, type: 'application/atom+xml',
-         href: @resolver.uri_for(r) }
-      end
-
-      if (t = label_for id)
-        preamble.unshift({ '#title' => t[1].to_s })
-      end
-
-      if (r = @graph.first_literal [id, RDF::Vocab::DC.rights, nil])
-        rh = { '#rights' => r.to_s, type: :text }
-        rh['xml:lang'] = r.language if r.has_language?
-        preamble.push rh
-      end
-
-      markup(spec: { '#feed' => preamble + entries,
-        xmlns: 'http://www.w3.org/2005/Atom' }).document
+      Intertwingler::Document::Feed.new(@resolver, id, published: published)
     end
 
     # MOVE TO Surface::DocumentRoot
@@ -1681,134 +1268,6 @@ module Intertwingler
       markup(spec: spec).document
     end
 
-    # KILL OK
-
-    # generate an alphabetized list as an xhtml document with metadata
-    #
-    # @param subject [RDF::Resource]
-    # @param fwd [RDF::URI,Array] forward predicate or array thereof
-    # @param rev [RDF::URI,Array] reverse predicate or array thereof
-    # @yield [subject, struct] pass a block to construct
-    # @yieldparam subject [RDF::Resource] the subject
-    # @yieldparam struct [Hash] the predicate-object struct of the subject
-    # @return [Nokogiri::XML::Document] the finished document
-    #
-    def alphabetized_list subject, fwd: nil, rev: nil, published: true,
-        preamble: RDF::Vocab::DC.description, ucache: {}, scache: {}, &block
-      raise ArgumentError,
-        'We need a block to render the markup! it is not optional!' unless block
-
-      # plump these out
-      fwd = fwd ? fwd.respond_to?(:to_a) ? fwd.to_a : [fwd] : []
-      rev = rev ? rev.respond_to?(:to_a) ? rev.to_a : [rev] : []
-
-      raise ArgumentError, 'Must have either a fwd or a rev defined' if
-        fwd.empty? and rev.empty?
-
-      # first we get them, then we sort them
-      frels = {} # forward relations
-      rrels = {} # reverse relations
-      alpha = {} # alphabetical map
-      seen  = {} # flat map
-
-      # a little metaprogramming to get forward and reverse
-      [[fwd, [frels, rrels], :objects_for,  [subject, fwd]],
-       [rev, [rrels, frels], :subjects_for, [rev, subject]]
-      ].each do |pa, rel, meth, args|
-        next if pa.empty?
-
-        send meth, *args, only: :resource do |n, pfwd, prev|
-          # skip if we've already got this (eg with fwd then reverse)
-          next if seen[n]
-          # make a dummy so as not to incur calling published? multiple times
-          seen[n] = {}
-          # now we set the real struct and get the label
-          st = seen[n] = @graph.struct_for n, inverses: true
-
-          # now check if it's published
-          next if published and
-            @graph.rdf_type?(n, RDF::Vocab::FOAF.Document, struct: st) and
-            not @graph.published?(n)
-
-          # now the relations to the subject
-          rel.map { |r| r[n] ||= Set.new }
-          rel.first[n] |= pfwd
-          rel.last[n]  |= prev
-
-          lab = (@graph.label_for(n, struct: st) || [nil, n]).last.value.strip
-
-          lab.gsub!(/\A[[:punct:][:space:]]*(?:An?|The)[[:space:]]+/i, '')
-
-          # get the index character which will be unicode, hence these
-          # festive character classes
-          char = if match = /\A[[:punct:][:space:]]*
-                   (?:([[:digit:]])|([[:word:]])|([[:graph:]]))
-                   /x.match(lab)
-                   match[2] ? match[2].upcase : ?#
-                 else
-                  ?#
-                 end
-
-          # add { node => struct } under this heading
-          (alpha[char] ||= {})[n] = st
-        end
-      end
-
-      # up until now we didn't need this; also add it to seen
-      struct = seen[subject] ||= @graph.struct_for subject, inverses: true
-
-      # obtain the base and prefixes and generate the node spec
-      base = @resolver.uri_for subject, as: :rdf, slugs: true
-      spec = alpha.sort { |a, b| a.first <=> b.first }.map do |key, structs|
-        # sort these and run the block
-
-        sections = structs.sort do |a, b|
-          if a.nil? or b.nil?
-            raise "#{key.inspect} => #{structs.inspect}"
-          end
-          al = @graph.label_for(a.first, noop: true, struct: a.last).last
-          bl = @graph.label_for(b.first, noop: true, struct: b.last).last
-          al.value.upcase <=> bl.value.upcase
-        end.map do |s, st|
-          # now we call the block
-          fr = frels[s].to_a if frels[s] and !frels[s].empty?
-          rr = rrels[s].to_a if rrels[s] and !rrels[s].empty?
-          # XXX it may be smart to just pass all the structs in
-          block.call s, fr, rr, st, base, seen
-        end.compact
-
-        { ([{[key] => :h2 }] + sections) => :section }
-      end
-
-
-      # now we get the page metadata
-      pfx   = @resolver.prefix_subset(seen).transform_values(&:to_s)
-      abs   = @graph.label_for(subject, struct: struct, desc: true)
-      mn    = abs ? { abs.last => :description } : {} # not an element!
-      meta  = head_meta(subject, struct: struct, meta_names: mn,
-                        vocab: XHV) + generate_twitter_meta(subject)
-      links = head_links subject, struct: struct, vocab: XHV,
-        ignore: seen.keys, rev: Intertwingler::Vocab::CI.document
-      types = @resolver.abbreviate @graph.asserted_types(subject, struct: struct)
-      title = if t = @graph.label_for(subject, struct: struct)
-                [t[1].to_s, @resolver.abbreviate(t[0])]
-              end
-
-      if abs
-        para = { [abs.last.to_s] => :p,
-          property: @resolver.abbreviate(abs.first) }
-        para['xml:lang'] = abs.last.language if abs.last.language?
-        para[:datatype]  = abs.last.datatype if abs.last.datatype?
-        spec.unshift para
-      end
-
-      xhtml_stub(base: base, title: title, transform: @config[:transform],
-        prefix: pfx, vocab: XHV, link: links, meta: meta,
-        attr: { id: UUID::NCName.to_ncname_64(subject.to_s.dup),
-          about: '', typeof: types }, content: spec
-      ).document
-    end
-
     # whoops lol we forgot the book list
 
     def reading_lists published: true
@@ -1817,9 +1276,21 @@ module Intertwingler
       out.select { |r| published? r }
     end
 
+    def add_xslt doc
+      # gotta do this because the generator separates these out now
+      if xf = @config[:transform]
+        dtd = doc.children.first
+        doc = markup(
+          spec: { '#pi' => 'xml-stylesheet', type: 'text/xsl', href: xf },
+          before: dtd).document
+      end
+
+      doc
+    end
+
     def generate_reading_list subject, published: true
-      Intertwingler::Document::ReadingList.new(
-        resolver, subject, published: published ,backlinks: true).doc
+      add_xslt Intertwingler::Document::ReadingList.new(
+        resolver, subject, published: published, backlinks: true).doc
     end
 
     def write_reading_lists published: true
@@ -1835,111 +1306,11 @@ module Intertwingler
       end
     end
 
-    DSD_SEQ = %i[characters words blocks sections
-      min low-quartile median high-quartile max mean sd].freeze
-    TH_SEQ = %w[Document Abstract Created Modified Characters Words Blocks
-      Sections Min Q1 Median Q3 Max Mean SD].map { |t| { [t] => :th } }
-
     def generate_stats published: true
-      out = {}
       all_of_type(QB.DataSet).map do |s|
-        base  = @resolver.uri_for s, as: :uri
-        types = @resolver.abbreviate @graph.asserted_types(s)
-        title = if t = @graph.label_for(s)
-                  [t[1].to_s, @resolver.abbreviate(t[0])]
-                end
-        cache = {}
-        subjects_for(QB.dataSet, s, only: :resource).each do |o|
-          if d = objects_for(o, CI.document, only: :resource).first
-            if !published or published?(d)
-              # include a "sort" time that defaults to epoch zero
-              c = cache[o] ||= {
-                doc: d, stime: Time.at(0).getgm, struct: struct_for(o) }
-
-              if t = label_for(d)
-                c[:title] = t
-              end
-              if a = label_for(d, desc: true)
-                c[:abstract] = a
-              end
-              if ct = objects_for(d,
-                RDF::Vocab::DC.created, datatype: RDF::XSD.dateTime).first
-                c[:stime] = c[:ctime] = ct.object.to_time.getgm
-              end
-              if mt = objects_for(d,
-                RDF::Vocab::DC.modified, datatype:RDF::XSD.dateTime)
-                c[:mtime] = mt.map { |m| m.object.to_time.getgm }.sort
-                c[:stime] = c[:mtime].last unless mt.empty?
-              end
-            end
-          end
-        end
-
-        # sort lambda closure
-        sl = -> a, b do
-          x = cache[b][:stime] <=> cache[a][:stime]
-          return x unless x == 0
-          x = cache[b][:ctime] <=> cache[a][:ctime]
-          return x unless x == 0
-          ta = cache[a][:title] || Array.new(2, cache[a][:uri])
-          tb = cache[b][:title] || Array.new(2, cache[b][:uri])
-          ta[1].to_s <=> tb[1].to_s
-        end
-
-        rows = []
-        cache.keys.sort(&sl).each do |k|
-          c = cache[k]
-          href = base.route_to @resolver.uri_for(c[:doc], as: :uri)
-          dt = @resolver.abbreviate @graph.asserted_types(c[:doc])
-          uu = URI(k.to_s).uuid
-          nc = UUID::NCName.to_ncname uu, version: 1
-          tp, tt = c[:title] || []
-          ab = if c[:abstract]
-                 { [c[:abstract][1].to_s] => :th, about: href,
-                  property: abbreviate(c[:abstract].first) }
-               else
-                 { [] => :th }
-               end
-
-          td = [{ { { [tt.to_s] => :span, property: abbreviate(tp) } => :a,
-            rel: 'ci:document', href: href } => :th },
-            ab,
-            { [c[:ctime].iso8601] => :th, property: 'dct:created',
-             datatype: 'xsd:dateTime', about: href, typeof: dt },
-            { c[:mtime].reverse.map { |m| { [m.iso8601] => :span,
-               property: 'dct:modified', datatype: 'xsd:dateTime' } } => :th,
-              about: href
-            },
-          ] + DSD_SEQ.map do |f|
-            h = []
-            x = { h => :td }
-            p = CI[f]
-            if y = c[:struct][p] and !y.empty?
-              h << y = y.first
-              x[:property] = @resolver.abbreviate p
-              x[:datatype] = @resolver.abbreviate y.datatype if y.datatype?
-            end
-            x
-          end
-          rows << { td => :tr, id: nc, about: "##{nc}",
-            typeof: 'qb:Observation' }
-        end
-
-        # XXX add something to the vocab so this can be controlled in the data
-        xf = config.dig(:stats, :transform) || config[:transform]
-
-        out[s] = xhtml_stub(base: base, title: title,
-          transform: xf, attr: {
-            id: UUID::NCName.to_ncname_64(s.to_s), about: '', typeof: types },
-          prefix: @resolver.prefixes, content: {
-            [{ [{ [{ ['About'] => :th, colspan: 4 },
-                { ['Counts'] => :th, colspan: 4 },
-                { ['Words per Block'] => :th, colspan: 7 }] => :tr },
-              { TH_SEQ => :tr } ] => :thead },
-             { rows => :tbody, rev: 'qb:dataSet' }] => :table }).document
-      end
-
-      out
+        [s, add_xslt(Intertwingler::Document::Stats.new(
+          @resolver, s, published: published))]
+      end.to_h
     end
 
     def write_stats published: true
@@ -1957,18 +1328,21 @@ module Intertwingler
     # XXX OKAY THESE ARE HELLA TEMPORARY; THEIR LAYOUTS SHOULD REALLY
     # BE GOVERNED BY LOUPE OR SOMETHING
 
-    # person:
-    # * (nickname) name or otherwise firstname lastname
-    # * homepage, mbox, onlineaccount(s)
-    # * relationships
+    def generate_address_book subject, published: true
+      add_xslt Intertwingler::Document::AddressBook.new(
+        resolver, subject, published: published, backlinks: true).doc
+    end
 
-    def generate_address_book subject
-      # get the members as a hash of { node => [predicates] }
-      members = @graph.objects_for(subject, RDF::Vocab::DC.hasPart) do |n, *ps|
-        [n, ps] # just cough the node and predicates back up
-      end.select { |m| @graph.type_is? m.first, RDF::Vocab::FOAF.Agent }.to_h
+    def write_address_book subject, published: true
+      write_any_index subject, published: published do
+        generate_address_book subject, published: published
+      end
+    end
 
-      # sort the members [surname, name]
+    def write_address_books published: true
+      all_of_type(RDF::Vocab::SiocTypes.AddressBook).each do |a|
+        write_address_book a, published: published
+      end
     end
 
     # This will generate an (X)HTML+RDFa page containing either a
@@ -1980,8 +1354,23 @@ module Intertwingler
     def generate_concept_scheme subject, published: true, fragment: false
       # stick some logic here to sort out what kind of thing it is
       # (concept scheme, collection, ordered collection)
-      return Intertwingler::Document::ReadingList.new(
-        resolver, subject, published: published ,backlinks: true).doc
+      add_xslt Intertwingler::Document::ConceptScheme.new(
+        resolver, subject, published: published, backlinks: true).doc
+    end
+
+    def write_any_index subject, published: true, &block
+      return if published and !@graph.published?(subject)
+      subject = @resolver.uuid_for(subject) or return
+
+      uuid = URI(subject.to_s)
+      states = [true]
+      states << false unless published
+      states.each do |state|
+        doc = block.call subject, published: state
+        dir = @config[state ? :target : :private]
+        dir.mkdir unless dir.exist?
+        (dir + "#{uuid.uuid}.xml").open('wb') { |fh| doc.write_to fh }
+      end
     end
 
     def write_concept_scheme subject, published: true
