@@ -1,4 +1,7 @@
+require 'intertwingler/vocab'
 require 'intertwingler/handler'
+require 'intertwingler/document'
+require 'xml/mixup'
 
 # This is a `GET` handler for what I'm calling "_catalogue_ resources"
 # (sorry Americans). Its purpose is to tell us things like what's in
@@ -109,33 +112,388 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
   private
 
+  CGTO = Intertwingler::Vocab::CGTO
+  QB   = Intertwingler::Vocab::QB
+  XSD  = RDF::XSD
+
+  # start with reverse mapping because it's easier to type
+  URI_REV = {
+    index:          'f4792b48-92d8-4dcb-ae8a-c17199601cb9',
+    all_classes:    '4ab10425-d970-4280-8da2-7172822929ea',
+    all_properties: '611ed2d0-1544-4e0b-a4db-de942e1193e2',
+    inventory:      'bf4647be-7b02-4742-b482-567022a8c228',
+    me:             'fe836b6d-11ef-48ef-9422-1747099b17ca',
+  }.transform_values { |v| RDF::URI("urn:uuid:#{v.freeze}") }
+  # XXX "graduate" the URI_MAP construct from transforms to ordinary handlers?
+  URI_MAP = URI_REV.invert
+
+  TYPE_MAP = {
+    index:          CGTO.Index,
+    all_classes:    CGTO.Summary,
+    all_properties: CGTO.Summary,
+    inventory:      CGTO.Inventory,
+    me:             nil, # dunno yet lol
+  }
+
+  # ditto parameter names, which shooould come to us from upstream as
+  # compact uuids but we resolve them back to boring old symbols
+  PARAM_REV = {
+    instance_of:  '67cf8149-face-4781-8fbd-07aa17cd2c6c',
+    in_domain_of: '61a04a58-045c-4747-b9aa-cceb95d0fcde',
+    in_range_of:  '5d798f1f-a0da-4824-92dc-fe2155bf30e8',
+    asserted:     '342ce7f9-9ebe-44cd-87b8-8be9e2e1a778',
+    inferred:     'e52d9137-f1e1-4611-8ca3-01d9786b3dd6',
+  }.transform_values { |v| RDF::URI("urn:uuid:#{v.freeze}") }
+  PARAM_MAP = PARAM_REV.invert
+
+  # lol, this is a bastard thing to do
+  def my_uuid
+    # this gets the name of the immediate caller
+    sym = caller_locations(1, 1).first.base_label.to_sym
+    # this gets the uuid urn from the map
+    URI_REV.fetch sym # will raise a KeyError if missing
+  end
+
+  # XXX maybe make Intertwingler::Document a mixin? iunno
+
+  def linkt target, **args
+    Intertwingler::Document.link_tag resolver, target, **args
+  end
+
+  def litt label, **args
+    Intertwingler::Document.literal_tag resolver, label, **args
+  end
+
   # specific resources:
 
-  # meta-catalogue (cgto:Index that links to summaries)
+  # Returns a meta-catalogue (`cgto:Index` that links to summaries).
+  # What I characterize as "almost static".
+  #
+  # @param base [URI] the user-facing subject URI
+  # @param args [Hash] throwaway keyword arguments for parity with
+  #  other methods
+  #
+  # @return [Array] `<body>` contents to {XML::Mixup}
+  #
+  def index base, **args
+    # note the keys are method names not URL slugs
+    {
+      all_classes:    CGTO['by-class'],
+      all_properties: CGTO['by-property'],
+    }.map do |method, pred|
+      uu   = URI_REV.fetch method # trigger a KeyError if missing
+      uri  = resolver.uri_for uu, slugs: true, as: :uri
+      src  = base.route_to uri
+      # we could hard-code these i suppose but this affords changing them
+      rel  = resolver.abbreviate pred
+      type = resolver.abbreviate CGTO.Summary
+
+      # XXX do we want alternate representations of this??
+      { { [''] => :script, type: 'application/xhtml+xml',
+         src: src, typeof: type } => :section, rel: rel }
+    end
+  end
+
+  # XXX CAN WE USE THIS IN GRAPHOPS PERHAPS?
+
+  VOCABS = [RDF::RDFV] + RDF::Vocabulary.to_a.drop(1)
+
+  def self.generate_stack properties: false
+    if properties
+      mth = :property?
+      eqv = :equivalentProperty
+      sup = :subPropertyOf
+    else
+      mth = :class?
+      eqv = :equivalentClass
+      sup = :subClassOf
+    end
+
+    VOCABS.reduce({}) do |hash, vocab|
+    vocab.each do |term|
+      # no blank nodes or other clutter
+      next unless term.uri? and term.respond_to? mth and term.send mth
+      # check if an equivalent class has already been entered into the hash
+      equivs = term.entail(eqv).to_set
+      record = hash.values_at(*equivs).compact.first || [Set[], Set[]]
+      if properties
+        record.push Set[], Set[] if record.length == 2
+        record[2].merge term.domain.select { |t| t.uri? }
+        record[3].merge term.range.select  { |t| t.uri? }
+      end
+      # add ourselves
+      equivs << term
+      record[0].merge equivs
+      equivs.each do |e|
+        # get subclasses as no guarantee they were already got
+        record[1].merge e.send(sup).select(&:uri?) if e.respond_to? sup
+        # now link it up
+        hash[e] ||= record
+      end
+    end
+    hash
+  end
+
+  end
+
+  PREFIXES = RDF::Vocabulary.vocab_map.map do |prefix, struct|
+    [prefix, struct[:class] || RDF::Vocabulary.find(struct[:uri])]
+  end.to_h
+
+  # first we're gonna need to pull all the classes that we know about
+  CLASSES    = generate_stack
+  PROPERTIES = generate_stack properties: true
+  DOMAINS    = {}
+  RANGES     = {}
+
+  PROPERTIES.each do |prop, record|
+    { 2 => DOMAINS, 3 => RANGES }.each do |index, mapping|
+      record[index].each { |type| (mapping[type] ||= Set[]) << prop }
+    end
+  end
+
+  def generic_set_for stack, term, include: false
+    out   = Set[]
+    queue = [term]
+
+    while term = queue.shift
+      pair = stack[term] or next
+      # add the equivalents
+      out |= pair.first
+      # append supers to the queue before adding them to out
+      queue += (pair.last - out).to_a
+      # okay now add the supers
+      out |= pair.last
+    end
+
+    out -= [term] unless include
+
+    out
+  end
+
+  def class_set_for type, include: false
+    generic_set_for CLASSES, type, include: include
+  end
+
+  def property_set_for prop, include: false
+    generic_set_for PROPERTIES, prop, include: include
+  end
 
   # all classes (cgto:Summary table)
+  #
+  # @param base [URI] the user-facing subject URI
+  # @param asserted [true, false] whether to include asserted types
+  # @param inferred [true, false] whether to include inferred types
+  #
+  # @return [Hash] an {XML::Mixup} representation of a table
+  #
+  def all_classes base, asserted: true, inferred: true
+    # we also need what's going on in the inventory down there so we
+    # can present the counts
+
+    prefixes = PREFIXES.merge resolver.prefixes
+
+    # log.debug "fart lol"
+
+    # our product is something shaped like { type => [asserted, inferred] }
+    # counts = CLASSES.keys.map { |k| [k, [0, 0]] }.to_h
+    counts = {}
+    abbrs  = {}
+
+    # then we scan the whole graph for ?s a ?t statements and
+    repo.query([nil, RDF.type, nil]).each do |stmt|
+      type = stmt.object
+      # only resources pls
+      next unless type.uri?
+
+      abbrs[type] ||= resolver.abbreviate(type, prefixes: prefixes)
+
+      # there may not be one already
+      (counts[type] ||= [0, 0])[0] += 1
+
+      # now do inferred
+      class_set_for(type).each do |inferred|
+        # doyy
+        abbrs[inferred] ||= resolver.abbreviate(inferred, prefixes: prefixes)
+
+        (counts[inferred] ||= [0, 0])[1] += 1
+      end
+    end
+
+    # log.debug abbrs.select {|_, v| v.nil? }.inspect
+
+    # okay now we can sort it
+    body = counts.sort do |a, b|
+      # log.debug({ a.first => abbrs[a.first], b.first => abbrs[b.first]}).inspect
+      abbrs[a.first] <=> abbrs[b.first]
+    end.map do |type, record|
+      tt = resolver.abbreviate type.type, prefixes: prefixes if
+        type.respond_to? :type
+      asserted = RDF::Literal(record.first, datatype: XSD.nonNegativeInteger)
+      inferred = RDF::Literal(record.last,  datatype: XSD.nonNegativeInteger)
+      st = resolver.abbreviate CGTO.Summary
+      cols = [
+        { linkt(type, typeof: tt, label: abbrs[type] || type) => :th },
+        { linkt('', typeof: st, label: asserted) => :td },
+        { linkt('', typeof: st, label: inferred) => :td },
+      ]
+
+      { cols => :tr }
+    end
+
+    { [
+      { { [
+        { ['Class'] => :th },
+        { ['Asserted Subjects'] => :th },
+        { ['Inferred Subjects'] => :th },
+      ] => :tr } => :thead },
+      { body => :tbody, rev: resolver.abbreviate(QB.dataSet) }
+      ] => :table }
+  end
 
   # all properties (cgto:Summary table)
+  #
+  # * all properties with domain T
+  # * all properties with range T
+  #
+  def all_properties base, asserted: true, inferred: true
+
+    prefixes = PREFIXES.merge resolver.prefixes
+
+    # asserted domain, inferred domain, asserted range, inferred range
+    # counts = PROPERTIES.keys.map { |k| [k, [0, 0, 0, 0]] }.to_h
+    counts = {}
+    abbrs  = {}
+
+    repo.query([nil, RDF.type, nil]).each do |stmt|
+      type = stmt.object
+      next unless type.uri?
+
+      # this index gives us the initial domain/range offsets
+      [DOMAINS, RANGES].each_with_index do |mapping, i|
+        # this one give us the initial asserted/inferred offsets
+        [Set[type], class_set_for(type)].each_with_index do |type, j|
+          # we give a default empty array
+          mapping.fetch(type, []).each do |props|
+            # these properties are directly referenced
+          end
+        end
+
+
+        mapping[type].each do |props|
+          # asserted is the exact match of predicate to type
+
+          # which means that other classes are inferred
+          class_set_for(type).each do |inferred|
+          end
+
+          # …as well as other properties
+          property_set_for(prop).each do |inferred|
+            # …and other classes again, lol
+            class_set_for(type).each do |ic|
+            end
+          end
+        end
+        i << 1
+      end
+
+    end
+
+    body = counts.sort do |a, b|
+      abbrs[a.first] <=> abbrs[b.first]
+    end.map do |type, record|
+      
+    end
+
+    { [
+      { [
+        { [
+          { ['Property'] => :th, rowspan: 2 },
+          { ['Asserted'] => :th, colspan: 2 },
+          { ['Inferred'] => :th, colspan: 2 },
+          ] => :tr },
+        { [
+          { ['In Domain'] => :th },
+          { ['In Range']  => :th },
+          { ['In Domain'] => :th },
+          { ['In Range']  => :th }
+          ] => :tr },
+        ] => :thead },
+      {
+        body => :tbody,
+        rev: resolver.abbreviate(QB.dataSet, prefixes: prefixes)
+      } ] => :table }
+  end
 
   # all of these should have asserted/inferred variants; could even do
   # a parameter for both so all four combinations (well, three of the
   # four since asserted=false&inferred=false would give you nothing)
   # are available.
 
-  # all instances of type T
+  # This has the potential to be enormous so it should really be paginated.
+  #
+  # * all instances of type T
+  # * all resources in domain of P
+  # * all resources in range of P
+  #
+  def inventory base, instance_of: nil, in_domain_of: nil, in_range_of: nil,
+      asserted: true, inferred: true, boundary: [1, 1000]
+    # first we need a list of types
+    # then we need a list of ?s a ?t
+    # then we sort the list
+    # then we segment it
+  end
 
-  # all properties with domain T
-
-  # all properties with range T
-
-  # all resources in domain of P
-
-  # all resources in range of P
 
   # a _me_ resource that echoes back `REMOTE_USER` among other things
+  def me base, **args
+    # XXX we can do this later lol
+  end
 
   public
 
   def handle req
+    # complain unless this is a GET or HEAD
+
+    # get the uri
+    uri  = RDF::URI(req.url)
+    orig = uri.dup
+
+    # clip off the query
+    query = uri.query
+    uri.query = nil
+
+    # uuid in here??
+    subject = resolver.uuid_for uri, verify: false
+
+    # get uuid or return 404
+    return Rack::Response[404, {
+      'content-type' => 'text/plain',
+    }, ['no catalogue']] unless subject
+
+    # find mapping or return 404
+    method = URI_MAP[subject]
+
+    return Rack::Response[404, {
+      'content-type' => 'text/plain',
+    }, ['no mapping']] unless method
+
+    # run the dispatch
+    body = send method, URI(uri.to_s)
+
+    # pfx = resolver.prefix_subset
+
+    ttag = 'hi lol'
+
+    doc = XML::Mixup.xhtml_stub(
+      base: uri, title: ttag, content: body
+    ).document
+
+    str = doc.to_xml.b
+
+    Rack::Response[200, {
+      'content-type'   => 'application/xhtml+xml',
+      'content-length' => str.length.to_s,
+    }, StringIO.new(str, ?r, encoding: Encoding::BINARY)]
   end
 end
