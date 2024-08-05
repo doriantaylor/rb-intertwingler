@@ -7,6 +7,8 @@ module Intertwingler::Vocab
   #   # Vocabulary for <https://vocab.methodandstructure.com/graph-tool#>
   #   #
   #   # Collaborative Graph Tool Ontology
+  #   #
+  #   # Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes.
   #   # @version 0.1
   #   class CGTO < RDF::StrictVocabulary
   #     # An error is a type of cgto:View the tool can send the user when something is wrong. It is more suitable to send as a response body than http:Response, which would be problematically self-referential.
@@ -33,6 +35,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :View
   #
+  #     # 
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :assertedsubjects
+  #
   #     # Specifies the owl:Class found in the rdf:type of the subjects.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :class
@@ -45,17 +51,9 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :index
   #
-  #     # 
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :objects
-  #
   #     # Specifies the property (predicate) in the statements from which subject and object resources are enumerated.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :property
-  #
-  #     # 
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :subjects
   #
   #     # Connects the cgto:Space to its cgto:Index of resources.
   #     # @return [RDF::Vocabulary::Term]
@@ -70,6 +68,7 @@ module Intertwingler::Vocab
 
     # Ontology definition
     ontology :"https://vocab.methodandstructure.com/graph-tool#",
+      comment: {en: "Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes."},
       "http://purl.org/dc/terms/created": "2022-12-04T20:12:02Z",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
       "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z"],
@@ -129,6 +128,48 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
+    property :"asserted-domain",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted-domain",
+      range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"asserted-domain-count",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted-domain-count",
+      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
+    property :"asserted-range",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted-range",
+      range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"asserted-range-count",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted-range-count",
+      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
+    property :"asserted-subject-count",
+      comment: {en: "Specifies the number of subject resources asserted to relate according to the given criterion."},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted-subject-count",
+      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
+    property :assertedsubjects,
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted-subjects",
+      range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :"by-class",
       comment: {en: "Specifies the index of inventories organized by rdfs:Class."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Index",
@@ -167,18 +208,46 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/graph-tool#Index",
       subPropertyOf: ["http://rdfs.org/sioc/ns#space_of", "http://www.w3.org/1999/xhtml/vocab#index"],
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
-    property :"object-count",
-      comment: {en: "Specifies the number of object resources in the selection criterion."},
-      domain: "http://purl.org/linked-data/cube#Observation",
-      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
-      label: "object-count",
-      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
-      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
-    property :objects,
+    property :"inferred-domain",
       comment: {en: ""},
       domain: "http://purl.org/linked-data/cube#Observation",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
-      label: "objects",
+      label: "inferred-domain",
+      range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"inferred-domain-count",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "inferred-domain-count",
+      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
+    property :"inferred-range",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "inferred-range",
+      range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"inferred-range-count",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "inferred-range-count",
+      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
+    property :"inferred-subject-count",
+      comment: {en: "Specifies the number of subject resources inferred to relate according to the given criterion."},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "inferred-subject-count",
+      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
+    property :"inferred-subjects",
+      comment: {en: ""},
+      domain: "http://purl.org/linked-data/cube#Observation",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "inferred-subjects",
       range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
       type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :property,
@@ -188,20 +257,6 @@ module Intertwingler::Vocab
       label: "property",
       range: "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
       type: ["http://purl.org/linked-data/cube#DimensionProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
-    property :"subject-count",
-      comment: {en: "Specifies the number of subject resources in the selection criterion."},
-      domain: "http://purl.org/linked-data/cube#Observation",
-      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
-      label: "subject-count",
-      range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
-      type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
-    property :subjects,
-      comment: {en: ""},
-      domain: "http://purl.org/linked-data/cube#Observation",
-      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
-      label: "subjects",
-      range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
-      type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :summary,
       comment: {en: "Connects the cgto:Space to its cgto:Index of resources."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Index",
@@ -233,36 +288,54 @@ module Intertwingler::Vocab
     term :"resources-by-class",
       comment: {en: "This structure describes a data set that tabulates subject resources of a certain rdf:type."},
       "http://purl.org/linked-data/cube#component": [term(
+          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#inferred-subjects",
+          type: "http://purl.org/linked-data/cube#ComponentSpecification"
+        ), term(
           "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#subjects",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         ), term(
           "http://purl.org/linked-data/cube#dimension": "https://vocab.methodandstructure.com/graph-tool#class",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         ), term(
-          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#subject-count",
+          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#asserted-subject-count",
+          type: "http://purl.org/linked-data/cube#ComponentSpecification"
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#inferred-subject-count",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         )],
-      label: {en: "Resources by Class"},
+      label: "resources-by-class",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
     term :"resources-by-property",
       comment: {en: "This structure describes a data set that tabulates both subject and object resources by property (predicate)."},
       "http://purl.org/linked-data/cube#component": [term(
-          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#objects",
+          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#asserted-domain",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         ), term(
-          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#subjects",
+          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#asserted-range",
+          type: "http://purl.org/linked-data/cube#ComponentSpecification"
+        ), term(
+          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#inferred-domain",
+          type: "http://purl.org/linked-data/cube#ComponentSpecification"
+        ), term(
+          "http://purl.org/linked-data/cube#attribute": "https://vocab.methodandstructure.com/graph-tool#inferred-range",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         ), term(
           "http://purl.org/linked-data/cube#dimension": "https://vocab.methodandstructure.com/graph-tool#property",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         ), term(
-          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#object-count",
+          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#asserted-domain-count",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         ), term(
-          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#subject-count",
+          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#asserted-range-count",
+          type: "http://purl.org/linked-data/cube#ComponentSpecification"
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#inferred-domain-count",
+          type: "http://purl.org/linked-data/cube#ComponentSpecification"
+        ), term(
+          "http://purl.org/linked-data/cube#measure": "https://vocab.methodandstructure.com/graph-tool#inferred-range-count",
           type: "http://purl.org/linked-data/cube#ComponentSpecification"
         )],
-      label: {en: "Resources by Property"},
+      label: "resources-by-property",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
 
     RDF::Vocabulary.register :ci, self if

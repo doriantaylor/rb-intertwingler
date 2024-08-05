@@ -246,10 +246,15 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   DOMAINS    = {}
   RANGES     = {}
 
+  # populate domains and ranges such that the keys are types
   PROPERTIES.each do |prop, record|
     { 2 => DOMAINS, 3 => RANGES }.each do |index, mapping|
       record[index].each { |type| (mapping[type] ||= Set[]) << prop }
     end
+  end
+
+  PROPLIST = (%w[asserted inferred].product %w[domain range]).map do |p|
+    Intertwingler::Vocab::CGTO[p.join ?-]
   end
 
   def generic_set_for stack, term, include: false
@@ -360,49 +365,46 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     prefixes = PREFIXES.merge resolver.prefixes
 
-    # asserted domain, inferred domain, asserted range, inferred range
-    # counts = PROPERTIES.keys.map { |k| [k, [0, 0, 0, 0]] }.to_h
-    counts = {}
-    abbrs  = {}
+    # property => asserted (domain, range), inferred (domain, range)
+    counts = {} # our product { p => [ad, ar, id, ir] }
+    abbrs  = {} # properties to CURIEs
 
     repo.query([nil, RDF.type, nil]).each do |stmt|
       type = stmt.object
       next unless type.uri?
 
-      # this index gives us the initial domain/range offsets
-      [DOMAINS, RANGES].each_with_index do |mapping, i|
-        # this one give us the initial asserted/inferred offsets
-        [Set[type], class_set_for(type)].each_with_index do |type, j|
-          # we give a default empty array
-          mapping.fetch(type, []).each do |props|
-            # these properties are directly referenced
-          end
-        end
+      # XXX there is probably a cheaper way to do this, loopwise
 
-
-        mapping[type].each do |props|
-          # asserted is the exact match of predicate to type
-
-          # which means that other classes are inferred
-          class_set_for(type).each do |inferred|
-          end
-
-          # …as well as other properties
-          property_set_for(prop).each do |inferred|
-            # …and other classes again, lol
-            class_set_for(type).each do |ic|
+      # this one give us the initial asserted/inferred offsets
+      [Set[type], class_set_for(type)].each_with_index do |types, i|
+        # this index gives us the initial domain/range offsets
+        [DOMAINS, RANGES].each_with_index do |mapping, j|
+          # this will increment the correct slot
+          slot = i << 1 | j
+          types.each do |t|
+            mapping.fetch(t, []).each do |prop|
+              abbrs[prop] ||= resolver.abbreviate prop, prefixes: prefixes
+              (counts[prop] ||= [0, 0, 0, 0])[slot] += 1
             end
           end
         end
-        i << 1
       end
 
     end
 
     body = counts.sort do |a, b|
       abbrs[a.first] <=> abbrs[b.first]
-    end.map do |type, record|
-      
+    end.map do |prop, record|
+      cols = [{ linkt(prop, label: abbrs[prop]) => :th }]
+
+      PROPLIST.each_with_index do |prop, i|
+        # we need the property and the count
+        cp = RDF::URI(prop.to_s + '-count')
+        cv = RDF::Literal(record[i], datatype: XSD.nonNegativeInteger)
+        cols << { linkt('', rel: prop, property: cp, label: cv) => :td }
+      end
+
+      { cols => :tr }
     end
 
     { [
