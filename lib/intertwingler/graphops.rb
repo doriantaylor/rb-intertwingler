@@ -1397,6 +1397,35 @@ module Intertwingler
       !(property_set(property) & property_set(referent)).empty?
     end
 
+    # Determine if the subject is a list.
+    #
+    # @param subject [RDF::Resource] the subject to test
+    #
+    # @return [false, true] whether it is a list or not
+    #
+    def list? subject
+      # nothing in principle prevents this from being a uri but it is
+      # overwhelmingly likely to be a bnode and never a literal
+      return false unless subject.resource?
+
+      # get rdf:first and rdf:rest
+      first = objects_for(subject, RDF::RDFV.first).first
+      rest  = objects_for(subject, RDF::RDFV.rest).first
+
+      # any of these will do; we don't require it to be valid
+      !!first or !!rest or subject == RDF.nil
+    end
+
+    # Coerce the subject to an {RDF::List}, or nil if not applicable.
+    #
+    # @param [RDF::Resource] subject
+    #
+    # @return [nil, RDF::List] the list
+    #
+    def as_list subject
+      RDF::List.new(subject: subject, graph: self) if list? subject
+    end
+
     # Return all RDF types (that is, all `?t` for `?s rdf:type ?t`)
     # present in the graph.
     #

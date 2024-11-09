@@ -23,10 +23,121 @@ class Intertwingler::Document
   include Intertwingler::NLP
   include Intertwingler::Util::Clean
 
+  private
+
   CI  = Intertwingler::Vocab::CI
   XHV = RDF::Vocab::XHV
 
-  private
+  R3986   = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/
+  SF      = /[^[:alpha:][:digit:]\/\?%@!$&'()*+,:;=._~-]/n
+  RFC3986 =
+    /^(?:([^:\/?#]+):)?(?:\/\/([^\/?#]*))?([^?#]+)?(?:\?([^#]*))?(?:#(.*))?$/
+  SEPS = [['', ?:], ['//', ''], ['', ''], [??, ''], [?#, '']].freeze
+
+  # this is a predicate "that does not have children that are not
+  # scripts"
+
+  # predicate says: "node has children other than scripts"
+  NON_SCRIPTS =
+    '[text()[normalize-space(.)]|*[not(self::html:script[@src])]]'.freeze
+
+  # all blocks minus: details dl fieldset form hr ol ul
+  BLOCKS = %w[
+    address article aside blockquote dialog dd div dt fieldset
+    figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup
+    li main nav p pre section table].freeze
+  INLINES = %w[a dfn abbr span var kbd samp code q cite data time mark].freeze
+
+  # rehydrate boilerplate
+  RH_BP = '[not(@rel|@rev|@property|@about|@resource|@typeof)]'.freeze
+
+  # scraped from https://html.spec.whatwg.org/multipage/indices.html
+  #
+  # Array.from(document.getElementById('attributes-1').rows).filter(
+  #  (r) => r.cells[r.cells.length-1].textContent.indexOf('URL') > -1).reduce(
+  #  (a, r) => { let x = r.cells[1].textContent.trim().split(/\s*;\s*/);
+  #  let y = r.cells[0].textContent.trim();
+  #  x.forEach(k => (a[y] ||= []).push(k)); return a }, {})
+
+  URL_ATTRS =  {
+    action:     %i[form],
+    cite:       %i[blockquote del ins q],
+    data:       %i[object],
+    formaction: %i[button input],
+    href:       %i[a area link base],
+    ping:       %i[a area],
+    poster:     %i[video],
+    src:        %i[audio embed iframe img input script source track video],
+  }.freeze
+
+  URL_ELEMS = URL_ATTRS.reduce({}) do |hash, pair|
+    attr, elems = pair
+    elems.each { |e| (hash[e] ||= []) << attr }
+    hash
+  end.freeze
+
+  XPATH = {
+    htmlbase: proc {
+      x = ['ancestor-or-self::html:html[1]/' \
+        'html:head[html:base[@href]][1]/html:base[@href][1]/@href']
+      (x << x.first.gsub('html:', '')).join ?| }.call,
+    xmlbase: 'ancestor-or-self::*[@xml:base][1]/@xml:base',
+    lang: 'normalize-space((%s)[last()])' %
+      %w[lang xml:lang].map do |a|
+      'ancestor-or-self::*[@%s][1]/@%s' % [a,a]
+    end.join(?|),
+    literal: '(ancestor::*[@property][not(@content)]' \
+      '[not(@resource|@href|@src) or @rel|@rev])[1]',
+    leaves: 'descendant::html:section[not(descendant::html:section)]' \
+      '[not(*[not(self::html:script)])]',
+    headers: './*[1][%s]//text()' %
+      (1..6).map { |x| "self::html:h#{x}" }.join(?|),
+    modernize: ([
+      "//html:div[*[1][#{(1..6).map { |i| 'self::html:h%d' % i }.join ?|}]]"] +
+        { div: %i[section figure], blockquote: :note,
+         table: :figure, img: :figure }.map do |k, v|
+        (v.is_a?(Array) ? v : [v]).map do |cl|
+          "//html:#{k}[contains(concat(' ', " \
+            "normalize-space(@class), ' '), ' #{cl} ')]"
+        end
+      end.flatten).join(?|),
+    # sanitize: './/html:*[%s]' %
+    #   %w[a area img iframe script form object].map do |x|
+    #     'self::html:%s' % x
+    #   end.join(?|),
+    sanitize: ".//html:*[%s][not(self::html:base)]" %
+      (%i[about resource] + URL_ATTRS.keys).map { |x| ?@ + x.to_s }.join(?|),
+    dehydrate: './/html:a[count(*|text())=1][html:dfn|html:abbr|html:span]',
+    rehydrate: (
+      %w[abbr[not(ancestor::html:dfn)]] + (INLINES - %w[a abbr])).map { |e|
+      ".//html:#{e}#{RH_BP}" }.join(?|).freeze,
+    rh_filter:
+    'ancestor::html:a|ancestor::*[@property and not(@content)]'.freeze,
+    htmllinks: (%w[*[not(self::html:base)][@href]/@href
+      *[@src]/@src object[@data]/@data *[@srcset]/@srcset
+      form[@action]/@action].map { |e|
+        './/html:%s' % e} + %w[//*[@xlink:href]/@xlink:href]).join(?|).freeze,
+    atomlinks: %w[uri content/@src category/@scheme generator/@uri icon id
+      link/@href logo].map { |e| './/atom:%s' % e }.join(?|).freeze,
+    rsslinks: %w[image/text()[1] docs/text()[1] source/@url enclosure/@url
+               guid/text()[1] comments/text()[1]].map { |e|
+      './/%s' % e }.join(?|).freeze,
+    xlinks: './/*[@xlink:href]/@xlink:href'.freeze,
+    rdflinks: %w[about resource datatype].map { |e|
+      './/*[@rdf:%s]/@rdf:%s' % [e, e] }.join(?|).freeze,
+    blocks: BLOCKS.map do |b|
+      pred = BLOCKS.map { |e| "descendant::html:#{e}" }.join ?|
+      "descendant::html:#{b}#{NON_SCRIPTS}[not(#{pred})]"
+    end.freeze,
+  }
+
+  XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
+  XPATHNS = {
+    html:  XHTMLNS,
+    svg:   'http://www.w3.org/2000/svg',
+    atom:  'http://www.w3.org/2005/Atom',
+    xlink: 'http://www.w3.org/1999/xlink',
+  }.freeze
 
   # this grabs a subset of the class methods defined herein and turns
   # 'em into instance methods, based on their argument signature
@@ -265,7 +376,7 @@ class Intertwingler::Document
 
     public
 
-    def generate published: true
+    def generate published: true, backlinks: false
       base  = @resolver.uri_for @subject, as: :uri
       types = @resolver.abbreviate @repo.asserted_types(@subject)
       title = if t = @repo.label_for(@subject)
@@ -421,7 +532,7 @@ class Intertwingler::Document
           rel.last[n]  |= prev
 
           lab = (repo.label_for(n, struct: st) || [nil, n]).last.value.strip
-          # find the ifrst letter that isn't an article
+          # find the first letter that isn't an article
           lab.gsub!(/\A[[:punct:][:space:]]*(?:An?|The)[[:space:]]+/i, '')
 
           # get the index character which will be unicode, hence these
@@ -442,6 +553,12 @@ class Intertwingler::Document
       # up until now we didn't need this; also add it to seen
       struct = seen[subject] ||= repo.struct_for subject, inverses: true
 
+      # duplicate the seen that gets passed into the block otherwise
+      # what happens is stuff that should show up in the <head> is
+      # skipped because it's doing double duty as a struct cache as
+      # well as a manifest of body links
+      bseen = seen.dup
+
       # obtain the base and prefixes and generate the node spec
       base = resolver.uri_for subject, as: :rdf, slugs: true
       spec = alpha.sort { |a, b| a.first <=> b.first }.map do |key, structs|
@@ -459,7 +576,7 @@ class Intertwingler::Document
           fr = frels[s].to_a if frels[s] and !frels[s].empty?
           rr = rrels[s].to_a if rrels[s] and !rrels[s].empty?
           # XXX it may be smart to just pass all the structs in
-          block.call s, fr, rr, st, base, seen
+          block.call s, fr, rr, st, base, bseen
         end.compact
 
         { ([{[key] => :h2 }] + sections) => :section }
@@ -1671,7 +1788,7 @@ class Intertwingler::Document
   #
   # @return [nil, String, URI, RDF::URI] the context's base URI
   #
-  def get_base elem, default: nil, coerce: nil
+  def self.get_base elem, default: nil, coerce: nil
     coerce = assert_uri_coercion coerce
 
     if elem.document?
@@ -1716,7 +1833,7 @@ class Intertwingler::Document
   # @param descend [false, true] go _down_ the tree instead of up
   # @return [Hash] Depending on +:traverse+, either all prefixes
   #  merged, or just the ones asserted in the element.
-  def get_prefixes elem, traverse: true, coerce: nil, descend: false
+  def self.get_prefixes elem, traverse: true, coerce: nil, descend: false
     coerce = assert_uri_coercion coerce
 
     # deal with a common phenomenon
@@ -1763,7 +1880,7 @@ class Intertwingler::Document
 
   private
 
-  def assert_uri_coercion coerce
+  def self.assert_uri_coercion coerce
     if coerce
       coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
       raise 'coerce must be either :uri or :rdf' unless
@@ -1772,13 +1889,13 @@ class Intertwingler::Document
     coerce
   end
 
-  def assert_xml_node node
+  def self.assert_xml_node node
     raise 'Argument must be a Nokogiri::XML::Element' unless
       node.is_a? Nokogiri::XML::Element
     node
   end
 
-  def internal_subject_for node, prefixes: nil, base: nil, as: nil,
+  def self.internal_subject_for resolver, node, prefixes: nil, base: nil, as: nil,
       is_ancestor: false
 
     raise ArgumentError, 'Elements only' unless node.element?
@@ -1787,8 +1904,8 @@ class Intertwingler::Document
     prefixes ||= get_prefixes node
 
     # document base is different from supplied base
-    base  = @resolver.coerce_resource base, as: :uri if base
-    dbase = @resolver.coerce_resource(get_base(node) || base, as: :uri)
+    base  = resolver.coerce_resource base, as: :uri if base
+    dbase = resolver.coerce_resource(get_base(node) || base, as: :uri)
 
     # ???
     base ||= dbase
@@ -1808,7 +1925,7 @@ class Intertwingler::Document
     if is_ancestor
       # ah right @resource gets special treatment
       if subject = node[:resource]
-        subject = @resolver.resolve_curie subject, term: false,
+        subject = resolver.resolve_curie subject, as: :term,
           prefixes: prefixes, base: dbase, scalar: true
       else
         # then check @href and @src
@@ -1821,7 +1938,7 @@ class Intertwingler::Document
         end
       end
 
-      return @resolver.coerce_resource subject, as: as if subject
+      return resolver.coerce_resource subject, as: as if subject
 
       # note if we are being called with is_ancestor, that means
       # the original node (or indeed any of the nodes previously
@@ -1831,8 +1948,8 @@ class Intertwingler::Document
     end
 
     if node[:about]
-      subject = @resolver.resolve_curie node[:about], prefixes: prefixes,
-        base: dbase, term: true, scalar: true
+      subject = resolver.resolve_curie node[:about], prefixes: prefixes,
+        base: dbase, as: :term, scalar: true
 
       # ignore coercion
       return subject if subject.is_a? RDF::Node
@@ -1842,11 +1959,11 @@ class Intertwingler::Document
       subject = base
     elsif special
       # same deal here
-      subject = internal_subject_for parent, base: base
+      subject = internal_subject_for resolver, parent, base: base
     elsif node[:resource]
       # XXX resolve @about against potential curie
-      subject = @resolver.resolve_curie node[:resource], prefixes: prefixes,
-        base: dbase, term: true, scalar: true
+      subject = resolver.resolve_curie node[:resource], prefixes: prefixes,
+        base: dbase, as: :term, scalar: true
     elsif node[:href]
       # XXX 2021-05-30 you can't just use this; you have to find a rel
       # or rev that isn't itself disrupted by about/resource/href/src
@@ -1869,13 +1986,13 @@ class Intertwingler::Document
       return RDF::Node('id-%016x' % node.pointer_id)
       # elsif node[:id]
     elsif parent.element?
-      subject = internal_subject_for parent,
+      subject = internal_subject_for resolver, parent,
         base: base || dbase, is_ancestor: true
     else
       raise "this should never get here"
     end
 
-    @resolver.coerce_resource subject, as: as if subject
+    resolver.coerce_resource subject, as: as if subject
   end
 
   public
@@ -1884,6 +2001,7 @@ class Intertwingler::Document
   # Optionally takes +:prefix+ and +:base+ parameters which override
   # anything found in the document tree.
   #
+  # @param resolver [Intertwingler::Resolver] the resolver
   # @param node [Nokogiri::XML::Element] the node
   # @param prefixes [Hash] Prefix mapping. Overrides derived values.
   # @param base [#to_s,URI,RDF::URI] Base URI, overrides as well.
@@ -1891,15 +2009,16 @@ class Intertwingler::Document
   #
   # @return [URI,RDF::URI,String] the subject
   #
-  def subject_for elem, prefixes: nil, base: nil, as: :rdf
+  def self.subject_for resolver, elem, prefixes: nil, base: nil, as: :rdf
     assert_xml_node elem
     as = assert_uri_coercion as
 
     if n = elem.at_xpath(XPATH[:literal])
-      return internal_subject_for n, prefixes: prefixes, base: base, as: as
+      return internal_subject_for resolver, n,
+        prefixes: prefixes, base: base, as: as
     end
 
-    internal_subject_for elem, prefixes: prefixes, base: base, as: as
+    internal_subject_for resolver, elem, prefixes: prefixes, base: base, as: as
   end
 
   # Return the language in scope for the current (X|HT)ML element.
@@ -1907,7 +2026,7 @@ class Intertwingler::Document
   # @param node [Nokogiri::XML::Element]
   # @return [nil, String] the RFC3066 language tag
   #
-  def lang_for elem
+  def self.lang_for elem
     lang = elem.lang || elem['lang']
     if lang
       return if lang.strip.empty?

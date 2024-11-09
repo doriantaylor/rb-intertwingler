@@ -581,14 +581,14 @@ module Intertwingler
           # add type attribute
           unless (mts = formats_for k).empty?
             ln[:type] = mts.first.to_s
+          end
 
-            if ln[:type] =~ /(java|ecma)script/i ||
-                !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
-              ln[:src] = ln.delete :href
-              # make sure we pass in an empty string so there is a closing tag
-              ln.delete nil
-              ln[['']] = :script
-            end
+          if ln[:type] =~ /(java|ecma)script/i ||
+              !(v.to_set & Set[RDF::Vocab::DC.requires]).empty?
+            ln[:src] = ln.delete :href
+            # make sure we pass in an empty string so there is a closing tag
+            ln.delete nil
+            ln[['']] = :script
           end
 
           # warn ln.inspect
@@ -978,7 +978,7 @@ module Intertwingler
     # KILL OK
     def generate_atom_feed id, published: true, related: []
       raise 'ID must be a resource' unless id.is_a? RDF::Resource
-      Intertwingler::Document::Feed.new(@resolver, id, published: published)
+      Intertwingler::Document::Feed.new(@resolver, id, published: published).doc
     end
 
     # MOVE TO Surface::DocumentRoot
@@ -1307,9 +1307,9 @@ module Intertwingler
     end
 
     def generate_stats published: true
-      all_of_type(QB.DataSet).map do |s|
+      all_of_type(Intertwingler::Vocab::QB.DataSet).map do |s|
         [s, add_xslt(Intertwingler::Document::Stats.new(
-          @resolver, s, published: published))]
+          @resolver, s, published: published).doc)]
       end.to_h
     end
 
@@ -2279,6 +2279,10 @@ module Intertwingler
           vocab = elem.at_xpath('ancestor-or-self::*[@vocab][1]/@vocab')
           vocab = uri_pp(vocab.to_s) if vocab
 
+          s = Intertwingler::Document.subject_for resolver, elem
+          s = resolver.uuid_for s, noop: true
+          next unless s == @uuid
+
           if elem.key?('href') or elem.key?('src')
             # warn [@uri, elem['href'] || elem['src']].inspect
             vu = uri_pp(elem['href'] || elem['src'])
@@ -2295,8 +2299,18 @@ module Intertwingler
               elem['title'] = label[1].to_s
             end
           end
-        end
+        end.map { |b| resolver.uuid_for b, noop: true }.uniq
 
+        # warn bodylinks.inspect
+        noskip = inv.reject do |k, v|
+          (v & [RDF::Vocab::FOAF.depiction, RDF::Vocab::XHV.contents]).empty?
+        end.keys
+
+        # warn noskip.inspect
+
+        bodylinks -= noskip
+
+        # warn bodylinks.inspect
 
         # and now we do the head
         links = @context.head_links @uuid, struct: struct, nodes: resources,

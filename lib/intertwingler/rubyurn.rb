@@ -43,7 +43,9 @@ class Intertwingler::RubyURN < URI::URN::Generic
   OPAQUE = /\A(#{NID}):(#{NSS})(?:\?\+(#{RQ})?)?(?:\?\=(#{RQ})?)?\z/o
   CONST  = /[A-Z]\w*(?:::[A-Z]\w*)*/o
   PATH   = /(?:\/*(?:#{MY_PCHAR})+(?:\/+(?:#{MY_PCHAR})+)*)/o
-  MY_NSS = /\A(?:(#{PATH})(?:;(#{CONST})?)?|;(#{CONST}))\z/o
+  EXPR   = /#{CONST}(?:;#{PCHAR_STR}*)?/o
+  # either a PATH or a CONST or both but not neither
+  MY_NSS = /\A(?:(#{PATH})(?:;(#{EXPR})?)?|;(#{EXPR})\z/o
 
   def check_nss value
     MY_NSS.match? value or raise URI::InvalidComponentError,
@@ -199,10 +201,22 @@ class Intertwingler::RubyURN < URI::URN::Generic
   # Return the string representation of the constant that will be
   # returned from #object.
   #
-  # @return [String] the constant name.
+  # @return [String,nil] the constant name.
   #
   def constant
-    URI.decode_www_form_component nss.split(?;, 2).last
+    if out = nss.split(/[?#]/).first.split(?;)[1]
+      URI.decode_www_form_component out
+    end
+  end
+
+  # Return any identifier that may be present.
+  #
+  # @return [nil,String] the identifier
+  #
+  def identifier
+    if out = nss.split(/[?#]/).first.split(?;)[1]
+      URI.decode_www_form_component out
+    end
   end
 
   # Apply `require` to the module path, if present.
@@ -227,12 +241,13 @@ class Intertwingler::RubyURN < URI::URN::Generic
   # @return [Object] whatever constant was named in the URN.
   #
   def object
-    self.require # this may raise a LoadError
-    ref = URI.decode_www_form_component nss.split(?;, 2).last.split(/[?#]/).first
-    raise URI::InvalidComponentError, "#{ref} is not a valid constant" unless
-      /\A\p{Lu}\p{Word}*(?:::\p{Lu}\p{Word}*)*\z/.match? ref
-    # this may raise a NameError
-    @constant ||= eval ref
+    if ref = constant
+      self.require # this may raise a LoadError
+      raise URI::InvalidComponentError, "#{ref} is not a valid constant" unless
+        /\A\p{Lu}\p{Word}*(?:::\p{Lu}\p{Word}*)*\z/.match? ref
+      # this may raise a NameError
+      @object ||= eval ref
+    end
   end
 end
 

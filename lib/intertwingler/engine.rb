@@ -14,6 +14,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   include Intertwingler::Loggable
 
   ITCV = Intertwingler::Vocab::ITCV
+  TFO  = Intertwingler::Vocab::TFO
 
   # The dispatcher has one job, which is to dispatch an incoming
   # request to the correct handler.
@@ -46,30 +47,71 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     # Load a handler (if not already loaded).
     #
-    # @param urn [URI, RDF::URI] the `urn:x-ruby:` URN.
+    # @param subject [URI, RDF::URI] the handler or instance URI
     # @param chdir [false, true] whether to change directories to the
     #  engine home.
     #
-    # @raise [Intertwingler::Error::Config] when the URN represents
-    #  something other than an {Intertwingler::Handler} subclass.
+    # @raise [Intertwingler::Error::Config] when the URI represents
+    #  something other than an {Intertwingler::Handler} subclass or
+    #  invocation thereof.
     #
-    # @return [nil, Intertwingler::Handler] `nil` if the URI is not a
-    #  `urn:x-ruby:`, {Intertwingler::Handler} instance otherwise.
+    # @return [nil, Intertwingler::Handler] `nil` if the URI does not
+    #  resolve, {Intertwingler::Handler} instance otherwise.
     #
-    def load_handler urn, chdir: false
-      urn = engine.resolver.coerce_resource urn, as: :uri
-      return unless urn.is_a? Intertwingler::RubyURN
+    def load_handler uri, chdir: false
+      resolver = engine.resolver
+      subject  = resolver.coerce_resource uri, as: :rdf
+      uri      = URI(subject.to_s)
 
-      # already cached
-      return @handlers[urn] if @handlers[urn]
+      # already cached, gitouttahere
+      return @handlers[uri] if @handlers[uri]
 
-      cls = urn.object
+      repo  = engine.repo
+      types = repo.types_for subject # get these just the once
+
+      # either this is an itcv:Handler or an itcv:Instance. if it's a
+      # handler it must be a `urn:x-ruby:`; if it's an instance it
+      # doesn't matter what it is BUT if it is a ruby URN it should
+      # get its parameters merged too.
+      #
+      # if the subject is an itcv:Instance:
+      if repo.type_is? types, ITCV.Instance
+        # * find the `itcv:of` (this must be an itcv:Handler and
+        #   `urn:x-ruby:`)
+        handler = repo.objects_for(subject, ITCV.of, only: :resource).sort.first
+        # * from there, find all tfo:parameter statements
+        preds = repo.objects_for handler, TFO.parameter, only: :resource
+        # * parse the associated parameter specs XXX MAYBE LATER LOL
+        # * go back and harvest/parse the parameters from the subject
+        params = preds.map do |pred|
+          key = repo.label_for pred
+          raw = repo.objects_for(subject, pred).map do |o|
+            # check if this is a list; coerce if so
+            repo.as_list(o) || o
+          end
+          [key.to_s.to_sym, raw]
+        end.to_h
+
+        # * merge with any parameters in the URN
+      elsif repo.type_is? types, ITCV.Handler
+        params = uri.q_component_hash
+      else
+        raise Intertwingler::Error::Config,
+          "#{subject} is neither Handler nor Instance (#{types.join(', ')})"
+      end
+      #
+      # otherwise:
+      # * do what's already here
+      #
+      return unless uri.is_a? Intertwingler::RubyURN
+
+      cls = uri.object
       raise Intertwingler::Error::Config,
         "#{cls} is not a subclass of Intertwingler::Handler" unless
         cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
                   # get the initialization params from the URN
 
-      params = urn.q_component_hash
+      params = uri.q_component_hash
 
       begin
         if chdir
@@ -77,7 +119,7 @@ class Intertwingler::Engine < Intertwingler::Handler
           Dir.chdir engine.home
         end
 
-        @handlers[urn] = cls.new(engine, **params)
+        @handlers[uri] = cls.new(engine, **params)
       ensure
         Dir.chdir oldpwd if chdir
       end

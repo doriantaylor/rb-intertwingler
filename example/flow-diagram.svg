@@ -15,12 +15,13 @@
    xmlns:svg="http://www.w3.org/2000/svg">
   <style
      id="style12198">
-text { 
-    font-family:CorpidOffice, Nunito, &quot;Lucida Grande&quot;, &quot;Lucida Sans Unicode&quot;;
-}
-@media (prefers-color-scheme: dark) {
+    @import url(/type/nunito/sans);
+    text {
+    font-family: CorpidOffice, "Nunito Sans", "Lucida Grande", "Lucida Sans Unicode";
+    }
+    @media (prefers-color-scheme: dark) {
     color: white;
-}
+    }
 </style>
   <sodipodi:namedview
      id="namedview7"
@@ -497,7 +498,7 @@ text {
          y="102.40433"
          id="text812-0-4"><tspan
            sodipodi:role="line"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="365.08975"
            y="102.40433"
            id="tspan3876">Resolver</tspan></text>
@@ -580,7 +581,7 @@ text {
          id="text848"><tspan
            sodipodi:role="line"
            id="tspan846"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="460.375"
            y="101.07082">File System</tspan></text>
       <g
@@ -610,7 +611,7 @@ text {
          id="text852"><tspan
            sodipodi:role="line"
            id="tspan850"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="459.10501"
            y="131.67781">Actual CAS</tspan></text>
       <g
@@ -640,7 +641,7 @@ text {
          id="text844"><tspan
            sodipodi:role="line"
            id="tspan842"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="465.66666"
            y="164.04163">Graph DB</tspan></text>
       <g
@@ -672,7 +673,7 @@ text {
            id="text740"><tspan
              sodipodi:role="line"
              id="tspan738"
-             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
              x="362.44165"
              y="58.208336">Response Handlers</tspan></text>
         <rect
@@ -902,7 +903,7 @@ text {
            id="text828"><tspan
              sodipodi:role="line"
              id="tspan826"
-             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
              x="272.36786"
              y="206.375">Early Queue</tspan></text>
         <rect
@@ -1001,7 +1002,7 @@ text {
            id="text832"><tspan
              sodipodi:role="line"
              id="tspan830"
-             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
              x="201.08333"
              y="206.375">Addressable Queue</tspan></text>
         <rect
@@ -1099,7 +1100,7 @@ text {
            id="text744"><tspan
              sodipodi:role="line"
              id="tspan742"
-             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
              x="185.20834"
              y="96.308334">Request Transforms</tspan></text>
         <rect
@@ -1197,7 +1198,7 @@ text {
            id="text836"><tspan
              sodipodi:role="line"
              id="tspan834"
-             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+             style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
              x="121.59192"
              y="206.375">Main Queue</tspan></text>
         <rect
@@ -1221,12 +1222,12 @@ text {
          id="text860"><tspan
            sodipodi:role="line"
            id="tspan858"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="31.951086"
            y="129.56117">The User™</tspan></text>
       <path
          id="path3831"
-         style="fill:none;stroke:currentColor;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
+         style="fill:transparent;stroke:currentColor;stroke-width:0.529167;stroke-linejoin:bevel;stroke-dasharray:none;stroke-dashoffset:0"
          d="M 31.75,74.083333 A 13.229166,13.229166 0 0 0 18.520833,87.3125 13.229166,13.229166 0 0 0 24.373706,98.290641 15.875,26.458332 0 0 0 15.875,121.70833 h 31.75 A 15.875,26.458332 0 0 0 39.126294,98.290641 13.229166,13.229166 0 0 0 44.979167,87.3125 13.229166,13.229166 0 0 0 31.75,74.083333 Z" />
     </g>
     <g
@@ -1240,7 +1241,7 @@ text {
          id="text744-7"><tspan
            sodipodi:role="line"
            id="tspan742-5"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:10.5833px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:10.5833px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="235.47917"
            y="44.979168">Intertwingler Engine</tspan></text>
       <rect
@@ -1264,7 +1265,7 @@ text {
          id="text804"><tspan
            sodipodi:role="line"
            id="tspan802"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="253.83066"
            y="222.25">Response Transforms</tspan></text>
       <rect
@@ -1287,7 +1288,7 @@ text {
          id="text856"><tspan
            sodipodi:role="line"
            id="tspan854"
-           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;-inkscape-font-specification:'CorpidOffice Bold';text-align:center;text-anchor:middle;stroke-width:0.264583"
            x="461.69791"
            y="232.8333">The Network</tspan></text>
       <path
@@ -1303,11 +1304,11 @@ text {
        id="text3043"><tspan
          sodipodi:role="line"
          id="tspan3041"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:end;text-anchor:end;stroke-width:0.264583"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;-inkscape-font-specification:CorpidOffice;text-align:end;text-anchor:end;stroke-width:0.264583"
          x="54.138664"
          y="245.00417">Organizational</tspan><tspan
          sodipodi:role="line"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:CorpidOffice;text-align:end;text-anchor:end;stroke-width:0.264583"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;-inkscape-font-specification:CorpidOffice;text-align:end;text-anchor:end;stroke-width:0.264583"
          x="54.138664"
          y="252.14803"
          id="tspan3045">Boundary</tspan></text>
@@ -1356,11 +1357,11 @@ text {
        id="text4212-7"><tspan
          sodipodi:role="line"
          id="tspan4210-9"
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
          x="203.72917"
          y="145.52083">Manipulates</tspan><tspan
          sodipodi:role="line"
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;-inkscape-font-specification:'CorpidOffice Italic';text-align:center;text-anchor:middle;stroke-width:0.264583"
          x="203.72917"
          y="152.66469"
          id="tspan4214-2">Queue</tspan></text>
@@ -1415,7 +1416,7 @@ text {
        y="117.71066"
        id="text4212-7-8"><tspan
          sodipodi:role="line"
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:start;text-anchor:start;stroke-width:0.264583"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;-inkscape-font-specification:'CorpidOffice Italic';text-align:start;text-anchor:start;stroke-width:0.264583"
          x="76.221169"
          y="117.71066"
          id="tspan6638">Request</tspan></text>
@@ -1426,7 +1427,7 @@ text {
        y="156.10417"
        id="text4212-7-8-3"><tspan
          sodipodi:role="line"
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;font-family:CorpidOffice;-inkscape-font-specification:'CorpidOffice Italic';text-align:start;text-anchor:start;stroke-width:0.264583"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444px;-inkscape-font-specification:'CorpidOffice Italic';text-align:start;text-anchor:start;stroke-width:0.264583"
          x="76.729164"
          y="156.10417"
          id="tspan6638-6">Response</tspan></text>

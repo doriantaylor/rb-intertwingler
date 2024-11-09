@@ -1,4 +1,4 @@
-#+STARTUP: showall hidestars
+#+STARTUP: showall hidestars indent
 * TODO a shippable ~Intertwingler~
   Around early August I decided to go with a much more ambitious design that does things I wasn't initially planning on doing. For example, I wasn't initially planning on doing the whole /transform/ infrastructure, but I think it will be a much more powerful product to have them than not to.
 ** TODO something you can run with ~rackup~
