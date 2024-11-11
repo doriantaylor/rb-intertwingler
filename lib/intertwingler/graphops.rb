@@ -576,6 +576,9 @@ module Intertwingler
     #  currently implemented (will be conneg)
     # @param desc [false, true] retrieve description instead of label
     # @param alt  [false, true] retrieve alternate instead of main
+    # @param noop [false, true] return a pair `[nil, subject]` if nothing found
+    # @param struct [Hash] the predicate-object struct to search in lieu of
+    #  consulting the graph
     #
     # @return [Array<(RDF::URI, RDF::Literal)>, Array<Array<(RDF::URI,
     #  RDF::Literal)>>] either a predicate-object pair or an array of

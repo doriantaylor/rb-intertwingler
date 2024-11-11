@@ -43,9 +43,10 @@ class Intertwingler::RubyURN < URI::URN::Generic
   OPAQUE = /\A(#{NID}):(#{NSS})(?:\?\+(#{RQ})?)?(?:\?\=(#{RQ})?)?\z/o
   CONST  = /[A-Z]\w*(?:::[A-Z]\w*)*/o
   PATH   = /(?:\/*(?:#{MY_PCHAR})+(?:\/+(?:#{MY_PCHAR})+)*)/o
-  EXPR   = /#{CONST}(?:;#{PCHAR_STR}*)?/o
+  EXPR   = /(?:#{CONST}(?:;(?:#{PCHAR_STR})*)?)/o
+
   # either a PATH or a CONST or both but not neither
-  MY_NSS = /\A(?:(#{PATH})(?:;(#{EXPR})?)?|;(#{EXPR})\z/o
+  MY_NSS = /\A(?:(#{PATH})(?:;(#{EXPR})?)?|;(#{EXPR}))\z/o
 
   def check_nss value
     MY_NSS.match? value or raise URI::InvalidComponentError,
@@ -214,7 +215,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
   # @return [nil,String] the identifier
   #
   def identifier
-    if out = nss.split(/[?#]/).first.split(?;)[1]
+    if out = nss.split(/[?#]/).first.split(?;)[2]
       URI.decode_www_form_component out
     end
   end

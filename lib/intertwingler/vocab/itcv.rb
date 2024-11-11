@@ -12,7 +12,7 @@ module Intertwingler::Vocab
   #   #
   #   # This document specifies the on-line configuration vocabulary for Intertwingler, a dense hypermedia engine.
   #   class ITCV < RDF::StrictVocabulary
-  #     # An itcv:Engine is the (as in the only one per instance) specialized itcv:Handler that is responsible for marshalling all other handlers and transforms.
+  #     # An itcv:Engine is the (as in the only one per site) specialized itcv:Handler that is responsible for marshalling all other handlers and transforms.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Engine
   #
@@ -31,6 +31,14 @@ module Intertwingler::Vocab
   #     # An itcv:HandlerList is a list of handlers and only handlers.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :HandlerList
+  #
+  #     # An itcv:Instance represents an instantiated handler object. It exists as a vehicle for initialization parameters to be specified in configuration data.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Instance
+  #
+  #     # An itcv:PathList is a list of itcv:paths.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :PathList
   #
   #     # An itcv:Engine has an itcv:Resolver for each website under its management. Resolvers map the dereferenceable—yet perishable—Web addresses to more durable identifiers like UUIDs and cryptographic hashes, as well as determine how to treat certain classes of resource, i.e., whether sovereign document or fragment thereof.
   #     # @return [RDF::Vocabulary::Term]
@@ -68,6 +76,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :manages
   #
+  #     # This property relates an itcv:Instance to the itcv:Handler to which it is intended to supply parameters.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :of
+  #
   #     # This is a prefix declaration borrowed from SHACL.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :prefix
@@ -92,6 +104,14 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :vocab
   #
+  #     # This literal datatype is a human-readable representation of a byte count, with magnitude suffixes.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :bytes
+  #
+  #     # This literal datatype represents a local file system path which may be absolute, relative, or relative to home (~[user]).
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :path
+  #
   #   end
   ITCV = Class.new(RDF::StrictVocabulary("https://vocab.methodandstructure.com/intertwingler#")) do
 
@@ -101,13 +121,17 @@ module Intertwingler::Vocab
       "http://purl.org/dc/terms/created": "2023-09-06T21:14:10Z",
       "http://purl.org/dc/terms/creator": "http://doriantaylor.com/person/dorian-taylor#me",
       "http://purl.org/dc/terms/description": {en: "This document specifies the on-line configuration vocabulary for Intertwingler, a dense hypermedia engine."},
-      "http://purl.org/dc/terms/modified": ["2023-10-09T19:04:07Z", "2023-10-29T19:43:48Z", "2023-11-18T19:28:38Z"],
+      "http://purl.org/dc/terms/modified": ["2023-10-09T19:04:07Z", "2023-10-29T19:43:48Z", "2023-11-18T19:28:38Z", "2024-11-08T05:06:04Z"],
       "http://purl.org/dc/terms/references": "https://github.com/doriantaylor/rb-intertwingler",
       "http://purl.org/dc/terms/subject": "https://intertwingler.net/",
       "http://purl.org/dc/terms/title": {en: "Intertwingler Configuration Vocabulary"},
       "http://purl.org/ontology/bibo/status": "http://purl.org/ontology/bibo/status/draft",
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/intertwingler#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "itcv",
+      "http://www.w3.org/1999/xhtml/vocab#contents": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#index": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2002/07/owl#imports": ["http://www.w3.org/ns/shacl#", "https://vocab.methodandstructure.com/transformation#"],
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://xmlns.com/foaf/0.1/primaryTopic": ["https://intertwingler.net/", "https://vocab.methodandstructure.com/intertwingler#"],
@@ -116,7 +140,7 @@ module Intertwingler::Vocab
 
     # Class definitions
     term :Engine,
-      comment: {en: "An itcv:Engine is the (as in the only one per instance) specialized itcv:Handler that is responsible for marshalling all other handlers and transforms."},
+      comment: {en: "An itcv:Engine is the (as in the only one per site) specialized itcv:Handler that is responsible for marshalling all other handlers and transforms."},
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
       label: {en: "Engine"},
       subClassOf: "https://vocab.methodandstructure.com/intertwingler#Handler",
@@ -161,6 +185,27 @@ module Intertwingler::Vocab
           onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
         )],
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :Instance,
+      comment: {en: "An itcv:Instance represents an instantiated handler object. It exists as a vehicle for initialization parameters to be specified in configuration data."},
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "Instance"},
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :PathList,
+      comment: {en: "An itcv:PathList is a list of itcv:paths."},
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "PathList"},
+      subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#List", term(
+          allValuesFrom: "https://vocab.methodandstructure.com/intertwingler#path",
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
+        ), term(
+          allValuesFrom: term(
+            unionOf: list("https://vocab.methodandstructure.com/intertwingler#PathList", term(
+              "http://www.w3.org/2002/07/owl#hasValue": list()
+            ))
+          ),
+          onProperty: "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
+        )],
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Resolver,
       comment: {en: "An itcv:Engine has an itcv:Resolver for each website under its management. Resolvers map the dereferenceable—yet perishable—Web addresses to more durable identifiers like UUIDs and cryptographic hashes, as well as determine how to treat certain classes of resource, i.e., whether sovereign document or fragment thereof."},
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
@@ -171,7 +216,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://vocab.methodandstructure.com/transformation#Transform",
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
       label: {en: "Transform"},
-      note: {en: "\n          The itcv:Transform class is different from the tfo:Transform insofar as the former is a handler, a potentially stand-alone microservice that bundles together a set of individual service endpoints, while the latter describes the individual service endpoints themselves.\n        "},
+      note: {en: "\n            The itcv:Transform class is different from the tfo:Transform insofar as the former is a handler, a potentially stand-alone microservice that bundles together a set of individual service endpoints, while the latter describes the individual service endpoints themselves.\n          "},
       subClassOf: "https://vocab.methodandstructure.com/intertwingler#Handler",
       type: "http://www.w3.org/2002/07/owl#Class"
 
@@ -244,6 +289,14 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
       label: {en: "manages"},
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :of,
+      cardinality: {en: "1"},
+      comment: {en: "This property relates an itcv:Instance to the itcv:Handler to which it is intended to supply parameters."},
+      domain: "https://vocab.methodandstructure.com/intertwingler#Instance",
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "of"},
+      range: "https://vocab.methodandstructure.com/intertwingler#Handler",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :prefix,
       comment: {en: "This is a prefix declaration borrowed from SHACL."},
       domain: "https://vocab.methodandstructure.com/intertwingler#Resolver",
@@ -303,12 +356,26 @@ module Intertwingler::Vocab
       range: "http://www.w3.org/2001/XMLSchema#anyURI",
       type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
 
-    # Extra definitions
-    term :"except-class",
-      domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier"
-    term :"fragment-class",
-      domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier"
-    term :"host-class",
-      domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier"
+    # Datatype definitions
+    term :bytes,
+      comment: {en: "This literal datatype is a human-readable representation of a byte count, with magnitude suffixes."},
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://en.wikipedia.org/wiki/Orders_of_magnitude_(data)",
+      "http://www.w3.org/2002/07/owl#onDatatype": "http://www.w3.org/2001/XMLSchema#token",
+      "http://www.w3.org/2002/07/owl#withRestrictions": list(term(
+          "http://www.w3.org/2001/XMLSchema#pattern": "^\\d+[KMGTPEkmgtpe]?$"
+        )),
+      "http://www.w3.org/2004/02/skos/core#usageNote": {en: "Magnitude suffixes use the convention of lowercase for base 10 and uppercase for base 2."},
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "bytes"},
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
+    term :path,
+      comment: {en: "This literal datatype represents a local file system path which may be absolute, relative, or relative to home (~[user])."},
+      "http://www.w3.org/2002/07/owl#onDatatype": "http://www.w3.org/2001/XMLSchema#string",
+      isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
+      label: {en: "path"},
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
+
+    RDF::Vocabulary.register :itcv, self if
+      RDF::Vocabulary.respond_to? :register
   end
 end

@@ -83,35 +83,61 @@ class Intertwingler::Engine < Intertwingler::Handler
         preds = repo.objects_for handler, TFO.parameter, only: :resource
         # * parse the associated parameter specs XXX MAYBE LATER LOL
         # * go back and harvest/parse the parameters from the subject
-        params = preds.map do |pred|
-          key = repo.label_for pred
-          raw = repo.objects_for(subject, pred).map do |o|
-            # check if this is a list; coerce if so
-            repo.as_list(o) || o
-          end
-          [key.to_s.to_sym, raw]
-        end.to_h
-
         # * merge with any parameters in the URN
+
+        params = uri.q_component_hash.merge preds.map do |pred|
+          # either we get it from the label
+          if key = repo.label_for(pred)
+            key = key.object
+          elsif pred.to_s.downcase.start_with? 'urn:x-ruby:'
+            key = URI(pred.to_s).identifier
+          else
+            key = pred.to_s # uh i guess?
+          end
+
+          # we want to separate out the list designations vs the scalars
+          lists   = []
+          scalars = []
+          repo.objects_for(subject, pred).each do |o|
+            # check if this is a list; coerce if so
+            if list = repo.as_list(o)
+              lists << list.to_a.map do |x|
+                x.literal? ? x.object : x.uri? ? URI(x.to_s) : x.to_s
+              end
+            else
+              scalars << (o.literal? ? o.object : o.uri? ? URI(o.to_s) : o.to_s)
+            end
+          end
+
+          # only return something
+          unless lists.empty? and scalars.empty?
+            val = if lists.empty?
+                    scalars.length == 1 ? scalars.first : scalars
+                  else
+                    lists.sort { |a, b| b.length <=> a.length }.first
+                  end
+
+            [key.to_sym, val]
+          end
+        end.compact.to_h
       elsif repo.type_is? types, ITCV.Handler
+        #
+        # otherwise:
+        # * do what's already here
+        #
         params = uri.q_component_hash
       else
         raise Intertwingler::Error::Config,
           "#{subject} is neither Handler nor Instance (#{types.join(', ')})"
       end
-      #
-      # otherwise:
-      # * do what's already here
-      #
-      return unless uri.is_a? Intertwingler::RubyURN
+
+      warn params
 
       cls = uri.object
       raise Intertwingler::Error::Config,
         "#{cls} is not a subclass of Intertwingler::Handler" unless
         cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
                   # get the initialization params from the URN
-
-      params = uri.q_component_hash
 
       begin
         if chdir
