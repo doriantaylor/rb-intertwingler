@@ -50,21 +50,21 @@ class Intertwingler::Resolver
     # 3) get document and fragment specifications
     documents = repo.objects_for(subject, ITCV.document, only: :uri)
     fragments = repo.objects_for(
-      subject, ITCV['fragment-list'], only: :resource)
+      subject, ITCV[:'fragment-list'], only: :resource)
     unless fragments.empty?
       fragments = RDF::List.new(
         subject: fragments.first, graph: repo).to_a.map do |f|
         # fragment class
-        c = repo.objects_for(f, ITCV.fragment, only: :uri)
+        c = repo.objects_for(f, ITCV[:'fragment-spec'], only: :uri)
         # via shacl property path
         v = repo.objects_for(f, ITCV.via, only: :resource).map do |path|
           repo.process_shacl_path path
         end
 
         # host class
-        h = repo.objects_for(f, ITCV.host, only: :uri)
+        h = repo.objects_for(f, ITCV[:'host-class'], only: :uri)
         # exceptions to host
-        e = repo.objects_for(f, ITCV.except, only: :uri)
+        e = repo.objects_for(f, ITCV[:'except-class'], only: :uri)
 
         [c, v, h, e]
       end

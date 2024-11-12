@@ -13,6 +13,7 @@
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .
+@prefix ibis: <https://vocab.methodandstructure.com/ibis#> .
 @prefix tfo:  <https://vocab.methodandstructure.com/transformation#> .
 @prefix itcv: <https://vocab.methodandstructure.com/intertwingler#> .
 
