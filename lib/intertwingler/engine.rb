@@ -85,10 +85,12 @@ class Intertwingler::Engine < Intertwingler::Handler
         # * go back and harvest/parse the parameters from the subject
         # * merge with any parameters in the URN
 
-        params = uri.q_component_hash.merge preds.map do |pred|
+        params = preds.map do |pred|
           # either we get it from the label
-          if key = repo.label_for(pred)
-            key = key.object
+          if key = repo.objects_for(
+            pred, RDF::Vocab::DC11.identifier,
+            only: :literal, datatype: RDF::XSD.token).first
+            key = key.last.object
           elsif pred.to_s.downcase.start_with? 'urn:x-ruby:'
             key = URI(pred.to_s).identifier
           else
@@ -120,20 +122,29 @@ class Intertwingler::Engine < Intertwingler::Handler
             [key.to_sym, val]
           end
         end.compact.to_h
+
+        # reassign the handler
+        handler = URI(handler.to_s)
+        # merge in any parameters
+        params = (handler.is_a?(Intertwingler::RubyURN) ?
+                  handler.q_component_hash : {}).merge params
+        # load the class from the handler
+        cls = handler.object
       elsif repo.type_is? types, ITCV.Handler
         #
         # otherwise:
         # * do what's already here
         #
         params = uri.q_component_hash
+        # load t
+        cls = uri.object
       else
         raise Intertwingler::Error::Config,
           "#{subject} is neither Handler nor Instance (#{types.join(', ')})"
       end
 
-      warn params
+      warn params.inspect
 
-      cls = uri.object
       raise Intertwingler::Error::Config,
         "#{cls} is not a subclass of Intertwingler::Handler" unless
         cls.is_a? Class and cls.ancestors.include? Intertwingler::Handler
@@ -150,7 +161,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         Dir.chdir oldpwd if chdir
       end
 
-      @handlers[urn]
+      @handlers[uri]
     end
 
     public

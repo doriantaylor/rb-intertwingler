@@ -1,0 +1,661 @@
+@prefix cgto: <https://vocab.methodandstructure.com/graph-tool#> .
+@prefix ci: <https://vocab.methodandstructure.com/content-inventory#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix ibis: <https://vocab.methodandstructure.com/ibis#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:uuid:d605090f-6e9f-4597-bb63-a1541baccdf0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T22:52:47Z"^^xsd:dateTime ;
+	rdf:value "We will need to be able to handle way more hits." ;
+	ibis:suggested-by <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> .
+<urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> a ibis:Network ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:08:07Z"^^xsd:dateTime ;
+	skos:prefLabel "Intertwingler MVP" .
+<urn:uuid:9ae0ae16-f3bd-403f-8904-e8ec371e7997> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-27T02:24:58Z"^^xsd:dateTime ;
+	rdf:value "Decouple the IBIS front-end from its back-end (into its own Git[hub] repository)." ;
+	ibis:responds-to <urn:uuid:2761af80-a09d-4109-ae8a-c6934cf6438b> .
+<urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:2bc72178-393e-4a69-98e4-0fa6e502ae4f>, <urn:uuid:14160a9f-f5a1-4ded-b307-8bf3e1dbe677> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T16:41:31Z"^^xsd:dateTime ;
+	rdf:value "Port the IBIS tool to Intertwingler." ;
+	ibis:responds-to <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+<urn:uuid:cd5e41fd-644d-4aac-8df8-bb3ab605c52a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:2bc72178-393e-4a69-98e4-0fa6e502ae4f> ;
+	dct:created "2024-03-15T20:59:09Z"^^xsd:dateTime ;
+	rdf:value "Do we actually want to keep this domain alive?" .
+<urn:uuid:adf05536-5489-4644-bc88-7f74b883c9b6> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T03:14:24Z"^^xsd:dateTime ;
+	rdf:value "Make a toggle for whether the node should be included." ;
+	ibis:responds-to <urn:uuid:7a55af8c-df7c-437e-9d2c-6676d12e6455> .
+<urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:54:40Z"^^xsd:dateTime ;
+	rdf:value "Put methodandstructure.com into Intertwingler." ;
+	ibis:responds-to <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> .
+<urn:uuid:cc5d27ec-bc9b-4eaa-9fc6-bb6191fe4437> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:7b75b305-aae5-4478-8daa-c9de013c5c76> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:45aa5cec-60dd-4091-af9d-3fc25722db38> ;
+	dct:created "2024-04-02T02:22:27Z"^^xsd:dateTime ;
+	rdf:value "What happens when somebody tries to directly access the main collection?" .
+<urn:uuid:7b75b305-aae5-4478-8daa-c9de013c5c76> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> ;
+	dct:created "2024-03-27T02:12:05Z"^^xsd:dateTime ;
+	rdf:value "What happens when you have an extreme quantity of entities for a given class and/or in the domain or range of a given predicate?" .
+<urn:uuid:c5f0efdb-a5ef-4062-9e13-0fbb32ccd030> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:bc4fce9a-fb92-4068-91a4-da9b06996b3d> ;
+	dct:created "2024-03-18T18:06:46Z"^^xsd:dateTime ;
+	rdf:value "What if a cache entry is superseded by an entity that is durable?" .
+<urn:uuid:bc4fce9a-fb92-4068-91a4-da9b06996b3d> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:05:19Z"^^xsd:dateTime ;
+	rdf:value "Extend Store::Digest to include a way to indicate that an entry ought to be treated as cache." ;
+	ibis:responds-to <urn:uuid:7b06b386-3625-4e5d-b2eb-4764fdb3484e> ;
+	ibis:generalizes <urn:uuid:48707ee2-d5af-4882-9d7f-ab0f4517ea5c> .
+<urn:uuid:11021658-81a7-4bcf-bc21-388f9e216d32> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:45aa5cec-60dd-4091-af9d-3fc25722db38> ;
+	dct:created "2024-04-02T02:27:29Z"^^xsd:dateTime ;
+	rdf:value "How does a client determine how to fill out the entire collection?" .
+<urn:uuid:1771b79a-1c54-42eb-af5d-006b3a7f37c4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:6a693bc2-ac87-4b87-b982-2ae0437d430a> ;
+	dct:created "2024-03-15T21:16:57Z"^^xsd:dateTime ;
+	rdf:value "How will we construct the UI of the RDF-KV forms?" ;
+	ibis:generalizes <urn:uuid:82181c35-3672-425d-aca9-863fd89886b7> .
+<urn:uuid:42f3fb9f-c894-469b-9deb-3b9be40b2002> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T02:39:01Z"^^xsd:dateTime ;
+	rdf:value "Radio buttons are just as easy to implement (over a small, fixed set of elements) as dropdowns." ;
+	ibis:suggested-by <urn:uuid:108f09ba-cddd-4433-958e-1089545c7cb1> ;
+	ibis:supports <urn:uuid:26aec95a-928e-4b31-9ba8-5d3b4ba996fc> .
+<urn:uuid:03d0455a-9fc5-4ca8-92d1-f1d32a7b9884> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:37f5ec7d-1b86-4b5d-8e86-4743fc8d99d5> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:45:41Z"^^xsd:dateTime ;
+	rdf:value "Implement the network switcher as a dropdown." .
+<urn:uuid:55e10fb2-1bc2-478e-a38a-b3a7b50cff6a> skos:inScheme <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5> ;
+	a skos:Concept ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-10-10T00:17:56Z"^^xsd:dateTime ;
+	skos:prefLabel "tuber" ;
+	skos:narrower <urn:uuid:812d376b-9767-4154-ac27-b2ef67f24370> .
+<urn:uuid:62126f41-c914-4ccb-85d9-6c019c425e9f> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:0b4080c1-f931-4abf-abb1-e5cd456667f5> ;
+	dct:created "2024-03-15T21:01:17Z"^^xsd:dateTime ;
+	rdf:value "How do we keep drafts and other works in progress from being exposed to the public?" .
+<urn:uuid:027bed66-42e7-435f-9e26-fa5e1ed4ff17> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-27T02:05:18Z"^^xsd:dateTime ;
+	rdf:value "Get in touch with the maintainers of the respective packages and get them to merge the patches." ;
+	ibis:responds-to <urn:uuid:c90ada9b-0ef8-4998-87cd-896084ee66ac> .
+<urn:uuid:8d2dd610-e863-49e4-8b86-f3ca4ac158d3> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T02:35:27Z"^^xsd:dateTime ;
+	rdf:value "There are only two choices: IBIS network and SKOS concept scheme." ;
+	ibis:supports <urn:uuid:26aec95a-928e-4b31-9ba8-5d3b4ba996fc> .
+<urn:uuid:5020dc83-ac0c-4f75-9683-a70429e32c99> a ibis:Network ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-10-08T19:28:22Z"^^xsd:dateTime ;
+	skos:prefLabel "Test" .
+<urn:uuid:c83e0d17-c742-43b5-a93b-2660f43dd9ba> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77> ;
+	dct:created "2024-09-12T02:30:54Z"^^xsd:dateTime ;
+	rdf:value "How do we select the type of network to be created?" .
+<urn:uuid:c8aa0aba-0710-482f-a2ec-cc98961d2026> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:18:06Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Write a getting-started tutorial." ;
+	ibis:responds-to <urn:uuid:c9df54db-b9df-45f8-8afa-e37f31412a4f> .
+<urn:uuid:9a202d16-3938-44de-a7a4-3cf547f4853c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:c91f5bee-c876-4d10-9307-c2c912ef009a> ;
+	dct:created "2024-09-12T02:10:44Z"^^xsd:dateTime ;
+	rdf:value "If we navigate to the overview of a network which is not in focus, how do we take focus?" .
+<urn:uuid:0bd6e0df-4e8c-4d3d-a49a-28439a7d360a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:08:10Z"^^xsd:dateTime ;
+	rdf:value "Yes, focusing the network should also go to it." ;
+	ibis:responds-to <urn:uuid:c91f5bee-c876-4d10-9307-c2c912ef009a> .
+<urn:uuid:c91f5bee-c876-4d10-9307-c2c912ef009a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:836cc0e1-e6ca-4935-9c79-ec892d2480d4> ;
+	dct:created "2024-09-12T02:01:47Z"^^xsd:dateTime ;
+	rdf:value "Should the focus button also navigate to the network overview?" .
+<urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:37f5ec7d-1b86-4b5d-8e86-4743fc8d99d5> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:47:32Z"^^xsd:dateTime ;
+	rdf:value "Implement the network switcher as a an autofilling text box." .
+<urn:uuid:bb4d7c47-8b24-4a66-aedf-c8e706613b42> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:36:45Z"^^xsd:dateTime ;
+	rdf:value "Extra buttons are potentially clutter." ;
+	ibis:opposes <urn:uuid:14efcaa7-c38a-4d9d-95b1-4dd4e77bb3a9> .
+<urn:uuid:c86f6104-ef5a-46ef-8717-b8c74ad001a4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-04-02T02:27:58Z"^^xsd:dateTime ;
+	rdf:value "Create an \"index\" resource that enumerates all the windowed resources." ;
+	ibis:responds-to <urn:uuid:11021658-81a7-4bcf-bc21-388f9e216d32> .
+<urn:uuid:34942d28-9d80-4ae8-9094-2d043411a2b7> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:30:08Z"^^xsd:dateTime ;
+	rdf:value "Always focus the network when you select it or create a new one." ;
+	ibis:responds-to <urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c> .
+<urn:uuid:6a693bc2-ac87-4b87-b982-2ae0437d430a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:40:25Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Create an RDF-KV handler." ;
+	ibis:responds-to <urn:uuid:d6356726-10d0-4083-9be1-615742b0cdae> .
+<urn:uuid:7b06b386-3625-4e5d-b2eb-4764fdb3484e> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:37:10Z"^^xsd:dateTime ;
+	rdf:value "It would be useful to be able to indicate to the engine that a given handler manages a content-addressable store (and thus can be used for caching)." ;
+	ibis:suggested-by <urn:uuid:8650031b-36fb-48a4-b7c1-4676deb376e0> .
+<urn:uuid:0b4080c1-f931-4abf-abb1-e5cd456667f5> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:54:27Z"^^xsd:dateTime ;
+	rdf:value "Put doriantaylor.com into Intertwingler." ;
+	ibis:responds-to <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> ;
+	ibis:generalizes <urn:uuid:8650031b-36fb-48a4-b7c1-4676deb376e0>, <urn:uuid:6c6f073b-4aa7-454e-96b0-efc728e83c8a> ;
+	ibis:suggests <urn:uuid:d605090f-6e9f-4597-bb63-a1541baccdf0> .
+<urn:uuid:8650031b-36fb-48a4-b7c1-4676deb376e0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T22:53:01Z"^^xsd:dateTime ;
+	rdf:value "Implement caching of generated representations against Store::Digest." ;
+	ibis:responds-to <urn:uuid:d605090f-6e9f-4597-bb63-a1541baccdf0> ;
+	ibis:generalizes <urn:uuid:bc4fce9a-fb92-4068-91a4-da9b06996b3d> .
+<urn:uuid:00676fe4-b256-4c72-ba55-fd0d88292956> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-04-02T02:22:53Z"^^xsd:dateTime ;
+	rdf:value "When somebody tries to access the main collection, redirect them to the first window onto the collection." ;
+	ibis:responds-to <urn:uuid:cc5d27ec-bc9b-4eaa-9fc6-bb6191fe4437> .
+<urn:uuid:728bc6fb-1b29-4793-950e-13a6b33208a3> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:created "2024-09-12T03:17:18Z"^^xsd:dateTime ;
+	rdf:value "There appears to be a general issue of getting nodes into networks." ;
+	ibis:suggested-by <urn:uuid:adf05536-5489-4644-bc88-7f74b883c9b6> .
+<urn:uuid:75221676-44ef-4b26-9693-7f8ac51418b7> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T02:36:51Z"^^xsd:dateTime ;
+	rdf:value "Dropdowns hide the available options behind a click." ;
+	ibis:suggests <urn:uuid:0e32e1db-9c7d-4de9-ab8a-b769051a8ea3> ;
+	ibis:opposes <urn:uuid:733e71ba-95d7-4201-97ca-78a6834a2ced> .
+<urn:uuid:0e32e1db-9c7d-4de9-ab8a-b769051a8ea3> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T02:36:06Z"^^xsd:dateTime ;
+	rdf:value "There is a bigger target to click with radio buttons." ;
+	ibis:supports <urn:uuid:26aec95a-928e-4b31-9ba8-5d3b4ba996fc> .
+<urn:uuid:45aa5cec-60dd-4091-af9d-3fc25722db38> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-04-02T02:20:37Z"^^xsd:dateTime ;
+	rdf:value "Represent windowed slices of a collection as ephemeral entities. Have them refer back to the main collection with the unmanageably many elements." ;
+	ibis:responds-to <urn:uuid:7b75b305-aae5-4478-8daa-c9de013c5c76> .
+<urn:uuid:9eb53b67-634a-4cca-83f5-4ae9f106e027> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:33:03Z"^^xsd:dateTime ;
+	rdf:value "Switching the focus without being conspicuous about it could cause the user to make a mistake." ;
+	ibis:opposes <urn:uuid:34942d28-9d80-4ae8-9094-2d043411a2b7> .
+<urn:uuid:8036478d-b934-4145-8aef-221b7373916c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:48:37Z"^^xsd:dateTime ;
+	rdf:value "An autofilled text box has an unlimited capacity and is easier to deal with than a dropdown when there are lots of entities." ;
+	ibis:supports <urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b> .
+<urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:28:47Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Ship an Intertwingler instance that the client can use." ;
+	ibis:responds-to <urn:uuid:8005ab95-86a5-4b0d-8c5f-7cb92e75e0d4> ;
+	ibis:generalizes <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> ;
+	ibis:suggests <urn:uuid:d606935b-2e46-49fc-9463-141f3e37987b> ;
+	ibis:questioned-by <urn:uuid:c9df54db-b9df-45f8-8afa-e37f31412a4f> .
+<urn:uuid:d8bd14b1-6091-41c8-a7e0-2e8ddd55d063> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:38:43Z"^^xsd:dateTime ;
+	rdf:value "Load all tfo:Function entities in the graph indiscriminately." ;
+	ibis:responds-to <urn:uuid:68a1b2b7-270e-4afa-a6d2-db72422c0a36> ;
+	ibis:opposed-by <urn:uuid:ba707676-6099-4ad1-8bca-996f45c580e0> .
+<urn:uuid:9342635b-346a-42ad-9218-a3eedc39ff77> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:58:29Z"^^xsd:dateTime ;
+	rdf:value "Alias privatealpha.com to methodandstructure.com." .
+<urn:uuid:2209c97e-cae3-4b78-900f-b663ae2bc4dc> a ibis:Network ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-10-08T23:10:51Z"^^xsd:dateTime ;
+	skos:prefLabel "ABC" .
+<urn:uuid:812d376b-9767-4154-ac27-b2ef67f24370> skos:inScheme <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5> ;
+	a skos:Concept ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-10-10T00:17:43Z"^^xsd:dateTime ;
+	skos:prefLabel "potato" .
+<urn:uuid:f37b456f-4fde-48ef-96de-db2441b612c8> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-07-26T14:55:29Z"^^xsd:dateTime ;
+	rdf:value "Shipping Intertwingler as a Docker image will afford putting off the open-source diplomacy of the upstream patches." ;
+	ibis:supports <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> .
+<urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:10:27Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Ship Intertwingler as a Docker image." ;
+	ibis:responds-to <urn:uuid:c90ada9b-0ef8-4998-87cd-896084ee66ac> .
+<urn:uuid:3a8aba30-0823-4cf3-9d5f-72d792594179> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:18:09Z"^^xsd:dateTime ;
+	rdf:value "No, stay where you are. Use a dedicated \"Go\" button to navigate." ;
+	ibis:responds-to <urn:uuid:c91f5bee-c876-4d10-9307-c2c912ef009a> .
+<urn:uuid:d6356726-10d0-4083-9be1-615742b0cdae> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a> ;
+	dct:created "2024-02-16T21:28:05Z"^^xsd:dateTime ;
+	rdf:value "What about writing to the graph?" .
+<urn:uuid:881ed50a-0c7e-4618-b3fc-6025ee3ed9ca> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-04-02T01:56:29Z"^^xsd:dateTime ;
+	rdf:value "We would actually be able to represent real sequences of actions instead of just suggestions about what to do." ;
+	ibis:supports <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
+<urn:uuid:21ac267e-ce02-415d-a09f-8c6dec09de8b> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:14:36Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Make the Intertwingler home directory a Docker volume." ;
+	ibis:responds-to <urn:uuid:35df0c71-05eb-49fe-9691-8b1d708a5f05> .
+<urn:uuid:7421a1da-9009-448d-8f63-b021f398a4d9> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-04-02T02:28:48Z"^^xsd:dateTime ;
+	rdf:value "Attach \"next\" and \"previous\" relations to the wiindow resources, when applicable." ;
+	ibis:responds-to <urn:uuid:11021658-81a7-4bcf-bc21-388f9e216d32> .
+<urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T16:56:03Z"^^xsd:dateTime ;
+	rdf:value "Create a set of \"catalogue resources\"." ;
+	ibis:responds-to <urn:uuid:1771b79a-1c54-42eb-af5d-006b3a7f37c4> .
+<urn:uuid:108f09ba-cddd-4433-958e-1089545c7cb1> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:45:51Z"^^xsd:dateTime ;
+	rdf:value "Dropdowns are easy to implement." ;
+	ibis:supports <urn:uuid:03d0455a-9fc5-4ca8-92d1-f1d32a7b9884> .
+<urn:uuid:cd4fbc68-c7f8-49a9-abc8-f12fd45228e0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:37f5ec7d-1b86-4b5d-8e86-4743fc8d99d5>, <urn:uuid:14efcaa7-c38a-4d9d-95b1-4dd4e77bb3a9> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:51:52Z"^^xsd:dateTime ;
+	rdf:value "Make sure the UI has a \"Set Focus\" button." .
+<urn:uuid:9fd48a18-ed21-4daf-8ea5-0a4d44f35b6c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c> ;
+	dct:created "2024-09-12T01:59:02Z"^^xsd:dateTime ;
+	rdf:value "Do we show the UI to focus the network if it's already focused?" .
+<urn:uuid:10cd698f-0192-450b-a524-9c4c17a75cf0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:32:52Z"^^xsd:dateTime ;
+	rdf:value "There are a number of scaled and transformed images on the site." ;
+	ibis:suggested-by <urn:uuid:0b4080c1-f931-4abf-abb1-e5cd456667f5>, <urn:uuid:91650821-22e2-4731-bd9a-b45f196d40f4> .
+<urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:08:41Z"^^xsd:dateTime ;
+	rdf:value "Make some UI that affords creating a new IBIS network (or SKOS concept scheme) from an entity or network overview." .
+<urn:uuid:ba707676-6099-4ad1-8bca-996f45c580e0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:40:51Z"^^xsd:dateTime ;
+	rdf:value "There already exists considerable infrastructure for selectively loading transform handlers." ;
+	ibis:supports <urn:uuid:40f5e3c5-b9ae-42db-8f1b-b1f07faf68ff> .
+<urn:uuid:37f5ec7d-1b86-4b5d-8e86-4743fc8d99d5> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:13:08Z"^^xsd:dateTime ;
+	rdf:value "Make some UI that affords switching IBIS networks." ;
+	ibis:questioned-by <urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c>, <urn:uuid:7a55af8c-df7c-437e-9d2c-6676d12e6455> .
+<urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77> ;
+	dct:created "2024-09-12T01:12:36Z"^^xsd:dateTime ;
+	rdf:value "Do we always want to focus the new network?" .
+<urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5> a ibis:Network ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-10-08T23:10:30Z"^^xsd:dateTime ;
+	skos:prefLabel "hmm" .
+<https://intertwingler.ibis.makethingsmakesense.com/> dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:08:07Z"^^xsd:dateTime .
+<urn:uuid:c9df54db-b9df-45f8-8afa-e37f31412a4f> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:17:53Z"^^xsd:dateTime ;
+	rdf:value "What if the client has trouble?" .
+<urn:uuid:e27cfc0f-ef03-4867-8c51-7d286667c00d> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:04:01Z"^^xsd:dateTime ;
+	rdf:value "Keep the focus button and disable it, and change the text to say \"Focused\"." ;
+	ibis:responds-to <urn:uuid:9fd48a18-ed21-4daf-8ea5-0a4d44f35b6c> .
+<urn:uuid:14c8b9d7-c662-4614-9cd1-9f144d0a9455> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:ac2f38cc-22a8-473c-9149-da337087bb9a> ;
+	dct:created "2024-09-13T03:28:46Z"^^xsd:dateTime ;
+	rdf:value "What about changes that happen on GitHub?" .
+<urn:uuid:ac2f38cc-22a8-473c-9149-da337087bb9a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-13T03:26:08Z"^^xsd:dateTime ;
+	rdf:value "Create an API bridge that will connect the two systems." ;
+	ibis:responds-to <urn:uuid:7cbf4dc4-e333-44e6-8ceb-044c453431ab> .
+<urn:uuid:712895d6-f7d4-434c-b181-c1f0ec17c024> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:41:59Z"^^xsd:dateTime ;
+	rdf:value "Indiscriminately loading transform handlers is a much simpler design." ;
+	ibis:supports <urn:uuid:d8bd14b1-6091-41c8-a7e0-2e8ddd55d063> .
+<urn:uuid:7489c0c6-85a6-4366-99fd-2f23851eddd0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:09:27Z"^^xsd:dateTime ;
+	rdf:value "Client is not a Ruby developer." ;
+	ibis:suggested-by <urn:uuid:8005ab95-86a5-4b0d-8c5f-7cb92e75e0d4> ;
+	ibis:response <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> .
+<urn:uuid:c948158d-60b7-4519-b744-dd7857295a30> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:47:55Z"^^xsd:dateTime ;
+	rdf:value "An autofilled text box will take up less space." ;
+	ibis:supports <urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b> .
+<urn:uuid:1df9b19c-6a94-431a-846b-e3f87b4b63c6> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:46:18Z"^^xsd:dateTime ;
+	rdf:value "Dropdowns can get huge and unwieldy." ;
+	ibis:opposes <urn:uuid:03d0455a-9fc5-4ca8-92d1-f1d32a7b9884> .
+<urn:uuid:1be64b93-475c-41bf-811c-fdc3771a5c2e> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:31:22Z"^^xsd:dateTime ;
+	rdf:value "Maybe the user just wants to look at the other network (or create one and not switch to it)." ;
+	ibis:opposes <urn:uuid:34942d28-9d80-4ae8-9094-2d043411a2b7> .
+<urn:uuid:d606935b-2e46-49fc-9463-141f3e37987b> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:48:17Z"^^xsd:dateTime ;
+	rdf:value "It turns out to that the default (AMD64) build is unusably slow in the client's development environment (Darwin/ARM64)." ;
+	ibis:suggested-by <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> .
+<urn:uuid:d2eb6ee7-41ec-4c62-b210-173e34401911> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:42:51Z"^^xsd:dateTime ;
+	rdf:value "There is a concern of memory consumption of unused handlers." ;
+	ibis:opposes <urn:uuid:d8bd14b1-6091-41c8-a7e0-2e8ddd55d063> .
+<urn:uuid:9d2369a3-4ca9-4c3c-91c0-57d8b9e01517> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> ;
+	a ibis:Issue ;
+	dct:created "2024-09-12T01:07:28Z"^^xsd:dateTime ;
+	rdf:value "Client wants the ability to create multiple IBIS networks." .
+<urn:uuid:2bc72178-393e-4a69-98e4-0fa6e502ae4f> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:54:55Z"^^xsd:dateTime ;
+	rdf:value "Put makethingsmakesense.com into Intertwingler." ;
+	ibis:responds-to <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> .
+<urn:uuid:2761af80-a09d-4109-ae8a-c6934cf6438b> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-27T02:23:01Z"^^xsd:dateTime ;
+	rdf:value "The front-end code to the IBIS tool is currently in the back-end repository." ;
+	ibis:suggested-by <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
+<urn:uuid:48707ee2-d5af-4882-9d7f-ab0f4517ea5c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:09:07Z"^^xsd:dateTime ;
+	rdf:value "If an entity is inserted into the store overtop of a cache entry, clear the cache flag and ensure it is never re-enabled." ;
+	ibis:responds-to <urn:uuid:c5f0efdb-a5ef-4062-9e13-0fbb32ccd030> .
+<urn:uuid:3571c2e8-f4e0-4e2f-89aa-d37d5099a385> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T03:15:25Z"^^xsd:dateTime ;
+	rdf:value "Automatically importing the entity may make sense for creating new networks but could make a mess with existing ones." ;
+	ibis:opposes <urn:uuid:1a9cc3f5-1234-4332-830e-f956b18191b4> .
+<urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:52:41Z"^^xsd:dateTime ;
+	rdf:value "I want to use Intertwingler to run my Web properties." .
+<urn:uuid:6c6f073b-4aa7-454e-96b0-efc728e83c8a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T21:02:05Z"^^xsd:dateTime ;
+	rdf:value "Implement a rudimentary mechanism for partitioning the graph into \"public\" and \"private\"." ;
+	ibis:responds-to <urn:uuid:62126f41-c914-4ccb-85d9-6c019c425e9f> .
+<urn:uuid:a4ce7c46-4499-431f-b318-e053753a4e13> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:14:42Z"^^xsd:dateTime ;
+	rdf:value "Make a unified UI for switching and/or creating new IBIS networks, SKOS concept schemes." ;
+	ibis:responds-to <urn:uuid:9d2369a3-4ca9-4c3c-91c0-57d8b9e01517> ;
+	ibis:generalizes <urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77>, <urn:uuid:37f5ec7d-1b86-4b5d-8e86-4743fc8d99d5> .
+<urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77> ;
+	dct:created "2024-09-12T01:10:10Z"^^xsd:dateTime ;
+	rdf:value "What about the ability to rename a network?" .
+<urn:uuid:917d825f-8152-4d71-bcb7-10f2afc3039c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:30:33Z"^^xsd:dateTime ;
+	rdf:value "Changing the focus isn't really that big a deal and it can always be changed later." ;
+	ibis:supports <urn:uuid:34942d28-9d80-4ae8-9094-2d043411a2b7> .
+<urn:uuid:7a3a37f7-682c-4e27-8924-0172f2a2ac0c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-01T16:22:21Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Create a Git repository with a prefabricated configuration." ;
+	ibis:responds-to <urn:uuid:c9df54db-b9df-45f8-8afa-e37f31412a4f> .
+<urn:uuid:579d4b57-8ec9-400e-bb48-df8d22afa06f> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c> ;
+	dct:created "2024-09-12T01:17:11Z"^^xsd:dateTime ;
+	rdf:value "Is the focus a property of the graph, or a property of the user preferences?" .
+<urn:uuid:14efcaa7-c38a-4d9d-95b1-4dd4e77bb3a9> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:34:42Z"^^xsd:dateTime ;
+	rdf:value "[ADOPTED] Only focus the new network if the user explicitly signals to do so (i.e., through a dedicated button)." ;
+	ibis:responds-to <urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c> .
+<urn:uuid:14160a9f-f5a1-4ded-b307-8bf3e1dbe677> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:56:23Z"^^xsd:dateTime ;
+	rdf:value "Put client extranets into Intertwingler." .
+<urn:uuid:82181c35-3672-425d-aca9-863fd89886b7> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-27T02:14:48Z"^^xsd:dateTime ;
+	rdf:value "Intertwingler currently does not have the resources to furnish the IBIS tool with fodder for autocompletes." ;
+	ibis:suggested-by <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> ;
+	ibis:response <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> .
+<urn:uuid:7cbf4dc4-e333-44e6-8ceb-044c453431ab> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:created "2024-09-12T01:01:07Z"^^xsd:dateTime ;
+	rdf:value "Client wants to map IBIS issues to GitHub issues." .
+<urn:uuid:68a1b2b7-270e-4afa-a6d2-db72422c0a36> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:a89b6372-217e-4560-a1f4-f890105d077c> ;
+	dct:created "2024-03-18T18:35:40Z"^^xsd:dateTime ;
+	rdf:value "Ordinary transforms are already attached to their respective queues. How do we handle transforms for addressable queues?" .
+<urn:uuid:a89b6372-217e-4560-a1f4-f890105d077c> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:34:00Z"^^xsd:dateTime ;
+	rdf:value "Finish implementing addressable transforms." ;
+	ibis:responds-to <urn:uuid:10cd698f-0192-450b-a524-9c4c17a75cf0> .
+<urn:uuid:286f4939-6973-4603-8ddb-aa1e43295999> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:56:03Z"^^xsd:dateTime ;
+	rdf:value "Put vocab.methodandstructure.com into Intertwingler." ;
+	ibis:generalizes <urn:uuid:8650031b-36fb-48a4-b7c1-4676deb376e0> ;
+	ibis:suggests <urn:uuid:d605090f-6e9f-4597-bb63-a1541baccdf0> .
+<urn:uuid:26aec95a-928e-4b31-9ba8-5d3b4ba996fc> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:34:17Z"^^xsd:dateTime ;
+	rdf:value "Use radio buttons to select between IBIS network and SKOS concept scheme." ;
+	ibis:responds-to <urn:uuid:c83e0d17-c742-43b5-a93b-2660f43dd9ba> .
+<urn:uuid:211f09bd-ea29-475e-8b93-6aa0b954c999> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:49:43Z"^^xsd:dateTime ;
+	rdf:value "Autofilled text boxes are implemented inconsistently across browsers." ;
+	ibis:opposes <urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b> .
+<urn:uuid:836cc0e1-e6ca-4935-9c79-ec892d2480d4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:01:24Z"^^xsd:dateTime ;
+	rdf:value "Yes, always show the focus button and make clicking on it a no-op." ;
+	ibis:responds-to <urn:uuid:9fd48a18-ed21-4daf-8ea5-0a4d44f35b6c> .
+<urn:uuid:8005ab95-86a5-4b0d-8c5f-7cb92e75e0d4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:08:36Z"^^xsd:dateTime ;
+	rdf:value "Client wants to use Intertwingler as a back-end." .
+<urn:uuid:40f5e3c5-b9ae-42db-8f1b-b1f07faf68ff> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:a89b6372-217e-4560-a1f4-f890105d077c> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-18T18:40:01Z"^^xsd:dateTime ;
+	rdf:value "Put every addressable transform in the queue and have the path parameters filter out and rearrange the remnants." ;
+	ibis:responds-to <urn:uuid:68a1b2b7-270e-4afa-a6d2-db72422c0a36> .
+<urn:uuid:f131d774-bbb2-4295-b834-fc5dacd90c7e> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:57:30Z"^^xsd:dateTime ;
+	rdf:value "Put intertwingler.net into Intertwingler (i.e., make it run its own website)." ;
+	ibis:responds-to <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> .
+<urn:uuid:b8712800-772c-48c6-9e4e-84793094a0d5> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:49:03Z"^^xsd:dateTime ;
+	rdf:value "[DONE] Generate an ARM64 Docker image." ;
+	ibis:responds-to <urn:uuid:d606935b-2e46-49fc-9463-141f3e37987b> .
+<urn:uuid:19b9d5d0-b32d-4651-a6ed-bb5127102646> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:37:30Z"^^xsd:dateTime ;
+	rdf:value "The user's intent is always clear." ;
+	ibis:supports <urn:uuid:14efcaa7-c38a-4d9d-95b1-4dd4e77bb3a9> .
+<urn:uuid:f398478e-af15-4890-99ef-58375a73fff2> a cgto:Space ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:07:58Z"^^xsd:dateTime ;
+	cgto:focus <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	dct:title "Intertwingler Space" ;
+	ci:canonical <https://intertwingler.ibis.makethingsmakesense.com/> .
+<urn:uuid:aa941f0c-f944-49ce-9155-dbfcb8e884c7> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T21:03:58Z"^^xsd:dateTime ;
+	rdf:value "doriantaylor.com only needs a basic notion of \"private\" (only visible to me) and \"public\"." ;
+	ibis:supports <urn:uuid:6c6f073b-4aa7-454e-96b0-efc728e83c8a> .
+<urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:8005ab95-86a5-4b0d-8c5f-7cb92e75e0d4> ;
+	a ibis:Issue ;
+	dct:created "2024-09-12T01:04:37Z"^^xsd:dateTime ;
+	rdf:value "Client wants to use the IBIS tool in everyday operations." ;
+	ibis:generalizes <urn:uuid:7cbf4dc4-e333-44e6-8ceb-044c453431ab> .
+<urn:uuid:733e71ba-95d7-4201-97ca-78a6834a2ced> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:32:51Z"^^xsd:dateTime ;
+	rdf:value "Use a dropdown to select between IBIS network and SKOS concept scheme like in the initialization phase." ;
+	ibis:responds-to <urn:uuid:c83e0d17-c742-43b5-a93b-2660f43dd9ba> ;
+	ibis:supported-by <urn:uuid:108f09ba-cddd-4433-958e-1089545c7cb1> .
+<urn:uuid:3f68a66b-13ba-4bbc-b040-e587d33b2643> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Argument ;
+	dct:created "2024-09-12T01:50:35Z"^^xsd:dateTime ;
+	rdf:value "There will be an ambiguity with the intent of typing in a value not found in the autofill: are you renaming the current network or making a new one?" ;
+	ibis:opposes <urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b> .
+<urn:uuid:91650821-22e2-4731-bd9a-b45f196d40f4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-03-15T20:55:21Z"^^xsd:dateTime ;
+	rdf:value "Put natureof.software into Intertwingler." ;
+	ibis:responds-to <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> .
+<urn:uuid:35df0c71-05eb-49fe-9691-8b1d708a5f05> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	ibis:questions <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> ;
+	dct:created "2024-02-16T21:13:26Z"^^xsd:dateTime ;
+	rdf:value "How do we get instance data in and out?" .
+<urn:uuid:efb8131e-d56d-4948-b55e-67eee10d1f71> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:ac2f38cc-22a8-473c-9149-da337087bb9a> ;
+	dct:created "2024-09-13T03:27:06Z"^^xsd:dateTime ;
+	rdf:value "How do you safely store API credentials?" .
+<urn:uuid:c90ada9b-0ef8-4998-87cd-896084ee66ac> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	dct:creator <mailto:burner@methodandstructure.com> ;
+	dct:created "2024-02-16T21:09:59Z"^^xsd:dateTime ;
+	rdf:value "About half a dozen dependencies have patches that have yet to be merged upstream." ;
+	ibis:suggested-by <urn:uuid:8005ab95-86a5-4b0d-8c5f-7cb92e75e0d4> .
+<urn:uuid:7a55af8c-df7c-437e-9d2c-6676d12e6455> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77> ;
+	dct:created "2024-09-12T01:09:32Z"^^xsd:dateTime ;
+	rdf:value "What about the IBIS entity in context? Does it get ported to the other network?" .
+<urn:uuid:1a9cc3f5-1234-4332-830e-f956b18191b4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T03:14:52Z"^^xsd:dateTime ;
+	rdf:value "Automatically import the node; people can remove it later." ;
+	ibis:responds-to <urn:uuid:7a55af8c-df7c-437e-9d2c-6676d12e6455> .
+<urn:uuid:89bf3d6c-9a15-4232-ba67-42774f9bdcd4> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Issue ;
+	ibis:questions <urn:uuid:728bc6fb-1b29-4793-950e-13a6b33208a3> ;
+	dct:created "2024-09-12T03:18:38Z"^^xsd:dateTime ;
+	rdf:value "What about getting nodes out of networks? How do you remove an IBIS entity (SKOS concept) from a network (concept scheme)?" .
+<urn:uuid:2516bdf4-13dd-4f25-8a3d-f2fc288101f7> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	ibis:specializes <urn:uuid:a4ce7c46-4499-431f-b318-e053753a4e13> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T01:40:58Z"^^xsd:dateTime ;
+	rdf:value "Make a field in the UI for (re)setting the network's name." ;
+	ibis:responds-to <urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a> .
+<urn:uuid:ff2a7c2b-613d-461a-b1e4-d2d3322aa1f0> skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+	a ibis:Position ;
+	dct:created "2024-09-12T02:03:21Z"^^xsd:dateTime ;
+	rdf:value "No, remove the set focus button if the network in question is already focused." ;
+	ibis:responds-to <urn:uuid:9fd48a18-ed21-4daf-8ea5-0a4d44f35b6c> .

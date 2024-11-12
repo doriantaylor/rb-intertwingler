@@ -1735,7 +1735,11 @@ module Intertwingler
         else
           # get all the equivalents, again note we can't trust this output
           # completely so we filter for URIs
-          ep = Set[p] | p.entail(:equivalentProperty).select(&:uri?).to_set
+          ep = Set[p]
+          # URIs that aren't vocab terms live in a funny space
+          ep |= p.entail(:equivalentProperty).select(&:uri?).to_set if
+            p.respond_to?(:property?)
+
           ep.map do |e|
             # get the subproperties of each
             sp = e.respond_to?(:property?) && e.respond_to?(:entail) ?
