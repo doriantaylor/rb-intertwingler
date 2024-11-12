@@ -56,21 +56,9 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :document
   #
-  #     # Specifies an rdfs:Class, e.g. a subclasswhich is explicitly not a host.
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :except
-  #
-  #     # A target class of an itcv:FragmentSpecifier.
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :fragment
-  #
   #     # This property relates a handler to the engine.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :handler
-  #
-  #     # Specifies a class of host document.
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :host
   #
   #     # Denotes the base URI under management from this resolver.
   #     # @return [RDF::Vocabulary::Term]
@@ -234,18 +222,18 @@ module Intertwingler::Vocab
       label: {en: "document"},
       range: "http://www.w3.org/2000/01/rdf-schema#Class",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
-    property :except,
-      comment: {en: "Specifies an rdfs:Class, e.g. a subclasswhich is explicitly not a host."},
+    property :"except-class",
+      comment: {en: "Specifies an rdfs:Class, e.g. a subclass which is explicitly not a host."},
       domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier",
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
-      label: {en: "except"},
+      label: {en: "except-class"},
       range: "http://www.w3.org/2000/01/rdf-schema#Class",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
-    property :fragment,
+    property :"fragment-class",
       comment: {en: "A target class of an itcv:FragmentSpecifier."},
-      domain: ["https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier", "https://vocab.methodandstructure.com/intertwingler#Resolver"],
+      domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier",
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
-      label: {en: "fragment"},
+      label: {en: "fragment-class"},
       range: "http://www.w3.org/2000/01/rdf-schema#Class",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"fragment-list",
@@ -276,11 +264,11 @@ module Intertwingler::Vocab
       label: {en: "handler-list"},
       range: "https://vocab.methodandstructure.com/intertwingler#HandlerList",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
-    property :host,
+    property :"host-class",
       comment: {en: "Specifies a class of host document."},
       domain: "https://vocab.methodandstructure.com/intertwingler#FragmentSpecifier",
       isDefinedBy: "https://vocab.methodandstructure.com/intertwingler#",
-      label: {en: "host"},
+      label: {en: "host-class"},
       range: "http://www.w3.org/2000/01/rdf-schema#Class",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :manages,
