@@ -2,6 +2,7 @@ require 'intertwingler/vocab'
 require 'intertwingler/handler'
 require 'intertwingler/document'
 require 'xml/mixup'
+require 'rdf/rdfxml'
 
 # This is a `GET` handler for what I'm calling "_catalogue_ resources"
 # (sorry Americans). Its purpose is to tell us things like what's in
@@ -123,6 +124,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     all_properties: '611ed2d0-1544-4e0b-a4db-de942e1193e2',
     inventory:      'bf4647be-7b02-4742-b482-567022a8c228',
     me:             'fe836b6d-11ef-48ef-9422-1747099b17ca',
+    all_vocabs:     '13e45ee1-0b98-4d4b-9e74-a83a09e85030',
   }.transform_values { |v| RDF::URI("urn:uuid:#{v.freeze}") }
   # XXX "graduate" the URI_MAP construct from transforms to ordinary handlers?
   URI_MAP = URI_REV.invert
@@ -183,7 +185,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     }.map do |method, pred|
       uu   = URI_REV.fetch method # trigger a KeyError if missing
       uri  = resolver.uri_for uu, slugs: true, as: :uri
-      src  = base.route_to uri
+      src  = resolver.base.route_to uri
       # we could hard-code these i suppose but this affords changing them
       rel  = resolver.abbreviate pred
       type = resolver.abbreviate CGTO.Summary
@@ -327,23 +329,34 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     # log.debug abbrs.select {|_, v| v.nil? }.inspect
 
+    obst = resolver.abbreviate(QB.Observation)
+
     # okay now we can sort it
+    obs  = 0
     body = counts.sort do |a, b|
       # log.debug({ a.first => abbrs[a.first], b.first => abbrs[b.first]}).inspect
       abbrs[a.first] <=> abbrs[b.first]
     end.map do |type, record|
+      row = "o.%d" % obs += 1
+      abt = "##{row}"
       tt = resolver.abbreviate type.type, prefixes: prefixes if
         type.respond_to? :type
-      asserted = RDF::Literal(record.first, datatype: XSD.nonNegativeInteger)
-      inferred = RDF::Literal(record.last,  datatype: XSD.nonNegativeInteger)
-      st = resolver.abbreviate CGTO.Summary
+      asserted = litt(
+        RDF::Literal(record.first, datatype: XSD.nonNegativeInteger),
+        about: abt, property: CGTO['asserted-subject-count'])
+      inferred = litt(
+        RDF::Literal(record.last,  datatype: XSD.nonNegativeInteger),
+        about: abt, property: CGTO['inferred-subject-count'])
+      st = resolver.abbreviate CGTO.Index
       cols = [
         { linkt(type, typeof: tt, label: abbrs[type] || type) => :th },
-        { linkt('', typeof: st, label: asserted) => :td },
-        { linkt('', typeof: st, label: inferred) => :td },
+        { linkt('', rel: CGTO['asserted-subjects'],
+                typeof: st, label: asserted) => :td },
+        { linkt('', rel: CGTO['inferred-subjects'],
+                typeof: st, label: inferred) => :td },
       ]
 
-      { cols => :tr }
+      { cols => :tr, id: row, about: abt, typeof: obst }
     end
 
     { [
@@ -452,39 +465,30 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # XXX we can do this later lol
   end
 
-  public
+  def all_vocabs base, **args
+    io = StringIO.new '', 'w+', encoding: Encoding::BINARY
 
-  def handle req
-    # complain unless this is a GET or HEAD
+    prefixes = resolver.prefixes.transform_values(&:to_uri)
 
-    # get the uri
-    uri  = RDF::URI(req.url)
-    orig = uri.dup
+    RDF::Writer.for(:rdf).new(io, base_uri: base, prefixes: prefixes) do |writer|
+      resolver.prefixes.values.each do |vocab|
+        repo.query({ graph_name: vocab.to_uri }).each do |stmt|
+          # warn stmt.to_triple.inspect
+          writer << stmt.to_triple
+        end
+      end
+    end
 
-    # clip off the query
-    query = uri.query
-    uri.query = nil
+    # require 'pry'
+    # binding.pry
 
-    # uuid in here??
-    subject = resolver.uuid_for uri, verify: false
+    Rack::Response[200, {
+      'content-type'   => 'application/rdf+xml',
+      'content-length' => io.size,
+    }, io]
+  end
 
-    # get uuid or return 404
-    return Rack::Response[404, {
-      'content-type' => 'text/plain',
-    }, ['no catalogue']] unless subject
-
-    # find mapping or return 404
-    method = URI_MAP[subject]
-
-    return Rack::Response[404, {
-      'content-type' => 'text/plain',
-    }, ['no mapping']] unless method
-
-    # run the dispatch
-    body = send method, URI(uri.to_s)
-
-    # pfx = resolver.prefix_subset
-
+  def xhtml_response uri, body
     ttag = 'hi lol'
 
     doc = XML::Mixup.xhtml_stub(
@@ -497,5 +501,62 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       'content-type'   => 'application/xhtml+xml',
       'content-length' => str.length.to_s,
     }, StringIO.new(str, ?r, encoding: Encoding::BINARY)]
+  end
+
+  #
+  #
+  #
+  #
+  # @
+  #
+  def dispatch subject, uri
+    return unless method = URI_MAP[subject]
+
+    body = send(method, URI(uri.to_s))
+
+    case body
+    when nil then nil
+    when Hash, Array then xhtml_response uri, body
+    when Rack::Response then body
+    else nil
+    end
+
+  end
+
+  public
+
+  # General-purpose dispatch handler.
+  #
+  # @param req [Rack::Request] the request object
+  #
+  # @return [Rack::Response] a response
+  #
+  def handle req
+    # complain unless this is a GET or HEAD
+
+    # get the uri
+    uri  = RDF::URI(req.url)
+    # orig = uri.dup
+
+    # clip off the query
+    # query = uri.query
+    uri.query = nil
+
+    # uuid in here??
+    subject = resolver.uuid_for uri, verify: false
+
+    # get uuid or return 404
+    return Rack::Response[404, {
+      'content-type' => 'text/plain',
+    }, ['no catalogue']] unless subject
+
+    # run the dispatch or return 404
+    resp = dispatch subject, uri
+
+    return Rack::Response[404, {
+      'content-type' => 'text/plain',
+    }, ['no mapping']] unless resp
+
+    resp
   end
 end

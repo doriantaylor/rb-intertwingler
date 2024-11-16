@@ -424,7 +424,7 @@ class Intertwingler::Document
       rows = []
       cache.keys.sort(&sl).each do |k|
         c = cache[k]
-        href = base.route_to @resolver.uri_for(c[:doc], as: :uri)
+        href = uri.route_to @resolver.uri_for(c[:doc], as: :uri)
         dt = @resolver.abbreviate @repo.asserted_types(c[:doc])
         uu = URI(k.to_s).uuid
         nc = UUID::NCName.to_ncname uu, version: 1
@@ -770,10 +770,11 @@ class Intertwingler::Document
                 # XXX this is where i would like canonical_uri to
                 # just "know" to do this (also this will fail if
                 # this is not a uuid)
-                id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
+                # id = UUID::NCName.to_ncname_64(o.value.dup, version: 1)
                 olp, olo = @repo.label_for(o, struct: neighbours[o])
-                href = base.dup
-                href.fragment = id
+                href = @resolver.uri_for(o)
+                # href = base.dup
+                # href.fragment = id
                 { link_tag(href, rel: ps, base: base,
                   typeof: @repo.asserted_types(o, struct: struct),
                   property: olp, label: olo,
@@ -858,13 +859,13 @@ class Intertwingler::Document
           el << { dl => :dl } unless dl.empty?
 
           # id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
-          id = @resolver.uri_for s, slugs: true
-          id = id.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
-          sec = { el => :section, id: id, resource: "##{id}" }
+          resource = @resolver.uri_for(s, slugs: true, as: :uri) || URI(s.to_s)
+          id = resource.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
+          sec = { el => :section, id: id, resource: uri.route_to(resource) }
           if typ = @repo.asserted_types(s, struct: struct)
             sec[:typeof] = @resolver.abbreviate typ
           end
-          sec[:rel] = @resolver.abbreviate(fp) if rp
+          sec[:rel] = @resolver.abbreviate(fp) if fp
           sec[:rev] = @resolver.abbreviate(rp) if rp
           sec
         end
@@ -2293,8 +2294,8 @@ class Intertwingler::Document
   #
   # @return [Hash] the element spec
   #
-  def self.literal_tag resolver, value, name: :span, property: nil, text: nil,
-    prefixes: {}, vocab: nil
+  def self.literal_tag resolver, value, name: :span, about: nil, property: nil,
+      text: nil, prefixes: {}, vocab: nil
 
     prefixes ||= resolver.prefixes
 
@@ -2305,6 +2306,8 @@ class Intertwingler::Document
 
     out = { [text || value.value] => name.to_sym }
     out[:content]  = content if content
+    out[:about]    = resolver.abbreviate(
+      about, prefixes: prefixes, vocab: vocab) if about
     out[:property] = resolver.abbreviate(
       property, prefixes: prefixes, vocab: vocab) if property
 
@@ -2350,9 +2353,11 @@ class Intertwingler::Document
     ltag = if property and label.is_a? RDF::Literal
              literal_tag resolver, label, property: property,
                prefixes: prefixes, vocab: vocab
-            else
-              [label.to_s]
-            end
+           elsif [Hash, Array, Nokogiri::XML::Node].any? { |x| label.is_a? x }
+             label
+           else
+             [label.to_s]
+           end
 
     # make the element with the bits we know for sure
     out = { ltag => name, href: href }

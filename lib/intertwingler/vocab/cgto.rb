@@ -9,7 +9,7 @@ module Intertwingler::Vocab
   #   # Collaborative Graph Tool Ontology
   #   #
   #   # Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes.
-  #   # @version 0.1
+  #   # @version 0.2
   #   class CGTO < RDF::StrictVocabulary
   #     # An error is a type of cgto:View the tool can send the user when something is wrong. It is more suitable to send as a response body than http:Response, which would be problematically self-referential.
   #     # @return [RDF::Vocabulary::Term]
@@ -34,10 +34,6 @@ module Intertwingler::Vocab
   #     # A partially or fully computed geometric rendering of a (sub)graph, or the structured information needed to do so.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :View
-  #
-  #     # 
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :assertedsubjects
   #
   #     # Specifies the owl:Class found in the rdf:type of the subjects.
   #     # @return [RDF::Vocabulary::Term]
@@ -71,7 +67,7 @@ module Intertwingler::Vocab
       comment: {en: "Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes."},
       "http://purl.org/dc/terms/created": "2022-12-04T20:12:02Z",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z"],
+      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z"],
       "http://purl.org/dc/terms/title": {en: "Collaborative Graph Tool Ontology"},
       "http://purl.org/ontology/bibo/status": "http://purl.org/ontology/bibo/status/draft",
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/graph-tool#",
@@ -82,7 +78,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2002/07/owl#imports": "http://purl.org/linked-data/cube#",
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.1",
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.2",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://www.w3.org/ns/shacl#namespace": "https://vocab.methodandstructure.com/graph-tool#",
       "http://www.w3.org/ns/shacl#prefix": "cgto",
@@ -163,7 +159,7 @@ module Intertwingler::Vocab
       label: "asserted-subject-count",
       range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
       type: ["http://purl.org/linked-data/cube#MeasureProperty", "http://www.w3.org/2002/07/owl#DatatypeProperty"]
-    property :assertedsubjects,
+    property :"asserted-subjects",
       comment: {en: ""},
       domain: "http://purl.org/linked-data/cube#Observation",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
@@ -196,10 +192,19 @@ module Intertwingler::Vocab
     property :focus,
       comment: {en: "The entity that takes primary focus in the space is what will be shown, e.g. on the front page of a Web app."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Space",
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#focus-of",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "focus",
       subPropertyOf: "http://rdfs.org/sioc/ns#space_of",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"focus-of",
+      comment: {en: "The entity that takes primary focus in the space is what will be shown, e.g. on the front page of a Web app."},
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#focus",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "focus-of",
+      range: "https://vocab.methodandstructure.com/graph-tool#Space",
+      subPropertyOf: "http://rdfs.org/sioc/ns#has_space",
+      type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :index,
       comment: {en: "Connects the cgto:Space to its cgto:Index of resources."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Space",
@@ -338,7 +343,7 @@ module Intertwingler::Vocab
       label: "resources-by-property",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
 
-    RDF::Vocabulary.register :ci, self if
+    RDF::Vocabulary.register :cgto, self if
       RDF::Vocabulary.respond_to? :register
   end
 end
