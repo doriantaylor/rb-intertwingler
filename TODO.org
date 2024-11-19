@@ -9,32 +9,40 @@
     - [X] provisional solution for main dispatcher (route by RDF type)
     - [X] replace hard-coded pseudo-RDF for vocabs with real RDF/XML
     - [ ] new catalogue resolution mechanism
+      - [ ] handle potentially paginated inventories
   - [ ] javascript reorganized
     - [ ] decide where to hang all the app-specific scripts
-    - [ ] fix math on hyperbolic representation
-      - [ ] (probably will need a new algorithm for final sugiyama phase tbh)
-- [ ] catalogue resources
-  - [ ] aggregated vocabs
+    - [ ] fix math on hyperbolic representation (deal with this last)
+      - [ ] (probably will need a whole new algorithm for final layout phase tbh)
+- [ ] create [[lib/intertwingler/handler/catalogue.rb][catalogue resources]]
+  - [ ] aggregated vocab resource
     - [ ] just RDF/XML for now
-    - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them
-  - [ ] index
-  - [ ] summary pages
+    - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them and then forever again to render 3 megabytes of RDF/XML
+      - (note it is mainly schema dot org that is responsible for this and we don't even use it)
+      - [ ] maybe consider some kind of subsetting/parametrization?
+  - [ ] ~cgto:Index~ resource
+    - (points to different types of summary resources)
+  - [ ] ~cgto:Summary~ resources
+    - (counts of resources and links to inventories)
     - [ ] by class
       - asserted/inferred, counts/links
     - [ ] by property
       - asserted/inferred, domain/range, counts/links
-  - [ ] inventory page
+  - [ ] ~cgto:Inventory~ resource (parametrized;
     - [ ] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
-      - [ ] handling of empty values (ignore, null, empty string, etc)
+      - [ ] handling of empty values (ignore vs null, empty string, etc)
       - [ ] some way to represent composite values
         - [ ] arrays (unbounded)
         - [ ] tuples (fixed length)
           - [ ] shift vs truncate policy
         - [ ] discrete sets
         - [ ] numeric (or number-like, e.g. date) spans
-    - [ ] some way to assign parse/serialize, compose/decompose functions
-      - [ ] change parameter spec or generalize domain
-    - [ ] fix [[lib/intertwingler/params.rb][~Intertwingler::Params~]]
+          - [ ] bounded on either side?
+          - [ ] include/exclude boundaries?
+      - [ ] determine how to represent a "term" type
+      - [ ] some way to assign parse/serialize, compose/decompose functions
+        - [ ] change parameter spec or generalize domain
+    - [ ] fix [[lib/intertwingler/params.rb][Intertwingler::Params]]
       - [ ] create mechanism for sets and sequences
         - [ ] read out of RDF graph
       - [ ] create a "term" parameter value type
@@ -43,6 +51,8 @@
     - [ ] some kind of caching?
     - [ ] pagination links
   - [ ] ~/me~ resource
+    - (e.g. "my" ~sioc:UserAccount~ which eventually hooks up to ~foaf:Person~ etc)
+    - [ ] rework application state stuff so it is centered around the user
 * TODO a shippable ~Intertwingler~
 Around early August (2023) I decided to go with a much more ambitious design that does things I wasn't initially planning on doing. For example, I wasn't initially planning on doing the whole /transform/ infrastructure, but I think it will be a much more powerful product to have them than not to.
 ** TODO something you can run with ~rackup~
