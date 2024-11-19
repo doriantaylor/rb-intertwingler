@@ -28,7 +28,8 @@
       - asserted/inferred, counts/links
     - [ ] by property
       - asserted/inferred, domain/range, counts/links
-  - [ ] ~cgto:Inventory~ resource (parametrized;
+  - [ ] ~cgto:Inventory~ resource
+    - (parametrized; used to enumerate actual resources in the graph)
     - [ ] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
       - [ ] handling of empty values (ignore vs null, empty string, etc)
       - [ ] some way to represent composite values
