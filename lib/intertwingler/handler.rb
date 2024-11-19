@@ -64,6 +64,16 @@ class Intertwingler::Handler
         super message, status: status || 403
       end
     end
+
+    class NotFound < Client
+    end
+
+    class Forbidden < Client
+    end
+
+    class Conflict < Client
+    end
+
     class Server < self
       def initialize message, status: nil
         super message, status: status || 500

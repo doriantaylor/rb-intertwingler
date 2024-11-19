@@ -2306,8 +2306,7 @@ class Intertwingler::Document
 
     out = { [text || value.value] => name.to_sym }
     out[:content]  = content if content
-    out[:about]    = resolver.abbreviate(
-      about, prefixes: prefixes, vocab: vocab) if about
+    out[:about]    = about if about
     out[:property] = resolver.abbreviate(
       property, prefixes: prefixes, vocab: vocab) if property
 

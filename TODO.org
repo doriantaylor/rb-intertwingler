@@ -1,523 +1,567 @@
 #+STARTUP: showall hidestars indent
+* TODO initial port of IBIS tool
+- [-] front-end separated
+  - [X] [[https://github.com/doriantaylor/app-ibis-front-end][git repository]]
+  - [X] Makefile
+  - [X] files renamed
+  - [-] XSLT rewritten
+    - [X] dependencies shaken out
+    - [X] provisional solution for main dispatcher (route by RDF type)
+    - [X] replace hard-coded pseudo-RDF for vocabs with real RDF/XML
+    - [ ] new catalogue resolution mechanism
+  - [ ] javascript reorganized
+    - [ ] decide where to hang all the app-specific scripts
+    - [ ] fix math on hyperbolic representation
+      - [ ] (probably will need a new algorithm for final sugiyama phase tbh)
+- [ ] catalogue resources
+  - [ ] aggregated vocabs
+    - [ ] just RDF/XML for now
+    - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them
+  - [ ] index
+  - [ ] summary pages
+    - [ ] by class
+      - asserted/inferred, counts/links
+    - [ ] by property
+      - asserted/inferred, domain/range, counts/links
+  - [ ] inventory page
+    - [ ] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
+      - [ ] handling of empty values (ignore, null, empty string, etc)
+      - [ ] some way to represent composite values
+        - [ ] arrays (unbounded)
+        - [ ] tuples (fixed length)
+          - [ ] shift vs truncate policy
+        - [ ] discrete sets
+        - [ ] numeric (or number-like, e.g. date) spans
+    - [ ] some way to assign parse/serialize, compose/decompose functions
+      - [ ] change parameter spec or generalize domain
+    - [ ] fix [[lib/intertwingler/params.rb][~Intertwingler::Params~]]
+      - [ ] create mechanism for sets and sequences
+        - [ ] read out of RDF graph
+      - [ ] create a "term" parameter value type
+        - [ ] serializes/canonicalizes to CURIE (if possible) using internal prefix map
+        - [ ] expands to URI (again, if possible)
+    - [ ] some kind of caching?
+    - [ ] pagination links
+  - [ ] ~/me~ resource
 * TODO a shippable ~Intertwingler~
-  Around early August I decided to go with a much more ambitious design that does things I wasn't initially planning on doing. For example, I wasn't initially planning on doing the whole /transform/ infrastructure, but I think it will be a much more powerful product to have them than not to.
+Around early August (2023) I decided to go with a much more ambitious design that does things I wasn't initially planning on doing. For example, I wasn't initially planning on doing the whole /transform/ infrastructure, but I think it will be a much more powerful product to have them than not to.
 ** TODO something you can run with ~rackup~
-   - This is proto-MVP.
+- This is proto-MVP.
 *** TODO get the main engine working
-    - The engine is the thing that resolves URIs, picks content handlers, and pipes requests/responses through transforms.
-    - The engine also has residual responsibility for all errors and redirects.
-    - As for the work outstanding, we're mostly talking about a data structure that is highly dependent on a huge schwack of configuration data.
-    - In the interest of shipping, I'm also just going to have it poll the handlers in the configured order, even though the long-term idea is to have it do something smarter than that.
+- The engine is the thing that resolves URIs, picks content handlers, and pipes requests/responses through transforms.
+- The engine also has residual responsibility for all errors and redirects.
+- As for the work outstanding, we're mostly talking about a data structure that is highly dependent on a huge schwack of configuration data.
+- In the interest of shipping, I'm also just going to have it poll the handlers in the configured order, even though the long-term idea is to have it do something smarter than that.
 **** TODO reads configuration out of the graph
-     - The main issue here is /how do we represent the massive amount of configuration we need/?
-       - The answer is the [[https://vocab.methodandstructure.com/intertwingler#][Intertwingler Configuration Vocabulary]] as well as the [[https://vocab.methodandstructure.com/transformation#][Transformation Functions Ontology]].
-     - [ ] thinking of implementing this as a ~configure~ class method on each of the relevant classes
-       - [ ] handle ~Params::Registry~ by making an ~Intertwingler~-specific subclass
+- The main issue here is /how do we represent the massive amount of configuration we need/?
+  - The answer is the [[https://vocab.methodandstructure.com/intertwingler#][Intertwingler Configuration Vocabulary]] as well as the [[https://vocab.methodandstructure.com/transformation#][Transformation Functions Ontology]].
+- [ ] thinking of implementing this as a ~configure~ class method on each of the relevant classes
+  - [ ] handle ~Params::Registry~ by making an ~Intertwingler~-specific subclass
 ***** TODO harmonize ITCV and TFO vocabularies
-      - The issue is basically that TFO does a handy-dandy job of describing parameters (for the newly-minted ~Params::Registry~), and relating them to what /it/ calls "transforms" which are different from what ~Intertwingler~ calls a transform.
-        - An ~itcv:Transform~ is a subclass of ~itcv:Handler~, which can be thought of a /container/ for at least one resource, while a ~tfo:Transform~ is equivalent to /one/ of those resources contained as such, like an individual service endpoint.
-        - What we /want/ is to be able to specify ~tfo:Parameter~ entities and lists thereof to pass into the parameter registry, but the relations are too tight
-      - I also don't want TFO to depend on ITCV but ITCV can depend on TFO.
-      - *Therefore:*
-        - [ ] Make (or find) a suitable generic superclass for ~tfo:Transform~ that represents an individual service endpoint, and make ~tfo:Transform~ ~rdfs:subClassOf~ that.
-        - [ ] Add the necessary classes/relations to make ITCV able to use ~tfo:Parameter~ declarations.
-          - [ ] Create configuration language for the various handlers/transforms that need it:
-            - [ ] filesystem
-            - [ ] content-addressable store
-            - [ ] XSLT processing instruction transform
-          - Should we reuse ~tfo:Parameter~ on these too? probably.
-            - This means the abstract parameter-having superclass is gonna need to subsume handlers /and/ individual resources /within/ handlers.
-          - Should we bootstrap the configuration for the graph database /itself/?
-            - like point the command line program to an initial config RDF which loads into the in-memory store, finds the config for the persistent store, spins that up, then disgorges its contents into it?
-            - Not sure yet.
-            - Note that ~RDF::Repository~ has subclasses that take arbitrary parameters
-              - (we are initially interested in ~RDF::LMDB~ that has ~dir~ and ~mapsize~)
-              - (should note that ~Store::Digest~, at least the one driver I wrote, /also/ uses LMDB, so it /also/ needs ~dir~ and ~mapsize~)
-              - (the filesystem handler has to specify multiple directories in order so it'll have to be a list or otherwise it'd reuse ~dir~ too)
+- The issue is basically that TFO does a handy-dandy job of describing parameters (for the newly-minted ~Params::Registry~), and relating them to what /it/ calls "transforms" which are different from what ~Intertwingler~ calls a transform.
+  - An ~itcv:Transform~ is a subclass of ~itcv:Handler~, which can be thought of a /container/ for at least one resource, while a ~tfo:Transform~ is equivalent to /one/ of those resources contained as such, like an individual service endpoint.
+  - What we /want/ is to be able to specify ~tfo:Parameter~ entities and lists thereof to pass into the parameter registry, but the relations are too tight
+- I also don't want TFO to depend on ITCV but ITCV can depend on TFO.
+- *Therefore:*
+  - [ ] Make (or find) a suitable generic superclass for ~tfo:Transform~ that represents an individual service endpoint, and make ~tfo:Transform~ ~rdfs:subClassOf~ that.
+  - [ ] Add the necessary classes/relations to make ITCV able to use ~tfo:Parameter~ declarations.
+    - [ ] Create configuration language for the various handlers/transforms that need it:
+      - [ ] filesystem
+      - [ ] content-addressable store
+      - [ ] XSLT processing instruction transform
+    - Should we reuse ~tfo:Parameter~ on these too? probably.
+      - This means the abstract parameter-having superclass is gonna need to subsume handlers /and/ individual resources /within/ handlers.
+    - Should we bootstrap the configuration for the graph database /itself/?
+      - like point the command line program to an initial config RDF which loads into the in-memory store, finds the config for the persistent store, spins that up, then disgorges its contents into it?
+      - Not sure yet.
+      - Note that ~RDF::Repository~ has subclasses that take arbitrary parameters
+        - (we are initially interested in ~RDF::LMDB~ that has ~dir~ and ~mapsize~)
+        - (should note that ~Store::Digest~, at least the one driver I wrote, /also/ uses LMDB, so it /also/ needs ~dir~ and ~mapsize~)
+        - (the filesystem handler has to specify multiple directories in order so it'll have to be a list or otherwise it'd reuse ~dir~ too)
 ***** TODO write out the full handler/transform/parameter configuration
-      - We're gonna need a demo configuration after all.
+- We're gonna need a demo configuration after all.
 **** TODO initializes handlers and transforms
-     - [ ] Write ~configure~ methods for the engine and handlers.
+- [ ] Write ~configure~ methods for the engine and handlers.
 **** TODO handles request loop
-     - I already have a few individual handlers and transforms running, now have to put them together.
+- I already have a few individual handlers and transforms running, now have to put them together.
 ***** TODO resolver works 100%
-      - There are some ambiguities about how the resolver ought to behave that can't be determined until the whole thing is online.
-        - In particular, how multiple path segments ought to be handled is unclear in the absence of ~ci:canonical~.
-          - set-theoretic like the old one? probably.
-            - (i.e., the ~/~ character is treated like an AND)
-          - do we nominate certain RDF classes as "containers" and/or certain properties as containment relations?
-            - more to the point, do we want to /discount/ certain classes and properties from being interpreted as such?
-            - basic issue here is determining when to put a terminating ~/~ on the URL path: "containers" should get them, non-containers should not.
-        - Squashing to lowercase, also underscores to hyphens, etc
-          - I prefer hyphens over underscores but other people may not.
-          - also certain slugs may need to be preserved exactly.
-          - do we want to make that behaviour configurable?
+- There are some ambiguities about how the resolver ought to behave that can't be determined until the whole thing is online.
+  - In particular, how multiple path segments ought to be handled is unclear in the absence of ~ci:canonical~.
+    - set-theoretic like the old one? probably.
+      - (i.e., the ~/~ character is treated like an AND)
+    - do we nominate certain RDF classes as "containers" and/or certain properties as containment relations?
+      - more to the point, do we want to /discount/ certain classes and properties from being interpreted as such?
+      - basic issue here is determining when to put a terminating ~/~ on the URL path: "containers" should get them, non-containers should not.
+  - Squashing to lowercase, also underscores to hyphens, etc
+    - I prefer hyphens over underscores but other people may not.
+    - also certain slugs may need to be preserved exactly.
+    - do we want to make that behaviour configurable?
 ***** TODO request transforms transform requests
-      - There is currently no code for passing HTTP requests /or/ entire responses into transforms
-      - [ ] write ~Intertwingler::Representation::HTTP~
-      - [ ] write request-transform harness
-        - [ ] write queue injection/manipulation code
+- There is currently no code for passing HTTP requests /or/ entire responses into transforms
+- [ ] write ~Intertwingler::Representation::HTTP~
+- [ ] write request-transform harness
+  - [ ] write queue injection/manipulation code
 ***** TODO content handlers handle content
-      - In the interest of shipping, this should just poll the handlers in the order they were configured.
-      - We can come around later and do the fancy handler prioritization code (which is gonna depend on the handler manifest protocol).
+- In the interest of shipping, this should just poll the handlers in the order they were configured.
+- We can come around later and do the fancy handler prioritization code (which is gonna depend on the handler manifest protocol).
 ***** TODO response transforms transform responses
-      - This actually works on the test bench.
-      - [ ] write response transform harness (likely very similar to request transform harness)
+- This actually works on the test bench.
+- [ ] write response transform harness (likely very similar to request transform harness)
 *** TODO complete essential handlers
-    - I have broken the list of handlers and transforms into MVP versus not, irrespective of the workload.
-    - [ ] ~Intertwingler::Handler::Generated~
-      - This is the basic handler for HTML/XML markup which is generated exclusively from the graph. It is mainly intended to be a stopgap until a [[https://vocab.methodandstructure.com/loupe#][Loupe]] processor becomes viable.
+- I have broken the list of handlers and transforms into MVP versus not, irrespective of the workload.
+- [ ] ~Intertwingler::Handler::Generated~
+  - This is the basic handler for HTML/XML markup which is generated exclusively from the graph. It is mainly intended to be a stopgap until a [[https://vocab.methodandstructure.com/loupe#][Loupe]] processor becomes viable.
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] Devise sub-handler configuration/loading mechanism
+    - [ ] Also determine sub-handler interface
+  - [ ] Core sub-handlers
+    - Most of these have already been written for ~RDF::SAK~ so like the markup trasnforms, it's mainly a matter of repackaging them.
+    - [ ] Generic (X)HTML+RDFa
+      - This will spit out a simple document centred around a subject in the graph, plus resources (and their labels) and literals adjacent to it, including blank nodes. The goal of this thing is to provide you with LEGO pieces to be composed at the network level downstream.
       - [ ] with tests
       - [ ] with documentation
-      - [ ] Devise sub-handler configuration/loading mechanism
-        - [ ] Also determine sub-handler interface
-      - [ ] Core sub-handlers
-        - Most of these have already been written for ~RDF::SAK~ so like the markup trasnforms, it's mainly a matter of repackaging them.
-        - [ ] Generic (X)HTML+RDFa
-          - This will spit out a simple document centred around a subject in the graph, plus resources (and their labels) and literals adjacent to it, including blank nodes. The goal of this thing is to provide you with LEGO pieces to be composed at the network level downstream.
-          - [ ] with tests
-          - [ ] with documentation
-        - [ ] Atom feed
-          - This will take ~GET~ requests to container-like resources and return responses in ~application/atom+xml~.
-          - [ ] with tests
-          - [ ] with documentation
-        - [ ] Google site map
-          - This repackages lists of resources ~Intertwingler~ recognizes as "documents" into something Google can consume. It's mainly here because it was in ~RDF::SAK~ and because it's easy. A later version will probably be implemented as a transform over handler manifests.
-          - [ ] with tests
-          - [ ] with documentation
-        - [ ] [[https://www.w3.org/TR/vocab-data-cube/][Data Cube]]
-          - This one will take a ~qb:DataSet~, ~qb:Slice~, or ~qb:ObservationGroup~ and generate an HTML table.
-          - [ ] with tests
-          - [ ] with documentation
-        - Alphabetic lists
-          - These all follow the same pattern of just a long aphabetized list punctuated by initial-letter sections. Under the hood it's mostly the same code.
-            - I18N/L10N is an issue here that I am totally punting on for the time being.
-          - [ ] [[https://www.w3.org/TR/skos-primer/][SKOS]] concept scheme/collection
-            - This is a simple list broken into alphabetic buckets to handle ~skos:ConceptScheme~ and ~skos:Collection~ entities.
-            - [ ] with tests
-            - [ ] with documentation
-          - [ ] Bibliography
-            - This handler continues the alphabetic list tradition for bibliographic references.
-            - [ ] with tests
-            - [ ] with documentation
-          - [ ] Person/organization list
-            - Alphabetic list hat trick for ~foaf:Person~ and ~org:Organization~, etc.
-            - [ ] with tests
-            - [ ] with documentation
-        - Interactive UI materials
-          - These sub-handlers are intended to provide raw materials for creating user interfaces, particularly where data entry is involved.
-            - (These are the only sub-handlers that need to be written from scratch, but they are dead simple.)
-          - [ ] All classes
-            - This will list all RDF classes known to ~Intertwingler~.
-            - [ ] with tests
-            - [ ] with documentation
-          - [ ] Adjacent properties (to subject)
-            - This will list all properties which are adjacent to a given class, or the class(es) of the subject. Can specify the direction, either ~rdfs:domain~ or ~rdfs:range~.
-            - [ ] with tests
-            - [ ] with documentation
-          - [ ] Adjacent class instances (to property)
-            - This will list all /instances/ of classes which are adjacent to a given property.
-            - [ ] with tests
-            - [ ] with documentation
-    - [ ] ~Intertwingler::Handler::CAS~
-      - This is a front end to ~Store::Digest::HTTP~ (itself a front end to ~Store::Digest~), a content-addresable store that registers blobs under multiple cryptographic digests at once, using [[https://datatracker.ietf.org/doc/html/rfc6920][RFC6920]] addresses.
+    - [ ] Atom feed
+      - This will take ~GET~ requests to container-like resources and return responses in ~application/atom+xml~.
       - [ ] with tests
       - [ ] with documentation
-      - [ ] ~/.well-known/ni/~ handles ~POST~ requests
-        - [ ] responds with redirect, either ~201 Created~ or ~303 See Other~
-    - [-] ~Intertwingler::Handler::FileSystem~
-      - This is a simple content-negotiating file system handler, mainly intended to smooth the transition to content-addressable storage.
+    - [ ] Google site map
+      - This repackages lists of resources ~Intertwingler~ recognizes as "documents" into something Google can consume. It's mainly here because it was in ~RDF::SAK~ and because it's easy. A later version will probably be implemented as a transform over handler manifests.
       - [ ] with tests
       - [ ] with documentation
-      - [-] handles multiple document roots
-        - [X] does not venture outside of them
-        - [ ] skips dotfiles
-        - [X] configurable index basename
-      - [X] does content negotiation
-        - [X] treats ~slug~ (file) first and ~slug/~ (dir) second
-    - [ ] ~Intertwingler::Handler::LDPatch~
-      - This thing only responds to ~PATCH~ requests with ~text/ldpatch~ bodies. Meant to be used in conjunction with the RDF-KV transform.
+    - [ ] [[https://www.w3.org/TR/vocab-data-cube/][Data Cube]]
+      - This one will take a ~qb:DataSet~, ~qb:Slice~, or ~qb:ObservationGroup~ and generate an HTML table.
       - [ ] with tests
       - [ ] with documentation
+    - Alphabetic lists
+      - These all follow the same pattern of just a long aphabetized list punctuated by initial-letter sections. Under the hood it's mostly the same code.
+        - I18N/L10N is an issue here that I am totally punting on for the time being.
+      - [ ] [[https://www.w3.org/TR/skos-primer/][SKOS]] concept scheme/collection
+        - This is a simple list broken into alphabetic buckets to handle ~skos:ConceptScheme~ and ~skos:Collection~ entities.
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Bibliography
+        - This handler continues the alphabetic list tradition for bibliographic references.
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Person/organization list
+        - Alphabetic list hat trick for ~foaf:Person~ and ~org:Organization~, etc.
+        - [ ] with tests
+        - [ ] with documentation
+    - Interactive UI materials
+      - These sub-handlers are intended to provide raw materials for creating user interfaces, particularly where data entry is involved.
+        - (These are the only sub-handlers that need to be written from scratch, but they are dead simple.)
+      - [ ] All classes
+        - This will list all RDF classes known to ~Intertwingler~.
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Adjacent properties (to subject)
+        - This will list all properties which are adjacent to a given class, or the class(es) of the subject. Can specify the direction, either ~rdfs:domain~ or ~rdfs:range~.
+        - [ ] with tests
+        - [ ] with documentation
+      - [ ] Adjacent class instances (to property)
+        - This will list all /instances/ of classes which are adjacent to a given property.
+        - [ ] with tests
+        - [ ] with documentation
+- [ ] ~Intertwingler::Handler::CAS~
+  - This is a front end to ~Store::Digest::HTTP~ (itself a front end to ~Store::Digest~), a content-addresable store that registers blobs under multiple cryptographic digests at once, using [[https://datatracker.ietf.org/doc/html/rfc6920][RFC6920]] addresses.
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] ~/.well-known/ni/~ handles ~POST~ requests
+    - [ ] responds with redirect, either ~201 Created~ or ~303 See Other~
+- [-] ~Intertwingler::Handler::FileSystem~
+  - This is a simple content-negotiating file system handler, mainly intended to smooth the transition to content-addressable storage.
+  - [ ] with tests
+  - [ ] with documentation
+  - [-] handles multiple document roots
+    - [X] does not venture outside of them
+    - [ ] skips dotfiles
+    - [X] configurable index basename
+  - [X] does content negotiation
+    - [X] treats ~slug~ (file) first and ~slug/~ (dir) second
+- [ ] ~Intertwingler::Handler::LDPatch~
+  - This thing only responds to ~PATCH~ requests with ~text/ldpatch~ bodies. Meant to be used in conjunction with the RDF-KV transform.
+  - [ ] with tests
+  - [ ] with documentation
 *** TODO complete essential transforms
-    - [ ] ~Intertwingler::Representation~
-      - This is the monad-like thing that keeps a parsed version of an HTTP message body around so you can pass it through multiple transforms without having to waste resources serializing and reparsing it.
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] ~Intertwingler::Representation::Nokogiri~
-        - This one handles XML/(X)HTML by parsing it with [[https://nokogiri.org/][Nokogiri]].
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] ~Intertwingler::Representation::Vips~
-        - This one handles raster images by parsing them with [[https://github.com/libvips/ruby-vips][Vips]].
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] ~Intertwingler::Representation::Rack~
-        - This one handles ~message/http~ bodies by parsing/serializing ~Rack::Request~ and ~Rack::Response~ objects.
-        - [ ] with tests
-        - [ ] with documentation
-    - [ ] ~Intertwingler::Transform~
-      - [ ] with tests
-      - [ ] with documentation
-    - [ ] ~Intertwingler::Transform::Markup~
-      - Most of these have already been written and the work is in refactoring them into transforms.
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] HTML ↔ XHTML transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Strip comments transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Rewrite ~<head>~ transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Rehydrate transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Add social media metadata transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Add backlinks transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Rewrite links transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Mangle ~mailto:~ transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Amazon tag transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Normalize RDFa prefixes transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Add ~xml-stylesheet~ PI transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Apply XSLT transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Reindent transform
-        - [ ] with tests
-        - [ ] with documentation
-    - [ ] ~Intertwingler::Transform::Raster~
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] Conversion transform
-        - [ ] converts from one image file format to another; does nothing else
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Crop transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Scale transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Desaturate transform
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] Posterize transform
-        - [ ] with tests
-        - [ ] with documentation
-    - [ ] ~Intertwingler::Transform::Markdown~
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] Markdown /hook/ transform
-        - [ ] with tests
-        - [ ] with documentation
-        - [ ] add ~text/markdown~ to ~Accept~
-        - [ ] hook the actual transform
-      - [ ] Markdown → (X)HTML transform
-        - [ ] with tests
-        - [ ] with documentation
-    - [ ] ~Intertwingler::Transform::Sass~
-      - This is potentially our first candidate for stand-alone transform, since all [[https://sass-lang.com/][Sass]] development has moved to [[https://dart.dev/][Dart]] and is literally the only thing I know that has. Until then, we use the old Ruby Sass I guess (or /maaaybe/ [[https://github.com/sass/sassc-ruby][libsass]] bindings? No updates in years though.)
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] Sass /hook/ transform
-        - This request transform makes it possible for downstream content negotiation to select Sass representations.
-        - [ ] with tests
-        - [ ] with documentation
-        - [ ] add ~text/x-vnd.sass~ and ~text/x-vnd.sass.scss~ to ~Accept~
-      - [ ] Sass transform
-        - This will take a Sass document and turn it into CSS.
-        - [ ] with tests
-        - [ ] with documentation
-        - [ ] Sass internal loader can fetch other Sass via subrequest
-    - [ ] ~Intertwingler::Transform::Input~
-      - There is nothing especially appropriate about lumping these resources together other than they are the only ones necessary for MVP that actually process input.
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] Pseudo-file ~PUT~ transform
-        - This will take a ~PUT~ request to an arbitrary resource and transform it into a ~POST~ to ~/.well-known/ni/~ (controlled by ~Store::Digest~), but only after recording the pseudo-file's pseudo-path in the graph.
-          - I have been thinking about how to do this one more transactionally, since the content-addressable store is a separate module and not 100% guaranteed to be reliable.
-            - Rather than crud up the graph with fake file references to nothing, maybe have the request handler install a response handler that takes the ~201 Created~ with the redirect (the ordinary behaviour of ~Store::Digest::HTTP~ when you ~POST~ to ~/.well-known/ni/~), have it rewrite that response (or at least the ~Location:~ header), and in the process, glean the hash from the response (~/.well-known/ni/sha-256/whatever…~) and in the process of attaching
-        - [ ] with tests
-        - [ ] with documentation
-      - [ ] [[https://doriantaylor.com/rdf-kv][RDF-KV]] transform
-        - This request transform takes a ~POST~ containing [[https://doriantaylor.com/][RDF-KV]] content and transforms it into a ~PATCH~ request containing [[https://dvcs.w3.org/hg/ldpwg/raw-file/ldpatch/ldpatch.html][LD-Patch]] content.
-        - [ ] with tests
-        - [ ] with documentation
+- [ ] ~Intertwingler::Representation~
+  - This is the monad-like thing that keeps a parsed version of an HTTP message body around so you can pass it through multiple transforms without having to waste resources serializing and reparsing it.
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] ~Intertwingler::Representation::Nokogiri~
+    - This one handles XML/(X)HTML by parsing it with [[https://nokogiri.org/][Nokogiri]].
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] ~Intertwingler::Representation::Vips~
+    - This one handles raster images by parsing them with [[https://github.com/libvips/ruby-vips][Vips]].
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] ~Intertwingler::Representation::Rack~
+    - This one handles ~message/http~ bodies by parsing/serializing ~Rack::Request~ and ~Rack::Response~ objects.
+    - [ ] with tests
+    - [ ] with documentation
+- [ ] ~Intertwingler::Transform~
+  - [ ] with tests
+  - [ ] with documentation
+- [ ] ~Intertwingler::Transform::Markup~
+  - Most of these have already been written and the work is in refactoring them into transforms.
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] HTML ↔ XHTML transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Strip comments transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Rewrite ~<head>~ transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Rehydrate transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Add social media metadata transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Add backlinks transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Rewrite links transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Mangle ~mailto:~ transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Amazon tag transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Normalize RDFa prefixes transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Add ~xml-stylesheet~ PI transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Apply XSLT transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Reindent transform
+    - [ ] with tests
+    - [ ] with documentation
+- [ ] ~Intertwingler::Transform::Raster~
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] Conversion transform
+    - [ ] converts from one image file format to another; does nothing else
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Crop transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Scale transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Desaturate transform
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Posterize transform
+    - [ ] with tests
+    - [ ] with documentation
+- [ ] ~Intertwingler::Transform::Markdown~
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] Markdown /hook/ transform
+    - [ ] with tests
+    - [ ] with documentation
+    - [ ] add ~text/markdown~ to ~Accept~
+    - [ ] hook the actual transform
+  - [ ] Markdown → (X)HTML transform
+    - [ ] with tests
+    - [ ] with documentation
+- [ ] ~Intertwingler::Transform::Sass~
+  - This is potentially our first candidate for stand-alone transform, since all [[https://sass-lang.com/][Sass]] development has moved to [[https://dart.dev/][Dart]] and is literally the only thing I know that has. Until then, we use the old Ruby Sass I guess (or /maaaybe/ [[https://github.com/sass/sassc-ruby][libsass]] bindings? No updates in years though.)
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] Sass /hook/ transform
+    - This request transform makes it possible for downstream content negotiation to select Sass representations.
+    - [ ] with tests
+    - [ ] with documentation
+    - [ ] add ~text/x-vnd.sass~ and ~text/x-vnd.sass.scss~ to ~Accept~
+  - [ ] Sass transform
+    - This will take a Sass document and turn it into CSS.
+    - [ ] with tests
+    - [ ] with documentation
+    - [ ] Sass internal loader can fetch other Sass via subrequest
+- [ ] ~Intertwingler::Transform::Input~
+  - There is nothing especially appropriate about lumping these resources together other than they are the only ones necessary for MVP that actually process input.
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] Pseudo-file ~PUT~ transform
+    - This will take a ~PUT~ request to an arbitrary resource and transform it into a ~POST~ to ~/.well-known/ni/~ (controlled by ~Store::Digest~), but only after recording the pseudo-file's pseudo-path in the graph.
+      - I have been thinking about how to do this one more transactionally, since the content-addressable store is a separate module and not 100% guaranteed to be reliable.
+        - Rather than crud up the graph with fake file references to nothing, maybe have the request handler install a response handler that takes the ~201 Created~ with the redirect (the ordinary behaviour of ~Store::Digest::HTTP~ when you ~POST~ to ~/.well-known/ni/~), have it rewrite that response (or at least the ~Location:~ header), and in the process, glean the hash from the response (~/.well-known/ni/sha-256/whatever…~) and in the process of attaching
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] [[https://doriantaylor.com/rdf-kv][RDF-KV]] transform
+    - This request transform takes a ~POST~ containing [[https://doriantaylor.com/][RDF-KV]] content and transforms it into a ~PATCH~ request containing [[https://dvcs.w3.org/hg/ldpwg/raw-file/ldpatch/ldpatch.html][LD-Patch]] content.
+    - [ ] with tests
+    - [ ] with documentation
 ** TODO stand-alone ~intertwingler~ command-line program
-   - It really just has to spin up the ~Rack~ app at this stage.
-     - [ ] (as a stand-alone server or FastCGI or SCGI or whatever.)
-     - /However/, the CLI currently uses [[https://github.com/commander-rb/commander][~Commander~]] and I would rather use [[http://whatisthor.com/][~Thor~]] and [[https://ttytoolkit.org/][~TTY~]] because I encountered some weird bugs with ~Commander~ in the past and those guys look way better organized.
-     - One thing ~Commmander~ /does/ do though is interactive shells with command completion, where you have access to the repertoire of commands inside the shell with all the parsing
-     - Also, TTY /finally/ has a [[https://github.com/piotrmurach/tty-reader][pure-Ruby command completion]] working, which means no dependency on readline or whatever.
-     - The only caveat is that I don't know how to expose the menu of ~Thor~ commands to a shell. *Therefore*:
-       - [ ] Research how (if) this can be done.
+- It really just has to spin up the ~Rack~ app at this stage.
+  - [ ] (as a stand-alone server or FastCGI or SCGI or whatever.)
+    - /However/, the CLI currently uses [[https://github.com/commander-rb/commander][~Commander~]] and I would rather use [[http://whatisthor.com/][~Thor~]] and [[https://ttytoolkit.org/][~TTY~]] because I encountered some weird bugs with ~Commander~ in the past and those guys look way better organized.
+    - One thing ~Commmander~ /does/ do though is interactive shells with command completion, where you have access to the repertoire of commands inside the shell with all the parsing
+    - Also, TTY /finally/ has a [[https://github.com/piotrmurach/tty-reader][pure-Ruby command completion]] working, which means no dependency on readline or whatever.
+    - The only caveat is that I don't know how to expose the menu of ~Thor~ commands to a shell. *Therefore*:
+      - [ ] Research how (if) this can be done.
 ** TODO Docker image
-   - Certain people have asked for one.
-   - [ ] make it so the state directory is a volume so you can get at it from outside the container.
+- Certain people have asked for one.
+- [ ] make it so the state directory is a volume so you can get at it from outside the container.
 * TODO after shipping initial version
 ** TODO static site generator
-   - This would bring ~Intertwingler~ back to parity with the old ~RDF::SAK~.
-   - [ ] just start up the engine in a sandbox, obtain its manifest (via ~OPTIONS \*~), then ~GET~ everything that is ~GET~-able, and save that to a directory.
-   - [ ] push out the rewrite maps and whatever else.
+- This would bring ~Intertwingler~ back to parity with the old ~RDF::SAK~.
+- [ ] just start up the engine in a sandbox, obtain its manifest (via ~OPTIONS \*~), then ~GET~ everything that is ~GET~-able, and save that to a directory.
+- [ ] push out the rewrite maps and whatever else.
 ** TODO cache transformation output
-   - Running transformations for responses that can otherwise cache is going to suck performance-wise.
-   - Solution: use the content-addressable store for cache like I originally intended.
-     - Problem: the cache is gonna get really big, really fast.
-     - Solution: An [[https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used_(LRU)][LRU]] policy or better.
+- Running transformations for responses that can otherwise cache is going to suck performance-wise.
+- Solution: use the content-addressable store for cache like I originally intended.
+  - Problem: the cache is gonna get really big, really fast.
+  - Solution: An [[https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used_(LRU)][LRU]] policy or better.
 *** TODO add ~cache~ flag to ~Store::Digest~
-    - Problem: if you mix persistent storage in the same store with cache and happen to lose the handle on the former, you aren't gonna know what's cache and what isn't.
-    - Solution: if ~Store::Digest~ knew an object was cache, nothing else would have to keep track of it.
-      - Problem: if you insert something that has the same hash that you want to be permanent
-        - Solution: if an object is reinserted with the cache flag off, it should be impossible to flip on again without deleting the object and reinserting it (~Store::Digest~ has a distinction between "merely" deleting an object while preserving its metadata and "forgetting" it ever existed, but merely deleting should be satisfactory).
+- Problem: if you mix persistent storage in the same store with cache and happen to lose the handle on the former, you aren't gonna know what's cache and what isn't.
+- Solution: if ~Store::Digest~ knew an object was cache, nothing else would have to keep track of it.
+  - Problem: if you insert something that has the same hash that you want to be permanent
+    - Solution: if an object is reinserted with the cache flag off, it should be impossible to flip on again without deleting the object and reinserting it (~Store::Digest~ has a distinction between "merely" deleting an object while preserving its metadata and "forgetting" it ever existed, but merely deleting should be satisfactory).
 **** TODO other changes to ~Store::Digest~
-     - Problem: adding a ~cache~ flag means changing the record layout for the metadata, which means anybody using ~Store::Digest~ is gonna have to upgrade.
-       - (this may not be a problem since nobody uses it anyway.)
-     - /However/, ~Store::Digest~ does some dumb stuff by using the canonical digest algorithm as the key, when all it needs is a 64-bit integer. so not only does it waste space, it makes things more complicated. *Therefore:*
-       - [ ] Overhaul the metadata so it uses integers as keys and the "main" hash algorithm (a concept which is still necessary for resolving the filenames in bulk storage) doesn't have special status in the metadata database.
-     - We may as well add the caching infrastructure itself to the thing while we're at it.
-       - [ ] new field (I think?) in the metadata: /last-access time/
-       - [ ] new initialization parameter: /cache size/
-       - [ ] write the cache expiration algorithm; hook it to a retrieval event
-         - make a new table in the key-value database that maps atime as a non-unique key to a record containing pk and size
-           - the main record will have the old atime so a full scan won't be necessary to delete the old record in this lookup table
-             - delete the old record and insert one with the new atime
-               - (set the initial atime to the insertion time)
-           - scan through this table from newest to oldest, tallying up the sizes.
-           - when you cross the capacity line, start deleting.
-           - (there is probably a smarter way to do this.)
-     - Are we gonna want to record statistics about thrashing? probably but not right away.
-       - Ordinary cache statistics (like hit/miss rate) are not meaningful in ~Store::Digest~ because hit/miss against *what*?
-         - You get a cached value in lieu of something else but all requests to ~Store::Digest~ are directly to hashes, so it doesn't know what it's caching, it only knows /that/ a particular object is considered (by some other system) to be cache.
-         - That said, knowing that certain objects are regularly getting deleted and reinserted (by the cache expiration policy, that is) is an indication that the cache is too small.
-     - Are we gonna want logging? uggghghgh
-       - inclined to say maybe someday but not critical for ~Intertwingler~
-     - What about ~Store::Digest::HTTP~, the Web front-end?
-       - [ ] Maybe make it more like an ~Intertwingler~ handler, or otherwise make a subclass of it in the ~Intertwingler~ namespace.
-       - There are some improvements that can be made to the index pages, but they aren't critical for shipping ~Intertwingler~.
+- Problem: adding a ~cache~ flag means changing the record layout for the metadata, which means anybody using ~Store::Digest~ is gonna have to upgrade.
+  - (this may not be a problem since nobody uses it anyway.)
+- /However/, ~Store::Digest~ does some dumb stuff by using the canonical digest algorithm as the key, when all it needs is a 64-bit integer. so not only does it waste space, it makes things more complicated. *Therefore:*
+  - [ ] Overhaul the metadata so it uses integers as keys and the "main" hash algorithm (a concept which is still necessary for resolving the filenames in bulk storage) doesn't have special status in the metadata database.
+- We may as well add the caching infrastructure itself to the thing while we're at it.
+  - [ ] new field (I think?) in the metadata: /last-access time/
+  - [ ] new initialization parameter: /cache size/
+  - [ ] write the cache expiration algorithm; hook it to a retrieval event
+    - make a new table in the key-value database that maps atime as a non-unique key to a record containing pk and size
+      - the main record will have the old atime so a full scan won't be necessary to delete the old record in this lookup table
+        - delete the old record and insert one with the new atime
+          - (set the initial atime to the insertion time)
+      - scan through this table from newest to oldest, tallying up the sizes.
+      - when you cross the capacity line, start deleting.
+      - (there is probably a smarter way to do this.)
+- Are we gonna want to record statistics about thrashing? probably but not right away.
+  - Ordinary cache statistics (like hit/miss rate) are not meaningful in ~Store::Digest~ because hit/miss against *what*?
+    - You get a cached value in lieu of something else but all requests to ~Store::Digest~ are directly to hashes, so it doesn't know what it's caching, it only knows /that/ a particular object is considered (by some other system) to be cache.
+    - That said, knowing that certain objects are regularly getting deleted and reinserted (by the cache expiration policy, that is) is an indication that the cache is too small.
+- Are we gonna want logging? uggghghgh
+  - inclined to say maybe someday but not critical for ~Intertwingler~
+- What about ~Store::Digest::HTTP~, the Web front-end?
+  - [ ] Maybe make it more like an ~Intertwingler~ handler, or otherwise make a subclass of it in the ~Intertwingler~ namespace.
+  - There are some improvements that can be made to the index pages, but they aren't critical for shipping ~Intertwingler~.
 ** TODO handler prioritization/shortcutting
-   - Polling the handlers until one returns something other than 404 (or 405) is a pretty inefficient strategy and it would be good to do something smarter than that.
-   - In order to do something smarter though we need to know the sets of resources each handler has and what request methods they respond to.
-     - This is what the handler's manifest is supposed to advertise.
-     - (In some cases an entire handler may only respond a subset of request methods. Transforms for instance are only supposed to respond to ~POST~. If we knew up front that no resource within a handler never responded to the request's method, we could rule it out with minimal processing.)
+- Polling the handlers until one returns something other than 404 (or 405) is a pretty inefficient strategy and it would be good to do something smarter than that.
+- In order to do something smarter though we need to know the sets of resources each handler has and what request methods they respond to.
+  - This is what the handler's manifest is supposed to advertise.
+  - (In some cases an entire handler may only respond a subset of request methods. Transforms for instance are only supposed to respond to ~POST~. If we knew up front that no resource within a handler never responded to the request's method, we could rule it out with minimal processing.)
 *** TODO handler manifest protocol
-    - The idea for the handler manifest protocol is calling ~OPTIONS \*~ on the handler with ~Prefer: return=representation~ will disgorge the handler's manifest, which is a list of all URIs it knows it has. *Therefore:*
-      - [ ] come up with the manifest format,
-      - [ ] implement as much plumbing as is reasonable in the ~Intertwingler::Handler~ base class.
+- The idea for the handler manifest protocol is calling ~OPTIONS \*~ on the handler with ~Prefer: return=representation~ will disgorge the handler's manifest, which is a list of all URIs it knows it has. *Therefore:*
+  - [ ] come up with the manifest format,
+  - [ ] implement as much plumbing as is reasonable in the ~Intertwingler::Handler~ base class.
 ** TODO lower-priority handlers
-   - These are handlers that aren't strictly necessary for an MVP and/or may be a lot of effort
+- These are handlers that aren't strictly necessary for an MVP and/or may be a lot of effort
 *** TODO reverse proxy handler
-    - While not strictly necessary for an MVP, a proxy handler would be necessary for the ultimate goal of making ~Intertwingler~ a layered system.
-    - Making it so anybody can access anything on the internet is also problematic, so some kind of access control will need to be in place before it could go live, even if rudimentary.
+- While not strictly necessary for an MVP, a proxy handler would be necessary for the ultimate goal of making ~Intertwingler~ a layered system.
+- Making it so anybody can access anything on the internet is also problematic, so some kind of access control will need to be in place before it could go live, even if rudimentary.
 *** TODO SPARQL handler
-    - I mean, the backend is RDF; it should probably have one, right?
-    - That said, SPARQL is an excellent ready-made vector for a denial-of-service attack, to say nothing of security over the content of the graph.
-    - You could make one in an afternoon if you didn't have to think about this, but I'd rather solve for capability-based access control first.
+- I mean, the backend is RDF; it should probably have one, right?
+- That said, SPARQL is an excellent ready-made vector for a denial-of-service attack, to say nothing of security over the content of the graph.
+- You could make one in an afternoon if you didn't have to think about this, but I'd rather solve for capability-based access control first.
 ** TODO lower-priority transforms
-   - Many of the markup transforms are going to be important for MVP, but we only need crop and resize image transforms for now.
-   - [ ] ~Intertwingler::Transform::Raster~
-     - These aren't currently used by anything but they would unambiguously be useful.
-     - [ ] Flip transform
-       - Flip is easy enough to implement but to be quite honest I can never remember which flip is which. Like is a horizontal flip a flip about the horizontal axis, ie a flip upside down, or is it a flip that is like a mirror? (ie a flip about the /vertical/ axis).
-         - (also a flip on both axes equals a rotate by a half-turn, and we have no way of expressing that currently.)
-         - Inclined to call ~flip~ upside down and ~mirror~ for, well, mirror.
-       - [ ] with tests
-       - [ ] with documentation
-     - [ ] Rotate transform
-       - 90-degree rotate is a completely different beast than arbitrary rotate, but it doesn't make sense to have two different rotates.
-         - /Non/-90-degree rotate will have to insist on an output format with an alpha channel, like PNG.
-           - Rotate about the centre and then resize to the bounding box; leave the corners transparent.
-           - you can tee up the crop transform after this.
-             - (I know it's inefficient to calculate an alpha channel just to throw it away but this'll eventually get run once and cached.)
-       - [ ] with tests
-       - [ ] with documentation
-     - [ ] Knockout transform
-       - The idea behind knockout is you can knock out a monochromatic border of an image and get just the subject floating in the middle.
-         - I put this here cause I wanted it but this will actually be kind of tough to implement.
-         - unless (even if) I can find a decent smart masking algorithm somewhere, this is /way/ more effort than just wrapping a stock library function.
-       - [ ] with tests
-       - [ ] with documentation
-     - [ ] Brightness transform
-       - Like Photoshop brightness.
-       - [ ] with tests
-       - [ ] with documentation
-     - [ ] Contrast transform
-       - Like Photoshop contrast.
-       - [ ] with tests
-       - [ ] with documentation
-     - [ ] Gamma transform
-       - I dunno if I want to mess with this but it'll probably be easy and I feel like I should.
-       - [ ] with tests
-       - [ ] with documentation
-   - [ ] ~Intertwingler::Transform::Tidy~
-     - This is a simple one; it just has a single resource that runs [[https://www.html-tidy.org/][~tidy~]] (or rather it's an interface to ~libtidy~). Since ~tidy~ converses in byte streams, it isn't appropriate to lump it in with the other markup transform that operates over parsed Nokogiri (~libxml~) instances.
-     - [ ] with tests
-     - [ ] with documentation
-   - [ ] ~Intertwingler::Transform::RDF~
-     - This is a handy transformer between different RDF serialization formats. Again it's not strictly necessary for /MVP/, but it will be useful in particular for content negotiation on resources that ust spit out one kind of RDF (including RDFa). This is also super straightforward /except/ for JSON-LD, which is going to require more thinking. (A naïve conversion to JSON-LD is of course easy but JSON-LD has lots of features like contexts and framing that will need design attention.)
-     - [ ] with tests
-     - [ ] with documentation
-     - [ ] XXX what about RDF-star?
-     - [ ] Triples
-       - [ ] N-Triples target
-       - [ ] Turtle target
-       - [ ] RDF/XML target
-     - [ ] Quads
-       - [ ] NQuads target
-       - [ ] TriG target
-       - [ ] JSON-LD target
-         - [ ] XXX do we try to do contexts???
-         - [ ] expand/contract/framing??
+- Many of the markup transforms are going to be important for MVP, but we only need crop and resize image transforms for now.
+- [ ] ~Intertwingler::Transform::Raster~
+  - These aren't currently used by anything but they would unambiguously be useful.
+  - [ ] Flip transform
+    - Flip is easy enough to implement but to be quite honest I can never remember which flip is which. Like is a horizontal flip a flip about the horizontal axis, ie a flip upside down, or is it a flip that is like a mirror? (ie a flip about the /vertical/ axis).
+      - (also a flip on both axes equals a rotate by a half-turn, and we have no way of expressing that currently.)
+      - Inclined to call ~flip~ upside down and ~mirror~ for, well, mirror.
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Rotate transform
+    - 90-degree rotate is a completely different beast than arbitrary rotate, but it doesn't make sense to have two different rotates.
+      - /Non/-90-degree rotate will have to insist on an output format with an alpha channel, like PNG.
+        - Rotate about the centre and then resize to the bounding box; leave the corners transparent.
+        - you can tee up the crop transform after this.
+          - (I know it's inefficient to calculate an alpha channel just to throw it away but this'll eventually get run once and cached.)
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Knockout transform
+    - The idea behind knockout is you can knock out a monochromatic border of an image and get just the subject floating in the middle.
+      - I put this here cause I wanted it but this will actually be kind of tough to implement.
+      - unless (even if) I can find a decent smart masking algorithm somewhere, this is /way/ more effort than just wrapping a stock library function.
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Brightness transform
+    - Like Photoshop brightness.
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Contrast transform
+    - Like Photoshop contrast.
+    - [ ] with tests
+    - [ ] with documentation
+  - [ ] Gamma transform
+    - I dunno if I want to mess with this but it'll probably be easy and I feel like I should.
+    - [ ] with tests
+    - [ ] with documentation
+- [ ] ~Intertwingler::Transform::Tidy~
+  - This is a simple one; it just has a single resource that runs [[https://www.html-tidy.org/][~tidy~]] (or rather it's an interface to ~libtidy~). Since ~tidy~ converses in byte streams, it isn't appropriate to lump it in with the other markup transform that operates over parsed Nokogiri (~libxml~) instances.
+  - [ ] with tests
+  - [ ] with documentation
+- [ ] ~Intertwingler::Transform::RDF~
+  - This is a handy transformer between different RDF serialization formats. Again it's not strictly necessary for /MVP/, but it will be useful in particular for content negotiation on resources that ust spit out one kind of RDF (including RDFa). This is also super straightforward /except/ for JSON-LD, which is going to require more thinking. (A naïve conversion to JSON-LD is of course easy but JSON-LD has lots of features like contexts and framing that will need design attention.)
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] XXX what about RDF-star?
+  - [ ] Triples
+    - [ ] N-Triples target
+    - [ ] Turtle target
+    - [ ] RDF/XML target
+  - [ ] Quads
+    - [ ] NQuads target
+    - [ ] TriG target
+    - [ ] JSON-LD target
+      - [ ] XXX do we try to do contexts???
+      - [ ] expand/contract/framing??
 ** TODO scraper/crawler
-   - A scraper/crawler is necessary for fetching things like link previews and scoping out referrers, but could also do things like fetch RSS feeds or other chores.
-   - There is already a stub scraper/crawler in the source tree but it needs some love.
+- A scraper/crawler is necessary for fetching things like link previews and scoping out referrers, but could also do things like fetch RSS feeds or other chores.
+- There is already a stub scraper/crawler in the source tree but it needs some love.
 ** TODO command shell
-   - We want to be able to do something like call ~intertwingler shell~ or just ~intertwingler~ with no arguments and it loads up a shell.
-     - We want all the commands that you can do on the command line to also be accessible within the shell.
-       - So like, you can run the server or scraper or whatever from the shell.
-       - /Mainly/ though, we want the shell to manipulate the RDF graph.
-         - In particular, I want to be able to type [[https://www.w3.org/TR/turtle/][Turtle]] with tab completion.
-         - [[https://www.w3.org/TR/sparql11-query/][SPARQL]] (also with tab completion and automatic prefix mapping) would also be convenient.
+- We want to be able to do something like call ~intertwingler shell~ or just ~intertwingler~ with no arguments and it loads up a shell.
+  - We want all the commands that you can do on the command line to also be accessible within the shell.
+    - So like, you can run the server or scraper or whatever from the shell.
+    - /Mainly/ though, we want the shell to manipulate the RDF graph.
+      - In particular, I want to be able to type [[https://www.w3.org/TR/turtle/][Turtle]] with tab completion.
+      - [[https://www.w3.org/TR/sparql11-query/][SPARQL]] (also with tab completion and automatic prefix mapping) would also be convenient.
 ** TODO [[https://vocab.methodandstructure.com/loupe#][Loupe]] processor
-   - Loupe is a planned vocabulary for making markup documents out of RDF by dictating the following:
-   - [ ] predicate order
-   - [ ] predicate show/hide
-     - note "hide" can mean invisible but present vs completely omitted from the representation
-     - gut says "completely omit from representation" should happen at the data source level, ie the processor does not have access to see what it should be omitting from the representation
-   - [ ] value order
-   - [ ] value show/hide
-   - [ ] label determination
-   - [ ] value disposition
-     - [ ] resources
-       - [ ] link
-       - [ ] embed (image, video, audio, iframe, object, script)
-       - [ ] inline (fragment)
-     - [ ] literals
-       - [ ] block
-       - [ ] inline
-       - [ ] merged
-     - [ ] alternates
-   - [ ] element selection
-     - [ ] block (section, div, paragraph, figure, etc)
-     - [ ] list (ol, ul, dl)
-       - note ~rdf:List~ treatment as well
-   - [ ] serialize to (X)HTML+RDFa
-   - [ ] serialize to JSON-LD (?)
+- Loupe is a planned vocabulary for making markup documents out of RDF by dictating the following:
+- [ ] predicate order
+- [ ] predicate show/hide
+  - note "hide" can mean invisible but present vs completely omitted from the representation
+  - gut says "completely omit from representation" should happen at the data source level, ie the processor does not have access to see what it should be omitting from the representation
+- [ ] value order
+- [ ] value show/hide
+- [ ] label determination
+- [ ] value disposition
+  - [ ] resources
+    - [ ] link
+    - [ ] embed (image, video, audio, iframe, object, script)
+    - [ ] inline (fragment)
+  - [ ] literals
+    - [ ] block
+    - [ ] inline
+    - [ ] merged
+  - [ ] alternates
+- [ ] element selection
+  - [ ] block (section, div, paragraph, figure, etc)
+  - [ ] list (ol, ul, dl)
+    - note ~rdf:List~ treatment as well
+- [ ] serialize to (X)HTML+RDFa
+- [ ] serialize to JSON-LD (?)
 * TODO onboarding and examples
 
 * desired outcome
-  - [ ] command-line tool that can:
-    - [ ] spawn a web server
-      - [ ] that resolves URIs
-        - [ ] that appropriately does redirects
-        - [ ] that resolves 410s (gone)
-        - [ ] that resolves 300s (multiple choices)
-      - [ ] that does content negotiation where applicable
-      - [ ] that generates (X)HTML with all the trimmings
-      - [ ] that applies transformation functions to whatever is thrown at it (modulo mime type compatibility)
-    - [ ] spawn a scraper/crawler
-      - [ ] that traces redirects
-        - [ ] that is smart enough to recognize loops
-      - [ ] that can either resolve a given list or follow links
-      - [ ] that stores content in the content-addressable store
-      - [ ] that returns an rdf graph of the metadata
-    - [ ] spawn a shell
-      - [ ] that can view and edit THE rdf graph
-        - [ ] with term completion
-        - [ ] with shortcuts for certain vocabs
-        - [ ] with commands for common bulk rdf operations
+- [ ] command-line tool that can:
+  - [ ] spawn a web server
+    - [ ] that resolves URIs
+      - [ ] that appropriately does redirects
+      - [ ] that resolves 410s (gone)
+      - [ ] that resolves 300s (multiple choices)
+    - [ ] that does content negotiation where applicable
+    - [ ] that generates (X)HTML with all the trimmings
+    - [ ] that applies transformation functions to whatever is thrown at it (modulo mime type compatibility)
+  - [ ] spawn a scraper/crawler
+    - [ ] that traces redirects
+      - [ ] that is smart enough to recognize loops
+    - [ ] that can either resolve a given list or follow links
+    - [ ] that stores content in the content-addressable store
+    - [ ] that returns an rdf graph of the metadata
+  - [ ] spawn a shell
+    - [ ] that can view and edit THE rdf graph
+      - [ ] with term completion
+      - [ ] with shortcuts for certain vocabs
+      - [ ] with commands for common bulk rdf operations
 * TODO Major refactor
-  - [ ] Create an ~Intertwingler::Config~ configuration file parser
-  - [ ] Main ~Intertwingler~ namespace has a convenience function for loading an ~Intertwingler::Engine~ instance from a config file
+- [ ] Create an ~Intertwingler::Config~ configuration file parser
+- [ ] Main ~Intertwingler~ namespace has a convenience function for loading an ~Intertwingler::Engine~ instance from a config file
 ** TODO Basic ~Intertwingler::Engine~
-   - [ ] with tests
-   - [ ] with documentation
-   - [ ] Loads configuration
-     - [ ] handles multiple authorities (host names + aliases)
-     - [ ] optionally shares RDF store but optionally doesn't
-   - [ ] Central dispatcher
-     - [ ] Figure out how ~OPTIONS *~ manifests are going to work
-       - [ ] actually make them
-   - [ ] Some facility for routing to meaningful error messages
-   - [ ] Handles ~410 Gone~
-   - [ ] Handles ~300 Multiple Choices~
+- [ ] with tests
+- [ ] with documentation
+- [ ] Loads configuration
+  - [ ] handles multiple authorities (host names + aliases)
+  - [ ] optionally shares RDF store but optionally doesn't
+- [ ] Central dispatcher
+  - [ ] Figure out how ~OPTIONS *~ manifests are going to work
+    - [ ] actually make them
+- [ ] Some facility for routing to meaningful error messages
+- [ ] Handles ~410 Gone~
+- [ ] Handles ~300 Multiple Choices~
 *** TODO Core content handlers
-    - [ ] ~Intertwingler::Handler::Proxy~
-      - [ ] with tests
-      - [ ] with documentation
-      - [ ] ~Prefer: respond-async~ and ~wait=N~
+- [ ] ~Intertwingler::Handler::Proxy~
+  - [ ] with tests
+  - [ ] with documentation
+  - [ ] ~Prefer: respond-async~ and ~wait=N~
 *** TODO Core transforms
 ** TODO Legacy static site generator ~Intertwingler::Static~
-   - [ ] ~GET~ every URL in the manifest, save it out to the file system
-     - [ ] depends on figuring out manifests
-   - [ ] write out rewrite maps
-   - [ ] include documentation for configuring Apache
-     - [ ] nginx, IIS too?? (can they even do conneg?)
+- [ ] ~GET~ every URL in the manifest, save it out to the file system
+  - [ ] depends on figuring out manifests
+- [ ] write out rewrite maps
+- [ ] include documentation for configuring Apache
+  - [ ] nginx, IIS too?? (can they even do conneg?)
 ** TODO "Offline" components
 *** TODO Stand-alone document class ~Intertwingler::Document~
-    - [ ] general cleanup
-    - [ ] tests
-    - [ ] documentation
+- [ ] general cleanup
+- [ ] tests
+- [ ] documentation
 *** TODO Crawler ~Intertwingler::Crawler~
-    - [ ] rename ~URLRunner~ to ~Crawler~
-    - [ ] general cleanup
-    - [ ] tests
-    - [ ] documentation
+- [ ] rename ~URLRunner~ to ~Crawler~
+- [ ] general cleanup
+- [ ] tests
+- [ ] documentation
 *** TODO Document stats ~Intertwingler::DocStats~
-    - [ ] general cleanup
-    - [ ] tests
-    - [ ] documentation
+- [ ] general cleanup
+- [ ] tests
+- [ ] documentation
 *** TODO Text mining for terminology ~Intertwingler::NLP~
-    - [ ] actually finish this
-    - [ ] tests
-    - [ ] documentation
+- [ ] actually finish this
+- [ ] tests
+- [ ] documentation
 ** TODO Command line and shell ~Intertwingler::CLI~
 *** TODO Batch commands
-    - [ ] spawn engine
-      - [ ] HTTP
-      - [ ] FastCGI
-        - [ ] option to use UNIX socket
-    - [ ] load RDF graph
-      - [ ] dump RDF graph to syntax of choice
-    - [ ] load file(s) into content-addressable store
-    - [ ] crawl external links
-    - [ ] batch-run document stats
-    - [ ] batch-run NLP scan
-      - [ ] disgorge data to JSON(-LD?)/CSV
+- [ ] spawn engine
+  - [ ] HTTP
+  - [ ] FastCGI
+    - [ ] option to use UNIX socket
+- [ ] load RDF graph
+  - [ ] dump RDF graph to syntax of choice
+- [ ] load file(s) into content-addressable store
+- [ ] crawl external links
+- [ ] batch-run document stats
+- [ ] batch-run NLP scan
+  - [ ] disgorge data to JSON(-LD?)/CSV
 *** TODO Interactive shell
-    - [ ] all batch commands also available in shell
-    - [ ] tab completion
-    - [ ] RDF data entry (Turtle with tab completion)
-    - [ ] run SPARQL queries (also with tab completion)
-      - [ ] output to CSV or RDF
+- [ ] all batch commands also available in shell
+- [ ] tab completion
+- [ ] RDF data entry (Turtle with tab completion)
+- [ ] run SPARQL queries (also with tab completion)
+  - [ ] output to CSV or RDF
 ** TODO Clean out all the cruft from ~RDF::SAK~
-   - [ ] Eliminate ~Intertwingler::Context~ and ~Intertwingler::Context::Document~
-   - [ ] Eliminate ~Intertwingler::Source~ and ~Intertwingler::Surface~
-   - [ ] Eliminate old junk from ~Intertwingler::Transform~
-   - [ ] Eliminate ~Intertwingler::Console~
-   - [ ] Eliminate ~Intertwingler::Util::Messy~
-     - [ ] Merge ~Intertwingler::Util::Clean~ into ~Intertwingler::Util~ and eliminate all explicit references to it
+- [ ] Eliminate ~Intertwingler::Context~ and ~Intertwingler::Context::Document~
+- [ ] Eliminate ~Intertwingler::Source~ and ~Intertwingler::Surface~
+- [ ] Eliminate old junk from ~Intertwingler::Transform~
+- [ ] Eliminate ~Intertwingler::Console~
+- [ ] Eliminate ~Intertwingler::Util::Messy~
+  - [ ] Merge ~Intertwingler::Util::Clean~ into ~Intertwingler::Util~ and eliminate all explicit references to it
 * TODO Packaging/installation
-  - [ ] Installation guide
-  - [ ] Sample configurations
-    - [ ] Download and install materials
-  - [ ] Docker image
+- [ ] Installation guide
+- [ ] Sample configurations
+  - [ ] Download and install materials
+- [ ] Docker image
 ** TODO get patches to third-party modules merged and released
-   - [ ] MimeMagic
-   - [ ] Rack
+- [ ] MimeMagic
+- [ ] Rack

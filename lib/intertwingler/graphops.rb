@@ -489,7 +489,7 @@ module Intertwingler
     # :blank/:bnode, :literal)
     #
     # @param subject [RDF::Resource] the subject of the inquiry
-    # @apram graph [RDF::Resource, Array<RDF::Resource>] named graph(s)
+    # @param graph [RDF::Resource, Array<RDF::Resource>] named graph(s)
     # @param rev [false, true] generate a struct from inbound links
     # @param only [Symbol, Array<Symbol>] one or more node types
     # @param inverses [false, true] whether to include
@@ -1767,7 +1767,7 @@ module Intertwingler
 
     public
 
-    # Generate a closure that can be passed into {Enumerable#sort} for
+    # Generate a closure that can be passed into {::Enumerable#sort} for
     # sorting URIs that would be found in the wild.
     #
     # @param reverse [false, true] whether to reverse the sort
@@ -1779,7 +1779,7 @@ module Intertwingler
     # @param blankfirst [false, true] whether blank nodes should
     #  always go before proper URIs, or after them.
     # @yieldparam comparand [Object] the comparand to be transformed
-    # @yieldreturn cleaned [Object] the transformed comparand
+    # @yieldreturn [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
@@ -1937,7 +1937,7 @@ module Intertwingler
       end
     end
 
-    # Generate a closure that can be passed into {Enumerable#sort} for
+    # Generate a closure that can be passed into {::Enumerable#sort} for
     # sorting literals according to the given policy.
     #
     # @param reverse [false, true] whether to reverse the sort
@@ -1949,7 +1949,7 @@ module Intertwingler
     #  before shorter strings where the longer string begins with the
     #  shorter string
     # @yieldparam comparand [Object] the comparand to be transformed
-    # @yieldreturn cleaned [Object] the transformed comparand
+    # @yieldreturn [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
@@ -2026,7 +2026,7 @@ module Intertwingler
       end
     end
 
-    # Generate a closure that can be passed into {Enumerable#sort} for
+    # Generate a closure that can be passed into {::Enumerable#sort} for
     # sorting the labels of subjects according to the given policy.
     # This is equivalent to calling #label_for on all the subjects and
     # then comparing those according to #literal_sort, but caches the
@@ -2041,7 +2041,7 @@ module Intertwingler
     #  before shorter strings where the longer string begins with the
     #  shorter string
     # @yieldparam comparand [Object] the comparand to be transformed
-    # @yieldreturn cleaned [Object] the transformed comparand
+    # @yieldreturn [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #
@@ -2073,7 +2073,7 @@ module Intertwingler
       end
     end
 
-    # Generate a closure that can be passed into {Enumerable#sort} for
+    # Generate a closure that can be passed into {::Enumerable#sort} for
     # comparing an arbitrary pair of RDF terms. This effectively wraps
     # and coalesces the behaviour of #cmp_label and #cmp_resource.
     #
@@ -2087,7 +2087,7 @@ module Intertwingler
     #  before shorter strings where the longer string begins with the
     #  shorter string
     # @yieldparam comparand [Object] the comparand to be transformed
-    # @yieldreturn cleaned [Object] the transformed comparand
+    # @yieldreturn [Object] the transformed comparand
     #
     # @return [Proc] the comparison function
     #

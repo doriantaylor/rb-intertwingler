@@ -47,7 +47,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     # Load a handler (if not already loaded).
     #
-    # @param subject [URI, RDF::URI] the handler or instance URI
+    # @param uri [URI, RDF::URI] the handler or instance URI
     # @param chdir [false, true] whether to change directories to the
     #  engine home.
     #

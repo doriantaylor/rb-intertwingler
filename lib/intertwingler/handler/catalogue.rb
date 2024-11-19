@@ -445,18 +445,86 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # four since asserted=false&inferred=false would give you nothing)
   # are available.
 
-  # This has the potential to be enormous so it should really be paginated.
+  # Return an inventory of resources found in the graph. Three
+  # parameters narrow the set returned:
   #
-  # * all instances of type T
-  # * all resources in domain of P
-  # * all resources in range of P
+  # * `instance_of`: resources returned must be instances of these classes
+  # * `in_domain_of`: resources returned must be instances of classes
+  #   in the _domain_ of these properties
+  # * `in_range_of`: resources returned must be instances of classes
+  #   in the _range_ of these properties
+  #
+  # The set of classes produced by all three of these parameters is
+  # unioned together. If the `inferred` flag is set, both the
+  # properties and classes are expanded out to their equivalents and
+  # subproperties/classes. If all three parameters (`instance_of`,
+  # `in_domain_of`, `in_range_of`) are empty, this resource should
+  # just disgorge the entire set of subjects in the graph.
+  #
+  # If `inferred` is true, then the equivalents and
+  # subclasses/properties are tested as well. If `asserted` is false,
+  # then asserted classes, as well as classes directly asserted in the
+  # domains and ranges of properties, are _subtracted_ from the result
+  # set. If both `asserted` and `inferred` are false, this will raise
+  # a `409 Conflict`.
+  #
+  # The result set has the potential to be enormous, so we use the
+  # `boundary` parameter to paginate it.
+  #
+  # The document body returned by this function contains a single
+  # `<ol>` followed by a `<nav>` containing up to four pagination
+  # links (first, previous, next, last). It represents a
+  # `cgto:Inventory` and relates to its members via `dct:hasPart`.
+  # The sequence of members is not enforced in the data, but rather is
+  # derived from sorting {Intertwingler::GraphOps#label_for}.
+  #
+  # @param base [RDF::URI] the requested URI
+  # @param instance_of [RDF::URI, Array<RDF::URI>] a set of
+  #  constraining RDF classes
+  # @param in_domain_of [RDF::URI, Array<RDF::URI>] a set of
+  #  constraining properties by domain
+  # @param in_range_of [RDF::URI, Array<RDF::URI>] a set of
+  #  constraining properties by range
+  # @param asserted [true, false] whether to include subjects whose
+  #  directly asserted types match the constraints
+  # @param inferred [false, true] whether to include subjects whose
+  #  types are inferred from equivalents or subclasses/properties
+  #
+  # @raise [Intertwingler::Handler::Redirect] when e.g. the parameters
+  #  are wrong but fixable internally
+  # @raise [Intertwingler::Handler::Conflict] when e.g. the parameters
+  #  are wrong but only fixable by the user
+  #
+  # @return [Array] the body to pass into {XML::Mixup}
   #
   def inventory base, instance_of: nil, in_domain_of: nil, in_range_of: nil,
-      asserted: true, inferred: true, boundary: [1, 1000]
+      asserted: true, inferred: false, boundary: [1, 1000]
+    # step zero: bail with a conflict error if both asserted and
+    # inferred are false
+
+    types = Set[*(instance_of || [])]
+
+
+    # flatten out 
+    if inferred
+    elsif !asserted
+      # neither asserted nor inferred: raise a 409
+      raise Intertwingler::Handler::Conflict,
+        'at least one of `asserted` or `inferred` must be true'
+    end
+
+    # resource, types, label(p, o)
+
+    li = []
+
+    # do instance of
+
     # first we need a list of types
     # then we need a list of ?s a ?t
     # then we sort the list
     # then we segment it
+
+    [{ li => :ol, start: start }, { nav => :nav }]
   end
 
 
