@@ -99,6 +99,7 @@ class Intertwingler::Params < Params::Registry
       XSD.nonPositiveInteger => T::NonPositiveInteger,
       XSD.date               => T::Date,
       XSD.dateTime           => T::Time,
+      TFO.term               => T::Term,
     }
 
     def repo; registry.engine.repo; end

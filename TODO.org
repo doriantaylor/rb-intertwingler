@@ -8,41 +8,56 @@
     - [X] dependencies shaken out
     - [X] provisional solution for main dispatcher (route by RDF type)
     - [X] replace hard-coded pseudo-RDF for vocabs with real RDF/XML
+      - [X] fudge with static file for now
+        - (we want this to ultimately be generated but currently missing the e.g. caching infrastructure to make that efficient)
     - [ ] new catalogue resolution mechanism
       - [ ] handle potentially paginated inventories
   - [ ] javascript reorganized
     - [ ] decide where to hang all the app-specific scripts
     - [ ] fix math on hyperbolic representation (deal with this last)
       - [ ] (probably will need a whole new algorithm for final layout phase tbh)
-- [ ] create [[lib/intertwingler/handler/catalogue.rb][catalogue resources]]
+- [-] create [[lib/intertwingler/handler/catalogue.rb][catalogue resources]]
   - [ ] aggregated vocab resource
     - [ ] just RDF/XML for now
     - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them and then forever again to render 3 megabytes of RDF/XML
       - (note it is mainly schema dot org that is responsible for this and we don't even use it)
       - [ ] maybe consider some kind of subsetting/parametrization?
-  - [ ] ~cgto:Index~ resource
+  - [X] ~cgto:Index~ resource
     - (points to different types of summary resources)
-  - [ ] ~cgto:Summary~ resources
+  - [-] ~cgto:Summary~ resources
     - (counts of resources and links to inventories)
-    - [ ] by class
+    - [X] by class
       - asserted/inferred, counts/links
     - [ ] by property
       - asserted/inferred, domain/range, counts/links
-  - [ ] ~cgto:Inventory~ resource
+  - [-] ~cgto:Inventory~ resource
     - (parametrized; used to enumerate actual resources in the graph)
-    - [ ] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
-      - [ ] handling of empty values (ignore vs null, empty string, etc)
-      - [ ] some way to represent composite values
-        - [ ] arrays (unbounded)
-        - [ ] tuples (fixed length)
-          - [ ] shift vs truncate policy
-        - [ ] discrete sets
-        - [ ] numeric (or number-like, e.g. date) spans
-          - [ ] bounded on either side?
-          - [ ] include/exclude boundaries?
-      - [ ] determine how to represent a "term" type
-      - [ ] some way to assign parse/serialize, compose/decompose functions
-        - [ ] change parameter spec or generalize domain
+    - [X] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
+      - [X] default value
+        - [X] ~tfo:default~ property
+      - [X] handling of empty values (ignore vs null, empty string, etc)
+        - [X] ~tfo:empty~ property
+        - [X] put empty string in ~tfo:default~ if that's what you want
+      - [X] some way to represent composite values
+        - [X] ~tfo:composite~ property
+        - [X] sequences (unbounded)
+          - [X] just put ~rdf:List~ as a composite
+        - [X] tuples (fixed length)
+          - [X] shift vs truncate policy
+            - [X] ~tfo:shift~ property
+        - [X] discrete sets
+          - [X] ~rdf:Bag~ + ~rdfs:member~
+        - [X] numeric (or number-like, e.g. date) spans
+          - [X] bounded on either side?
+          - [X] include/exclude boundaries?
+          - [X] ~tfo:Range~ class
+            - [X] ~tfo:low~ property
+            - [X] ~tfo:high~ property
+            - [X] ~tfo:infimum~ property
+            - [X] ~tfo:supremum~ property
+      - [X] determine how to represent a "term" type
+    - [ ] some way to assign parse/serialize, compose/decompose functions
+      - [ ] change parameter spec or generalize domain
     - [ ] fix [[lib/intertwingler/params.rb][Intertwingler::Params]]
       - [ ] create mechanism for sets and sequences
         - [ ] read out of RDF graph

@@ -363,6 +363,12 @@
   owl:cardinality 1 ;
   rdfs:range xsd:anyURI . # do we want that or a resource?
 
+<urn:uuid:b348a477-61c6-4ab0-9a88-d9eda964f256> a tfo:Parameter ;
+  ci:canonical-slug "boundary"^^xsd:token ;
+  skos:prefLabel "Boundary"@en ;
+  rdfs:comment "Absolute for pagination"@en ;
+  rdfs:range xsd:positiveInteger .
+
 # other reusable parameters
 
 # Partial invocations

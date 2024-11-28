@@ -59,6 +59,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Queue
   #
+  #     # A span of numbers or sequence-able objects, like dates.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Range
+  #
   #     # A strict queue is one for which all its elements must be executed, unlike an ordinary queue which only has to attempt to run its contents.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :StrictQueue
@@ -71,6 +75,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :completes
   #
+  #     # Assigns a composite type for the parameter.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :composite
+  #
   #     # An HTTP status code for which the insertion is triggered.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :condition
@@ -78,6 +86,10 @@ module Intertwingler::Vocab
   #     # Specifies one or more default values for a parameter.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :default
+  #
+  #     # Flags whether an empty parameter value should be treated as input rather than ignored.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :empty
   #
   #     # Explicitly specifies a transform that must go first.
   #     # @return [RDF::Vocabulary::Term]
@@ -87,9 +99,17 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :follows
   #
+  #     # Specifies the upper bound of a tfo:Range.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :high
+  #
   #     # URI to the implementation of the function.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :implementation
+  #
+  #     # Flags whether a tfo:Range will be open on the low side.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :infimum
   #
   #     # Specifies the resource that was the input of the transformation function.
   #     # @return [RDF::Vocabulary::Term]
@@ -98,6 +118,10 @@ module Intertwingler::Vocab
   #     # Explicitly specifies a transform that must go last.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :last
+  #
+  #     # Specifies the lower bound of a tfo:Range.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :low
   #
   #     # Denotes a member of a queue.
   #     # @return [RDF::Vocabulary::Term]
@@ -131,11 +155,19 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :returns
   #
+  #     # Flags whether a parameter with multiple values but a fixed cardinality shift off the front of the list rather than truncate off the back.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :shift
+  #
+  #     # Flags whether a tfo:Range will be open on the high side.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :supremum
+  #
   #     # A target queue for the insertion.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :target
   #
-  #     # Specifies the transform associated with this particular application
+  #     # Specifies the transform associated with this particular invocation.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :transform
   #
@@ -151,6 +183,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :regexp
   #
+  #     # An RDF term represented as either a CURIE (prefixed term) or IRI.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :term
+  #
   #     # An XPath expression.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :xpath
@@ -164,14 +200,19 @@ module Intertwingler::Vocab
       "http://purl.org/dc/terms/created": "2014-06-05T03:06:58Z",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
       "http://purl.org/dc/terms/description": {en: "This document describes functions which transform HTTP representations, i.e., the actual literal payloads of HTTP messages."},
-      "http://purl.org/dc/terms/modified": ["2020-01-20T06:05:13Z", "2020-04-11T02:51:52Z", "2020-06-10T18:27:35Z", "2020-07-03T04:49:40Z", "2023-08-27T00:30:09Z", "2023-09-06T20:54:02Z", "2023-10-09T19:04:07Z", "2024-01-31T03:26:41Z"],
-      "http://purl.org/dc/terms/references": ["https://www.iana.org/assignments/media-types/media-types.xhtml", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/rdf-schema/", "https://www.w3.org/TR/xmlschema-2/"],
+      "http://purl.org/dc/terms/modified": ["2020-01-20T06:05:13Z", "2020-04-11T02:51:52Z", "2020-06-10T18:27:35Z", "2020-07-03T04:49:40Z", "2023-08-27T00:30:09Z", "2023-09-06T20:54:02Z", "2023-10-09T19:04:07Z", "2024-01-31T03:26:41Z", "2024-10-16T02:03:59Z", "2024-11-26T04:18:22Z"],
+      "http://purl.org/dc/terms/references": ["https://www.iana.org/assignments/media-types/media-types.xhtml", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/rdf-schema/", "https://www.w3.org/TR/xmlschema11-2/"],
       "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/transformation#",
       "http://purl.org/dc/terms/title": {en: "Transformation Functions Ontology"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/transformation#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "tfo",
+      "http://www.w3.org/1999/xhtml/vocab#contents": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#index": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2002/07/owl#imports": ["http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/ns/dcat#"],
       "http://www.w3.org/2002/07/owl#sameAs": ["https://privatealpha.com/ontology/permutation/1", "https://privatealpha.com/ontology/permutation/1#", "https://privatealpha.com/ontology/transformation/1", "https://privatealpha.com/ontology/transformation/1#"],
+      "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/transformation#",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       type: ["http://purl.org/ontology/bibo/Specification", "http://www.w3.org/2002/07/owl#Ontology"]
@@ -259,6 +300,11 @@ module Intertwingler::Vocab
       note: {en: "\n            Given that tfo:Invocation is a subclass of tfo:Partial, there is nothing in principle preventing the former from being introduced into a queue. If this happens, we ignore any tfo:input or tfo:output statemments associated with the application of the function.\n          "},
       subClassOf: "http://www.w3.org/ns/prov#Activity",
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :Range,
+      comment: {en: "A span of numbers or sequence-able objects, like dates."},
+      label: {en: "Range"},
+      subClassOf: "http://www.w3.org/2000/01/rdf-schema#Container",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :StrictQueue,
       comment: {en: "A strict queue is one for which all its elements must be executed, unlike an ordinary queue which only has to attempt to run its contents."},
       label: {en: "StrictQueue"},
@@ -297,6 +343,15 @@ module Intertwingler::Vocab
       label: {en: "completes"},
       range: "https://vocab.methodandstructure.com/transformation#Partial",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :composite,
+      comment: {en: "Assigns a composite type for the parameter."},
+      domain: "https://vocab.methodandstructure.com/transformation#Parameter",
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://www.w3.org/1999/02/22-rdf-syntax-ns#Bag", "http://www.w3.org/1999/02/22-rdf-syntax-ns#List", "https://vocab.methodandstructure.com/transformation#Range"],
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "composite"},
+      note: {en: "\n\t    The range can be any class but we prefer some subclass of rdfs:Container. It is assumed that the code implementation knows what to do with the composite class.\n\t  "},
+      range: "http://www.w3.org/2000/01/rdf-schema#Class",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :condition,
       comment: {en: "An HTTP status code for which the insertion is triggered."},
       domain: "https://vocab.methodandstructure.com/transformation#Insertion",
@@ -310,6 +365,13 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "default"},
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :empty,
+      comment: {en: "Flags whether an empty parameter value should be treated as input rather than ignored."},
+      domain: "https://vocab.methodandstructure.com/transformation#Parameter",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "empty"},
+      range: "http://www.w3.org/2001/XMLSchema#boolean",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
     property :first,
       comment: {en: "Explicitly specifies a transform that must go first."},
       domain: "https://vocab.methodandstructure.com/transformation#Queue",
@@ -328,6 +390,13 @@ module Intertwingler::Vocab
       label: {en: "follows"},
       range: "https://vocab.methodandstructure.com/transformation#Function",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :high,
+      comment: {en: "Specifies the upper bound of a tfo:Range."},
+      domain: "https://vocab.methodandstructure.com/transformation#Range",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "high"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Literal",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
     property :implementation,
       comment: {en: "URI to the implementation of the function."},
       domain: "https://vocab.methodandstructure.com/transformation#Bundle",
@@ -336,6 +405,13 @@ module Intertwingler::Vocab
       label: {en: "implementation"},
       range: "http://www.w3.org/2000/01/rdf-schema#Resource",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :infimum,
+      comment: {en: "Flags whether a tfo:Range will be open on the low side."},
+      domain: "https://vocab.methodandstructure.com/transformation#Range",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "infimum"},
+      range: "http://www.w3.org/2001/XMLSchema#boolean",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
     property :input,
       comment: {en: "Specifies the resource that was the input of the transformation function."},
       domain: "https://vocab.methodandstructure.com/transformation#Invocation",
@@ -354,6 +430,13 @@ module Intertwingler::Vocab
         ),
       subPropertyOf: "https://vocab.methodandstructure.com/transformation#member",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :low,
+      comment: {en: "Specifies the lower bound of a tfo:Range."},
+      domain: "https://vocab.methodandstructure.com/transformation#Range",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "low"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Literal",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
     property :member,
       comment: {en: "Denotes a member of a queue."},
       domain: "https://vocab.methodandstructure.com/transformation#Queue",
@@ -401,7 +484,7 @@ module Intertwingler::Vocab
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :parameter,
       comment: {en: "Binds a parameter object to its function."},
-      domain: "http://www.w3.org/ns/dcat#DataService",
+      domain: ["http://www.w3.org/ns/dcat#DataService", "http://www.w3.org/ns/dcat#Resource"],
       "http://www.w3.org/2004/02/skos/core#usageNote": {en: "Parameters can either be supplied to the function as key-value pairs or sequentially."},
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "parameter"},
@@ -409,7 +492,7 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"parameter-list",
       comment: {en: "Specifies the sequence of parameters when the invocation method of the function is sequential."},
-      domain: "http://www.w3.org/ns/dcat#DataService",
+      domain: ["http://www.w3.org/ns/dcat#DataService", "http://www.w3.org/ns/dcat#Resource"],
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "parameter-list"},
       range: "https://vocab.methodandstructure.com/transformation#ParameterList",
@@ -449,6 +532,20 @@ module Intertwingler::Vocab
           unionOf: list("https://vocab.methodandstructure.com/transformation#content-type", "http://www.w3.org/1999/02/22-rdf-syntax-ns#List")
         ),
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :shift,
+      comment: {en: "Flags whether a parameter with multiple values but a fixed cardinality shift off the front of the list rather than truncate off the back."},
+      domain: "https://vocab.methodandstructure.com/transformation#Parameter",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "shift"},
+      range: "http://www.w3.org/2001/XMLSchema#boolean",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
+    property :supremum,
+      comment: {en: "Flags whether a tfo:Range will be open on the high side."},
+      domain: "https://vocab.methodandstructure.com/transformation#Range",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "supremum"},
+      range: "http://www.w3.org/2001/XMLSchema#boolean",
+      type: ["http://www.w3.org/2002/07/owl#DatatypeProperty", "http://www.w3.org/2002/07/owl#FunctionalProperty"]
     property :target,
       comment: {en: "A target queue for the insertion."},
       domain: "https://vocab.methodandstructure.com/transformation#Insertion",
@@ -457,12 +554,12 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/transformation#Queue",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :transform,
-      comment: {en: "Specifies the transform associated with this particular application"},
+      comment: {en: "Specifies the transform associated with this particular invocation."},
       domain: "https://vocab.methodandstructure.com/transformation#Partial",
+      "http://www.w3.org/2000/01/rdf-schema#PropertyOf": "http://www.w3.org/ns/prov#used",
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "transform"},
       range: "https://vocab.methodandstructure.com/transformation#Function",
-      subPropertyOf: "https://vocab.methodandstructure.com/transformation#input",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :triggers,
       comment: {en: "A tfo:Function can trigger an tfo:Insertion event on a certain condition (e.g., successful completion)."},
@@ -498,6 +595,12 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "regexp"},
       type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
+    term :term,
+      comment: {en: "An RDF term represented as either a CURIE (prefixed term) or IRI."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "term"},
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype",
+      unionOf: list("http://www.w3.org/2001/XMLSchema#QName", "http://www.w3.org/2001/XMLSchema#anyURI")
     term :xpath,
       comment: {en: "An XPath expression."},
       "http://www.w3.org/2002/07/owl#deprecated": "true",
