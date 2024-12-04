@@ -38,14 +38,16 @@
       - [X] handling of empty values (ignore vs null, empty string, etc)
         - [X] ~tfo:empty~ property
         - [X] put empty string in ~tfo:default~ if that's what you want
+      - [X] ~tfo:universe~ property
       - [X] some way to represent composite values
-        - [X] ~tfo:composite~ property
+        - [X] ~tfo:Composite~ class
+          - [X] ~tfo:element~ property
         - [X] sequences (unbounded)
           - [X] just put ~rdf:List~ as a composite
         - [X] tuples (fixed length)
           - [X] shift vs truncate policy
             - [X] ~tfo:shift~ property
-        - [X] discrete sets
+        - [X] discrete/enumerated sets
           - [X] ~rdf:Bag~ + ~rdfs:member~
         - [X] numeric (or number-like, e.g. date) spans
           - [X] bounded on either side?

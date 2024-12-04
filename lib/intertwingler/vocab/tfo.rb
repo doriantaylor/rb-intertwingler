@@ -23,6 +23,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Bundle
   #
+  #     # A composite parameter has a multi-valued value like a list, tuple, set or range.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Composite
+  #
   #     # This class provides a specification for a transformation function.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Function
@@ -75,10 +79,6 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :completes
   #
-  #     # Assigns a composite type for the parameter.
-  #     # @return [RDF::Vocabulary::Term]
-  #     attr_reader :composite
-  #
   #     # An HTTP status code for which the insertion is triggered.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :condition
@@ -86,6 +86,10 @@ module Intertwingler::Vocab
   #     # Specifies one or more default values for a parameter.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :default
+  #
+  #     # This property designates an elementary type to go into the composite type.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :element
   #
   #     # Flags whether an empty parameter value should be treated as input rather than ignored.
   #     # @return [RDF::Vocabulary::Term]
@@ -175,6 +179,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :triggers
   #
+  #     # Specifies the container that contains the universe of values that a paramter can take.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :universe
+  #
   #     # A case-insensitive regular expression.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :iregexp
@@ -210,7 +218,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#index": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
-      "http://www.w3.org/2002/07/owl#imports": ["http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/ns/dcat#"],
+      "http://www.w3.org/2002/07/owl#imports": ["http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/ns/dcat#", "http://www.w3.org/ns/prov#"],
       "http://www.w3.org/2002/07/owl#sameAs": ["https://privatealpha.com/ontology/permutation/1", "https://privatealpha.com/ontology/permutation/1#", "https://privatealpha.com/ontology/transformation/1", "https://privatealpha.com/ontology/transformation/1#"],
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/transformation#",
@@ -220,6 +228,7 @@ module Intertwingler::Vocab
     # Class definitions
     term :AddressableQueue,
       comment: {en: "An addressable queue is a strict queue intended to hold transforms that have been invoked through the URL."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "AddressableQueue"},
       subClassOf: "https://vocab.methodandstructure.com/transformation#StrictQueue",
       type: "http://www.w3.org/2002/07/owl#Class"
@@ -228,11 +237,20 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Bundle,
       comment: {en: "This class provides a basic mechanism to yoke a set of transformation functions together."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Bundle"},
       subClassOf: ["http://www.w3.org/ns/dcat#Catalog", "http://www.w3.org/ns/prov#SoftwareAgent"],
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :Composite,
+      comment: {en: "A composite parameter has a multi-valued value like a list, tuple, set or range."},
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://www.w3.org/1999/02/22-rdf-syntax-ns#Bag", "http://www.w3.org/1999/02/22-rdf-syntax-ns#List", "https://vocab.methodandstructure.com/transformation#Range"],
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "Composite"},
+      subClassOf: "https://vocab.methodandstructure.com/transformation#Parameter",
+      type: "http://www.w3.org/2002/07/owl#Class"
     term :Function,
       comment: {en: "This class provides a specification for a transformation function."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Function"},
       subClassOf: ["http://www.w3.org/ns/dcat#DataService", "http://www.w3.org/ns/prov#Entity"],
       type: "http://www.w3.org/2002/07/owl#Class"
@@ -251,6 +269,7 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Insertion,
       comment: {en: "An insertion is a pre-packaged event that manipulates a per-request instance of a transformation queue. When the result of the transform being run matches the condition, the contents of the tfo:Insertion are inserted into the target queue."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Insertion"},
       subClassOf: "https://vocab.methodandstructure.com/transformation#Queue",
       type: "http://www.w3.org/2002/07/owl#Class"
@@ -264,12 +283,14 @@ module Intertwingler::Vocab
     term :MarkupTransform,
       comment: {en: "This class represents the set of transformation functions that operate exclusively over (HTML/XML) markup."},
       "http://www.w3.org/2002/07/owl#deprecated": "true",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "MarkupTransform"},
       note: {en: "\n            This class has been deprecated since it only made sense in 2020 when this vocabulary was being used in a different context.\n          "},
       subClassOf: "https://vocab.methodandstructure.com/transformation#Function",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Parameter,
       comment: {en: "This class provides a specification for a parameter in a given function."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Parameter"},
       subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#Property", term(
           allValuesFrom: term(
@@ -280,6 +301,7 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
     term :ParameterList,
       comment: {en: "This class represents a list with the restriction that its members be tfo:Parameter nodes."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "ParameterList"},
       subClassOf: ["http://www.w3.org/1999/02/22-rdf-syntax-ns#List", term(
           allValuesFrom: "https://vocab.methodandstructure.com/transformation#Parameter",
@@ -291,17 +313,20 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Partial,
       comment: {en: "This class represents a partial application of a transformation function, affording the encapsulation and re-use of existing parameters."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Partial"},
       subClassOf: "http://www.w3.org/ns/prov#Activity",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Queue,
       comment: {en: "A queue is a collection of tfo:Function (and/or tfo:Partial) elements, organized either by explicit sequence (via tfo:member-list), or by dynamic sorting at runtime."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Queue"},
       note: {en: "\n            Given that tfo:Invocation is a subclass of tfo:Partial, there is nothing in principle preventing the former from being introduced into a queue. If this happens, we ignore any tfo:input or tfo:output statemments associated with the application of the function.\n          "},
       subClassOf: "http://www.w3.org/ns/prov#Activity",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Range,
       comment: {en: "A span of numbers or sequence-able objects, like dates."},
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "Range"},
       subClassOf: "http://www.w3.org/2000/01/rdf-schema#Container",
       type: "http://www.w3.org/2002/07/owl#Class"
@@ -343,15 +368,6 @@ module Intertwingler::Vocab
       label: {en: "completes"},
       range: "https://vocab.methodandstructure.com/transformation#Partial",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
-    property :composite,
-      comment: {en: "Assigns a composite type for the parameter."},
-      domain: "https://vocab.methodandstructure.com/transformation#Parameter",
-      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://www.w3.org/1999/02/22-rdf-syntax-ns#Bag", "http://www.w3.org/1999/02/22-rdf-syntax-ns#List", "https://vocab.methodandstructure.com/transformation#Range"],
-      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
-      label: {en: "composite"},
-      note: {en: "\n\t    The range can be any class but we prefer some subclass of rdfs:Container. It is assumed that the code implementation knows what to do with the composite class.\n\t  "},
-      range: "http://www.w3.org/2000/01/rdf-schema#Class",
-      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :condition,
       comment: {en: "An HTTP status code for which the insertion is triggered."},
       domain: "https://vocab.methodandstructure.com/transformation#Insertion",
@@ -365,6 +381,13 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "default"},
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :element,
+      comment: {en: "This property designates an elementary type to go into the composite type."},
+      domain: "https://vocab.methodandstructure.com/transformation#Composite",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "element"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Datatype",
+      type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :empty,
       comment: {en: "Flags whether an empty parameter value should be treated as input rather than ignored."},
       domain: "https://vocab.methodandstructure.com/transformation#Parameter",
@@ -567,6 +590,13 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
       label: {en: "triggers"},
       range: "https://vocab.methodandstructure.com/transformation#Insertion",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :universe,
+      comment: {en: "Specifies the container that contains the universe of values that a paramter can take."},
+      domain: "https://vocab.methodandstructure.com/transformation#Parameter",
+      isDefinedBy: "https://vocab.methodandstructure.com/transformation#",
+      label: {en: "universe"},
+      range: "http://www.w3.org/2000/01/rdf-schema#Container",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
 
     # Datatype definitions
