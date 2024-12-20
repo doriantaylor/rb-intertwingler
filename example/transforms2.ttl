@@ -363,13 +363,51 @@
   owl:cardinality 1 ;
   rdfs:range xsd:anyURI . # do we want that or a resource?
 
-<urn:uuid:b348a477-61c6-4ab0-9a88-d9eda964f256> a tfo:Parameter ;
-  ci:canonical-slug "boundary"^^xsd:token ;
-  skos:prefLabel "Boundary"@en ;
-  rdfs:comment "Absolute for pagination"@en ;
-  rdfs:range xsd:positiveInteger .
+# these are for the catalogues
+
+<urn:uuid:9ebe1146-b658-4dfb-9ae2-8036883a96ac> a tfo:Composite ;
+  ci:canonical-slug "instance-of"^^xsd:token ;
+  skos:prefLabel "Instance of"@en ;
+  rdfs:comment "This parameter represents a set of classes used to select instances thereof."@en ;
+  rdfs:range rdf:Bag ;
+  tfo:element tfo:term .
+
+<urn:uuid:7170dcb2-aa31-4876-8817-dfe53ef79d69> a tfo:Composite ;
+  ci:canonical-slug "in-domain-of"^^xsd:token ;
+  skos:prefLabel "In domain of"@en ;
+  rdfs:comment "This parameter represents a set of properties used to select instances of classes in their domain."@en ;
+  rdfs:range rdf:Bag ;
+  tfo:element tfo:term .
+
+<urn:uuid:3ef90f8b-a629-451e-94bf-da66c4a939bd> a tfo:Composite ;
+  ci:canonical-slug "in-range-of"^^xsd:token ;
+  skos:prefLabel "In range of"@en ;
+  rdfs:comment "This parameter represents a set of properties used to select instances of classes in their range."@en ;
+  rdfs:range rdf:Bag ;
+  tfo:element tfo:term .
+
+<urn:uuid:fe4d51e5-db44-4ebf-8d7b-8f5b3edaedbb> a tfo:Parameter ;
+  ci:canonical-slug "asserted"^^xsd:token ;
+  skos:prefLabel "Asserted?"@en ;
+  rdfs:comment "This is a flag to filter whether results should include asserted statements."@en ;
+  rdfs:range xsd:boolean ;
+  tfo:default true .
+
+<urn:uuid:a6cf777a-2abf-46be-acc5-42625f335d03> a tfo:Parameter ;
+  ci:canonical-slug "inferred"^^xsd:token ;
+  skos:prefLabel "Inferred?"@en ;
+  rdfs:comment "This is a flag to filter whether results should include inferred statements."@en ;
+  rdfs:range xsd:boolean ;
+  tfo:default false .
 
 # other reusable parameters
+
+<urn:uuid:b348a477-61c6-4ab0-9a88-d9eda964f256> a tfo:Composite ;
+  ci:canonical-slug "boundary"^^xsd:token ;
+  skos:prefLabel "Boundary"@en ;
+  rdfs:comment "Boundary index (low and high) for paginating long lists of records."@en ;
+  rdfs:range tfo:Range ;
+  tfo:element xsd:positiveInteger .
 
 # Partial invocations
 

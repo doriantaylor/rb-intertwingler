@@ -125,7 +125,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     inventory:      'bf4647be-7b02-4742-b482-567022a8c228',
     me:             'fe836b6d-11ef-48ef-9422-1747099b17ca',
     all_vocabs:     '13e45ee1-0b98-4d4b-9e74-a83a09e85030',
-  }.transform_values { |v| RDF::URI("urn:uuid:#{v.freeze}") }
+  }.transform_values { |v| RDF::URI("urn:uuid:#{v}".freeze) }
   # XXX "graduate" the URI_MAP construct from transforms to ordinary handlers?
   URI_MAP = URI_REV.invert
 
@@ -140,12 +140,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # ditto parameter names, which shooould come to us from upstream as
   # compact uuids but we resolve them back to boring old symbols
   PARAM_REV = {
-    instance_of:  '67cf8149-face-4781-8fbd-07aa17cd2c6c',
-    in_domain_of: '61a04a58-045c-4747-b9aa-cceb95d0fcde',
-    in_range_of:  '5d798f1f-a0da-4824-92dc-fe2155bf30e8',
-    asserted:     '342ce7f9-9ebe-44cd-87b8-8be9e2e1a778',
-    inferred:     'e52d9137-f1e1-4611-8ca3-01d9786b3dd6',
-  }.transform_values { |v| RDF::URI("urn:uuid:#{v.freeze}") }
+    instance_of:  '9ebe1146-b658-4dfb-9ae2-8036883a96ac',
+    in_domain_of: '7170dcb2-aa31-4876-8817-dfe53ef79d69',
+    in_range_of:  '3ef90f8b-a629-451e-94bf-da66c4a939bd',
+    asserted:     'fe4d51e5-db44-4ebf-8d7b-8f5b3edaedbb',
+    inferred:     'a6cf777a-2abf-46be-acc5-42625f335d03',
+    boundary:     'b348a477-61c6-4ab0-9a88-d9eda964f256',
+  }.transform_values { |v| RDF::URI("urn:uuid:#{v}".freeze) }
   PARAM_MAP = PARAM_REV.invert
 
   # lol, this is a bastard thing to do
