@@ -2567,7 +2567,7 @@ module Intertwingler
   # graph. When I get around to implementing it. (Python librdf has
   # one of these and it's handy. This should really belong in the core
   # rdflib.)  Currently does not do anything.
-  class Resource
+  class Subject
     attr_reader :repository, :resolver
 
     def initialize repository, subject, resolver: nil, cache: 1000

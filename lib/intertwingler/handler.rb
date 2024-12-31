@@ -10,13 +10,15 @@ class Intertwingler::Handler
   class ::Intertwingler::Engine < self
   end
 
-  # This is the abstract parent Exception class that acts as an escape
+  # This is the abstract parent {::Exception} class that acts as an escape
   # hatch for responses that are something _other_ than 200-series,
   # i.e. they are not-successful (albeit not strictly _unsuccessful_)
   # responses.
   class AnyButSuccess < Exception
+    STATUS = nil
+
     def initialize message, status: nil
-      @status = status
+      @status = status || self.class.const_get(:STATUS)
 
       super message
     end
@@ -53,6 +55,8 @@ class Intertwingler::Handler
     end
   end
 
+  # This is the superclass of HTTP errors.
+  #
   class Error < AnyButSuccess
     def response
       Rack::Response[status, { 'content-type' => 'text/plain' },
@@ -61,20 +65,40 @@ class Intertwingler::Handler
 
     class Client < self
       def initialize message, status: nil
-        super message, status: status || 403
+        super message, status: status
       end
     end
 
-    class NotFound < Client
+    class BadRequest < Client
+      STATUS = 400
     end
 
     class Forbidden < Client
+      STATUS = 403
+    end
+
+    class NotFound < Client
+      STATUS = 404
+    end
+
+    class NotAllowed < Client
+      STATUS = 405
+
+      attr_reader :request_method
+
+      def initialize message, status: 405, method: 'GET'
+        @request_method = method
+
+        super message, status: status
+      end
     end
 
     class Conflict < Client
+      STATUS =  409
     end
 
     class Server < self
+      STATUS = 500
       def initialize message, status: nil
         super message, status: status || 500
       end
