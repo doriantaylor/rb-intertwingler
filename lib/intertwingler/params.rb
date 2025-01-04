@@ -1,5 +1,6 @@
 require 'intertwingler/engine'
 require 'intertwingler/graphops'
+require 'intertwingler/types'
 require 'intertwingler/vocab/ci'
 require 'intertwingler/vocab/tfo'
 require 'intertwingler/vocab/itcv'
@@ -80,6 +81,7 @@ class Intertwingler::Params < Params::Registry
     private
 
     T   = ::Params::Registry::Types
+    I   = Intertwingler::Types
     CI  = Intertwingler::Vocab::CI
     TFO = Intertwingler::Vocab::TFO
     XSD = RDF::Vocab::XSD
@@ -99,7 +101,7 @@ class Intertwingler::Params < Params::Registry
       XSD.nonPositiveInteger => T::NonPositiveInteger,
       XSD.date               => T::Date,
       XSD.dateTime           => T::Time,
-      TFO.term               => T::Term,
+      TFO.term               => I::Term,
     }
 
     def repo; registry.engine.repo; end

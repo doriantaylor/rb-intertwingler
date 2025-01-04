@@ -45,6 +45,8 @@ module Intertwingler
 
     # @!group Atoms
 
+    Term = Types.Constructor(::RDF::URI) { |x| RDF::URI(x) }
+
     # A relative path name.
     RelativePathname = Types.Constructor(::Pathname) { |x| Pathname(x) }
 

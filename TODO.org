@@ -17,6 +17,17 @@
     - [ ] fix math on hyperbolic representation (deal with this last)
       - [ ] (probably will need a whole new algorithm for final layout phase tbh)
 - [-] create [[lib/intertwingler/handler/catalogue.rb][catalogue resources]]
+  - [ ] fix [[lib/intertwingler/params.rb][Intertwingler::Params]]
+    - [ ] create mechanism for sets and sequences
+      - [ ] read out of RDF graph
+    - [ ] create a "term" parameter value type
+      - [ ] serializes/canonicalizes to CURIE (if possible) using internal prefix map
+      - [ ] expands to URI (again, if possible)
+  - [ ] create a mechanism for /any/ resource to marshal [[lib/intertwingler/params.rb][Intertwingler::Params]], not just transforms
+    - [ ] create [[lib/intertwingler/resource.rb][Intertwingler::Resource]]
+      - [ ] these represent individual resources with stateful config
+      - [ ] generic ~call~ method to route requests
+      - [ ] actual methods map to HTTP request methods
   - [ ] aggregated vocab resource
     - [ ] just RDF/XML for now
     - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them and then forever again to render 3 megabytes of RDF/XML
@@ -60,12 +71,6 @@
       - [X] determine how to represent a "term" type
     - [ ] some way to assign parse/serialize, compose/decompose functions
       - [ ] change parameter spec or generalize domain
-    - [ ] fix [[lib/intertwingler/params.rb][Intertwingler::Params]]
-      - [ ] create mechanism for sets and sequences
-        - [ ] read out of RDF graph
-      - [ ] create a "term" parameter value type
-        - [ ] serializes/canonicalizes to CURIE (if possible) using internal prefix map
-        - [ ] expands to URI (again, if possible)
     - [ ] some kind of caching?
     - [ ] pagination links
   - [ ] ~/me~ resource

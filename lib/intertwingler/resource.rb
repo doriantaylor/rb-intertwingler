@@ -8,6 +8,13 @@ require 'intertwingler/handler'
 # directly. Subclasses of this class are intended to be instantiated
 # by a handler, when the handler itself is instantiated or otherwise
 # refreshed.
+#
+# To use this class, subclass it and create a method with the same
+# name as the request method except transliterated to
+# `.downcase.tr_s(?-, ?_)` (so `GET` becomes `get`, or
+# `VERSION-CONTROL` becomes `version_control`).  The method _must_
+# return a {::Rack::Response} and _may_ raise an
+# {Intertwingler::Handler::AnyButSuccess}.
 class Intertwingler::Resource
 
   private
@@ -21,9 +28,15 @@ class Intertwingler::Resource
   UPDATEREDIRECTREF VERSION-CONTROL
   METH
 
+  URI = nil
+
   public
 
   attr_reader :handler, :uri
+
+  def self.uri
+    const_get :URI
+  end
 
   # @!attribute [r] handler
   #  @return [Intertwingler::Handler] the associated handler
@@ -33,9 +46,9 @@ class Intertwingler::Resource
 
   # Initialize a new resource object.
   #
-  def initialize handler, uri, **args
+  def initialize handler, uri = nil, **args
     @handler = handler
-    @uri     = resolver.uuid_for uri
+    @uri     = resolver.uuid_for(uri || self.class.uri)
   end
 
   # @!attribute [r] engine
@@ -67,18 +80,19 @@ class Intertwingler::Resource
   # @return [Rack::Response] the response to pass upstream
   #
   def call method, params: {}, headers: {}, body: nil
-    to_call = method
+    # keep the original method untouched
+    to_call = method.dup
     # set the method name to `http_whatever` for unregistered methods
     to_call = "http_#{to_call}" unless METHODS.include? method.to_s.strip.to_sym
     # normalize the request method to a ruby method
     to_call = to_call.to_s.strip.downcase.tr_s(?-, ?_).to_sym
 
-    begin
-      send to_call, params: params, headers: headers, body: body
-    rescue NoMethodError
-      raise Intertwingler::Handler::Error::NotAllowed.new(
-        "This resource does not respond to #{method} requests.", method: method)
-    end
+    raise Intertwingler::Handler::Error::NotAllowed.new(
+      "This resource does not respond to #{method} requests.",
+      method: method) unless respond_to? to_call
+
+    # this will already be wrapped in a rescue block upstream
+    send to_call, params: params, headers: headers, body: body
   end
 
 end
