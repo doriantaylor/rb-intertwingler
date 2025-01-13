@@ -2560,6 +2560,37 @@ module Intertwingler
           o.object.is_a? Numeric
         end.sort
       end
+
+      # Get the type(s) of this subject.
+      #
+      # @param graph [nil,RDF::URI,Array<RDF::URI>] the graph(s) to search
+      # @param entail [false, true] whether to entail
+      #
+      # @return [Array<RDF::URI>] the tyeps
+      #
+      def types graph: nil, entail: false
+        repo.types_for subject, graph: graph, entail: entail
+      end
+
+      # Test whether the subject is of a certain RDF type.
+      #
+      # @return [Boolean] whether or not the type matches
+      #
+      def type? type, graph: nil
+        repo.rdf_type? subject, graph: graph
+      end
+
+      # Get the label for this subject.
+      #
+      # @param graph [nil,RDF::URI,Array<RDF::URI>] the graph(s) to search
+      #
+      # @return [Array] the label
+      #
+      def label graph: nil, entail: true, unique: true, lang: nil,
+          desc: false, alt: false, noop: false
+        repo.label_for subject, graph: graph, entail: entail, unique: unique,
+          lang: lang, desc: desc, alt: alt, noop: noop
+      end
     end
   end
 

@@ -2,6 +2,7 @@ require 'intertwingler/vocab'
 require 'intertwingler/handler'
 require 'intertwingler/resource'
 require 'intertwingler/document'
+require 'intertwingler/representation/nokogiri'
 require 'xml/mixup'
 require 'rdf/rdfxml'
 
@@ -137,19 +138,21 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       Intertwingler::Document.literal_tag resolver, label, **args
     end
 
-    def xhtml_response uri, body
-      ttag = 'hi lol'
+    def xhtml_response body, uri: nil, label: nil
+      uri   ||= resolver.uri_for subject, slugs: true
+      label ||= repo.label_for(subject, noop: true).reverse
 
       doc = XML::Mixup.xhtml_stub(
-        base: uri, title: ttag, content: body
+        base: uri, title: label, content: body
       ).document
 
-      str = doc.to_xml.b
+      rep = Intertwingler::Representation::Nokogiri.new doc,
+        type: 'application/xhtml+xml'
 
       Rack::Response[200, {
-        'content-type'   => 'application/xhtml+xml',
-        'content-length' => str.length.to_s,
-      }, StringIO.new(str, ?r, encoding: Encoding::BINARY)]
+        'content-type'   => rep.type,
+        'content-length' => rep.size.to_s,
+      }, rep]
     end
 
     # XXX CAN WE USE THIS IN GRAPHOPS PERHAPS?
@@ -244,11 +247,11 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     def finalize body
       # XXX should we get this from the request??
-      requri = resolver.uri_for uri, slugs: true
+      # requri = resolver.uri_for subject, slugs: true
 
       case body
       when nil then nil
-      when Hash, Array then xhtml_response requri, body
+      when Hash, Array then xhtml_response body
       when Rack::Response then body
       else nil
       end
@@ -271,9 +274,11 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # @return [Array] `<body>` contents to {XML::Mixup}
   #
   class Index < Resource
-    URI = RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9')
+    SUBJECT = RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9')
 
     def get params: {}, headers: {}, body: nil
+      # uri = resolver.uri_for subject, slugs: true
+
       # note the keys are method names not URL slugs
       out = {
         '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
@@ -303,7 +308,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # @return [Hash] an {XML::Mixup} representation of a table
   #
   class AllClasses < Resource
-    URI = RDF::URI('urn:uuid:4ab10425-d970-4280-8da2-7172822929ea')
+    SUBJECT = RDF::URI('urn:uuid:4ab10425-d970-4280-8da2-7172822929ea')
 
     def get params: {}, headers: {}, body: nil
       # we also need what's going on in the inventory down there so we
@@ -387,7 +392,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # * all properties with range T
   #
   class AllProperties < Resource
-    URI = RDF::URI('urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2')
+    SUBJECT = RDF::URI('urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2')
 
     def get params: {}, headers: {}, body: nil
 
@@ -509,17 +514,22 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # @return [Array] the body to pass into {XML::Mixup}
   #
   class Inventory < Resource
-    URI = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
+    SUBJECT = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
 
     def get params: {}, headers: {}, body: nil
       # step zero: bail with a conflict error if both asserted and
       # inferred are false
+
+      group handler.engine.registry.group[subject]
+
 
       # types = Set[*(instance_of || [])]
 
       # flatten out
       if params[:inferred]
       end
+
+      statements = repo.query([nil, RDF.type, nil])
 
       # then we need a list of ?s a ?t
       # then we sort the list
@@ -530,14 +540,14 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   end
 
   class Me < Resource
-    URI = RDF::URI('urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca')
+    SUBJECT = RDF::URI('urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca')
 
     def get params: {}, headers: {}, body: nil
     end
   end
 
   class AllVocabs < Resource
-    URI = RDF::URI('urn:uuid:13e45ee1-0b98-4d4b-9e74-a83a09e85030')
+    SUBJECT = RDF::URI('urn:uuid:13e45ee1-0b98-4d4b-9e74-a83a09e85030')
 
     def get params: {}, headers: {}, body: nil
       io = StringIO.new '', 'w+', encoding: Encoding::BINARY
@@ -566,7 +576,9 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   private
 
   MANIFEST = [Index, AllClasses, AllProperties,
-              Inventory, Me, AllVocabs].map { |c| [c.uri, c] }.to_h
+              Inventory, Me, AllVocabs].map { |c| [c.subject, c] }.to_h
+
+  # XXX we don't need this anymore
 
   # ditto parameter names, which shooould come to us from upstream as
   # compact uuids but we resolve them back to boring old symbols
@@ -625,7 +637,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # XXX this may raise an Intertwingler::Handler::AnyButSuccess
     begin
       resp = resource.call req.request_method, params: query,
-        headers: get_headers(req), body: req.body
+        headers: normalize_headers(req), body: req.body
     rescue Intertwingler::Handler::AnyButSuccess => e
       return e.response
     end

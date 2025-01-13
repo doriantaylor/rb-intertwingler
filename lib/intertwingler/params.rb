@@ -38,9 +38,28 @@ require 'params/registry'
 #
 class Intertwingler::Params < Params::Registry
 
+  private
+
+  T   = ::Params::Registry::Types
+  I   = Intertwingler::Types
+  CI  = Intertwingler::Vocab::CI
+  TFO = Intertwingler::Vocab::TFO
+  XSD = RDF::Vocab::XSD
+
+  public
+
   # This is the group class with additional functionality for fetching
   # configuration from the graph.
   class Group < ::Params::Registry::Group
+    include Intertwingler::GraphOps::Addressable
+
+    private
+
+    def repo ; registry.engine.repo ; end
+
+    public
+
+    alias_method :subject, :id
 
     # This assignor autovivifies the template from the graph.
     #
@@ -59,12 +78,32 @@ class Intertwingler::Params < Params::Registry
       super id, spec
     end
 
-    # Refresh the group and its constituent parameters.
+    # Refresh the group and (optionally) its constituent parameters.
+    #
+    # @param cascade [true, false] whether to cascade into the templates
     #
     # @return [self]
     #
-    def refresh
-      templates.each { |t| t.refresh }
+    def refresh! cascade: true
+      # only do this if we're a graph buddy
+      if subject.is_a? RDF::URI
+        # fetch the parameters out of the graph
+
+        # XXX TODO better negotiation between ordered and unordered
+        # (eg subtract ordered from unordered then sort unordered and
+        # append it to the end of ordered? something like that?)
+        params = if pl = blanks(TFO['parameter-list']).sort.first
+                   RDF::List.new(subject: pl, graph: repo).to_a.uniq
+                 else
+                   resources(TFO.parameter).sort
+                 end
+
+        # now use the overloaded bulk assign
+        templates = params unless params.empty?
+      end
+
+      # do the templates
+      templates.each { |t| t.refresh! } if cascade
 
       self
     end
@@ -79,12 +118,6 @@ class Intertwingler::Params < Params::Registry
     include Intertwingler::GraphOps::Addressable
 
     private
-
-    T   = ::Params::Registry::Types
-    I   = Intertwingler::Types
-    CI  = Intertwingler::Vocab::CI
-    TFO = Intertwingler::Vocab::TFO
-    XSD = RDF::Vocab::XSD
 
     # XXX need a solution for object properties, relative URIs, also
     # (compact) UUIDs.
@@ -110,7 +143,7 @@ class Intertwingler::Params < Params::Registry
     # configuration data.
     #
     def post_init
-      refresh if blank?
+      refresh! if blank?
     end
 
     public
@@ -126,11 +159,11 @@ class Intertwingler::Params < Params::Registry
     #
     # @return [self]
     #
-    def refresh
+    def refresh!
 
       if slug = literals(CI['canonical-slug']).sort.first
         # i guess this is what we do? lol
-        @slug = slug.object.to_s.to_sym
+        @slug = slug = slug.object.to_s.to_sym
       end
 
       @aliases = (
@@ -151,9 +184,22 @@ class Intertwingler::Params < Params::Registry
       end
 
       # we return self cause there's nothing here to see
-      self
+      super
     end
 
+  end
+
+  def refresh!
+    # do the groups
+    groups.each { |g| g.refresh! cascade: false }
+
+    # do the templates
+    super
+  end
+
+  def self.configure engine
+
+    self.new(engine).refresh!
   end
 
   # This constructor extends its parent {Params::Registry#initialize}

@@ -128,6 +128,30 @@ class Intertwingler::Handler
     handle(req).finish
   end
 
+  # Normalize a set of request headers into something that can be
+  # counted on downstream.
+  #
+  # @note This method is 100% provisional.
+  #
+  # @param req [Rack::Request] a Rack request.
+  # @param as_symbols [false, true] whether to coerce keys to symbols
+  # @param split [false, true] whether to split multi-valued headers
+  #
+  # @return [Hash] the normalized header set
+  #
+  def normalize_headers req, as_symbols: false, split: false
+    req.env.select do |k|
+      %w[CONTENT_TYPE CONTENT_LENGTH].include?(k) or k.start_with? 'HTTP'
+    end.reduce({}) do |hash, pair|
+      key = pair.first.downcase.delete_prefix('http_').tr_s(?_, ?-)
+      key = key.to_sym if as_symbols
+      val = pair.last
+      val = val.split(/\s*,+\s*/) if split
+        hash[key] = val
+      hash
+    end
+  end
+
   # Initialize a handler.
   #
   # @param engine [Intertwingler::Engine]

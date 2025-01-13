@@ -13,6 +13,7 @@
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix ci:   <https://vocab.methodandstructure.com/content-inventory#> .
+@prefix cgto: <https://vocab.methodandstructure.com/graph-tool#> .
 @prefix ibis: <https://vocab.methodandstructure.com/ibis#> .
 @prefix tfo:  <https://vocab.methodandstructure.com/transformation#> .
 @prefix itcv: <https://vocab.methodandstructure.com/intertwingler#> .
@@ -408,6 +409,38 @@
   rdfs:comment "Boundary index (low and high) for paginating long lists of records."@en ;
   rdfs:range tfo:Range ;
   tfo:element xsd:positiveInteger .
+
+# the catalogues themselves
+
+<urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9> a cgto:Index, dcat:DataService ;
+  ci:canonical-slug "catalogue-index"^^xsd:token ;
+  dct:abstract "The resource catalogue is a set of resources organized in a way that is useful to many applications."@en ;
+  dct:title "Resource Catalogue Index"@en ;
+  cgto:by-class <urn:uuid:4ab10425-d970-4280-8da2-7172822929ea> ;
+  cgto:by-property <urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2> .
+
+<urn:uuid:4ab10425-d970-4280-8da2-7172822929ea> a cgto:Summary, dcat:DataService ;
+  ci:canonical-slug "all-classes"^^xsd:token ;
+  dct:abstract "This data set summarizes all classes known to the graph "@en ;
+  dct:title "All (RDF) Classes"@en ;
+  tfo:parameter-list ( <urn:uuid:7170dcb2-aa31-4876-8817-dfe53ef79d69> <urn:uuid:3ef90f8b-a629-451e-94bf-da66c4a939bd> ) .
+
+<urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2> a cgto:Summary, dcat:DataService ;
+  ci:canonical-slug "all-properties"^^xsd:token ;
+  dct:title "All (RDF) Properties"@en .
+
+<urn:uuid:13e45ee1-0b98-4d4b-9e74-a83a09e85030> a dcat:DataService ;
+  ci:canonical-slug "all-vocabs"^^xsd:token ;
+  dct:title "All (RDF) Vocabularies"@en .
+
+<urn:uuid:bf4647be-7b02-4742-b482-567022a8c228> a cgto:Inventory, dcat:DataService ;
+  ci:canonical-slug "all-resources"^^xsd:token ;
+  dct:title "All (RDF) Resources"@en ;
+  tfo:parameter-list ( <urn:uuid:9ebe1146-b658-4dfb-9ae2-8036883a96ac> <urn:uuid:7170dcb2-aa31-4876-8817-dfe53ef79d69> <urn:uuid:3ef90f8b-a629-451e-94bf-da66c4a939bd> <urn:uuid:fe4d51e5-db44-4ebf-8d7b-8f5b3edaedbb> <urn:uuid:a6cf777a-2abf-46be-acc5-42625f335d03> <urn:uuid:b348a477-61c6-4ab0-9a88-d9eda964f256> ) .
+
+<urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca> a dcat:DataService ;
+  ci:canonical-slug "me"^^xsd:token ;
+  dct:title "Me"@en .
 
 # Partial invocations
 

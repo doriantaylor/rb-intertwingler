@@ -1,6 +1,6 @@
 require 'intertwingler/representation'
 
-require 'intertwingler/document' # this will import nokogiri
+require 'intertwingler/document' # this will also import nokogiri
 
 require 'stringio'
 
@@ -20,8 +20,8 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
 
   def io
     return @io unless @object
-
-    out = StringIO.new '', 'w+'
+    # XXX we want this to be
+    out = StringIO.new ''.b, 'wb+'
 
     @object.write_to out
 

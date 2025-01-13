@@ -1,4 +1,5 @@
 require 'intertwingler/handler'
+require 'intertwingler/graphops'
 
 # This class encapsulates an individual (presumably generated) HTTP
 # resource. It sits between an {Intertwingler::Handler} and whatever
@@ -16,10 +17,16 @@ require 'intertwingler/handler'
 # return a {::Rack::Response} and _may_ raise an
 # {Intertwingler::Handler::AnyButSuccess}.
 class Intertwingler::Resource
+  include Intertwingler::GraphOps::Addressable
 
   private
 
   # from https://www.iana.org/assignments/http-methods/http-methods.xhtml
+  #
+  # any (instance) methods with these names (modulo `.downcase.tr_s(?-,?_)`)
+  # are automatically routed; otherwise http method FOO is represented by
+  # `def http_foo`…
+  #
   METHODS = (<<~METH).strip.split.map(&:to_sym)
   ACL BASELINE-CONTROL BIND CHECKIN CHECKOUT CONNECT COPY DELETE GET
   HEAD LABEL LINK LOCK MERGE MKACTIVITY MKCALENDAR MKCOL MKREDIRECTREF
@@ -28,27 +35,28 @@ class Intertwingler::Resource
   UPDATEREDIRECTREF VERSION-CONTROL
   METH
 
-  URI = nil
+  SUBJECT = nil
 
   public
 
-  attr_reader :handler, :uri
-
-  def self.uri
-    const_get :URI
-  end
 
   # @!attribute [r] handler
   #  @return [Intertwingler::Handler] the associated handler
   #
-  # @!attribute [r] uri
+  attr_reader :handler, :subject
+
+  # @!attribute [r] subject
   #  @return [RDF::URI] the (durable, canonical) URI of the resource
+  #
+  def self.subject
+    const_get :SUBJECT
+  end
 
   # Initialize a new resource object.
   #
-  def initialize handler, uri = nil, **args
+  def initialize handler, subject = nil, **args
     @handler = handler
-    @uri     = resolver.uuid_for(uri || self.class.uri)
+    @subject = resolver.uuid_for(subject || self.class.subject, verify: false)
   end
 
   # @!attribute [r] engine
@@ -91,8 +99,16 @@ class Intertwingler::Resource
       "This resource does not respond to #{method} requests.",
       method: method) unless respond_to? to_call
 
+    warn engine.registry.groups.inspect
+
+    # handle the params XXX MAY RAISE
+    # instance = engine.registry[subject].process params
+    instance = engine.registry.process params
+
+    # warn instance.inspect
+
     # this will already be wrapped in a rescue block upstream
-    send to_call, params: params, headers: headers, body: body
+    send to_call, params: instance.to_h, headers: headers, body: body
   end
 
 end
