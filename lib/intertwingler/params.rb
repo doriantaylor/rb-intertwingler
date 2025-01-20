@@ -85,25 +85,36 @@ class Intertwingler::Params < Params::Registry
     # @return [self]
     #
     def refresh! cascade: true
+      # warn subject.inspect
+
       # only do this if we're a graph buddy
-      if subject.is_a? RDF::URI
-        # fetch the parameters out of the graph
+      return self unless subject.is_a? RDF::URI
 
-        # XXX TODO better negotiation between ordered and unordered
-        # (eg subtract ordered from unordered then sort unordered and
-        # append it to the end of ordered? something like that?)
-        params = if pl = blanks(TFO['parameter-list']).sort.first
-                   RDF::List.new(subject: pl, graph: repo).to_a.uniq
-                 else
-                   resources(TFO.parameter).sort
-                 end
+      # fetch the parameters out of the graph
 
-        # now use the overloaded bulk assign
-        templates = params unless params.empty?
-      end
+      # XXX TODO better negotiation between ordered and unordered
+      # (eg subtract ordered from unordered then sort unordered and
+      # append it to the end of ordered? something like that?)
+      params = if pl = blanks(TFO['parameter-list']).sort.first
+                 RDF::List.new(subject: pl, graph: repo).to_a.uniq
+               else
+                 resources(TFO.parameter).sort
+               end
+
+      # now use the overloaded bulk assign
+      # templates = params unless params.empty?
+
+      #warn templates.inspect
 
       # do the templates
-      templates.each { |t| t.refresh! } if cascade
+      params.each do |uri|
+        if template = self[uri]
+          template.refresh!
+        else
+          # this will trigger it
+          self[uri] = uri
+        end
+      end
 
       self
     end
@@ -127,6 +138,7 @@ class Intertwingler::Params < Params::Registry
       RDF::RDFV.langString   => T::String,
       XSD.string             => T::String,
       XSD.token              => T::Token,
+      XSD.boolean            => T::Bool,
       XSD.integer            => T::DecimalInteger,
       XSD.negativeInteger    => T::NegativeInteger,
       XSD.positiveInteger    => T::PositiveInteger,
@@ -134,8 +146,48 @@ class Intertwingler::Params < Params::Registry
       XSD.nonPositiveInteger => T::NonPositiveInteger,
       XSD.date               => T::Date,
       XSD.dateTime           => T::Time,
+      RDF::RDFV.List         => T::List,
+      RDF::RDFV.Bag          => T::Set,
+      TFO.Range              => T::Range,
       TFO.term               => I::Term,
     }
+
+    # this is to actually parse the defaults out of the graph
+    COMPOSITES = {
+      RDF::RDFV.List => -> subject {
+        RDF::List.new(subject: subject, graph: repo).to_a.map do |x|
+          # convert the literals
+          x.literal? ? x.object : x
+        end
+      },
+      RDF::RDFV.Bag => -> subject {
+        repo.objects_for(subject, RDF::RDFS.member).map do |x|
+          # convert the literals
+          x.literal? ? x.object : x
+        end.to_set
+      },
+      TFO.Range => -> subject {
+        # XXX we won't mess with open ranges and infimum/supremum right now
+        lo = repo.objects_for(subject, TFO.low,  only: :literal).sort.first
+        hi = repo.objects_for(subject, TFO.high, only: :literal).sort.first
+
+        # convert the literals if not nil
+        lo = lo.object if lo
+        hi = hi.object if hi
+
+        Range.new lo, hi
+      },
+    }
+
+    def load_composite subject
+      # get the domains of the predicates from the struct
+      types = (repo.types_for(subject) + repo.struct_for(subject).keys.select do |p|
+        p.respond_to? :domain
+      end.map { |p| p.domain }.flatten).uniq
+
+      candidates = domains & COMPOSITES.keys
+
+    end
 
     def repo; registry.engine.repo; end
 
@@ -151,15 +203,25 @@ class Intertwingler::Params < Params::Registry
     alias_method :subject, :id
 
     # Refresh the template from the graph. Currently manages `slug`,
-    # `aliases`, `type` (mapped from XSD), and cardinality.
+    # `aliases`, `type` (mapped from XSD), cardinality, `empty`, and
+    # `shift`. Will also determine if the entity is composite.
+    #
+    # @note Still outstanding are `format`, `depends`, `conflicts`,
+    #  `consumes` `preproc`, `universe`, `complement`, `unwind`,
+    #  and `reverse`.
     #
     # @note This method does not configure the full feature set of
     #  {Params::Registry::Template}, because there is currently no
-    #  ontology that represents it.
+    #  determination on how the `universe` and `complement` members
+    #  ought to be implemented; likewise stateful type coercions
+    #  (i.e., coercions that may change when something within a
+    #  running instance of Intertwingler changes).
     #
-    # @return [self]
+    # @return [self] because what else do you return
     #
     def refresh!
+      # bail out because nothing here to work with otherwise
+      return super unless subject.is_a? RDF::URI
 
       if slug = literals(CI['canonical-slug']).sort.first
         # i guess this is what we do? lol
@@ -169,9 +231,22 @@ class Intertwingler::Params < Params::Registry
       @aliases = (
         literals(CI.slug).map { |a| a.object.to_s.to_sym } - [slug]).sort.uniq
 
-      # XXX this may be subtler
-      @type = MAPPING.fetch(
-        resources(RDF::RDFS.range).sort.first, T::NormalizedString)
+      if type? TFO.Composite
+        @composite = MAPPING.fetch(
+          resources(RDF::RDFS.range).sort.first, T::Set)
+        @type = MAPPING.fetch(
+          resources(TFO.element).sort.first, T::NormalizedString)
+        # XXX COMPOSITE DEFAULT ???
+      else
+        # XXX this may be subtler
+        @type = MAPPING.fetch(
+          resources(RDF::RDFS.range).sort.first, T::NormalizedString)
+
+        # XXX is there some less stupid way of doing this
+        @default = if d = literals(TFO.default).sort.first
+                     d.object
+                   end
+      end
 
       # cardinality
       if c1 = numeric_literals(RDF::OWL.cardinality).sort.first
@@ -183,23 +258,44 @@ class Intertwingler::Params < Params::Registry
         @max = c2.object.to_i if c2
       end
 
-      # we return self cause there's nothing here to see
+      # empty/multi-value behaviour
+      @empty = if em = literals(TFO.empty, datatype: XSD.boolean).sort.first
+                 T::Bool[em.object]
+               end
+      @shift = if sh = literals(TFO.shift, datatype: XSD.boolean).sort.first
+                 T::Bool[sh.object]
+               end
+
+      # we return self (well, `super` does) cause there's nothing here to see
       super
     end
 
   end
 
   def refresh!
-    # do the groups
-    groups.each { |g| g.refresh! cascade: false }
 
     # do the templates
     super
+
+
+    # do the groups
+    groups.each { |g| g.refresh! cascade: false }
+
+    self
   end
 
   def self.configure engine
+    repo   = engine.repo
+    props  = repo.property_set [TFO.parameter, TFO['parameter-list']]
+    groups = props.map do |p|
+      repo.query([nil, p, nil]).subjects
+    end.flatten.select(&:iri?)
 
-    self.new(engine).refresh!
+    me = self.new engine
+
+    groups.each { |g| me.configure_group g }
+
+    me
   end
 
   # This constructor extends its parent {Params::Registry#initialize}
@@ -230,4 +326,13 @@ class Intertwingler::Params < Params::Registry
     (Params::Registry::Types::Array|Params::Registry::Types::TemplateMap)[params]
   end
 
+  def configure_group id, params = []
+    # this is dumb because dumb
+    unless group = self[id]
+      self[id] = params
+      group = self[id]
+    end
+
+    group.refresh!
+  end
 end

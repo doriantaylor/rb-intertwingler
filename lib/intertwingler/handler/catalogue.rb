@@ -507,7 +507,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   #  types are inferred from equivalents or subclasses/properties
   #
   # @raise [Intertwingler::Handler::Redirect] when e.g. the parameters
-  #  are wrong but fixable internally
+  #  do not match when round-tripped or otherwise require adjustment
   # @raise [Intertwingler::Handler::Conflict] when e.g. the parameters
   #  are wrong but only fixable by the user
   #
@@ -517,11 +517,26 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     SUBJECT = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
 
     def get params: {}, headers: {}, body: nil
+
+      warn params.inspect
+
       # step zero: bail with a conflict error if both asserted and
       # inferred are false
+      raise Intertwingler::Handler::Error::Conflict,
+        'At least one of asserted or inferred parameters must be true' unless
+        params[:asserted] or params[:inferred]
+      # let's coerce
+      ioc = params[:"instance-of"]  || Set[]
+      ido = params[:"in-domain-of"] || Set[]
+      iro = params[:"in-range-of"]  || Set[]
 
-      group handler.engine.registry.group[subject]
+      # let's get all the types that are actually in the graph
+      all = repo.all_types
 
+      warn all.inspect
+
+      # now let's get t
+      # asserted = params[:asserted] ? repo.all_of_type
 
       # types = Set[*(instance_of || [])]
 
@@ -534,6 +549,10 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       # then we need a list of ?s a ?t
       # then we sort the list
       # then we segment it
+
+      li = []
+      nav = []
+      start = 1
 
       finalize [{ li => :ol, start: start }, { nav => :nav }]
     end
@@ -622,7 +641,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # orig = uri.dup
 
     # clip off the query
-    query = uri.query
+    query = uri.query || ''
     uri.query = nil
 
     # uuid in here??

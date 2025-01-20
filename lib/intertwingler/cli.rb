@@ -654,6 +654,9 @@ EOS
   def pry
     require 'intertwingler/harness'
     require 'pry'
+
+    harness = Intertwingler::Harness.new authorities, home: config_home
+
     binding.pry
   end
 

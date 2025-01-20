@@ -99,11 +99,11 @@ class Intertwingler::Resource
       "This resource does not respond to #{method} requests.",
       method: method) unless respond_to? to_call
 
-    warn engine.registry.groups.inspect
+    # warn engine.registry.groups.inspect
 
     # handle the params XXX MAY RAISE
     # instance = engine.registry[subject].process params
-    instance = engine.registry.process params
+    instance = engine.registry.process params, defaults: true
 
     # warn instance.inspect
 

@@ -2577,7 +2577,7 @@ module Intertwingler
       # @return [Boolean] whether or not the type matches
       #
       def type? type, graph: nil
-        repo.rdf_type? subject, graph: graph
+        repo.rdf_type? subject, type, graph: graph
       end
 
       # Get the label for this subject.

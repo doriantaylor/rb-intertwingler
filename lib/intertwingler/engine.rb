@@ -143,7 +143,7 @@ class Intertwingler::Engine < Intertwingler::Handler
           "#{subject} is neither Handler nor Instance (#{types.join(', ')})"
       end
 
-      warn params.inspect
+      # warn params.inspect
 
       raise Intertwingler::Error::Config,
         "#{cls} is not a subclass of Intertwingler::Handler" unless
@@ -418,7 +418,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         end
       end
 
-      warn paths.inspect
+      # warn paths.inspect
 
       # now build up a list of candidate handlers. first we try the
       # full stack of paths with the actual request method, then we
@@ -592,7 +592,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     @home = Pathname(home.to_s).expand_path
     @log  = log || resolver.log
 
-    @registry   = Intertwingler::Params.new self
+    @registry   = Intertwingler::Params.configure self
     @dispatcher = Dispatcher.new self
 
     # step 2: find the handlers and load them. (incidentally, this

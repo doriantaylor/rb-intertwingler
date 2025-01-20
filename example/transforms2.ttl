@@ -408,7 +408,8 @@
   skos:prefLabel "Boundary"@en ;
   rdfs:comment "Boundary index (low and high) for paginating long lists of records."@en ;
   rdfs:range tfo:Range ;
-  tfo:element xsd:positiveInteger .
+  tfo:element xsd:positiveInteger ;
+  tfo:default [ a tfo:Range ; tfo:low 1 ; tfo:high 1000 ] .
 
 # the catalogues themselves
 
