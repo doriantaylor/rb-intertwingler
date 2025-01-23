@@ -117,6 +117,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   CGTO = Intertwingler::Vocab::CGTO
   QB   = Intertwingler::Vocab::QB
   XSD  = RDF::XSD
+  XHV  = RDF::Vocab::XHV
 
   public
 
@@ -153,6 +154,61 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         'content-type'   => rep.type,
         'content-length' => rep.size.to_s,
       }, rep]
+    end
+
+    # this is more or less copied from perl
+    #
+    # @note `params[key]` is assumed to be a {::Range}
+    #
+    # @param params [Params::Registry::Instance] the parsed parameters
+    # @param key    [Object] the key to pick out of the parameters
+    # @param items  [Integer] the total number of items to paginate
+    # @param step   [Integer] the default step size
+    #
+    # @return [Hash{Symbol=>Params::Registry::Instance}] the relevant
+    #  parameter set
+    #
+    def pagination_params params, key, items, step: 100
+      min, max = params[key].minmax
+
+      min ||= 1
+      max ||= (min - 1) + step
+
+      rows = max - (min - 1)
+      # page = (min - 1) / rows # this is never used
+      last = items / rows + 1
+      ceil = last * rows
+
+      # the return value
+      out = {}
+
+      if min > 1
+        pmin = min - rows < 1 ? 1 : min - rows
+        pmax = max - rows < rows ? rows : max - rows
+
+        prev = out[:prev] = params.dup
+        prev[key] = [pmin, pmax]
+
+        if ceil > rows
+          x = out[:first] = params.dup
+          x[key] = [1, rows]
+        end
+      end
+
+      if min - 1 + rows < ceil
+        nmin = min + rows
+        nmax = (min - 1) + (rows * 2)
+
+        n = out[:next] = params.dup
+        n[key] = [nmin, nmax]
+
+        if ceil > rows
+          last = out[:last] = params.dup
+          last[key] = [(ceil - rows + 1), ceil]
+        end
+      end
+
+      out
     end
 
     # XXX CAN WE USE THIS IN GRAPHOPS PERHAPS?
@@ -517,44 +573,135 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     SUBJECT = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
 
     def get params: {}, headers: {}, body: nil
-
-      warn params.inspect
+      # The job of this thing is to list individual resources, in a
+      # consistent order, with "best" label if applicable. Passing no
+      # (rather, default) parameters will yield a paginated list of
+      # all subjects in the graph. Results can be filtered first with
+      # an `instance-of` parameter which represents a set of classes,
+      # and `in-domain-of`/`in-range-of` parameters, which represent
+      # sets of properties. Each of these sets must be non-empty if it
+      # is to be included in the filtering, however the results
+      # returned will correspond to the union of all sets.
+      #
+      # Results can further be adjusted by using the boolean
+      # parameters `asserted` and `inferred`, although it is a 409
+      # Conflict error if both of these are false.
+      #
+      # ###
 
       # step zero: bail with a conflict error if both asserted and
       # inferred are false
       raise Intertwingler::Handler::Error::Conflict,
         'At least one of asserted or inferred parameters must be true' unless
         params[:asserted] or params[:inferred]
-      # let's coerce
-      ioc = params[:"instance-of"]  || Set[]
-      ido = params[:"in-domain-of"] || Set[]
-      iro = params[:"in-range-of"]  || Set[]
 
-      # let's get all the types that are actually in the graph
-      all = repo.all_types
+      # XXX step 0.5: resolve all the curies in the three sets in lieu
+      # of a functioning thing that will do this at the level of the parameter registry.
 
-      warn all.inspect
-
-      # now let's get t
-      # asserted = params[:asserted] ? repo.all_of_type
-
-      # types = Set[*(instance_of || [])]
-
-      # flatten out
-      if params[:inferred]
+      # instance-of OR (in-domain-of AND in-range-of)
+      terms = %i[instance-of in-domain-of in-range-of].reduce({}) do |h, k|
+        p    = params[k] || Set[]
+        h[k] = [p.map { |t| resolver.resolve_curie t }.to_set, Set[]]
+        h
       end
 
-      statements = repo.query([nil, RDF.type, nil])
+      # 
+      variants = [0]
+      variants << 1 if params[:inferred]
 
-      # then we need a list of ?s a ?t
-      # then we sort the list
-      # then we segment it
+      # step 1: map domain and range properties to asserted types
+      { "in-domain-of": :domain, "in-range-of": :range}.each do |k, m|
+        # add to inferred
+        terms[k][1] |= repo.property_set terms[k][0] if params[:inferred]
 
-      li = []
-      nav = []
-      start = 1
+        variants.each do |v|
+          terms[:"instance-of"][v] |= terms[k][v].map do |t|
+            t.respond_to?(m) ? t.send(m) : nil
+          end.flatten.compact.select(&:iri?)
+        end
+      end
 
-      finalize [{ li => :ol, start: start }, { nav => :nav }]
+      terms[:"instance-of"][1] |=
+        repo.type_strata(terms[:"instance-of"][0], descend: true) if
+        params[:inferred]
+
+      resources = Set[]
+
+      if terms.values.flatten.reduce(&:|).empty?
+        # just fetch everything
+        resources |= %i[subjects objects].map do |x|
+          repo.send(x).select &:iri?
+        end.reduce(&:+)
+      else
+        # there is something in at least one of these, so we filter
+
+        # let's get all the types that are actually in the graph
+        all = repo.all_types
+
+        variants.each do |v|
+          # do the properties
+          { "in-domain-of": :subjects, "in-range-of": :objects }.each do |k, m|
+            terms[k][v].each do |p|
+              resources |= repo.query([nil, p, nil]).send(m).select(&:iri?)
+            end
+          end
+
+          #
+          (terms[:"instance-of"][v] & all).each do |t|
+            resources |= repo.query([nil, RDF.type, t]).subjects.select(&:iri?)
+          end
+        end
+      end
+
+      # warn params.inspect
+
+      # do the boundary
+      boundary = Range.new(*params[:boundary].minmax.map { |x| x - 1 })
+
+      # transform resources initially
+      resources = resources.map do |r|
+        x = { RDF.type => repo.types_for(r) }
+        lp, lo = repo.label_for r
+        x[lp] = [lo] if lp
+        [r, x]
+      end.to_h
+
+      # but we want to use it as a cache for this comparator
+      lcmp = repo.cmp_label cache: resources, nocase: true
+
+      li = resources.sort do |a, b|
+        lcmp.(a.first, b.first)
+      end.slice(boundary).map do |s, struct|
+        href  = resolver.uri_for s, slugs: true
+        types = resolver.abbreviate(repo.types_for s, struct: struct)
+        lp, lo = repo.label_for s, struct: struct, noop: true
+        a = { '#a' => lo.value, href: href }
+        a[:typeof] = resolver.abbreviate types unless types.empty?
+        if lo.literal?
+          a[:property]  = resolver.abbreviate lp
+          a['xml:lang'] = lo.language if lo.language?
+          a[:datatype]  = resolver.abbreviate lo.datatype if lo.datatype?
+        end
+
+        { "#li" => a }
+      end
+
+      uri = resolver.uri_for subject, as: :uri
+      pp  = pagination_params params, :boundary, resources.size
+
+      nav = { first: 'First', prev: 'Previous',
+             next: 'Next', last: 'Last'}.map do |k, label|
+        if pp[k]
+          ku = pp[k].make_uri uri
+          linkt ku, rel: XHV[k], label: label
+        else
+          { '#span' => label }
+        end
+      end
+
+      # XXX don't forget backlinks
+
+      finalize [{ li => :ol, start: boundary.begin + 1 }, { nav => :nav }]
     end
   end
 

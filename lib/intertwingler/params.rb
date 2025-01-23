@@ -179,14 +179,23 @@ class Intertwingler::Params < Params::Registry
       },
     }
 
+    UNWIND = {
+      T::Range => -> value { [value.minmax, false] },
+      T::Set   => -> value { [value.to_a.sort, false] },
+      T::List  => -> value { [value, false] },
+    }
+
     def load_composite subject
       # get the domains of the predicates from the struct
-      types = (repo.types_for(subject) + repo.struct_for(subject).keys.select do |p|
-        p.respond_to? :domain
-      end.map { |p| p.domain }.flatten).uniq
+      types = (
+        repo.types_for(subject) + repo.struct_for(subject).keys.select do |p|
+          p.respond_to? :domain
+        end.map { |p| p.domain }.flatten).uniq
 
-      candidates = domains & COMPOSITES.keys
+      candidates = COMPOSITES.keys.reverse & types
 
+      instance_exec subject, &COMPOSITES[candidates.first] unless
+        candidates.empty?
     end
 
     def repo; registry.engine.repo; end
@@ -234,9 +243,13 @@ class Intertwingler::Params < Params::Registry
       if type? TFO.Composite
         @composite = MAPPING.fetch(
           resources(RDF::RDFS.range).sort.first, T::Set)
+        @unwind = UNWIND[@composite]
         @type = MAPPING.fetch(
           resources(TFO.element).sort.first, T::NormalizedString)
         # XXX COMPOSITE DEFAULT ???
+        if d = resources(TFO.default).sort.first
+          @default = load_composite d
+        end
       else
         # XXX this may be subtler
         @type = MAPPING.fetch(

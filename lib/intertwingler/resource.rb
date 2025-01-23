@@ -108,7 +108,7 @@ class Intertwingler::Resource
     # warn instance.inspect
 
     # this will already be wrapped in a rescue block upstream
-    send to_call, params: instance.to_h, headers: headers, body: body
+    send to_call, params: instance, headers: headers, body: body
   end
 
 end
