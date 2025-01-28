@@ -409,6 +409,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         # log.debug({ a.first => abbrs[a.first], b.first => abbrs[b.first]}).inspect
         abbrs[a.first] <=> abbrs[b.first]
       end.map do |type, record|
+        # XXX we have decided to make the sequence number into stable
+        # fragments so we can point back to them
         row = "o.%d" % obs += 1
         abt = "##{row}"
         tt = resolver.abbreviate type.type, prefixes: prefixes if
@@ -605,7 +607,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         h
       end
 
-      # 
+      #
       variants = [0]
       variants << 1 if params[:inferred]
 
