@@ -156,7 +156,7 @@ require 'base64'
 #
 # Having decided to have the bulk of the identifier consist of the
 # first 96 bits of a SHA256 hash, and we have furthermore decided that
-# the contents of the hash will be a space-separated string of RDF
+# the input to the hash will be a space-separated string of RDF
 # terms (serialized to their NTriples representations), we need to
 # consider what the remaining 24 bits should say. What I'm thinking
 # here is some sort of fixed code that indicates what kind of
