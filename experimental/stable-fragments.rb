@@ -1,12 +1,3 @@
-require 'rdf'
-require 'rdf/turtle'
-require 'rdf/vocab'
-require 'intertwingler/vocab'
-require 'uuidtools'
-require 'uuid-ncname'
-require 'digest'
-require 'base64'
-
 # This is a little side quest to figure out stable fragment identifiers
 # based on RFC9562 §5.5 (UUID v8): https://datatracker.ietf.org/doc/html/rfc9562
 #
@@ -172,8 +163,17 @@ require 'base64'
 # > The `I`…`I` characters at either end of the fragment identifier
 # > represent the version and variant nybbles, respectively (the
 # > latter with the remaining two bits masked). These are explained in
-# > the UUID-NCName spec at
-# > https://datatracker.ietf.org/doc/html/draft-taylor-uuid-ncname.
+# > the UUID-NCName spec
+# > (https://datatracker.ietf.org/doc/html/draft-taylor-uuid-ncname).
+
+require 'rdf'
+require 'rdf/turtle'
+require 'rdf/vocab'
+require 'intertwingler/vocab'
+require 'uuidtools'
+require 'uuid-ncname'
+require 'digest'
+require 'base64'
 
 def make_stable_fragment *terms
   # generate a string of terms separated by spaces
