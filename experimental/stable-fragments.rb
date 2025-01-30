@@ -165,10 +165,9 @@ require 'base64'
 # zero, followed by a separator. The three bytes, when transformed,
 # will be `48 5d 3e`.
 #
-#
 # Thus, an identifier given the inputs above will look like
 # `ISF0-gYTySpDxALMNjWJ4I`, which translates into an equivalent UUID
-# that looks like `485d3e81-84f2-84a9-80f1-00b30d8d6278`
+# that looks like `485d3e81-84f2-84a9-80f1-00b30d8d6278`.
 #
 # > The `I`…`I` characters at either end of the fragment identifier
 # > represent the version and variant nybbles, respectively (the
