@@ -1,5 +1,5 @@
 # This is a little side quest to figure out stable fragment identifiers
-# based on RFC9562 §5.5 (UUID v8): https://datatracker.ietf.org/doc/html/rfc9562
+# based on RFC9562 §5.8 (UUID v8): https://datatracker.ietf.org/doc/html/rfc9562
 #
 # What we _want_ are fragment identifiers that can be
 # deterministically generated based on a set of immutable facts about

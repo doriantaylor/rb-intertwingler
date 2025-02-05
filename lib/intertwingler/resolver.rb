@@ -1092,4 +1092,49 @@ class Intertwingler::Resolver
     return unless authorities.include? rb.authority
     coerce_resource(base + req.env['REQUEST_URI'], as: as)
   end
+
+  # Returns a stable fragment identifier for a given sequence of
+  # terms. Passing in a base URI will return it with the fragment
+  # appended. Setting `expand` to a true value will return the
+  # fragment as a UUID URN. The `as` parameter coerces the output like
+  # it does elsewhere in this module, but is ignored for the compact
+  # (default) representation.
+  #
+  # @param terms [RDF::Value] the RDF terms to hash
+  # @param expand [false, true] whether to return a UUID URN
+  # @param base [RDF::URI, URI] a base URI to which the fragment will
+  #  be appended
+  # @param as [:rdf, :uri, false, nil] how to coerce the result
+  #
+  # @return [String, RDF::URI, URI] the fragment (or URI with fragment)
+  #
+  def stable_fragment *terms, expand: false, base: nil, as: :rdf
+    # generate a string of terms separated by spaces
+    input = terms.flatten.map { |t| coerce_resource(t).to_sxp }.join(' ')
+
+    # generate a sha256 hash truncated to 96 bits
+    hash = Digest::SHA256.digest(input).slice 0, 12
+
+    # base64 encode that baby
+    b64 = Base64.urlsafe_encode64 hash
+
+    # I… is version 8 and …I is the variant 0b1000 (with the last two
+    # bits masked); `SF0-` (48 5d 3e) stands for stable fragment rev 0
+    # plus a hyphen because we're not animals
+    frag = "ISF0-%sI" % b64
+
+    if base
+      base = coerce_resource(base, as: as).dup
+      base.fragment = frag
+      return base
+    end
+
+    if expand
+      out = UUID::NCName.from_ncname frag, format: :urn
+      return coerce_resource out, as: as
+    end
+
+    # XXX what if we want to change the radix? don't care for now
+    frag
+  end
 end
