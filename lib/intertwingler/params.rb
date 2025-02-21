@@ -149,7 +149,7 @@ class Intertwingler::Params < Params::Registry
       RDF::RDFV.List         => T::List,
       RDF::RDFV.Bag          => T::Set,
       TFO.Range              => T::Range,
-      TFO.term               => I::Term,
+      TFO[:term]             => I::Term,  # XXX '#term' is an api method
     }
 
     # this is to actually parse the defaults out of the graph
@@ -179,10 +179,15 @@ class Intertwingler::Params < Params::Registry
       },
     }
 
+    # XXX we are doing this because apparently the type instances
+    # don't compare, which is unbelievably fucking annoying
+    ROOTS = [TFO.Range, RDF::RDFV.Bag, RDF::RDFV.List]
+
+    # this could have been simple, but no
     UNWIND = {
-      T::Range => -> value { [value.minmax, false] },
-      T::Set   => -> value { [value.to_a.sort, false] },
-      T::List  => -> value { [value, false] },
+      T::Range => -> value { value.minmax },
+      T::Set   => -> value { value.to_a.sort },
+      T::List  => -> value { value },
     }
 
     def load_composite subject
@@ -241,9 +246,12 @@ class Intertwingler::Params < Params::Registry
         literals(CI.slug).map { |a| a.object.to_s.to_sym } - [slug]).sort.uniq
 
       if type? TFO.Composite
-        @composite = MAPPING.fetch(
-          resources(RDF::RDFS.range).sort.first, T::Set)
-        @unwind = UNWIND[@composite]
+        comp = resources(RDF::RDFS.range).sort.first || RDF::RDFV.Bag
+        # root = ROOTS.detect(-> { RDF::RDFV.Bag }) { |c| repo.type_is? comp, c }
+
+        @composite = MAPPING.fetch(comp, T::Set)
+        @unwfunc = UNWIND[@composite]
+        # warn @unwfunc.inspect
         @type = MAPPING.fetch(
           resources(TFO.element).sort.first, T::NormalizedString)
         # XXX COMPOSITE DEFAULT ???
@@ -261,9 +269,23 @@ class Intertwingler::Params < Params::Registry
                    end
       end
 
+      # XXX deal with terms a non-stupid way: the problem is we need
+      # state from the resolver ie the prefix mapping to deal
+      if @type and @type == I::Term
+        # we need to do surgery to preproc and format; note these are
+        # instance_exec'd
+        @preproc = -> x, _ {
+          r = registry.engine.resolver
+          x.map { |t| r.resolve_curie t, noop: true }
+        }
+        @format  = -> x { registry.engine.resolver.abbreviate x, noop: true }
+      end
+
+      # we need an unwind for trms
+
       # cardinality
       if c1 = numeric_literals(RDF::OWL.cardinality).sort.first
-        @min = @max = c1.object
+        @min = @max = c1.object.to_i
       else
         c1 = numeric_literals(RDF::OWL.minCardinality).sort.first
         c2 = numeric_literals(RDF::OWL.maxCardinality).sort.last
@@ -289,7 +311,6 @@ class Intertwingler::Params < Params::Registry
 
     # do the templates
     super
-
 
     # do the groups
     groups.each { |g| g.refresh! cascade: false }

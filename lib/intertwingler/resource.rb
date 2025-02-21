@@ -87,7 +87,7 @@ class Intertwingler::Resource
   #
   # @return [Rack::Response] the response to pass upstream
   #
-  def call method, params: {}, headers: {}, body: nil
+  def call method, uri, params: {}, headers: {}, body: nil
     # keep the original method untouched
     to_call = method.dup
     # set the method name to `http_whatever` for unregistered methods
@@ -103,12 +103,12 @@ class Intertwingler::Resource
 
     # handle the params XXX MAY RAISE
     # instance = engine.registry[subject].process params
-    instance = engine.registry.process params, defaults: true
+    instance = engine.registry.process params || uri.query, defaults: true
 
     # warn instance.inspect
 
     # this will already be wrapped in a rescue block upstream
-    send to_call, params: instance, headers: headers, body: body
+    send to_call, uri, params: instance, headers: headers, body: body
   end
 
 end

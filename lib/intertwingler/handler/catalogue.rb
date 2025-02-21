@@ -139,12 +139,32 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       Intertwingler::Document.literal_tag resolver, label, **args
     end
 
-    def xhtml_response body, uri: nil, label: nil
-      uri   ||= resolver.uri_for subject, slugs: true
-      label ||= repo.label_for(subject, noop: true).reverse
+    def xhtml_response body, uri: nil, label: nil, prefixes: nil, typeof: nil
+      uri      ||= resolver.uri_for subject, slugs: true
+      label    ||= repo.label_for(subject, noop: true).reverse
+
+      if prefixes
+        # get at a prefix subset
+        prefixes = resolver.prefixes.slice(*prefixes) if prefixes.is_a? Array
+      else
+        prefixes = resolver.prefixes
+      end
+
+      vocab ||= prefixes[nil] || resolver.prefixes[nil]
+
+      label[1] = resolver.abbreviate label.last, prefixes: prefixes if
+        label and label.is_a? Array and label.last.is_a? RDF::URI
+
+      attr = {}
+      if typeof
+        typeof = resolver.abbreviate typeof, prefixes: prefixes if
+          [Array, RDF::URI, URI].detect { |c| typeof.is_a? c }
+        attr[:typeof] = typeof
+      end
 
       doc = XML::Mixup.xhtml_stub(
-        base: uri, title: label, content: body
+        base: uri, title: label, content: body,
+        prefix: prefixes, vocab: vocab, attr: attr
       ).document
 
       rep = Intertwingler::Representation::Nokogiri.new doc,
@@ -301,13 +321,14 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       generic_set_for PROPERTIES, prop, include: include
     end
 
-    def finalize body
+    def finalize body, uri: nil, prefixes: nil, typeof: nil
       # XXX should we get this from the request??
-      # requri = resolver.uri_for subject, slugs: true
+      uri ||= resolver.uri_for subject, slugs: true
 
       case body
       when nil then nil
-      when Hash, Array then xhtml_response body
+      when Hash, Array
+        xhtml_response body, uri: uri, prefixes: prefixes, typeof: typeof
       when Rack::Response then body
       else nil
       end
@@ -315,7 +336,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     public
 
-    def get params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, body: nil
+      raise NotImplementedError, 'you should really implement this method, lol'
     end
 
   end
@@ -332,26 +354,25 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Index < Resource
     SUBJECT = RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9')
 
-    def get params: {}, headers: {}, body: nil
-      # uri = resolver.uri_for subject, slugs: true
+    def get uri, params: {}, headers: {}, body: nil
+
+      type = resolver.abbreviate CGTO.Summary
 
       # note the keys are method names not URL slugs
       out = {
         '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
         '611ed2d0-1544-4e0b-a4db-de942e1193e2' => CGTO['by-property'],
       }.map do |uu, pred|
-        uri  = resolver.uri_for uu, slugs: true, as: :uri
-        src  = resolver.base.route_to uri
+        href = resolver.uri_for uu, slugs: true, as: :uri, via: uri
+        src  = uri.route_to href
         # we could hard-code these i suppose but this affords changing them
         rel  = resolver.abbreviate pred
-        type = resolver.abbreviate CGTO.Summary
-
         # XXX do we want alternate representations of this??
         { { [''] => :script, type: 'application/xhtml+xml',
            src: src, typeof: type } => :section, rel: rel }
       end
 
-      finalize out
+      finalize out, uri: uri, prefixes: %i[cgto dct], typeof: CGTO.Index
     end
   end
 
@@ -366,13 +387,11 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class AllClasses < Resource
     SUBJECT = RDF::URI('urn:uuid:4ab10425-d970-4280-8da2-7172822929ea')
 
-    def get params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, body: nil
       # we also need what's going on in the inventory down there so we
       # can present the counts
 
       prefixes = PREFIXES.merge resolver.prefixes
-
-      # log.debug "fart lol"
 
       # our product is something shaped like { type => [asserted, inferred] }
       # counts = CLASSES.keys.map { |k| [k, [0, 0]] }.to_h
@@ -401,32 +420,49 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
       # log.debug abbrs.select {|_, v| v.nil? }.inspect
 
-      obst = resolver.abbreviate(QB.Observation)
+      obst = resolver.abbreviate QB.Observation
+      st   = resolver.abbreviate CGTO.Index
+
+      # XXX we should figure out a way to resolve these if the subject
+      # UUIDs get overridden
+      href = resolver.uri_for(
+        RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228'),
+        slugs: true, via: uri)
 
       # okay now we can sort it
-      obs  = 0
       body = counts.sort do |a, b|
         # log.debug({ a.first => abbrs[a.first], b.first => abbrs[b.first]}).inspect
         abbrs[a.first] <=> abbrs[b.first]
       end.map do |type, record|
         # XXX we have decided to make the sequence number into stable
         # fragments so we can point back to them
-        row = "o.%d" % obs += 1
+        row = resolver.stable_fragment subject, type
         abt = "##{row}"
-        tt = resolver.abbreviate type.type, prefixes: prefixes if
-          type.respond_to? :type
+
+        # this is the class of the class, which will be either
+        # rdfs:Class or owl:Class, or potentially something else we
+        # haven't seen yet
+        tt = resolver.abbreviate(
+          type.respond_to?(:type) ? type.type : RDF::RDFS.Class,
+          prefixes: prefixes)
+
+        # asserted and inferred params
+        ap = params.dup
+        ap[:"instance-of"] = Set[type]
+        ip = ap.dup
+        ip[:inferred] = true
+
         asserted = litt(
           RDF::Literal(record.first, datatype: XSD.nonNegativeInteger),
           about: abt, property: CGTO['asserted-subject-count'])
         inferred = litt(
           RDF::Literal(record.last,  datatype: XSD.nonNegativeInteger),
           about: abt, property: CGTO['inferred-subject-count'])
-        st = resolver.abbreviate CGTO.Index
         cols = [
           { linkt(type, typeof: tt, label: abbrs[type] || type) => :th },
-          { linkt('', rel: CGTO['asserted-subjects'],
+          { linkt(uri.route_to(ap.make_uri href), rel: CGTO['asserted-subjects'],
                   typeof: st, label: asserted) => :td },
-          { linkt('', rel: CGTO['inferred-subjects'],
+          { linkt(uri.route_to(ip.make_uri href), rel: CGTO['inferred-subjects'],
                   typeof: st, label: inferred) => :td },
         ]
 
@@ -440,7 +476,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           { ['Inferred Subjects'] => :th },
         ] => :tr } => :thead },
         { body => :tbody, rev: resolver.abbreviate(QB.dataSet) }
-        ] => :table })
+        ] => :table }, uri: uri, prefixes: prefixes, typeof: CGTO.Summary)
     end
   end
 
@@ -452,7 +488,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class AllProperties < Resource
     SUBJECT = RDF::URI('urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2')
 
-    def get params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, body: nil
 
       prefixes = PREFIXES.merge resolver.prefixes
 
@@ -515,7 +551,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         {
           body => :tbody,
           rev: resolver.abbreviate(QB.dataSet, prefixes: prefixes)
-        } ] => :table })
+        } ] => :table }, uri: uri, prefixes: prefixes, typeof: CGTO.Summary)
     end
   end
 
@@ -574,7 +610,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Inventory < Resource
     SUBJECT = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
 
-    def get params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, body: nil
       # The job of this thing is to list individual resources, in a
       # consistent order, with "best" label if applicable. Passing no
       # (rather, default) parameters will yield a paginated list of
@@ -598,7 +634,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         params[:asserted] or params[:inferred]
 
       # XXX step 0.5: resolve all the curies in the three sets in lieu
-      # of a functioning thing that will do this at the level of the parameter registry.
+      # of a functioning thing that will do this at the level of the
+      # parameter registry.
 
       # instance-of OR (in-domain-of AND in-range-of)
       terms = %i[instance-of in-domain-of in-range-of].reduce({}) do |h, k|
@@ -607,7 +644,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         h
       end
 
-      #
+      # an easy way to do this is just make an array of one element
+      # and append a 1 to it
       variants = [0]
       variants << 1 if params[:inferred]
 
@@ -703,21 +741,22 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
       # XXX don't forget backlinks
 
-      finalize [{ li => :ol, start: boundary.begin + 1 }, { nav => :nav }]
+      finalize [{ li => :ol, start: boundary.begin + 1 }, { nav => :nav }],
+        uri: uri, prefixes: resolver.prefixes, typeof: CGTO.Inventory
     end
   end
 
   class Me < Resource
     SUBJECT = RDF::URI('urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca')
 
-    def get params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, body: nil
     end
   end
 
   class AllVocabs < Resource
     SUBJECT = RDF::URI('urn:uuid:13e45ee1-0b98-4d4b-9e74-a83a09e85030')
 
-    def get params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, body: nil
       io = StringIO.new '', 'w+', encoding: Encoding::BINARY
       prefixes = resolver.prefixes.transform_values(&:to_uri)
 
@@ -776,6 +815,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     @manifest = MANIFEST.transform_values { |v| v.new self }
   end
 
+  attr_reader :manifest
+
   # General-purpose dispatch handler.
   #
   # @param req [Rack::Request] the request object
@@ -786,8 +827,10 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # complain unless this is a GET or HEAD
 
     # get the uri
-    uri  = RDF::URI(req.url)
+    uri  = URI(req.url)
     # orig = uri.dup
+
+    warn uri
 
     # clip off the query
     query = uri.query || ''
@@ -804,7 +847,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     # XXX this may raise an Intertwingler::Handler::AnyButSuccess
     begin
-      resp = resource.call req.request_method, params: query,
+      resp = resource.call req.request_method, uri, params: query,
         headers: normalize_headers(req), body: req.body
     rescue Intertwingler::Handler::AnyButSuccess => e
       return e.response

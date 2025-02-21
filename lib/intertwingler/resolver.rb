@@ -7,6 +7,8 @@ require 'intertwingler/util/clean'
 require 'uri'
 require 'uuidtools'
 require 'uuid/ncname'
+require 'digest'
+require 'base64'
 
 # This class is intended to be a caching URI (and URI-adjacent)
 # resolver, intended to persist only as long as it needs to, as the
@@ -72,6 +74,17 @@ class Intertwingler::Resolver
 
     self.new repo, base, aliases: aliases, prefixes: prefixes,
       subject: subject, documents: documents, fragments: fragments, log: log
+  end
+
+  # this is dumb but we have URI and RDF::URI
+  def set_alias uri, base
+    return uri unless /^https?$/i.match? uri.scheme and base
+
+    uri.scheme = base.scheme
+    uri.host   = base.host
+    uri.port   = base.port
+
+    uri
   end
 
   public
@@ -623,12 +636,18 @@ class Intertwingler::Resolver
   # @param fragments [true, false] resolve fragment URIs
   # @param local [false, true] only return URIs with the same
   #  authority as the base
+  # @param via [URI, RDF::URI] a base URI, e.g. one of the aliases
   #
   # @return [URI, RDF::URI, Array<URI, RDF::URI>] the URI(s)
   #
-  def uri_for term, scalar: true, as: :rdf, relative: false,
-      roundtrip: false, slugs: false, fragments: true, local: false
+  def uri_for term, scalar: true, as: :rdf, relative: false, roundtrip: false,
+      slugs: false, fragments: true, local: false, via: nil
     term = coerce_resource term
+
+    if via
+      via = coerce_resource via
+      via = nil unless authorities.include? via.authority.downcase
+    end
 
     # harvest uuid out of term if present
     uuid = case
@@ -647,6 +666,7 @@ class Intertwingler::Resolver
       term = tmp
     else
       term = coerce_resource term, as: as
+      set_alias term, via
       return scalar ? term : [term]
     end
 
@@ -655,7 +675,7 @@ class Intertwingler::Resolver
                 # XXX what do we do about explicit graphs? also published?
                 host = host_for uuid
                 # note function-level scope of hosturi
-                uri_for(host, slugs: true) if host
+                uri_for(host, slugs: true, via: via) if host
               end
 
     # create an appropriate map function depending on whether there
@@ -725,7 +745,11 @@ class Intertwingler::Resolver
     end if local
 
     # turn these into URIs if the thing says so
-    out.map! { |u| URI(preproc u.to_s) } if as == :uri
+    out.map! do |u|
+      set_alias u, via
+      u = URI(preproc u.to_s) if as == :uri
+      u
+    end
 
     scalar ? out.first : out
   end
@@ -793,7 +817,8 @@ class Intertwingler::Resolver
   #
   # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil]
   #
-  def resolve_curie curie, as: :term, scalar: true, base: nil, prefixes: {}
+  def resolve_curie curie, as: :term, scalar: true, base: nil,
+      prefixes: {}, noop: false
     # override the base if present
     base = base ? coerce_resource(base, as: :uri) : @base
 
@@ -801,7 +826,7 @@ class Intertwingler::Resolver
     prefixes = @prefixes.merge(sanitize_prefixes prefixes)
 
     self.class.resolve_curie curie, as: as, scalar: scalar,
-      base: base, prefixes: prefixes
+      base: base, prefixes: prefixes, noop: noop
   end
 
   # Abbreviate one or more URIs into one or more CURIEs if we
@@ -1100,6 +1125,18 @@ class Intertwingler::Resolver
   # it does elsewhere in this module, but is ignored for the compact
   # (default) representation.
   #
+  # The stable fragment identifier takes a space-concatenated string
+  # of a list of RDF terms and returns a [compact
+  # UUID](https://datatracker.ietf.org/doc/html/draft-taylor-uuid-ncname)
+  # [version
+  # 8](https://datatracker.ietf.org/doc/html/rfc9562#section-5.8)
+  # consisting of the token `SF0-`, standing for "stable fragment
+  # revision 0", followed by the first 96 bits of a SHA-256 hash of
+  # the input string constructed from the RDF terms. The `expand`
+  # parameter will return the equivalent UUID URN, or a `base` URI can
+  # be passed where a copy will be returned with the fragment
+  # appended.
+  #
   # @param terms [RDF::Value] the RDF terms to hash
   # @param expand [false, true] whether to return a UUID URN
   # @param base [RDF::URI, URI] a base URI to which the fragment will
@@ -1109,8 +1146,13 @@ class Intertwingler::Resolver
   # @return [String, RDF::URI, URI] the fragment (or URI with fragment)
   #
   def stable_fragment *terms, expand: false, base: nil, as: :rdf
+    # first make sure these are the correct representatoin
+    terms = terms.flatten.map { |t| coerce_resource(t).to_sxp }
+
+    raise ArgumentError, "Term list cannot be empty" if terms.empty?
+
     # generate a string of terms separated by spaces
-    input = terms.flatten.map { |t| coerce_resource(t).to_sxp }.join(' ')
+    input = terms.join ' '
 
     # generate a sha256 hash truncated to 96 bits
     hash = Digest::SHA256.digest(input).slice 0, 12
@@ -1136,5 +1178,13 @@ class Intertwingler::Resolver
 
     # XXX what if we want to change the radix? don't care for now
     frag
+  end
+
+  # Return a new random (v4) UUID URN.
+  #
+  # @return [RDF::URI, URI, String] the UUID URN
+  #
+  def random_uuid as: :rdf
+    coerce_resource UUIDTools::UUID.random_create.to_uri, as: as
   end
 end
