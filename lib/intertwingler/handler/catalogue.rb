@@ -290,7 +290,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       end
     end
 
-    PROPLIST = (%w[asserted inferred].product %w[domain range]).map do |p|
+    PROPLIST = (%w[asserted inferred].product %w[subjects objects]).map do |p|
       Intertwingler::Vocab::CGTO[p.join ?-]
     end
 
@@ -519,16 +519,34 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
       end
 
+      obst = resolver.abbreviate QB.Observation
+      st   = resolver.abbreviate CGTO.Index
+
+      # XXX we should figure out a way to resolve these if the subject
+      # UUIDs get overridden
+      href = resolver.uri_for(
+        RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228'),
+        slugs: true, via: uri)
+
+
       body = counts.sort do |a, b|
         abbrs[a.first] <=> abbrs[b.first]
       end.map do |prop, record|
         cols = [{ linkt(prop, label: abbrs[prop]) => :th }]
 
+        # this will make an array of links with appropriate parameters
+        hrefs = %i[in-domain-of in-range-of].product([false, true]).map do |p|
+          x = params.dup
+          x[p.first] = Set[prop]
+          x[:inferred] = p.last
+          uri.route_to(x.make_uri href)
+        end
+
         PROPLIST.each_with_index do |prop, i|
           # we need the property and the count
-          cp = RDF::URI(prop.to_s + '-count')
+          cp = RDF::URI(prop.to_s.chop + '-count')
           cv = RDF::Literal(record[i], datatype: XSD.nonNegativeInteger)
-          cols << { linkt('', rel: prop, property: cp, label: cv) => :td }
+          cols << { linkt(hrefs[i], rel: prop, property: cp, label: cv) => :td }
         end
 
         { cols => :tr }
@@ -640,7 +658,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       # instance-of OR (in-domain-of AND in-range-of)
       terms = %i[instance-of in-domain-of in-range-of].reduce({}) do |h, k|
         p    = params[k] || Set[]
-        h[k] = [p.map { |t| resolver.resolve_curie t }.to_set, Set[]]
+        h[k] = [p.map { |t| resolver.resolve_curie t, noop: true }.to_set, Set[]]
         h
       end
 
@@ -664,6 +682,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       terms[:"instance-of"][1] |=
         repo.type_strata(terms[:"instance-of"][0], descend: true) if
         params[:inferred]
+
+      warn terms.inspect
 
       resources = Set[]
 
@@ -723,7 +743,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           a[:datatype]  = resolver.abbreviate lo.datatype if lo.datatype?
         end
 
-        { "#li" => a }
+        { '#li' => a }
       end
 
       uri = resolver.uri_for subject, as: :uri
@@ -746,6 +766,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     end
   end
 
+  # this is kind of a user state record which we still have to figure out
   class Me < Resource
     SUBJECT = RDF::URI('urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca')
 
@@ -784,20 +805,6 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
   MANIFEST = [Index, AllClasses, AllProperties,
               Inventory, Me, AllVocabs].map { |c| [c.subject, c] }.to_h
-
-  # XXX we don't need this anymore
-
-  # ditto parameter names, which shooould come to us from upstream as
-  # compact uuids but we resolve them back to boring old symbols
-  PARAM_REV = {
-    instance_of:  '9ebe1146-b658-4dfb-9ae2-8036883a96ac',
-    in_domain_of: '7170dcb2-aa31-4876-8817-dfe53ef79d69',
-    in_range_of:  '3ef90f8b-a629-451e-94bf-da66c4a939bd',
-    asserted:     'fe4d51e5-db44-4ebf-8d7b-8f5b3edaedbb',
-    inferred:     'a6cf777a-2abf-46be-acc5-42625f335d03',
-    boundary:     'b348a477-61c6-4ab0-9a88-d9eda964f256',
-  }.transform_values { |v| RDF::URI("urn:uuid:#{v}".freeze) }
-  PARAM_MAP = PARAM_REV.invert
 
   def get_headers req
     req.env.select do |k|
