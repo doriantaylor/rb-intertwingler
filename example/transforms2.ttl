@@ -392,6 +392,7 @@
   skos:prefLabel "Asserted?"@en ;
   rdfs:comment "This is a flag to filter whether results should include asserted statements."@en ;
   rdfs:range xsd:boolean ;
+  owl:maxCardinality 1;
   tfo:default true .
 
 <urn:uuid:a6cf777a-2abf-46be-acc5-42625f335d03> a tfo:Parameter ;
@@ -399,6 +400,7 @@
   skos:prefLabel "Inferred?"@en ;
   rdfs:comment "This is a flag to filter whether results should include inferred statements."@en ;
   rdfs:range xsd:boolean ;
+  owl:maxCardinality 1;
   tfo:default false .
 
 # other reusable parameters

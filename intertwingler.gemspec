@@ -35,7 +35,7 @@ discussion of the problems Intertwingler was designed to solve.
   spec.require_paths = %w[lib]
 
   # ruby
-  spec.required_ruby_version = '>= 3.1'
+  spec.required_ruby_version = '~> 3', '>= 3.2'
 
   # dev/test dependencies
   spec.add_development_dependency 'bundler', '>= 2.4'
@@ -57,7 +57,7 @@ discussion of the problems Intertwingler was designed to solve.
 
   # stuff for handlers/transforms
   spec.add_runtime_dependency 'md-noko',           '~> 0.1', '>= 0.1.0' # mine
-  spec.add_runtime_dependency 'params-registry',   '~> 0.2', '>= 0.2.1' # mine
+  spec.add_runtime_dependency 'params-registry',   '~> 0.2', '>= 0.2.2' # mine
   spec.add_runtime_dependency 'rdf-kv',            '~> 0.1', '>= 0.1.2' # mine
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
   spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine

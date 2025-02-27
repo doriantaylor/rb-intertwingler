@@ -273,9 +273,11 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     end
 
+    # this is all the prefixes we know about
     PREFIXES = RDF::Vocabulary.vocab_map.map do |prefix, struct|
-      [prefix, struct[:class] || RDF::Vocabulary.find(struct[:uri])]
-    end.to_h
+      [prefix, struct[:class] || RDF::Vocabulary.find(struct[:uri])] unless
+        prefix == :rdfv # XXX HACK this fucking thing out
+    end.compact.to_h
 
     # first we're gonna need to pull all the classes that we know about
     CLASSES    = generate_stack
@@ -421,7 +423,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       # log.debug abbrs.select {|_, v| v.nil? }.inspect
 
       obst = resolver.abbreviate QB.Observation
-      st   = resolver.abbreviate CGTO.Index
+      st   = resolver.abbreviate CGTO.Inventory
 
       # XXX we should figure out a way to resolve these if the subject
       # UUIDs get overridden
@@ -520,7 +522,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       end
 
       obst = resolver.abbreviate QB.Observation
-      st   = resolver.abbreviate CGTO.Index
+      st   = resolver.abbreviate CGTO.Inventory
+      wt   = resolver.abbreviate CGTO.Window
 
       # XXX we should figure out a way to resolve these if the subject
       # UUIDs get overridden
@@ -528,11 +531,17 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228'),
         slugs: true, via: uri)
 
-
       body = counts.sort do |a, b|
         abbrs[a.first] <=> abbrs[b.first]
       end.map do |prop, record|
-        cols = [{ linkt(prop, label: abbrs[prop]) => :th }]
+        row = resolver.stable_fragment subject, prop
+        abt = "##{row}"
+
+        tt = resolver.abbreviate(
+          prop.respond_to?(:type) ? prop.type : RDF::RDFV.Property,
+          prefixes: prefixes)
+
+        cols = [{ linkt(prop, typeof: tt, label: abbrs[prop] || prop) => :th }]
 
         # this will make an array of links with appropriate parameters
         hrefs = %i[in-domain-of in-range-of].product([false, true]).map do |p|
@@ -545,11 +554,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         PROPLIST.each_with_index do |prop, i|
           # we need the property and the count
           cp = RDF::URI(prop.to_s.chop + '-count')
-          cv = RDF::Literal(record[i], datatype: XSD.nonNegativeInteger)
-          cols << { linkt(hrefs[i], rel: prop, property: cp, label: cv) => :td }
+          cv = litt(
+            RDF::Literal(record[i], datatype: XSD.nonNegativeInteger),
+            about: abt, property: cp)
+          cols << { linkt(hrefs[i], rel: prop, label: cv) => :td }
         end
 
-        { cols => :tr }
+        { cols => :tr, id: row, about: abt, typeof: obst }
       end
 
       finalize({ [
@@ -645,6 +656,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       #
       # ###
 
+      # warn "wat lol #{uri.inspect}"
+
       # step zero: bail with a conflict error if both asserted and
       # inferred are false
       raise Intertwingler::Handler::Error::Conflict,
@@ -683,7 +696,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         repo.type_strata(terms[:"instance-of"][0], descend: true) if
         params[:inferred]
 
-      warn terms.inspect
+      # warn terms.inspect
 
       resources = Set[]
 
@@ -729,40 +742,52 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       # but we want to use it as a cache for this comparator
       lcmp = repo.cmp_label cache: resources, nocase: true
 
+      mem = resolver.abbreviate RDF::RDFS.member
+
       li = resources.sort do |a, b|
         lcmp.(a.first, b.first)
       end.slice(boundary).map do |s, struct|
-        href  = resolver.uri_for s, slugs: true
-        types = resolver.abbreviate(repo.types_for s, struct: struct)
+        href = resolver.uri_for s, slugs: true, via: uri.dup
+        href = uri.route_to href
+
+        # lol watch out, `types` is a valid mixed-in method
+        types = repo.types_for s
+
         lp, lo = repo.label_for s, struct: struct, noop: true
-        a = { '#a' => lo.value, href: href }
-        a[:typeof] = resolver.abbreviate types unless types.empty?
-        if lo.literal?
-          a[:property]  = resolver.abbreviate lp
-          a['xml:lang'] = lo.language if lo.language?
-          a[:datatype]  = resolver.abbreviate lo.datatype if lo.datatype?
-        end
+
+        a = linkt href, rel: mem,
+          typeof: types, label: lp ? litt(lo, property: lp) : lo
 
         { '#li' => a }
       end
 
-      uri = resolver.uri_for subject, as: :uri
       pp  = pagination_params params, :boundary, resources.size
+
+      # this is trash but we're using a dynamic language sooo
+      abt = params.dup
+      abt[:boundary] = nil
+      abt = abt.make_uri uri
 
       nav = { first: 'First', prev: 'Previous',
              next: 'Next', last: 'Last'}.map do |k, label|
         if pp[k]
-          ku = pp[k].make_uri uri
-          linkt ku, rel: XHV[k], label: label
+          ku = pp[k].make_uri uri, defaults: :boundary
+          { '#li' => linkt(uri.route_to(ku), rel: XHV[k], label: label) }
         else
-          { '#span' => label }
+          { '#li' => label }
         end
       end
 
       # XXX don't forget backlinks
 
-      finalize [{ li => :ol, start: boundary.begin + 1 }, { nav => :nav }],
-        uri: uri, prefixes: resolver.prefixes, typeof: CGTO.Inventory
+      finalize [{
+        li => :ol, start: boundary.begin + 1, resource: abt,
+        rel: resolver.abbreviate(CGTO['window-of']),
+        rev: resolver.abbreviate(CGTO[:window]),
+        typeof: resolver.abbreviate(CGTO.Inventory),
+      }, { '#nav' => { '#ul' =>  nav } }],
+        uri: params.make_uri(uri, defaults: :boundary),
+        prefixes: resolver.prefixes, typeof: CGTO.Window
     end
   end
 
@@ -836,8 +861,6 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # get the uri
     uri  = URI(req.url)
     # orig = uri.dup
-
-    warn uri
 
     # clip off the query
     query = uri.query || ''

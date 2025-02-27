@@ -76,10 +76,15 @@ class Intertwingler::Resolver
       subject: subject, documents: documents, fragments: fragments, log: log
   end
 
-  # this is dumb but we have URI and RDF::URI
+  # this is dumb but we have both URI and RDF::URI in the mix
   def set_alias uri, base
-    return uri unless /^https?$/i.match? uri.scheme and base
+    # this will work whether it's URI or RDF::URI
+    return uri unless /^https?$/i.match? uri.scheme and
+      base and base.respond_to? :authority and
+      authorities.include? base.authority.downcase
 
+    # we have to dup in case it's frozen
+    uri = uri.dup
     uri.scheme = base.scheme
     uri.host   = base.host
     uri.port   = base.port
@@ -666,7 +671,7 @@ class Intertwingler::Resolver
       term = tmp
     else
       term = coerce_resource term, as: as
-      set_alias term, via
+      term = set_alias term, via
       return scalar ? term : [term]
     end
 
@@ -746,7 +751,7 @@ class Intertwingler::Resolver
 
     # turn these into URIs if the thing says so
     out.map! do |u|
-      set_alias u, via
+      u = set_alias u, via
       u = URI(preproc u.to_s) if as == :uri
       u
     end

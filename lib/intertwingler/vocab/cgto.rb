@@ -27,6 +27,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Space
   #
+  #     # A cgto:State relates elements of persistent application state, e.g. from the perspective of the user.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :State
+  #
   #     # A summary indexes the available cgto:Inventory resources.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Summary
@@ -34,6 +38,10 @@ module Intertwingler::Vocab
   #     # A partially or fully computed geometric rendering of a (sub)graph, or the structured information needed to do so.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :View
+  #
+  #     # A window represents a slice of another container, e.g. for pagination.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Window
   #
   #     # Specifies the owl:Class found in the rdf:type of the subjects.
   #     # @return [RDF::Vocabulary::Term]
@@ -59,6 +67,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :view
   #
+  #     # Relates a collection to an arbitrary window over the collection.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :window
+  #
   #   end
   CGTO = Class.new(RDF::StrictVocabulary("https://vocab.methodandstructure.com/graph-tool#")) do
 
@@ -67,7 +79,7 @@ module Intertwingler::Vocab
       comment: {en: "Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes."},
       "http://purl.org/dc/terms/created": "2022-12-04T20:12:02Z",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z"],
+      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z", "2025-02-23T01:28:27Z"],
       "http://purl.org/dc/terms/title": {en: "Collaborative Graph Tool Ontology"},
       "http://purl.org/ontology/bibo/status": "http://purl.org/ontology/bibo/status/draft",
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/graph-tool#",
@@ -77,7 +89,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#index": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
-      "http://www.w3.org/2002/07/owl#imports": "http://purl.org/linked-data/cube#",
+      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/linked-data/cube#", "http://purl.org/linked-data/cube#", "http://rdfs.org/sioc/ns#", "http://www.w3.org/1999/xhtml/vocab#", "http://www.w3.org/2000/01/rdf-schema#"],
       "http://www.w3.org/2002/07/owl#versionInfo": "0.2",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://www.w3.org/ns/shacl#namespace": "https://vocab.methodandstructure.com/graph-tool#",
@@ -97,19 +109,24 @@ module Intertwingler::Vocab
       comment: {en: "An index relates a cgto:Space to a set of cgto:Inventory resources, via a set of cgto:Summary resources."},
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "Index",
-      subClassOf: "http://rdfs.org/sioc/ns#Container",
+      subClassOf: ["http://rdfs.org/sioc/ns#Container", "http://www.w3.org/2000/01/rdf-schema#Container"],
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Inventory,
       comment: {en: "An inventory is a de facto grouping of resources according to some criterion."},
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "Inventory",
-      subClassOf: "http://rdfs.org/sioc/ns#Container",
+      subClassOf: ["http://rdfs.org/sioc/ns#Container", "http://www.w3.org/2000/01/rdf-schema#Container"],
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Space,
       comment: {en: "A graph tool needs a shared logical space to lay out its universe of discourse."},
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "Space",
       subClassOf: "http://rdfs.org/sioc/ns#Space",
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :State,
+      comment: {en: "A cgto:State relates elements of persistent application state, e.g. from the perspective of the user."},
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "State",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Summary,
       comment: {en: "A summary indexes the available cgto:Inventory resources."},
@@ -121,6 +138,12 @@ module Intertwingler::Vocab
       comment: {en: "A partially or fully computed geometric rendering of a (sub)graph, or the structured information needed to do so."},
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "View",
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :Window,
+      comment: {en: "A window represents a slice of another container, e.g. for pagination."},
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "Window",
+      subClassOf: ["http://rdfs.org/sioc/ns#Container", "http://www.w3.org/2000/01/rdf-schema#Container"],
       type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
@@ -175,6 +198,14 @@ module Intertwingler::Vocab
       label: "class",
       range: "http://www.w3.org/2000/01/rdf-schema#Class",
       type: ["http://purl.org/linked-data/cube#DimensionProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"first-window",
+      comment: {en: "Points to the first window over a collection."},
+      domain: "http://www.w3.org/2000/01/rdf-schema#Container",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "first-window",
+      range: "https://vocab.methodandstructure.com/graph-tool#Window",
+      subPropertyOf: ["http://www.w3.org/1999/xhtml/vocab#first", "https://vocab.methodandstructure.com/graph-tool#window"],
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :focus,
       comment: {en: "The entity that takes primary focus in the space is what will be shown, e.g. on the front page of a Web app."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Space",
@@ -260,6 +291,22 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/graph-tool#Space",
       subPropertyOf: "http://rdfs.org/sioc/ns#has_space",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :window,
+      comment: {en: "Relates a collection to an arbitrary window over the collection."},
+      domain: "http://www.w3.org/2000/01/rdf-schema#Container",
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#window-of",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "window",
+      range: "https://vocab.methodandstructure.com/graph-tool#Window",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"window-of",
+      comment: {en: "Points a window to the collection it slices."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Window",
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#window",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "window-of",
+      range: "http://www.w3.org/2000/01/rdf-schema#Container",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
 
     # Extra definitions
     term :"resources-by-class",

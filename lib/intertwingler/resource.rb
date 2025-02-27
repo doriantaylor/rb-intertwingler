@@ -101,6 +101,8 @@ class Intertwingler::Resource
 
     # warn engine.registry.groups.inspect
 
+    # warn "inside resource: #{uri}"
+
     # handle the params XXX MAY RAISE
     # instance = engine.registry[subject].process params
     instance = engine.registry.process params || uri.query, defaults: true
