@@ -47,7 +47,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :class
   #
-  #     # The entity that takes primary focus in the space is what will be shown, e.g. on the front page of a Web app.
+  #     # This property picks out the resource that is currently in focus to the user.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :focus
   #
@@ -55,13 +55,25 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :index
   #
+  #     # This property relates a cgto:State to the foaf:OnlineAccount associated with it.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :owner
+  #
   #     # Specifies the property (predicate) in the statements from which subject and object resources are enumerated.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :property
   #
+  #     # This property relates a cgto:State to the foaf:OnlineAccount associated with it.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :state
+  #
   #     # Connects the cgto:Space to its cgto:Index of resources.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :summary
+  #
+  #     # This property relates the cgto:Index to the foaf:OnlineAccount that reprsents the current user.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :user
   #
   #     # Relates the space to a view of said space.
   #     # @return [RDF::Vocabulary::Term]
@@ -79,7 +91,7 @@ module Intertwingler::Vocab
       comment: {en: "Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes."},
       "http://purl.org/dc/terms/created": "2022-12-04T20:12:02Z",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z", "2025-02-23T01:28:27Z"],
+      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z", "2025-02-23T01:28:27Z", "2025-02-28T14:20:07Z"],
       "http://purl.org/dc/terms/title": {en: "Collaborative Graph Tool Ontology"},
       "http://purl.org/ontology/bibo/status": "http://purl.org/ontology/bibo/status/draft",
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/graph-tool#",
@@ -207,20 +219,18 @@ module Intertwingler::Vocab
       subPropertyOf: ["http://www.w3.org/1999/xhtml/vocab#first", "https://vocab.methodandstructure.com/graph-tool#window"],
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :focus,
-      comment: {en: "The entity that takes primary focus in the space is what will be shown, e.g. on the front page of a Web app."},
-      domain: "https://vocab.methodandstructure.com/graph-tool#Space",
+      comment: {en: "This property picks out the resource that is currently in focus to the user."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#State",
       inverseOf: "https://vocab.methodandstructure.com/graph-tool#focus-of",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "focus",
-      subPropertyOf: "http://rdfs.org/sioc/ns#space_of",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :"focus-of",
-      comment: {en: "The entity that takes primary focus in the space is what will be shown, e.g. on the front page of a Web app."},
+      comment: {en: "This property relates the focus back to the user state."},
       inverseOf: "https://vocab.methodandstructure.com/graph-tool#focus",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "focus-of",
-      range: "https://vocab.methodandstructure.com/graph-tool#Space",
-      subPropertyOf: "http://rdfs.org/sioc/ns#has_space",
+      range: "https://vocab.methodandstructure.com/graph-tool#State",
       type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :index,
       comment: {en: "Connects the cgto:Space to its cgto:Index of resources."},
@@ -258,6 +268,14 @@ module Intertwingler::Vocab
       label: "inferred-subjects",
       range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
       type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :owner,
+      comment: {en: "This property relates a cgto:State to the foaf:OnlineAccount associated with it."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#State",
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#state",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "owner",
+      range: "http://xmlns.com/foaf/0.1/OnlineAccount",
+      type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :property,
       comment: {en: "Specifies the property (predicate) in the statements from which subject and object resources are enumerated."},
       domain: "http://purl.org/linked-data/cube#Observation",
@@ -265,6 +283,14 @@ module Intertwingler::Vocab
       label: "property",
       range: "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
       type: ["http://purl.org/linked-data/cube#DimensionProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :state,
+      comment: {en: "This property relates a cgto:State to the foaf:OnlineAccount associated with it."},
+      domain: "http://xmlns.com/foaf/0.1/OnlineAccount",
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#owner",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "state",
+      range: "https://vocab.methodandstructure.com/graph-tool#State",
+      type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :summary,
       comment: {en: "Connects the cgto:Space to its cgto:Index of resources."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Index",
@@ -273,6 +299,14 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/graph-tool#Summary",
       subPropertyOf: "http://rdfs.org/sioc/ns#parent_of",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :user,
+      comment: {en: "This property relates the cgto:Index to the foaf:OnlineAccount that reprsents the current user."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Index",
+      inverseOf: "https://vocab.methodandstructure.com/graph-tool#owner",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "user",
+      range: "http://xmlns.com/foaf/0.1/OnlineAccount",
+      type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :view,
       comment: {en: "Relates the space to a view of said space."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Space",

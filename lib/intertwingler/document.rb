@@ -1593,7 +1593,7 @@ class Intertwingler::Document
   end
 
   def self.backlinks resolver, subject, resource: nil,
-      published: true, ignore: nil, label: nil, tag: :nav
+      published: true, ignore: nil, label: nil, tag: :nav, &block
     repo = resolver.repo
 
     resource ||= subject
@@ -1640,16 +1640,18 @@ class Intertwingler::Document
 
     li = nodes.sort(&lcmp).map do |rsrc, preds|
       next unless rsrc.uri?
-      cu  = resolver.uri_for(rsrc, as: :uri) or next
-      st  = structs[rsrc]
-      lab = repo.label_for(rsrc, struct: st, noop: true)
-      lp  = resolver.abbreviate(lab.first) if lab
-      tt  = repo.types_for rsrc, struct: st
-      ty  = resolver.abbreviate(tt) unless tt.empty?
+      next unless cu = resolver.uri_for(rsrc, slugs: true, as: :uri)
 
-      { { { [lab[1].to_s] => :span, property: lp } => :a,
-        href: uri.route_to(cu), typeof: ty,
-        rev: resolver.abbreviate(preds) } => :li }
+      st = structs[rsrc]
+      ct = repo.types_for rsrc, struct: st
+      lp, lo = repo.label_for(rsrc, struct: st, noop: true)
+
+      # currently the block does nothing but let us see what's in here
+      block.call rsrc, ct, lp, lo if block
+
+      { '#li' => link_tag(resolver, cu, base: uri,
+                          typeof: ct, property: lp, label: lo) }
+
     end.compact
 
 
@@ -2676,7 +2678,7 @@ class Intertwingler::Document
     # pcache = Set.new
 
     # compute the struct
-    struct = repo.struct_for subject, inverses: true
+    struct ||= repo.struct_for subject, inverses: true
 
     # get the content of the title
     labp, labo = repo.label_for subject, struct: struct
@@ -2695,7 +2697,7 @@ class Intertwingler::Document
     end
 
     # generate what should be the request-uri
-    uri = resolver.uri_for subject
+    uri = resolver.uri_for subject, slugs: true, as: :uri
 
     # otherwise the body is just a special kind of fragment
     body, _ = generate_fragment resolver, subject, struct: struct, base: uri,

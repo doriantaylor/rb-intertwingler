@@ -116,6 +116,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
   CGTO = Intertwingler::Vocab::CGTO
   QB   = Intertwingler::Vocab::QB
+  FOAF = RDF::Vocab::FOAF
   XSD  = RDF::XSD
   XHV  = RDF::Vocab::XHV
 
@@ -338,7 +339,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     public
 
-    def get uri, params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, user: nil, body: nil
       raise NotImplementedError, 'you should really implement this method, lol'
     end
 
@@ -356,12 +357,89 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Index < Resource
     SUBJECT = RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9')
 
-    def get uri, params: {}, headers: {}, body: nil
+    # XXX lol one day we will localize
+    LABELS = {
+      CGTO.user           => 'User',
+      CGTO.state          => 'States',
+      CGTO['by-class']    => 'By Class',
+      CGTO['by-property'] => 'By Property',
+    }
+    # (actually hate to be that guy but could probably do l10n in a transform)
 
+    def get uri, params: {}, headers: {}, user: nil, body: nil
+
+      # user, state, by-class, by-property
+
+      dd = []
+
+      # XXX PERHAPS THIS WHOLE USER BUSINESS SHOULD BE PARCELED OUT??
+      if user
+        # resolve the user
+        unless user.is_a? RDF::URI
+          user = resolver.preproc user.to_s
+          if user.include? ?@
+            # XXX we are assuming there is no query string crap on
+            # this email and we are making the executive decision to
+            # downcase it here
+            user = RDF::URI("mailto:#{user.downcase}")
+          else
+            # XXX change this to something less ad-hoc
+            user = RDF::URI("urn:x-user-id:#{user}")
+          end
+        end
+
+        # uu = resolver.uri_for user, slugs: true, as: :uri, via: uri
+        # ut = repo.types_for user
+        # up, uo = repo.label_for user, noop: true
+
+        # dd << { '#dt' => LABELS[CGTO.user] }
+        # dd << { '#dd' => linkt(uu, base: uri, rel: CGTO.user,
+        #                        typeof: ut, property: up, label: uo) }
+
+        # XXX don't get rid of this quite yet
+
+        # this is the actual user we want
+        agent = repo.subjects_for(FOAF.account, user).sort.first
+
+        if agent
+          at = repo.types_for agent
+          au = resolver.uri_for agent, slugs: true, as: :uri, via: uri
+          ap, ao = repo.label_for agent
+
+          dd << { '#dt' => LABELS[CGTO.user] }
+          dd << { '#dd' => linkt(au, base: uri, rel: CGTO.user,
+                                 typeof: at, property: ap, label: ao) }
+
+          # resolve the user's state object
+
+          # ruh roh, didn't think about this: the user could conceivably
+          # have multiple state objects because the same site (moreover
+          # the same rdf store) could have multiple app instances
+
+          states = repo.subjects_for(CGTO.owner, agent).sort
+          unless states.empty?
+            dd << { '#dt' => LABELS[CGTO.state] }
+            states.each do |s|
+              su = resolver.uri_for s, slugs: true, as: :uri, via: uri
+              st = repo.types_for s
+
+              # doubtful but whatever
+              lp, lo = repo.label_for s, noop: true
+              dd << { '#dd' => linkt(su, rel: CGTO.state, typeof: st,
+                                     property: lp, label: lo )}
+            end
+          end
+        end
+      end
+
+      out = []
+      out << { dd => :dl } unless dd.empty?
+
+      # link to the two summaries
       type = resolver.abbreviate CGTO.Summary
 
       # note the keys are method names not URL slugs
-      out = {
+      out += {
         '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
         '611ed2d0-1544-4e0b-a4db-de942e1193e2' => CGTO['by-property'],
       }.map do |uu, pred|
@@ -389,7 +467,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class AllClasses < Resource
     SUBJECT = RDF::URI('urn:uuid:4ab10425-d970-4280-8da2-7172822929ea')
 
-    def get uri, params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, user: nil, body: nil
       # we also need what's going on in the inventory down there so we
       # can present the counts
 
@@ -490,7 +568,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class AllProperties < Resource
     SUBJECT = RDF::URI('urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2')
 
-    def get uri, params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, user: nil, body: nil
 
       prefixes = PREFIXES.merge resolver.prefixes
 
@@ -639,7 +717,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Inventory < Resource
     SUBJECT = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
 
-    def get uri, params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, user: nil, body: nil
       # The job of this thing is to list individual resources, in a
       # consistent order, with "best" label if applicable. Passing no
       # (rather, default) parameters will yield a paginated list of
@@ -795,14 +873,14 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Me < Resource
     SUBJECT = RDF::URI('urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca')
 
-    def get uri, params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, user: nil, body: nil
     end
   end
 
   class AllVocabs < Resource
     SUBJECT = RDF::URI('urn:uuid:13e45ee1-0b98-4d4b-9e74-a83a09e85030')
 
-    def get uri, params: {}, headers: {}, body: nil
+    def get uri, params: {}, headers: {}, user: nil, body: nil
       io = StringIO.new '', 'w+', encoding: Encoding::BINARY
       prefixes = resolver.prefixes.transform_values(&:to_uri)
 
@@ -870,6 +948,9 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     subject  = resolver.uuid_for uri, verify: false
     resource = @manifest[subject] if subject
 
+    # stupid rack doesn't have this field
+    user = req.env['REMOTE_USER']
+
     # get uuid or return 404
     return Rack::Response[404, {
       'content-type' => 'text/plain',
@@ -878,7 +959,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # XXX this may raise an Intertwingler::Handler::AnyButSuccess
     begin
       resp = resource.call req.request_method, uri, params: query,
-        headers: normalize_headers(req), body: req.body
+        headers: normalize_headers(req), user: user, body: req.body
     rescue Intertwingler::Handler::AnyButSuccess => e
       return e.response
     end

@@ -78,6 +78,7 @@ class Intertwingler::Resource
   # @param method [Symbol, #to_sym, #to_s] the request method
   # @param params [Hash] query parameters, semi-processed by the handler
   # @param headers [Hash] any relevant request headers
+  # @param user [String] the content of `REMOTE_USER`
   # @param body [nil, #read, #call, #to_s] something that can pass for a request body
   #
   # @raise [Intertwingler::Handler::Redirect] when the response needs
@@ -87,7 +88,7 @@ class Intertwingler::Resource
   #
   # @return [Rack::Response] the response to pass upstream
   #
-  def call method, uri, params: {}, headers: {}, body: nil
+  def call method, uri, params: {}, headers: {}, user: nil, body: nil
     # keep the original method untouched
     to_call = method.dup
     # set the method name to `http_whatever` for unregistered methods
@@ -110,7 +111,8 @@ class Intertwingler::Resource
     # warn instance.inspect
 
     # this will already be wrapped in a rescue block upstream
-    send to_call, uri, params: instance, headers: headers, body: body
+    send to_call, uri, params: instance, headers: headers,
+      user: user, body: body
   end
 
 end

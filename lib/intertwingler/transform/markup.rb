@@ -201,9 +201,33 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       body = doc.at_xpath '/html:html/html:body|/html/body',
         { html: 'http://www.w3.org/1999/xhtml' }
 
+      terms = Set[]
+
       # don't touch it if there are no backlinks
       if body and links = Intertwingler::Document.backlinks(
-        resolver, subject, published: false)
+        resolver, subject, published: false) do |*args|
+          terms |= args.flatten.compact.map do |t|
+            t.literal? && t.datatype? ? t.datatype : t.uri? ? t : nil
+          end.compact
+        end
+
+        # obtain prefixes from terms
+        tpfx = resolver.prefix_subset terms
+
+        if pfx = doc.root['prefix']
+          pfx = pfx.strip.split(/:\s+/)
+          h = {}
+          until (pair = pfx.slice(0, 2)).empty?
+            h[pair.first] = pair.last
+          end
+          pfx = resolver.sanitize_prefixes pfx
+        else
+          pfx = {}
+        end
+
+        pfx.merge! tpfx
+
+        doc.root['prefix'] = XML::Mixup.flatten_attr pfx
 
         # decided the magic word to include backlinks in a way that
         # can be picked up by a transform but still comply with the

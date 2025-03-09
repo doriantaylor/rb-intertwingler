@@ -618,6 +618,8 @@ EOS
     desc: 'Detach process to background'
   option :pid, aliases: %i[-P], type: :string,
     desc: 'Create a PID file when detached'
+  option :user, aliases: %i[-U], type: :string,
+    desc: 'override REMOTE_USER'
 
   def engine
     # we imagine detecting whether the configuration has been initialized
@@ -636,12 +638,18 @@ EOS
     log = Logger.new $stderr
 
     # give us a harness
-    harness = Intertwingler::Harness.new authorities,
+    app = harness = Intertwingler::Harness.new authorities,
       home: config_home, log: log
+
+    # gin up a quick lil middleware to override REMOTE_USER
+    app = -> env do
+      env['REMOTE_USER'] = options[:user]
+      harness.call env
+    end if options[:user]
 
     # initialize rack server
     Rackup::Server.start({
-      app: harness,
+      app: app,
       # server: ...
       # environment: ...
       daemonize: options[:detach],
