@@ -7,7 +7,7 @@ module Intertwingler::Vocab
   #   # Vocabulary for <https://vocab.methodandstructure.com/content-inventory#>
   #   #
   #   # A Content Inventory Vocabulary
-  #   # @version 0.14
+  #   # @version 0.16
   #   class CI < RDF::StrictVocabulary
   #     # This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware.
   #     # @return [RDF::Vocabulary::Term]
@@ -57,6 +57,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :assumes
   #
+  #     # This a role to identify a particular HTML element (e.g. a <nav> element) as a designated container for backlinks.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :backlinks
+  #
   #     # A block count is conceptually similar to a word or section count, though it counts the total of elements in the document considered to be text blocks, such as paragraphs, tables, lists and figures. It is suited for document types that have no concept of (semantic) sections, such as HTML. The purpose of this measurement is to provide a sort of ratio to the word count, to glean how well-proportioned the document is.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :blocks
@@ -104,6 +108,10 @@ module Intertwingler::Vocab
   #     # The number of forms in the document.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :forms
+  #
+  #     # This property relates a subject to one of its fragments.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :fragment
   #
   #     # This indicates the number of images in the document.
   #     # @return [RDF::Vocabulary::Term]
@@ -284,23 +292,28 @@ module Intertwingler::Vocab
     ontology :"https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/dc/terms/created": "2012-01-23T11:52:00-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z"],
       "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
-      "http://purl.org/dc/terms/subject": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", "https://www.w3.org/TR/vocab-org/", term(
+      "http://purl.org/dc/terms/subject": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", term(
           comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
           "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy","http://vocab.org/frbr/core","http://vocab.org/frbr/extended","https://www.w3.org/TR/prov-o/"],
-          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
+          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","https://www.w3.org/TR/vocab-org/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
         )],
       "http://purl.org/dc/terms/title": {en: "A Content Inventory Vocabulary"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci",
+      "http://www.w3.org/1999/xhtml/vocab#contents": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#index": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#license": "http://creativecommons.org/licenses/by/2.5/ca/",
+      "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
+      "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#"],
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.14",
-      "http://xmlns.com/foaf/0.1/primaryTopic": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", "https://www.w3.org/TR/vocab-org/", term(
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.16",
+      "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
+      "http://xmlns.com/foaf/0.1/primaryTopic": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", term(
           comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
           "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy","http://vocab.org/frbr/core","http://vocab.org/frbr/extended","https://www.w3.org/TR/prov-o/"],
-          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
+          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","https://www.w3.org/TR/vocab-org/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
         )],
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       type: ["http://purl.org/ontology/bibo/Webpage", "http://www.w3.org/2002/07/owl#Ontology"]
@@ -407,6 +420,11 @@ module Intertwingler::Vocab
       range: "http://www.w3.org/2004/02/skos/core#Concept",
       subPropertyOf: "http://www.w3.org/2004/02/skos/core#related",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :backlinks,
+      comment: {en: "This a role to identify a particular HTML element (e.g. a  <nav> element) as a designated container for backlinks."},
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "backlinks",
+      type: "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property"
     property :blocks,
       comment: {en: "A block count is conceptually similar to a word or section count, though it counts the total of elements in the document considered to be text blocks, such as paragraphs, tables, lists and figures. It is suited for document types that have no concept of (semantic) sections, such as HTML. The purpose of this measurement is to provide a sort of ratio to the word count, to glean how well-proportioned the document is."},
       domain: "http://purl.org/linked-data/cube#Observation",
@@ -512,11 +530,19 @@ module Intertwingler::Vocab
       label: "forms",
       range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
       type: "http://purl.org/linked-data/cube#MeasureProperty"
+    property :fragment,
+      comment: {en: "This property relates a subject to one of its fragments."},
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#fragment-of",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "fragment",
+      subPropertyOf: "http://purl.org/dc/terms/hasPart",
+      type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :"fragment-of",
       comment: {en: "This property asserts that the subject should be treated as a fragment of the document it relates to."},
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#fragment",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "fragment-of",
-      range: "http://xmlns.com/foaf/0.1/Document",
+      subPropertyOf: "http://purl.org/dc/terms/isPartOf",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :"high-quartile",
       comment: {en: "Third Quartile"},

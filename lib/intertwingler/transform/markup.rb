@@ -215,17 +215,25 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
         tpfx = resolver.prefix_subset terms
 
         if pfx = doc.root['prefix']
-          pfx = pfx.strip.split(/:\s+/)
+          # chop up into an array
+          # engine.log.debug pfx.inspect
+          pfx = pfx.strip.split
+          # engine.log.debug pfx.length
+          # collect into a hash
           h = {}
-          until (pair = pfx.slice(0, 2)).empty?
-            h[pair.first] = pair.last
+          until (pair = pfx.slice! 0, 2).empty?
+            h[pair.first.chop] = pair.last
           end
-          pfx = resolver.sanitize_prefixes pfx
+          # engine.log.debug h.inspect
+          # normalize it
+          pfx = resolver.sanitize_prefixes h
         else
           pfx = {}
         end
 
         pfx.merge! tpfx
+
+        # engine.log.debug pfx.inspect
 
         doc.root['prefix'] = XML::Mixup.flatten_attr pfx
 

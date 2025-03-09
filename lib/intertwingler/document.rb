@@ -1592,8 +1592,8 @@ class Intertwingler::Document
   def self.sdo resolver, subject
   end
 
-  def self.backlinks resolver, subject, resource: nil,
-      published: true, ignore: nil, label: nil, tag: :nav, &block
+  def self.backlinks resolver, subject, resource: nil, published: true,
+      ignore: nil, label: nil, tag: :nav, role: CI.backlinks, &block
     repo = resolver.repo
 
     resource ||= subject
@@ -1647,11 +1647,10 @@ class Intertwingler::Document
       lp, lo = repo.label_for(rsrc, struct: st, noop: true)
 
       # currently the block does nothing but let us see what's in here
-      block.call rsrc, ct, lp, lo if block
+      block.call rsrc, preds, ct, lp, lo if block
 
-      { '#li' => link_tag(resolver, cu, base: uri,
+      { '#li' => link_tag(resolver, cu, base: uri, rev: preds,
                           typeof: ct, property: lp, label: lo) }
-
     end.compact
 
 

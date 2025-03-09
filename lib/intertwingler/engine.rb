@@ -636,7 +636,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     # same deal with with the body
     body ||= req.env['rack.input']
 
-    log.debug headers.inspect
+    # log.debug headers.inspect
 
     # fake up an environment
     env = req.env.merge Rack::MockRequest.env_for uri.to_s,
