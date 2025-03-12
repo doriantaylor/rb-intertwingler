@@ -72,7 +72,7 @@ module Intertwingler::Util::Clean
   def assert_uri_coercion coerce
     if coerce
       coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
-      raise "coerce must be in #{URI_COERCIONS.keys}" unless
+      raise ArgumentError, "coerce must be in #{URI_COERCIONS.keys}" unless
         URI_COERCIONS.key?(coerce)
     end
     coerce

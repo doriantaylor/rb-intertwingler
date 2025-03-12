@@ -55,7 +55,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :index
   #
-  #     # This property relates a cgto:State to the foaf:OnlineAccount associated with it.
+  #     # This property relates a cgto:State to the foaf:Agent associated with it.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :owner
   #
@@ -63,7 +63,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :property
   #
-  #     # This property relates a cgto:State to the foaf:OnlineAccount associated with it.
+  #     # This property relates a cgto:State to the foaf:Agent associated with it.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :state
   #
@@ -71,7 +71,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :summary
   #
-  #     # This property relates the cgto:Index to the foaf:OnlineAccount that reprsents the current user.
+  #     # This property relates the cgto:Index to the foaf:Agent that reprsents the current user.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :user
   #
@@ -269,12 +269,13 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
       type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :owner,
-      comment: {en: "This property relates a cgto:State to the foaf:OnlineAccount associated with it."},
+      comment: {en: "This property relates a cgto:State to the foaf:Agent associated with it."},
       domain: "https://vocab.methodandstructure.com/graph-tool#State",
       inverseOf: "https://vocab.methodandstructure.com/graph-tool#state",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "owner",
-      range: "http://xmlns.com/foaf/0.1/OnlineAccount",
+      note: {en: "This property and its relatives originally related to foaf:OnlineAccount—and may again—although for operational reasons this was inconvenient at the time (2025-03-12)."},
+      range: "http://xmlns.com/foaf/0.1/Agent",
       type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :property,
       comment: {en: "Specifies the property (predicate) in the statements from which subject and object resources are enumerated."},
@@ -284,8 +285,8 @@ module Intertwingler::Vocab
       range: "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
       type: ["http://purl.org/linked-data/cube#DimensionProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :state,
-      comment: {en: "This property relates a cgto:State to the foaf:OnlineAccount associated with it."},
-      domain: "http://xmlns.com/foaf/0.1/OnlineAccount",
+      comment: {en: "This property relates a cgto:State to the foaf:Agent associated with it."},
+      domain: "http://xmlns.com/foaf/0.1/Agent",
       inverseOf: "https://vocab.methodandstructure.com/graph-tool#owner",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "state",
@@ -300,12 +301,12 @@ module Intertwingler::Vocab
       subPropertyOf: "http://rdfs.org/sioc/ns#parent_of",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :user,
-      comment: {en: "This property relates the cgto:Index to the foaf:OnlineAccount that reprsents the current user."},
+      comment: {en: "This property relates the cgto:Index to the foaf:Agent that reprsents the current user."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Index",
       inverseOf: "https://vocab.methodandstructure.com/graph-tool#owner",
       isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
       label: "user",
-      range: "http://xmlns.com/foaf/0.1/OnlineAccount",
+      range: "http://xmlns.com/foaf/0.1/Agent",
       type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :view,
       comment: {en: "Relates the space to a view of said space."},

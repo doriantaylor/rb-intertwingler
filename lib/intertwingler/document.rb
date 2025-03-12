@@ -115,12 +115,11 @@ class Intertwingler::Document
     'ancestor::html:a|ancestor::*[@property and not(@content)]'.freeze,
     htmllinks: (%w[*[not(self::html:base)][@href]/@href
       *[@src]/@src object[@data]/@data *[@srcset]/@srcset
-      form[@action]/@action].map { |e|
-        './/html:%s' % e} + %w[//*[@xlink:href]/@xlink:href]).join(?|).freeze,
+      form[@action]/@action].map { |e| './/html:%s|.//%s' % [e , e]} +
+                  %w[//*[@xlink:href]/@xlink:href]).join(?|).freeze,
     atomlinks: %w[uri content/@src category/@scheme generator/@uri icon id
-      link/@href logo].map { |e| './/atom:%s' % e }.join(?|).freeze,
-    rsslinks: %w[image/text()[1] docs/text()[1] source/@url enclosure/@url
-               guid/text()[1] comments/text()[1]].map { |e|
+                  link/@href logo].map { |e| './/atom:%s' % e }.join(?|).freeze,
+    rsslinks: %w[image docs source/@url enclosure/@url guid comments].map { |e|
       './/%s' % e }.join(?|).freeze,
     xlinks: './/*[@xlink:href]/@xlink:href'.freeze,
     rdflinks: %w[about resource datatype].map { |e|
@@ -136,8 +135,14 @@ class Intertwingler::Document
     html:  XHTMLNS,
     svg:   'http://www.w3.org/2000/svg',
     atom:  'http://www.w3.org/2005/Atom',
+    rdf:   'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
     xlink: 'http://www.w3.org/1999/xlink',
   }.freeze
+
+  NSLINKS = XPATHNS.invert.transform_values do |pfx|
+    pfx = pfx.to_s
+    (pfx + (pfx.end_with?('link') ? ?s : 'links')).to_sym
+  end
 
   # this grabs a subset of the class methods defined herein and turns
   # 'em into instance methods, based on their argument signature
@@ -1609,7 +1614,7 @@ class Intertwingler::Document
     end
 
     structs = {}
-    nodes  = {}
+    nodes   = {}
 
     repo.query([nil, nil, resource]).each do |stmt|
       # XXX clutter
@@ -1627,7 +1632,7 @@ class Intertwingler::Document
       # now we'll just grab the literals and type(s)
       unless structs.key? sj
         struct = structs[sj] = repo.struct_for sj, only: :literal
-        struct[RDF.type] = repo.types_for(sj)
+        struct[RDF.type] = repo.types_for sj
       end
     end
 
@@ -1635,6 +1640,9 @@ class Intertwingler::Document
     nodes.select! { |k, _| repo.published? k } if published
 
     return if nodes.empty?
+
+    terms = Set[]
+    terms << role if role
 
     lcmp = repo.cmp_label(cache: structs) { |comparand| comparand.first }
 
@@ -1644,22 +1652,27 @@ class Intertwingler::Document
 
       st = structs[rsrc]
       ct = repo.types_for rsrc, struct: st
-      lp, lo = repo.label_for(rsrc, struct: st, noop: true)
+      lp, lo = repo.label_for rsrc, struct: st, noop: true
 
-      # currently the block does nothing but let us see what's in here
-      block.call rsrc, preds, ct, lp, lo if block
+      # add to the terms
+      terms |= [rsrc, preds.to_a, ct.to_a, lp, lo].flatten
 
       { '#li' => link_tag(resolver, cu, base: uri, rev: preds,
                           typeof: ct, property: lp, label: lo) }
     end.compact
 
+    # currently the block returns nothing but it lets us see the terms
+    block.call(terms.to_a) if block
 
-    out = [{ li => :ul }]
-    out.unshift label if label
+    links = [{ li => :ul }]
+    links.unshift label if label
 
     # warn "WTF #{out.inspect}"
 
-    { out => tag }
+    out = { links => tag }
+    out[:role] = resolver.abbreviate role if role
+
+    out
   end
 
   def add_rdfa
@@ -1676,11 +1689,22 @@ class Intertwingler::Document
   #
   # @return [false, true]
   #
-  def html? elem
+  def self.html? elem
     # make sure we find an element
     elem = elem.document? ? elem.root : elem.element? ? elem : elem.parent
-    ns = elem.namespace && elem.namespace.href
-    ns == XHTMLNS or !ns && elem.name.downcase == 'html'
+    elem.namespace&.href == XHTMLNS or
+      elem.document.root&.name&.downcase == 'html'
+  end
+
+  # Return true if the element is (Winer's) RSS 2.0.
+  #
+  # @param elem [Nokogiri::XML::Node] the node/element to test
+  #
+  # @return [false, true]
+  #
+  def self.rss2? elem
+    root = elem.document.root
+    root && !root.namespace && root.name == 'rss'
   end
 
   # Normalize the indentation of the document.
@@ -1790,8 +1814,8 @@ class Intertwingler::Document
   #
   # @return [nil, String, URI, RDF::URI] the context's base URI
   #
-  def self.get_base elem, default: nil, coerce: nil
-    coerce = assert_uri_coercion coerce
+  def self.get_base elem, default: nil, as: :uri
+    coerce = assert_uri_coercion as
 
     if elem.document?
       elem = elem.root
@@ -1813,7 +1837,7 @@ class Intertwingler::Document
     base = nil if base and base.empty?
 
     # eh that's about all the input sanitation we're gonna get
-    base && coerce ? URI_COERCIONS[coerce].call(base) : base
+    base && as ? URI_COERCIONS[coerce].call(base) : base
   end
 
   # Given an X(HT)ML element, returns a hash of prefixes of the form
@@ -2099,7 +2123,7 @@ class Intertwingler::Document
   # @param elem [Nokogiri::XML::Node]
   #
   # @return [Nokogiri::XML::Node]
-  #
+
   def sanitize elem
 
     # and away we go
@@ -2107,7 +2131,7 @@ class Intertwingler::Document
 
     out.xpath(XPATH[:sanitize], XPATHNS).each do |e|
       # XXX this shouldn ot be a problem post-refactor
-      base  = base_for e, @uri
+      base  = self.class.get_base e, default: @uri
       attrs = %i[about resource] + URL_ELEMS.fetch(e.name.to_sym, [])
 
       attrs.each do |a|
@@ -2257,7 +2281,102 @@ class Intertwingler::Document
 
   # these all need the resolver
 
-  def self.rewrite_links resolver, elem, base: nil
+  # In-situ rewrite links. If you want this to be non-destructive,
+  # pass in a duplicate.
+  #
+  # @param resolver [Intertwingler::Resolver] the resolver
+  # @param elem [Nokogiri::XML::Node] the element/document/node
+  # @param base [URI, RDF::URI] the base URI
+  #
+  # @yieldparam text [String] the URI from the element/attribute
+  # @yieldreturn [#to_s] the transformed URI
+  #
+  # @return [Nokogiri::XML::Node] the original node
+  #
+  def self.rewrite_links resolver, elem, base: nil, &block
+    # stash this to return
+    orig = elem
+
+    # ensure we are dealing with an element
+    elem = elem.document? ? elem.root : elem.element? ? elem :
+      elem.parent.element? ? elem.parent : elem.document.root
+
+    base = resolver.coerce_resource base, as: :uri if base
+    doc_base = get_base elem, default: base, as: :uri
+
+    # there must be at least one of these or this is a noop
+    base ||= doc_base or return orig
+
+    xpath_type = NSLINKS[elem.namespace&.href] ||
+      (html?(elem) ? :htmllinks : rss2?(elem) ? :rsslinks : :xlinks)
+
+    # we have a default closure we can override with a block
+    block ||= -> text do
+      return text unless base
+      # dereference with doc_base
+      uri = resolver.as_alias doc_base.merge(resolver.preproc text), base
+      # re-relativize with new base
+      rel = base.route_to uri
+
+      # warn "text: #{text}, uri: #{uri}"
+
+      # we don't like dot-dot-slash paths so we just use the whole path
+      if rel.to_s.start_with? '../' or rel.path == './'
+        # just give us the request-uri
+        rel = uri.request_uri
+        rel = "#{rel}##{uri.fragment}" if uri.fragment
+      elsif rel.to_s.start_with? '//'
+        # don't screw around with just lopping off the scheme
+        rel = uri
+      elsif rel.to_s.start_with? './'
+        # this will happen when the relative uri path terminates with
+        # a / at the same depth as the base uri
+
+        # XXX this will not do the right thing
+        # rel.path = uri.path.gsub(/[^\/]*$/, '')
+      end
+
+      rel.to_s
+    end
+
+    # set the base uri
+    if xpath_type == :htmllinks
+      head = elem.document.at_xpath '/html:html/html:head|/html/head', XPATHNS
+      if head
+        # find the existing <base> element
+        bh = head.at_xpath 'html:base|base', XPATHNS
+        # unless there isn't one, then we tuck it behind the title
+        if bh
+          bh['href'] = base.to_s
+        else
+          spec = { '#base' => nil, href: base.to_s }
+          if title = head.at_xpath('html:title|title', XPATHNS)
+            XML::Mixup.markup spec: spec, after: title
+          elsif head.children.empty?
+            XML::Mixup.markup spec: spec, parent: head
+          else
+            # unless there isn't one, then we insert it first
+            XML::Mixup.markup spec: spec, before: head.children.first
+          end
+        end
+      end
+    else
+      # XXX this is not right. the whole document needs to be scanned
+      # for xml:base and any found in subtrees have to be removed
+      elem.document.root['xml:base'] = base.to_s
+    end
+
+    # warn XPATH[xpath_type].inspect
+
+     # actually traverse the document
+    elem.xpath(XPATH[xpath_type], XPATHNS).each do |node|
+      text = block.call node.content
+      # warn "#{node.content} -> #{text}"
+      # can i just say i appreciate this unified interface, lol
+      node.content = text.to_s
+    end
+
+    orig
   end
 
   def self.title_tag resolver, predicates, content,
@@ -2344,9 +2463,10 @@ class Intertwingler::Document
 
     # make a relative uri but only if we have a base, otherwise don't bother
     if base
+      # warn [href, base].inspect
       href = href.is_a?(URI) ? href : URI(resolver.preproc href.to_s)
       base = base.is_a?(URI) ? base : URI(resolver.preproc base.to_s)
-      href = base.route_to(href)
+      # href = base.route_to(href)
     end
 
     # construct the label tag/relation

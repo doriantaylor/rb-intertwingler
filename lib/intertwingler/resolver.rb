@@ -76,12 +76,25 @@ class Intertwingler::Resolver
       subject: subject, documents: documents, fragments: fragments, log: log
   end
 
-  # this is dumb but we have both URI and RDF::URI in the mix
-  def set_alias uri, base
+  public
+
+  # Return a copy of the given (`URI`, `RDF::URI`) with the given
+  # scheme and authority.
+  #
+  # @param uri [URI, RDF::URI] the URI in question
+  # @param base [URI, RDF::URI] the reference URI
+  #
+  # @return [URI, RDF::URI] a copy of the URI
+  #
+  def as_alias uri, base
     # this will work whether it's URI or RDF::URI
-    return uri unless /^https?$/i.match? uri.scheme and
-      base and base.respond_to? :authority and
-      authorities.include? base.authority.downcase
+
+    # only do this if base is present and both addresses are in the
+    # list of authorities, but duplicate the uri for parity
+    return uri.dup unless base and [uri, base].all? do |u|
+      /^https?$/i.match? u.scheme and u.respond_to? :authority and
+      authorities.include? u.authority.downcase
+    end
 
     # we have to dup in case it's frozen
     uri = uri.dup
@@ -91,8 +104,6 @@ class Intertwingler::Resolver
 
     uri
   end
-
-  public
 
   # Return a hash mapping a set of RDF prefixes to their vocabularies.
   #
@@ -671,7 +682,7 @@ class Intertwingler::Resolver
       term = tmp
     else
       term = coerce_resource term, as: as
-      term = set_alias term, via
+      term = as_alias term, via
       return scalar ? term : [term]
     end
 
@@ -751,7 +762,7 @@ class Intertwingler::Resolver
 
     # turn these into URIs if the thing says so
     out.map! do |u|
-      u = set_alias u, via
+      u = as_alias u, via
       u = URI(preproc u.to_s) if as == :uri
       u
     end

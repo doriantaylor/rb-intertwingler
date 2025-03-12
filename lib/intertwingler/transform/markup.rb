@@ -79,6 +79,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       %w[application/xml text/html], %w[application/xml text/html] ],
   }.freeze
 
+  XHTMLNS = 'http://www.w3.org/1999/xhtml'.freeze
+
   # These are internal methods that actually perform the
   # transformations. since by this point we have everything we need from
   # the request, we can dispense with it and just operate over the body.
@@ -206,9 +208,13 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       # don't touch it if there are no backlinks
       if body and links = Intertwingler::Document.backlinks(
         resolver, subject, published: false) do |*args|
-          terms |= args.flatten.compact.map do |t|
+          args = args.map do |a|
+            a.respond_to?(:to_a) ? a.to_a : a
+          end.flatten.compact.uniq.map do |t|
             t.literal? && t.datatype? ? t.datatype : t.uri? ? t : nil
           end.compact
+
+          terms |= args
         end
 
         # obtain prefixes from terms
@@ -226,7 +232,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
           end
           # engine.log.debug h.inspect
           # normalize it
-          pfx = resolver.sanitize_prefixes h
+          pfx = resolver.sanitize_prefixes h, nonnil: true
         else
           pfx = {}
         end
@@ -235,12 +241,14 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
         # engine.log.debug pfx.inspect
 
-        doc.root['prefix'] = XML::Mixup.flatten_attr pfx
+        doc.root['prefix'] =
+          XML::Mixup.flatten_attr(pfx.reject { |k, _| k.nil? })
+        doc.root['vocab'] = pfx[nil] if pfx.key? nil
 
         # decided the magic word to include backlinks in a way that
         # can be picked up by a transform but still comply with the
         # spec is <noscript>.
-        XML::Mixup.markup parent: body, spec: { '#noscript' => links }
+        XML::Mixup.markup parent: body, spec: links
 
         # again, reassigning the object resets the faux-nad
         req.body.object = doc
@@ -255,6 +263,26 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   def rewrite_links req, params
     # engine.resolver_for params[:subject]
     engine.log.debug "rewriting links lol"
+
+    if loc = req.get_header('HTTP_CONTENT_LOCATION')
+      loc = resolver.coerce_resource loc, as: :uri
+    end
+
+    engine.log.debug "rewrite: #{loc}"
+
+    # get a duplicate of the document
+    doc = req.body.object.dup
+
+    # no return because this operates in situ
+    Intertwingler::Document.rewrite_links engine.resolver, doc, base: loc
+
+    # (* URIs should be empty, slug/query/fragment, full path, or
+    # absolute. no screwing around with ../ or //authority.host/)
+
+    # reassign to invalidate any serialized version
+    # (XXX THIS IS DUMB IS THERE A BETTER WAY TO DO THIS???)
+    req.body.object = doc
+
     req.body
   end
 
