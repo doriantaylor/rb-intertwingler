@@ -1827,7 +1827,7 @@ module Intertwingler
           subject = RDF::URI(row.first)
 
           if row[1] # type
-            type = @resolver.resolve_curie row[1], scalar: true, as: :rdf
+            type = @resolver.resolve_curie row[1]
             out << [subject, RDF.type, type]
           end
           if row[2] # preflabel

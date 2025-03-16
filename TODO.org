@@ -1,85 +1,110 @@
 #+STARTUP: showall hidestars indent
 * TODO initial port of IBIS tool
-- [-] front-end separated
-  - [X] [[https://github.com/doriantaylor/app-ibis-front-end][git repository]]
-  - [X] Makefile
-  - [X] files renamed
-  - [-] XSLT rewritten
-    - [X] dependencies shaken out
-    - [X] provisional solution for main dispatcher (route by RDF type)
-    - [X] replace hard-coded pseudo-RDF for vocabs with real RDF/XML
-      - [X] fudge with static file for now
-        - (we want this to ultimately be generated but currently missing the e.g. caching infrastructure to make that efficient)
-    - [ ] new catalogue resolution mechanism
-      - [ ] handle potentially paginated inventories
-  - [ ] javascript reorganized
-    - [ ] decide where to hang all the app-specific scripts
-    - [ ] fix math on hyperbolic representation (deal with this last)
-      - [ ] (probably will need a whole new algorithm for final layout phase tbh)
-- [-] create [[lib/intertwingler/handler/catalogue.rb][catalogue resources]]
-  - [ ] fix [[lib/intertwingler/params.rb][Intertwingler::Params]]
-    - [ ] create ~configure~ class method for parity with other subsystems that configure themselves out of the graph
-    - [ ] create ~refresh~ method for templates, groups, and the registry itself
-      - [ ] figure out why tf it's ~refresh~ in ~Intertwingler::Params~ and ~refresh!~ in ~Params::Registry~
-        - [ ] whatever reason just standardize on one or the other
-    - [ ] create mechanism for sets and sequences
-      - [ ] read out of RDF graph
-    - [ ] create a "term" parameter value type
-      - [ ] serializes/canonicalizes to CURIE (if possible) using internal prefix map
-      - [ ] expands to URI (again, if possible)
-  - [X] create a mechanism for /any/ resource to marshal [[lib/intertwingler/params.rb][Intertwingler::Params]], not just transforms
-    - [X] create [[lib/intertwingler/resource.rb][Intertwingler::Resource]]
-      - [X] these represent individual resources with stateful config
-      - [X] generic ~call~ method to route requests
-      - [X] actual methods map to HTTP request methods
-  - [ ] aggregated vocab resource
-    - [ ] just RDF/XML for now
-    - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them and then forever again to render 3 megabytes of RDF/XML
-      - (note it is mainly schema dot org that is responsible for this and we don't even use it)
-      - [ ] maybe consider some kind of subsetting/parametrization?
-  - [X] ~cgto:Index~ resource
-    - (points to different types of summary resources)
-  - [-] ~cgto:Summary~ resources
-    - (counts of resources and links to inventories)
-    - [X] by class
-      - asserted/inferred, counts/links
-    - [ ] by property
-      - asserted/inferred, domain/range, counts/links
-  - [-] ~cgto:Inventory~ resource
-    - (parametrized; used to enumerate actual resources in the graph)
-    - [X] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
-      - [X] default value
-        - [X] ~tfo:default~ property
-      - [X] handling of empty values (ignore vs null, empty string, etc)
-        - [X] ~tfo:empty~ property
-        - [X] put empty string in ~tfo:default~ if that's what you want
-      - [X] ~tfo:universe~ property
-      - [X] some way to represent composite values
-        - [X] ~tfo:Composite~ class
-          - [X] ~tfo:element~ property
-        - [X] sequences (unbounded)
-          - [X] just put ~rdf:List~ as a composite
-        - [X] tuples (fixed length)
-          - [X] shift vs truncate policy
-            - [X] ~tfo:shift~ property
-        - [X] discrete/enumerated sets
-          - [X] ~rdf:Bag~ + ~rdfs:member~
-        - [X] numeric (or number-like, e.g. date) spans
-          - [X] bounded on either side?
-          - [X] include/exclude boundaries?
-          - [X] ~tfo:Range~ class
-            - [X] ~tfo:low~ property
-            - [X] ~tfo:high~ property
-            - [X] ~tfo:infimum~ property
-            - [X] ~tfo:supremum~ property
-      - [X] determine how to represent a "term" type
-    - [ ] some way to assign parse/serialize, compose/decompose functions
-      - [ ] change parameter spec or generalize domain
-    - [ ] some kind of caching?
-    - [ ] pagination links
-  - [ ] ~/me~ resource
-    - (e.g. "my" ~sioc:UserAccount~ which eventually hooks up to ~foaf:Person~ etc)
-    - [ ] rework application state stuff so it is centered around the user
+** TODO front-end separated
+- [X] [[https://github.com/doriantaylor/app-ibis-front-end][git repository]]
+- [X] Makefile
+- [X] files renamed
+- [X] Sass/CSS reorganized
+- [X] fonts accounted for
+*** TODO rewrite XSLT
+- [X] dependencies shaken out
+- [X] provisional solution for main dispatcher (route by RDF type)
+- [X] replace hard-coded pseudo-RDF for vocabs with real RDF/XML
+  - [X] fudge with static file for now
+    - (we want this to ultimately be generated but currently missing the e.g. caching infrastructure to make that efficient)
+- [ ] new catalogue resolution mechanism
+  - [ ] handle potentially paginated inventories
+*** TODO javascript reorganized
+- [X] decide where to hang all the app-specific scripts
+  - (it was the "containing" ~cgto:Space~)
+- [ ] overhaul the bit that loads the content for the graph
+- [ ] fix math on hyperbolic representation (deal with this last)
+  - [ ] (probably will need a whole new algorithm for final layout phase tbh)
+  - [ ] (and maybe even some new rdf vocab)
+** TODO create [[lib/intertwingler/handler/catalogue.rb][catalogue resources]]
+- [X] fix [[lib/intertwingler/params.rb][Intertwingler::Params]]
+  - [X] create ~configure~ class method for parity with other subsystems that configure themselves out of the graph
+  - [X] create ~refresh~ method for templates, groups, and the registry itself
+    - [X] figure out why tf it's ~refresh~ in ~Intertwingler::Params~ and ~refresh!~ in ~Params::Registry~
+      - [X] whatever reason just standardize on one or the other
+  - [X] create mechanism for sets and sequences
+    - [X] read out of RDF graph
+  - [X] create a "term" parameter value type
+    - [X] serializes/canonicalizes to CURIE (if possible) using internal prefix map
+    - [X] expands to URI (again, if possible)
+- [X] create a mechanism for /any/ resource to marshal [[lib/intertwingler/params.rb][Intertwingler::Params]], not just transforms
+  - [X] create [[lib/intertwingler/resource.rb][Intertwingler::Resource]]
+    - [X] these represent individual resources with stateful config
+    - [X] generic ~call~ method to route requests
+    - [X] actual methods map to HTTP request methods
+- [X] ~cgto:Index~ resource
+  - (points to different types of summary resources)
+  - [X] points to ~cgto:Summary~ resources
+  - [X] resolves ~foaf:Agent~ currently logged in
+- [X] ~cgto:Summary~ resources
+  - (counts of resources and links to inventories)
+  - [X] by class
+    - asserted/inferred, counts/links
+  - [X] by property
+    - asserted/inferred, domain/range, counts/links
+- [-] ~cgto:Inventory~ resource
+  - (parametrized; used to enumerate actual resources in the graph)
+  - [X] update [[https://vocab.methodandstructure.com/transformation#][TFO]] vocab
+    - [X] default value
+      - [X] ~tfo:default~ property
+    - [X] handling of empty values (ignore vs null, empty string, etc)
+      - [X] ~tfo:empty~ property
+      - [X] put empty string in ~tfo:default~ if that's what you want
+    - [X] ~tfo:universe~ property
+    - [X] some way to represent composite values
+      - [X] ~tfo:Composite~ class
+        - [X] ~tfo:element~ property
+      - [X] sequences (unbounded)
+        - [X] just put ~rdf:List~ as a composite
+      - [X] tuples (fixed length)
+        - [X] shift vs truncate policy
+          - [X] ~tfo:shift~ property
+      - [X] discrete/enumerated sets
+        - [X] ~rdf:Bag~ + ~rdfs:member~
+      - [X] numeric (or number-like, e.g. date) spans
+        - [X] bounded on either side?
+        - [X] include/exclude boundaries?
+        - [X] ~tfo:Range~ class
+          - [X] ~tfo:low~ property
+          - [X] ~tfo:high~ property
+          - [X] ~tfo:infimum~ property
+          - [X] ~tfo:supremum~ property
+    - [X] determine how to represent a "term" type
+  - [ ] some way to assign parse/serialize, compose/decompose functions
+    - [ ] change parameter spec or generalize domain
+    - (i have no idea what this subtree means anymore)
+  - [ ] some kind of caching?
+    - (i mean, caching in general amirite)
+  - [X] pagination links
+- [-] aggregated vocab resource
+  - [X] just RDF/XML for now
+  - [ ] figure out some /compute-once/ situation for all vocabs because it takes for-eeever to extract them and then forever again to render 3 megabytes of RDF/XML
+    - (note it is mainly the two copies of schema dot org—http and https—that are responsible for this, and we don't even use it)
+    - [ ] maybe consider some kind of subsetting/parametrization?
+- [X] ~/me~ resource
+  - (e.g. "my" ~sioc:UserAccount~ which eventually hooks up to ~foaf:Person~ etc)
+  - [X] rework application state stuff so it is centered around the user
+  - *actually* this has been absorbed into the index because it turned out not to make sense to have a separate ~/me~
+* TODO general-purpose graph-based web app infrastructure
+- 2025-03-12 just putting this here for now:
+  - aaand flipped away from this window and totally forgot what it was when i flipped back
+  - ah, now i remember: ~<head>~ elements like stylesheets and scripts should be topologically sorted
+    - that is, dependencies go first then their dependents
+    - do this with
+- anyway, another thing i've been thinking about which i'm gonna stash here is "what would i use an LLM for"
+  - in general the function of intertwingler doesn't really intersect with large language models, ie it's like that engineer at the car company who was facepalming at the executives who wanted him to put ai in the brakes because "ai makes stuff better", it's like no that's a hydraulic system and what you're asking to do is not only wrong, it isn't even meaningful
+    - intertwingler is obviously not a hydraulic system, but it's close enough that ai has no business in its workings
+  - however i /do/ think it would be useful in a couple places in /applications/ on top of it:
+    - scanning corpora for concept/audience stuff
+    - it'll also be useful in the ibis tool for reducing redundant entries, like help forums do
+      - (at least i /assume/ that's an LLM doing that?)
+  - at any rate, figuring out some non-stupid way to interface with LLMs, whether local (preferred) or saas (ugh), is not a bad idea #formarketingpurposes
+    - as in, people keep asking where the AI goes; i would like an answer for them besides "it doesn't"
 * TODO a shippable ~Intertwingler~
 Around early August (2023) I decided to go with a much more ambitious design that does things I wasn't initially planning on doing. For example, I wasn't initially planning on doing the whole /transform/ infrastructure, but I think it will be a much more powerful product to have them than not to.
 ** TODO something you can run with ~rackup~

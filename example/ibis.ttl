@@ -3,14 +3,15 @@
 @prefix ci: <https://vocab.methodandstructure.com/content-inventory#> .
 @prefix dct: <http://purl.org/dc/terms/> .
 @prefix ibis: <https://vocab.methodandstructure.com/ibis#> .
-@prefix sioc: <http://rdfs.org/sioc/ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix xhv: <http://www.w3.org/1999/xhtml/vocab#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sioc: <http://rdfs.org/sioc/ns#> .
+@prefix xhv: <http://www.w3.org/1999/xhtml/vocab#> .
 
 <urn:uuid:00676fe4-b256-4c72-ba55-fd0d88292956>
     dct:created "2024-04-02T02:22:53Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "When somebody tries to access the main collection, redirect them to the first window onto the collection." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -19,11 +20,17 @@
 
 <urn:uuid:027bed66-42e7-435f-9e26-fa5e1ed4ff17>
     dct:created "2024-03-27T02:05:18Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Get in touch with the maintainers of the respective packages and get them to merge the patches." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:c90ada9b-0ef8-4998-87cd-896084ee66ac> .
+
+<urn:uuid:03891bfd-10a0-457f-9e15-378d62d30844>
+    dct:created "2025-03-13T02:14:02Z"^^xsd:dateTime ;
+    a cgto:State ;
+    cgto:focus <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    cgto:owner <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> .
 
 <urn:uuid:03d0455a-9fc5-4ca8-92d1-f1d32a7b9884>
     dct:created "2024-09-12T01:45:41Z"^^xsd:dateTime ;
@@ -34,7 +41,7 @@
 
 <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a>
     dct:created "2024-02-16T21:28:47Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Ship an Intertwingler instance that the client can use." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -45,7 +52,7 @@
 
 <urn:uuid:0b4080c1-f931-4abf-abb1-e5cd456667f5>
     dct:created "2024-03-15T20:54:27Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put doriantaylor.com into Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -76,7 +83,7 @@
 
 <urn:uuid:10cd698f-0192-450b-a524-9c4c17a75cf0>
     dct:created "2024-03-18T18:32:52Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "There are a number of scaled and transformed images on the site." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -84,7 +91,7 @@
 
 <urn:uuid:11021658-81a7-4bcf-bc21-388f9e216d32>
     dct:created "2024-04-02T02:27:29Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "How does a client determine how to fill out the entire collection?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -92,11 +99,20 @@
 
 <urn:uuid:14160a9f-f5a1-4ded-b307-8bf3e1dbe677>
     dct:created "2024-03-15T20:56:23Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put client extranets into Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:specializes <urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7> .
+
+<urn:uuid:14556374-9ec1-438c-aa27-7fd15934b7b7>
+    dct:created "2025-01-24T02:42:44Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "Create an \"inventory\" resource that is itself a list of resources with the characteristic of being in the range of a given property." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:generalizes <urn:uuid:653228f3-7b51-4467-9a09-2997bb39d1b9>, <urn:uuid:899eded0-a0c1-4ad1-80a2-2c68f4d6663d>, <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7> ;
+    ibis:responds-to <urn:uuid:152e9d0b-df23-47d7-8cf7-c89009f03119> .
 
 <urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a>
     dct:created "2024-09-12T01:10:10Z"^^xsd:dateTime ;
@@ -119,9 +135,26 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:5fb38d8d-b584-40d0-9fc1-293d125d4a5c> .
 
+<urn:uuid:152e9d0b-df23-47d7-8cf7-c89009f03119>
+    dct:created "2025-01-24T02:41:08Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "To populate potential linkages, the tool needs a list of all resources that are in the range of a given property." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:de9f16c6-1cbd-4811-92f0-15a72936b577> ;
+    ibis:response <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
+<urn:uuid:160bcab3-b338-4fba-830d-a1811996102a>
+    dct:created "2025-01-24T03:30:28Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Create an `inferred` flag that is on by default but can be set to false that will disable inferencing." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:965341c6-2a34-4f47-b50f-4695a02963bb> .
+
 <urn:uuid:1771b79a-1c54-42eb-af5d-006b3a7f37c4>
     dct:created "2024-03-15T21:16:57Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "How will we construct the UI of the RDF-KV forms?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -142,6 +175,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:7a55af8c-df7c-437e-9d2c-6676d12e6455> .
 
+<urn:uuid:1abe0167-2179-4172-b464-a0ecae1383cd>
+    dct:created "2025-01-24T02:23:22Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Argument ;
+    rdf:value "We would actually be able to unblock development on the IBIS tool that has been sitting idle for over a decade." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:supports <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
+
 <urn:uuid:1be64b93-475c-41bf-811c-fdc3771a5c2e>
     dct:created "2024-09-12T01:31:22Z"^^xsd:dateTime ;
     a ibis:Argument ;
@@ -151,7 +192,7 @@
 
 <urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7>
     dct:created "2024-03-15T20:54:40Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put methodandstructure.com into Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -173,7 +214,7 @@
 
 <urn:uuid:21ac267e-ce02-415d-a09f-8c6dec09de8b>
     dct:created "2024-02-16T21:14:36Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Make the Intertwingler home directory a Docker volume." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -182,9 +223,9 @@
 
 <urn:uuid:2209c97e-cae3-4b78-900f-b663ae2bc4dc>
     dct:created "2024-10-08T23:10:51Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
-    a ibis:Network ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     sioc:has_space <urn:uuid:f398478e-af15-4890-99ef-58375a73fff2> ;
+    a ibis:Network ;
     skos:prefLabel "ABC" .
 
 <urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b>
@@ -210,9 +251,18 @@
     ibis:responds-to <urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a> ;
     ibis:specializes <urn:uuid:a4ce7c46-4499-431f-b318-e053753a4e13> .
 
+<urn:uuid:260ebda6-2ac8-48fd-af3f-9c878181892b>
+    dct:created "2025-01-24T03:17:16Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[ADOPTED] Treat the `instance-of`, `in-range-of`, `in-domain-of` parameters as a union, that is, select all resources that match any of them." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:7f2709cd-7840-44eb-afcf-e35219b1d1f7> ;
+    ibis:specializes <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d>
     dct:created "2024-02-16T21:52:41Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "I want to use Intertwingler to run my Web properties." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> .
@@ -226,15 +276,15 @@
 
 <urn:uuid:2761af80-a09d-4109-ae8a-c6934cf6438b>
     dct:created "2024-03-27T02:23:01Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
-    rdf:value "The front-end code to the IBIS tool is currently in the back-end repository." ;
+    rdf:value "[RESOLVED] The front-end code to the IBIS tool is currently in the back-end repository." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:suggested-by <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
 
 <urn:uuid:286f4939-6973-4603-8ddb-aa1e43295999>
     dct:created "2024-03-15T20:56:03Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put vocab.methodandstructure.com into Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -244,7 +294,7 @@
 
 <urn:uuid:2bc72178-393e-4a69-98e4-0fa6e502ae4f>
     dct:created "2024-03-15T20:54:55Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put makethingsmakesense.com into Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -266,7 +316,7 @@
 
 <urn:uuid:35df0c71-05eb-49fe-9691-8b1d708a5f05>
     dct:created "2024-02-16T21:13:26Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "How do we get instance data in and out?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -286,6 +336,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:c91f5bee-c876-4d10-9307-c2c912ef009a> .
 
+<urn:uuid:3d79cf73-ba7d-431c-8ecc-e3346a738680>
+    dct:created "2025-01-24T03:22:43Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "How do you make sure that you net resources that are subclasses of, or related by subproperties to, the supplied parameters?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:3f68a66b-13ba-4bbc-b040-e587d33b2643>
     dct:created "2024-09-12T01:50:35Z"^^xsd:dateTime ;
     a ibis:Argument ;
@@ -295,7 +353,7 @@
 
 <urn:uuid:40f5e3c5-b9ae-42db-8f1b-b1f07faf68ff>
     dct:created "2024-03-18T18:40:01Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put every addressable transform in the queue and have the path parameters filter out and rearrange the remnants." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -312,7 +370,7 @@
 
 <urn:uuid:45aa5cec-60dd-4091-af9d-3fc25722db38>
     dct:created "2024-04-02T02:20:37Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Represent windowed slices of a collection as ephemeral entities. Have them refer back to the main collection with the unmanageably many elements." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -321,29 +379,37 @@
 
 <urn:uuid:48707ee2-d5af-4882-9d7f-ab0f4517ea5c>
     dct:created "2024-03-18T18:09:07Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "If an entity is inserted into the store overtop of a cache entry, clear the cache flag and ensure it is never re-enabled." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:c5f0efdb-a5ef-4062-9e13-0fbb32ccd030> .
 
+<urn:uuid:48bba32f-1545-4cb1-aba0-5ac5c11a6fc9>
+    dct:created "2025-01-24T03:48:35Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "How is the inventory going to be related to the index?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5>
     dct:created "2024-10-08T23:10:30Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
-    a ibis:Network ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     sioc:has_space <urn:uuid:f398478e-af15-4890-99ef-58375a73fff2> ;
+    a ibis:Network ;
     skos:prefLabel "hmm" .
 
 <urn:uuid:5020dc83-ac0c-4f75-9683-a70429e32c99>
     dct:created "2024-10-08T19:28:22Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
-    a ibis:Network ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     sioc:has_space <urn:uuid:f398478e-af15-4890-99ef-58375a73fff2> ;
+    a ibis:Network ;
     skos:prefLabel "Test" .
 
 <urn:uuid:55e10fb2-1bc2-478e-a38a-b3a7b50cff6a>
     dct:created "2024-10-10T00:17:56Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a skos:Concept ;
     skos:inScheme <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5> ;
     skos:narrower <urn:uuid:812d376b-9767-4154-ac27-b2ef67f24370> ;
@@ -365,15 +431,40 @@
 
 <urn:uuid:62126f41-c914-4ccb-85d9-6c019c425e9f>
     dct:created "2024-03-15T21:01:17Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "How do we keep drafts and other works in progress from being exposed to the public?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:questions <urn:uuid:0b4080c1-f931-4abf-abb1-e5cd456667f5> .
 
+<urn:uuid:64f9d3f6-8cd8-4c28-8f59-2dc03614a4eb>
+    dct:created "2025-01-24T02:50:12Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "Properties go in the other direction too, so it would be useful to be able to pick subjects of properties as well as objects." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7> .
+
+<urn:uuid:653228f3-7b51-4467-9a09-2997bb39d1b9>
+    dct:created "2025-01-24T02:59:12Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Add an `instance-of` parameter that takes class identifiers for parity with the original resource." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:c622aa47-e760-4c50-a263-a0327df2dbdc> .
+
+<urn:uuid:66b40985-42ec-4a42-a5cc-15d4c79e4c52>
+    dct:created "2025-01-24T03:09:38Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Argument ;
+    rdf:value "An inventory that takes alll these paramaters does much more than just display resources in the range of a given property." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:opposes <urn:uuid:14556374-9ec1-438c-aa27-7fd15934b7b7> ;
+    ibis:supports <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:68a1b2b7-270e-4afa-a6d2-db72422c0a36>
     dct:created "2024-03-18T18:35:40Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "Ordinary transforms are already attached to their respective queues. How do we handle transforms for addressable queues?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -381,16 +472,25 @@
 
 <urn:uuid:6a693bc2-ac87-4b87-b982-2ae0437d430a>
     dct:created "2024-02-16T21:40:25Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Create an RDF-KV handler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:d6356726-10d0-4083-9be1-615742b0cdae> ;
     ibis:specializes <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a> .
 
+<urn:uuid:6aa1b5cd-d3fa-4871-bcf4-c587bcd34dc8>
+    dct:created "2025-01-24T03:27:10Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Perform RDFS/OWL inferencing against the supplied parameters and result set." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:3d79cf73-ba7d-431c-8ecc-e3346a738680> ;
+    ibis:specializes <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:6c6f073b-4aa7-454e-96b0-efc728e83c8a>
     dct:created "2024-03-15T21:02:05Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Implement a rudimentary mechanism for partitioning the graph into \"public\" and \"private\"." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -398,7 +498,7 @@
 
 <urn:uuid:712895d6-f7d4-434c-b181-c1f0ec17c024>
     dct:created "2024-03-18T18:41:59Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Argument ;
     rdf:value "Indiscriminately loading transform handlers is a much simpler design." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -421,7 +521,7 @@
 
 <urn:uuid:7421a1da-9009-448d-8f63-b021f398a4d9>
     dct:created "2024-04-02T02:28:48Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Attach \"next\" and \"previous\" relations to the wiindow resources, when applicable." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -429,7 +529,7 @@
 
 <urn:uuid:7489c0c6-85a6-4366-99fd-2f23851eddd0>
     dct:created "2024-02-16T21:09:27Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "Client is not a Ruby developer." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -444,9 +544,18 @@
     ibis:opposes <urn:uuid:733e71ba-95d7-4201-97ca-78a6834a2ced> ;
     ibis:suggests <urn:uuid:0e32e1db-9c7d-4de9-ab8a-b769051a8ea3> .
 
+<urn:uuid:759fb287-4fa3-4b26-ad98-28e01d92dd45>
+    dct:created "2025-01-24T02:27:48Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Define a relation that connects the tool to the entry point." ;
+    rdfs:seeAlso cgto:index ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:84d124ad-b7dd-4da9-8d3c-074bb64bebc8> .
+
 <urn:uuid:7a3a37f7-682c-4e27-8924-0172f2a2ac0c>
     dct:created "2024-03-01T16:22:21Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Create a Git repository with a prefabricated configuration." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -462,7 +571,7 @@
 
 <urn:uuid:7b06b386-3625-4e5d-b2eb-4764fdb3484e>
     dct:created "2024-03-15T20:37:10Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "It would be useful to be able to indicate to the engine that a given handler manages a content-addressable store (and thus can be used for caching)." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -470,14 +579,14 @@
 
 <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905>
     dct:created "2024-02-16T21:08:07Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
-    a ibis:Network ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     sioc:has_space <urn:uuid:f398478e-af15-4890-99ef-58375a73fff2> ;
+    a ibis:Network ;
     skos:prefLabel "Intertwingler MVP" .
 
 <urn:uuid:7b75b305-aae5-4478-8daa-c9de013c5c76>
     dct:created "2024-03-27T02:12:05Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "What happens when you have an extreme quantity of entities for a given class and/or in the domain or range of a given predicate?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -489,9 +598,17 @@
     rdf:value "Client wants to map IBIS issues to GitHub issues." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> .
 
+<urn:uuid:7f2709cd-7840-44eb-afcf-e35219b1d1f7>
+    dct:created "2025-01-24T03:16:12Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "How are the parameters reconciled if you have multiples at once?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:8005ab95-86a5-4b0d-8c5f-7cb92e75e0d4>
     dct:created "2024-02-16T21:08:36Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "Client wants to use Intertwingler as a back-end." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> .
@@ -505,14 +622,14 @@
 
 <urn:uuid:812d376b-9767-4154-ac27-b2ef67f24370>
     dct:created "2024-10-10T00:17:43Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a skos:Concept ;
     skos:inScheme <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5> ;
     skos:prefLabel "potato" .
 
 <urn:uuid:82181c35-3672-425d-aca9-863fd89886b7>
     dct:created "2024-03-27T02:14:48Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "Intertwingler currently does not have the resources to furnish the IBIS tool with fodder for autocompletes." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -526,9 +643,26 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:9fd48a18-ed21-4daf-8ea5-0a4d44f35b6c> .
 
+<urn:uuid:84d124ad-b7dd-4da9-8d3c-074bb64bebc8>
+    dct:created "2025-01-24T02:26:34Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "How does the front-end know where the catalogues are?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> .
+
+<urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6>
+    dct:created "2025-01-24T03:10:21Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[ADOPTED] Create a generic inventory resource that can take any combination of filtering parameters." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:generalizes <urn:uuid:160bcab3-b338-4fba-830d-a1811996102a>, <urn:uuid:653228f3-7b51-4467-9a09-2997bb39d1b9>, <urn:uuid:899eded0-a0c1-4ad1-80a2-2c68f4d6663d>, <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7> ;
+    ibis:responds-to <urn:uuid:66b40985-42ec-4a42-a5cc-15d4c79e4c52> .
+
 <urn:uuid:8650031b-36fb-48a4-b7c1-4676deb376e0>
     dct:created "2024-02-16T22:53:01Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Implement caching of generated representations against Store::Digest." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -537,11 +671,19 @@
 
 <urn:uuid:881ed50a-0c7e-4618-b3fc-6025ee3ed9ca>
     dct:created "2024-04-02T01:56:29Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Argument ;
     rdf:value "We would actually be able to represent real sequences of actions instead of just suggestions about what to do." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:supports <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
+
+<urn:uuid:899eded0-a0c1-4ad1-80a2-2c68f4d6663d>
+    dct:created "2025-01-24T02:52:00Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Make the inventory resource respond to an `in-domain-of` parameter for symmetry with `in-range-of`." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:64f9d3f6-8cd8-4c28-8f59-2dc03614a4eb> .
 
 <urn:uuid:89bf3d6c-9a15-4232-ba67-42774f9bdcd4>
     dct:created "2024-09-12T03:18:38Z"^^xsd:dateTime ;
@@ -559,7 +701,7 @@
 
 <urn:uuid:91650821-22e2-4731-bd9a-b45f196d40f4>
     dct:created "2024-03-15T20:55:21Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put natureof.software into Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -574,11 +716,19 @@
 
 <urn:uuid:9342635b-346a-42ad-9218-a3eedc39ff77>
     dct:created "2024-03-15T20:58:29Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Alias privatealpha.com to methodandstructure.com." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:specializes <urn:uuid:1db39e89-316a-45a5-8b74-9882ac44b8a7> .
+
+<urn:uuid:965341c6-2a34-4f47-b50f-4695a02963bb>
+    dct:created "2025-01-24T03:28:23Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "What if we only want resources that match assertions with no inferencing?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:6aa1b5cd-d3fa-4871-bcf4-c587bcd34dc8> .
 
 <urn:uuid:9a202d16-3938-44de-a7a4-3cf547f4853c>
     dct:created "2024-09-12T02:10:44Z"^^xsd:dateTime ;
@@ -589,18 +739,20 @@
 
 <urn:uuid:9ae0ae16-f3bd-403f-8904-e8ec371e7997>
     dct:created "2024-03-27T02:24:58Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
-    rdf:value "Decouple the IBIS front-end from its back-end (into its own Git[hub] repository)." ;
+    rdf:value "[DONE] Decouple the IBIS front-end from its back-end (into its own Git[hub] repository)." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:2761af80-a09d-4109-ae8a-c6934cf6438b> ;
     ibis:specializes <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
 
 <urn:uuid:9d2369a3-4ca9-4c3c-91c0-57d8b9e01517>
     dct:created "2024-09-12T01:07:28Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "Client wants the ability to create multiple IBIS networks." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:generalizes <urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a> ;
     ibis:specializes <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
 
 <urn:uuid:9eb53b67-634a-4cca-83f5-4ae9f106e027>
@@ -627,7 +779,7 @@
 
 <urn:uuid:a89b6372-217e-4560-a1f4-f890105d077c>
     dct:created "2024-03-18T18:34:00Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Finish implementing addressable transforms." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -635,7 +787,7 @@
 
 <urn:uuid:aa941f0c-f944-49ce-9155-dbfcb8e884c7>
     dct:created "2024-03-15T21:03:58Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Argument ;
     rdf:value "doriantaylor.com only needs a basic notion of \"private\" (only visible to me) and \"public\"." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -648,6 +800,16 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:7cbf4dc4-e333-44e6-8ceb-044c453431ab> .
 
+<urn:uuid:adb7a3be-a42e-4e14-aa2d-499fd9aca130>
+    dct:created "2025-01-24T03:44:35Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "Paginate the result set." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:generalizes <urn:uuid:45aa5cec-60dd-4091-af9d-3fc25722db38> ;
+    ibis:responds-to <urn:uuid:c60b8280-ec2a-4c21-9b34-d35ef38ae0f3> ;
+    ibis:specializes <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:adf05536-5489-4644-bc88-7f74b883c9b6>
     dct:created "2024-09-12T03:14:24Z"^^xsd:dateTime ;
     a ibis:Position ;
@@ -657,16 +819,17 @@
 
 <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af>
     dct:created "2024-03-18T16:56:03Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Create a set of \"catalogue resources\"." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:generalizes <urn:uuid:14556374-9ec1-438c-aa27-7fd15934b7b7>, <urn:uuid:759fb287-4fa3-4b26-ad98-28e01d92dd45>, <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> ;
     ibis:responds-to <urn:uuid:1771b79a-1c54-42eb-af5d-006b3a7f37c4> ;
     ibis:specializes <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
 
 <urn:uuid:b8712800-772c-48c6-9e4e-84793094a0d5>
     dct:created "2024-03-15T20:49:03Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Generate an ARM64 Docker image." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -675,7 +838,7 @@
 
 <urn:uuid:ba707676-6099-4ad1-8bca-996f45c580e0>
     dct:created "2024-03-18T18:40:51Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Argument ;
     rdf:value "There already exists considerable infrastructure for selectively loading transform handlers." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -690,7 +853,7 @@
 
 <urn:uuid:bc4fce9a-fb92-4068-91a4-da9b06996b3d>
     dct:created "2024-03-18T18:05:19Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Extend Store::Digest to include a way to indicate that an entry ought to be treated as cache." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -699,11 +862,27 @@
 
 <urn:uuid:c5f0efdb-a5ef-4062-9e13-0fbb32ccd030>
     dct:created "2024-03-18T18:06:46Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "What if a cache entry is superseded by an entity that is durable?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:questions <urn:uuid:bc4fce9a-fb92-4068-91a4-da9b06996b3d> .
+
+<urn:uuid:c60b8280-ec2a-4c21-9b34-d35ef38ae0f3>
+    dct:created "2025-01-24T03:43:50Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "What if the result set is enormous?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
+<urn:uuid:c622aa47-e760-4c50-a263-a0327df2dbdc>
+    dct:created "2025-01-24T02:58:28Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "The original inventory resource in the prototype goes by instance of class rather than range." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7> .
 
 <urn:uuid:c83e0d17-c742-43b5-a93b-2660f43dd9ba>
     dct:created "2024-09-12T02:30:54Z"^^xsd:dateTime ;
@@ -714,7 +893,7 @@
 
 <urn:uuid:c86f6104-ef5a-46ef-8717-b8c74ad001a4>
     dct:created "2024-04-02T02:27:58Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Create an \"index\" resource that enumerates all the windowed resources." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -722,7 +901,7 @@
 
 <urn:uuid:c8aa0aba-0710-482f-a2ec-cc98961d2026>
     dct:created "2024-02-16T21:18:06Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Write a getting-started tutorial." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -731,7 +910,7 @@
 
 <urn:uuid:c90ada9b-0ef8-4998-87cd-896084ee66ac>
     dct:created "2024-02-16T21:09:59Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "About half a dozen dependencies have patches that have yet to be merged upstream." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -753,14 +932,22 @@
 
 <urn:uuid:c9df54db-b9df-45f8-8afa-e37f31412a4f>
     dct:created "2024-02-16T21:17:53Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "What if the client has trouble?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> .
 
+<urn:uuid:ca3206af-b615-4432-8d48-b238c87f32eb>
+    dct:created "2025-01-24T03:31:25Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "What if you wanted only inferred results with no asserted ones?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:160bcab3-b338-4fba-830d-a1811996102a> .
+
 <urn:uuid:cc5d27ec-bc9b-4eaa-9fc6-bb6191fe4437>
     dct:created "2024-04-02T02:22:27Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "What happens when somebody tries to directly access the main collection?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -776,7 +963,7 @@
 
 <urn:uuid:cd5e41fd-644d-4aac-8df8-bb3ab605c52a>
     dct:created "2024-03-15T20:59:09Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "Do we actually want to keep this domain alive?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -784,15 +971,23 @@
 
 <urn:uuid:d2eb6ee7-41ec-4c62-b210-173e34401911>
     dct:created "2024-03-18T18:42:51Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Argument ;
     rdf:value "There is a concern of memory consumption of unused handlers." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:opposes <urn:uuid:d8bd14b1-6091-41c8-a7e0-2e8ddd55d063> .
 
+<urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7>
+    dct:created "2025-01-24T02:47:15Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Put the `in-range-of` property into parameter." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:e3f459e7-51b9-41c3-a048-ba44c70713e4> .
+
 <urn:uuid:d605090f-6e9f-4597-bb63-a1541baccdf0>
     dct:created "2024-02-16T22:52:47Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "We will need to be able to handle way more hits." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -800,7 +995,7 @@
 
 <urn:uuid:d606935b-2e46-49fc-9463-141f3e37987b>
     dct:created "2024-03-15T20:48:17Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "It turns out to that the default (AMD64) build is unusably slow in the client's development environment (Darwin/ARM64)." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -808,7 +1003,7 @@
 
 <urn:uuid:d6356726-10d0-4083-9be1-615742b0cdae>
     dct:created "2024-02-16T21:28:05Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Issue ;
     rdf:value "What about writing to the graph?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -816,12 +1011,22 @@
 
 <urn:uuid:d8bd14b1-6091-41c8-a7e0-2e8ddd55d063>
     dct:created "2024-03-18T18:38:43Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Load all tfo:Function entities in the graph indiscriminately." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:opposed-by <urn:uuid:ba707676-6099-4ad1-8bca-996f45c580e0> ;
     ibis:responds-to <urn:uuid:68a1b2b7-270e-4afa-a6d2-db72422c0a36> .
+
+<urn:uuid:de9f16c6-1cbd-4811-92f0-15a72936b577>
+    dct:created "2025-01-24T02:27:11Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Create an index as a top-level entry point to the catalogues." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:generalizes <urn:uuid:759fb287-4fa3-4b26-ad98-28e01d92dd45> ;
+    ibis:responds-to <urn:uuid:84d124ad-b7dd-4da9-8d3c-074bb64bebc8> ;
+    ibis:specializes <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> .
 
 <urn:uuid:e27cfc0f-ef03-4867-8c51-7d286667c00d>
     dct:created "2024-09-12T02:04:01Z"^^xsd:dateTime ;
@@ -829,6 +1034,14 @@
     rdf:value "Keep the focus button and disable it, and change the text to say \"Focused\"." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:9fd48a18-ed21-4daf-8ea5-0a4d44f35b6c> .
+
+<urn:uuid:e3f459e7-51b9-41c3-a048-ba44c70713e4>
+    dct:created "2025-01-24T02:46:04Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "There are all manners of properties, so hard-coding a single one is silly." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:14556374-9ec1-438c-aa27-7fd15934b7b7> .
 
 <urn:uuid:efb8131e-d56d-4948-b55e-67eee10d1f71>
     dct:created "2024-09-13T03:27:06Z"^^xsd:dateTime ;
@@ -839,7 +1052,7 @@
 
 <urn:uuid:f131d774-bbb2-4295-b834-fc5dacd90c7e>
     dct:created "2024-03-15T20:57:30Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Put intertwingler.net into Intertwingler (i.e., make it run its own website)." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -847,7 +1060,7 @@
 
 <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40>
     dct:created "2024-03-18T16:41:31Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "Port the IBIS tool to Intertwingler." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -856,7 +1069,7 @@
 
 <urn:uuid:f37b456f-4fde-48ef-96de-db2441b612c8>
     dct:created "2024-07-26T14:55:29Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Argument ;
     rdf:value "Shipping Intertwingler as a Docker image will afford putting off the open-source diplomacy of the upstream patches." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
@@ -864,13 +1077,11 @@
 
 <urn:uuid:f398478e-af15-4890-99ef-58375a73fff2>
     dct:created "2024-02-16T21:07:58Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
-    dct:requires <https://doriantaylor.com/asset/rdf>, <https://doriantaylor.com/asset/d3>, <https://doriantaylor.com/asset/rdf-viz>, <https://doriantaylor.com/asset/complex>, <https://doriantaylor.com/asset/hierarchical>, <https://doriantaylor.com/asset/skos-ibis/scripts> ;
-    dct:title "Intertwingler Space" ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    dct:title "IBIS Tool Space" ;
+    sioc:space_of <urn:uuid:03891bfd-10a0-457f-9e15-378d62d30844>, <urn:uuid:2209c97e-cae3-4b78-900f-b663ae2bc4dc>, <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5>, <urn:uuid:5020dc83-ac0c-4f75-9683-a70429e32c99>, <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     a cgto:Space ;
-    cgto:index <urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9> ;
-    cgto:focus <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
-    xhv:stylesheet <https://doriantaylor.com/type/font-awesome>, <https://doriantaylor.com/asset/skos-ibis/style> .
+    cgto:index <urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9> .
 
 <urn:uuid:f54f00bd-6665-4f4c-840f-4b26c7f1aa77>
     dct:created "2024-09-12T01:08:41Z"^^xsd:dateTime ;
@@ -878,9 +1089,18 @@
     rdf:value "Make some UI that affords creating a new IBIS network (or SKOS concept scheme) from an entity or network overview." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> .
 
+<urn:uuid:f5f4eb09-79e2-4788-8726-163372c604b6>
+    dct:created "2025-01-24T03:40:21Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "[DONE] Create an `asserted` flag that is on by default but can be set to false to eliminate asserted resources from the result set." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:ca3206af-b615-4432-8d48-b238c87f32eb> ;
+    ibis:specializes <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
 <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738>
     dct:created "2024-02-16T21:10:27Z"^^xsd:dateTime ;
-    dct:creator <mailto:burner@methodandstructure.com> ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
     rdf:value "[DONE] Ship Intertwingler as a Docker image." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;

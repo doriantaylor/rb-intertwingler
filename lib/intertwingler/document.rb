@@ -1597,6 +1597,9 @@ class Intertwingler::Document
   def self.sdo resolver, subject
   end
 
+  # yo one thing we can do here is just collate all the backlinks for
+  # each fragment in the same block.
+  #
   def self.backlinks resolver, subject, resource: nil, published: true,
       ignore: nil, label: nil, tag: :nav, role: CI.backlinks, &block
     repo = resolver.repo
@@ -1921,8 +1924,8 @@ class Intertwingler::Document
     node
   end
 
-  def self.internal_subject_for resolver, node, prefixes: nil, base: nil, as: nil,
-      is_ancestor: false
+  def self.internal_subject_for resolver, node, prefixes: nil, base: nil,
+      as: nil, is_ancestor: false
 
     raise ArgumentError, 'Elements only' unless node.element?
 
@@ -1930,8 +1933,8 @@ class Intertwingler::Document
     prefixes ||= get_prefixes node
 
     # document base is different from supplied base
-    base  = resolver.coerce_resource base, as: :uri if base
-    dbase = resolver.coerce_resource(get_base(node) || base, as: :uri)
+    base  = resolver.coerce_resource base if base
+    dbase = resolver.coerce_resource(get_base(node) || base)
 
     # ???
     base ||= dbase
@@ -1951,14 +1954,14 @@ class Intertwingler::Document
     if is_ancestor
       # ah right @resource gets special treatment
       if subject = node[:resource]
-        subject = resolver.resolve_curie subject, as: :term,
-          prefixes: prefixes, base: dbase, scalar: true
+        subject = resolver.resolve_curie subject,
+          prefixes: prefixes, base: dbase
       else
         # then check @href and @src
         %w[href src].each do |attr|
           if node.key? attr
             # merge with the root and return it
-            subject = dbase + node[attr]
+            subject = dbase.join node[attr]
             break
           end
         end
@@ -1974,30 +1977,30 @@ class Intertwingler::Document
     end
 
     if node[:about]
-      subject = resolver.resolve_curie node[:about], prefixes: prefixes,
-        base: dbase, as: :term, scalar: true
+      subject = resolver.resolve_curie node[:about],
+        prefixes: prefixes, base: dbase, noop: true
 
       # ignore coercion
       return subject if subject.is_a? RDF::Node
 
     elsif is_root
       # note this is parameter base not document base
-      subject = base
+      subject = base.dup
     elsif special
       # same deal here
       subject = internal_subject_for resolver, parent, base: base
     elsif node[:resource]
       # XXX resolve @about against potential curie
-      subject = resolver.resolve_curie node[:resource], prefixes: prefixes,
-        base: dbase, as: :term, scalar: true
+      subject = resolver.resolve_curie node[:resource],
+        prefixes: prefixes, base: dbase
     elsif node[:href]
       # XXX 2021-05-30 you can't just use this; you have to find a rel
       # or rev that isn't itself disrupted by about/resource/href/src
       # or typeof/inlist. you already figured this out for the xslt
       # rdfa query engine so go look there.
-      subject = dbase + node[:href]
+      subject = dbase.join node[:href]
     elsif node[:src]
-      subject = dbase + node[:src]
+      subject = dbase.join node[:src]
     elsif node[:typeof]
       # bnode the typeof attr
 

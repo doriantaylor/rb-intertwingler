@@ -78,7 +78,7 @@ class Intertwingler::Resolver
 
   public
 
-  # Return a copy of the given (`URI`, `RDF::URI`) with the given
+  # Return a copy of the given ({::URI}, {::RDF::URI}) with the given
   # scheme and authority.
   #
   # @param uri [URI, RDF::URI] the URI in question
@@ -105,17 +105,113 @@ class Intertwingler::Resolver
     uri
   end
 
+  # Sanitize a term as an {::RDF::Vocabulary}.
+  #
+  # @param term [#to_s,RDF::URI,URI] the term to sanitize.
+  # @param cache [Hash] an optional cache.
+  #
+  # @return [RDF::Vocabulary]
+  #
+  def self.sanitize_vocab vocab, cache: nil
+    cache = {} unless cache.is_a? Hash
+    # 2022-05-18 XXX THIS IS A CLUSTERFUCK
+    #
+    # what we want is the official vocab if it exists, an
+    # on-the-fly vocab if it doesn't, and to use RDF::RDFV
+    # instead of RDF if it shows up
+    #
+    # we notice that bibo:status/ resolves to bibo: with .find
+    # so we need to check if the uri is the same before accepting it
+    vocab = RDF::URI(vocab) unless vocab.is_a? RDF::URI
+    vocab = if cache[vocab.to_s]
+              cache[vocab.to_s]
+            elsif vocab.is_a?(Class) and
+                vocab.ancestors.include?(RDF::Vocabulary)
+              vocab # arrrrghhh
+            elsif vv = RDF::Vocabulary.find(vocab) # XXX SLOW AF hence cache
+              vv.to_uri == vocab ? vv : Class.new(RDF::Vocabulary(vocab))
+            else
+              Class.new(RDF::Vocabulary(vocab))
+            end
+    # GRRRR the punning on RDF messes things up so we have to replace it
+    vocab = RDF::RDFV if vocab == RDF
+
+    cache[vocab.to_s] = vocab
+  end
+
+  # @!method sanitize_vocab(vocab)
+  #
+  # Sanitize a term as an {::RDF::Vocabulary}.
+  #
+  # @param term [#to_s,RDF::URI,URI] the term to sanitize.
+  #
+  # @return [RDF::Vocabulary]
+  #
+  proc do
+    # is this how we do it?
+    meth = singleton_method(:sanitize_vocab).to_proc
+
+    define_method :singleton_method do |vocab|
+      meth.call vocab, cache: @vocabs
+    end
+  end.call
+
+  # Return a hash mapping a set of RDF prefixes to their vocabularies.
+  #
+  # @param prefixes [Hash, #to_h, String, #to_s] the input prefixes
+  # @param downcase [true, false] whether to normalize key symbolss to downcase
+  # @param nonnil [false, true] whether to remove the nil prefix
+  # @param cache [Hash] an optional cache for the slowness
+  #
+  # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
+  #
+  def self.sanitize_prefixes prefixes, downcase: true, nonnil: false, cache: nil
+    prefixes = {} unless prefixes         # noop prefixes
+    cache    = {} unless cache.is_a? Hash # noop cache
+
+    # turn raw text from a `prefix` attribute into a hash
+    if !prefixes.respond_to?(:to_h) && prefixes.respond_to?(:to_s)
+      prefixes = prefixes.to_s.strip.split.each_slice(2).map do |k, v|
+        [k.split(?:).first, v]
+      end.to_h
+    end
+
+    raise ArgumentError, 'prefixes must be a hash' unless
+      prefixes.is_a? Hash or prefixes.respond_to? :to_h
+
+    prefixes = prefixes.to_h.map do |k, v|
+      unless k.nil?
+        k = k.to_s.strip
+        if k.empty?
+          k = nil
+        else
+          k.downcase! if downcase
+          k = k.to_sym
+        end
+      end
+      [k, sanitize_vocab(v, cache: cache)] if (k or !nonnil) and v
+    end.compact.to_h
+
+    prefixes
+  end
+
+  # @!method sanitize_prefixes(prefixes, downcase: true, nonnil: false)
+  #
   # Return a hash mapping a set of RDF prefixes to their vocabularies.
   #
   # @param prefixes [Hash, #to_h] the input prefixes
+  # @param downcase [true, false] whether to normalize key symbolss to downcase
   # @param nonnil [false, true] whether to remove the nil prefix
   #
   # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
   #
-  def sanitize_prefixes prefixes, nonnil: false
-    Intertwingler::Util::Clean.sanitize_prefixes prefixes,
-      nonnil: nonnil, cache: @vocabs
-  end
+  proc do
+    meth = singleton_method(:sanitize_prefixes).to_proc
+
+    define_method :sanitize_prefixes do |prefixes, downcase: true, nonnil: false|
+      meth.call(prefixes, downcase: downcase, nonnil: nonnil, cache: @vocabs)
+    end
+  end.call
 
   def self.locate repo
     repo.all_of_type Intertwingler::Vocab::ITCV.Resolver
@@ -233,7 +329,7 @@ class Intertwingler::Resolver
   # @param uri [#to_s] the URI, absolute or relative, treated as a
   #  string
   # @param extra [#to_s] a set of additional characters to be
-  #  escaped, treated as a {Regexp} character class
+  #  escaped, treated as a {::Regexp} character class
   #
   # @return [String] the preprocessed URI string
   #
@@ -372,8 +468,8 @@ class Intertwingler::Resolver
   define_singleton_method :coerce_resource,
     Intertwingler::Util::Clean.method(:coerce_resource).unbind
 
-  # Coerce the argument into a resource, either {URI} or {RDF::URI}
-  # (or {RDF::Node}). The type can be specified
+  # Coerce the argument into a resource, either {::URI} or {::RDF::URI}
+  # (or {::RDF::Node}). The type can be specified
   #
   # @param arg [#to_s, URI, RDF::URI, RDF::Node] the argument to
   #  coerce into a resource
@@ -402,7 +498,7 @@ class Intertwingler::Resolver
   # @param verify [true, false] whether any UUID found in the input
   #  should be resolved against the graph
   # @param as [:rdf, :uri, :str] coerce the output to either
-  #  {RDF::URI}, {URI}, or string literal, respectively
+  #  {::RDF::URI}, {::URI}, or string literal, respectively
   # @param published [false, true] whether to constrain the
   #  UUID resolution to published documents only
   # @param noop [false, true] whether to return `nil` or otherwise
@@ -775,74 +871,124 @@ class Intertwingler::Resolver
   # existing markup, so this is kinda the lite version
 
 
-  # Resolve a CURIE to a full URI using the embedded prefix map,
-  # with optional overrides. Multiple values, including CURIE
-  # strings containing spaces, will be split and expanded out
-  # individually. Safe CURIEs (as in encased in square brackets) are
-  # handled appropriately.
+  # Resolve a CURIE to a full URI. Safe CURIEs (as in encased in
+  # square brackets) are handled appropriately.
   #
   # @param curie [String, Array<String>] one or more CURIEs
-  # @param as [:rdf, :uri, :term, false, nil] coercion types
-  # @param scalar [true, false] whether to return a single value
+  # @param as [:term, :rdf, :uri, false, nil] coercion types
   # @param base [URI, RDF::URI] overriding base URI
   # @param prefixes [Hash{Symbol, nil => RDF::Vocabulary}]
   #  overriding prefix map, if needed
+  # @param noop [false, true] whether to pass the input back on failure
   #
-  # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil]
+  # @return [URI, RDF::URI, nil]
   #
-  def self.resolve_curie curie,
-      as: :term, scalar: true, base: nil, prefixes: {}, noop: false
-    prefixes = { rdf: RDF::RDFV }.merge(
-      Intertwingler::Util::Clean.sanitize_prefixes prefixes)
+  def self.resolve_curie curie, as: :term, base: nil, prefixes: {}, noop: false
+    curie    = curie.to_s.strip
+    base     = coerce_resource base if base
+    prefixes = { rdf: RDF::RDFV }.merge(sanitize_prefixes prefixes)
 
-    out = (curie.respond_to?(:to_a) ? curie.to_a : [curie]).map do |c|
-      Intertwingler::Util::Clean.normalize_space(c.to_s).split
-    end.flatten.compact.map do |c|
-      prefix, slug = /^\[?(?:([^:]+):)?(.*?)\]?$/.match(c).captures
-      prefix = prefix.to_sym if prefix
-      tmp = if v = prefixes[prefix]
-              # note that we will need another resolve_curie for
-              # dealing with markup
-              case v
-              when RDF::Vocabulary then v[slug]
-              when RDF::URI then v + slug
-              else RDF::URI(v.to_s + slug)
-              end
-            else
-              noop ? c : nil
+    # XXX we don't use this yet but whatever
+    if safe = /^\[([^\]]*)\]$/.match(curie)
+      curie = safe.captures.first
+      safe = true
+    end
+
+    # okay so per https://www.w3.org/TR/rdfa-core/#s_curieprocessing
+    # we're supposed to try to expand a CURIE if it's "valid", or
+    # process it as an IRI otherwise. problem is, very little isn't
+    # a valid CURIE. like, `:` is a valid curie, so is `/foo/bar`.
+    # although `../whatever` is not, but `#hi` is.
+    #
+    # so how do you know something is *not* a CURIE? unmapped prefix
+    # for one, also the reference beginning with `//` (so `http://…`
+    # is an invalid CURIE even if `http` is a valid prefix). but
+    # what do you do when the prefix is nil?
+
+    # now we get at its content
+    prefix, slug = /^(?:([^:]+):)?(.*?)$/.match(curie).captures
+    prefix = prefix.downcase.to_sym if prefix # otherwise it's nil, ie `vocab`
+    out = if vocab = prefixes[prefix]
+            # note that an RDF::StrictVocabulary will crash if the
+            # term isn't in the vocab, hence the `rescue`
+            case vocab
+            when RDF::Vocabulary then vocab[slug] rescue vocab.to_uri + slug
+            when RDF::URI then vocab + slug
+            else RDF::URI(vocab.to_s + slug)
             end
+          elsif base
+            base.join curie
+          else
+            noop ? curie : nil
+          end
 
-      tmp ? coerce_resource(tmp, as: as) : tmp
-    end.compact
-
-    scalar ? out.first : out
+    out ? coerce_resource(out, as: as) : out
   end
 
-  # Resolve a CURIE to a full URI using the embedded prefix map,
-  # with optional overrides. Multiple values, including CURIE
-  # strings containing spaces, will be split and expanded out
-  # individually. Safe CURIEs (as in encased in square brackets) are
-  # handled appropriately.
+  # Resolve multiple CURIEs to an array of URIs.
   #
-  # @param curie [String, Array<String>] one or more CURIEs
-  # @param as [:rdf, :uri, :term, false, nil] coercion types
-  # @param scalar [true, false] whether to return a single value
+  # @param curies [String, Array<String>] one or more CURIEs
+  # @param as [:term, :rdf, :uri, false, nil] coercion types
   # @param base [URI, RDF::URI] overriding base URI
   # @param prefixes [Hash{Symbol, nil => RDF::Vocabulary}]
   #  overriding prefix map, if needed
+  # @param noop [false, true] whether to pass the input back on failure
   #
-  # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil]
+  # @return [Array<URI, RDF::URI, nil>]
   #
-  def resolve_curie curie, as: :term, scalar: true, base: nil,
-      prefixes: {}, noop: false
+  def self.resolve_curies curies,
+      as: :term, base: nil, prefixes: {}, noop: false
+    curies = curies.respond_to?(:to_a) ? curies.to_a : curies.strip.split
+    curies.map do |c|
+      resolve_curie c, as: as, base: base, prefixes: prefixes, noop: noop
+    end
+  end
+
+  # Resolve a CURIE to a full URI using the embedded prefixes and
+  # base, with optional overrides. Safe CURIEs (as in encased in
+  # square brackets) are handled appropriately.
+  #
+  # @param curie [String, Array<String>] one or more CURIEs
+  # @param as [:term, :rdf, :uri, false, nil] coercion types
+  # @param base [URI, RDF::URI] overriding base URI
+  # @param prefixes [Hash{Symbol, nil => RDF::Vocabulary}]
+  #  overriding prefix map, if needed
+  # @param noop [false, true] whether to pass the input back on failure
+  #
+  # @return [URI, RDF::URI, nil]
+  #
+  def resolve_curie curie, as: :term, base: nil, prefixes: {}, noop: false
     # override the base if present
-    base = base ? coerce_resource(base, as: :uri) : @base
+    base = coerce_resource(base || @base)
 
     # smush together any overriding prefixes
     prefixes = @prefixes.merge(sanitize_prefixes prefixes)
 
-    self.class.resolve_curie curie, as: as, scalar: scalar,
-      base: base, prefixes: prefixes, noop: noop
+    self.class.resolve_curie curie, as: as, base: base,
+      prefixes: prefixes, noop: noop
+  end
+
+  # Resolve multiple CURIEs to an array of URIs. Uses embedded
+  # prefixes and base.
+  #
+  # @param curies [String, Array<String>] one or more CURIEs
+  # @param as [:term, :rdf, :uri, false, nil] coercion types
+  # @param base [URI, RDF::URI] overriding base URI
+  # @param prefixes [Hash{Symbol, nil => RDF::Vocabulary}]
+  #  overriding prefix map, if needed
+  # @param noop [false, true] whether to pass the input back on failure
+  #
+  # @return [Array<URI, RDF::URI, nil>]
+  #
+  def resolve_curies curies, as: :term, base: nil, prefixes: {}, noop: false
+    # override the base if present
+    base = coerce_resource(base || @base)
+
+    # smush together any overriding prefixes
+    prefixes = @prefixes.merge(sanitize_prefixes prefixes)
+
+    self.class.resolve_curies curies, as: as, base: base,
+      prefixes: prefixes, noop: noop
   end
 
   # Abbreviate one or more URIs into one or more CURIEs if we
@@ -924,11 +1070,11 @@ class Intertwingler::Resolver
   end
 
   # Return the subset of prefixes, in the form of a `{ foo: "bar" }`
-  # {Hash}, that cover, to the extent of available prefix mappings,
+  # {::Hash}, that cover, to the extent of available prefix mappings,
   # the set of terms passed in. The terms can be embedded in any
-  # kind of data structure that can be flattened into an {Array}.
-  # Elements not belonging to the {URI} (which are coerced),
-  # {RDF::URI}, and {RDF::Literal} (from which datatypes are
+  # kind of data structure that can be flattened into an {::Array}.
+  # Elements not belonging to the {::URI} (which are coerced),
+  # {::RDF::URI}, and {::RDF::Literal} (from which datatypes are
   # harvested) classes are ignored. The `nil` key can be interpreted
   # as the `vocab` for the given scope.
   #
@@ -965,7 +1111,7 @@ class Intertwingler::Resolver
   end
 
   # Clean any dodginess (`//`, `.`, `..`) out of the path, including
-  # path parameters. Unlike {Pathname#cleanpath} it preserves the
+  # path parameters. Unlike {::Pathname#cleanpath} it preserves the
   # trailing slash if one is present. Returns either the cleaned
   # path or an array of segments. Returns nil (or empty array) if
   # the URI does not respond to `#path`.
@@ -1121,9 +1267,9 @@ class Intertwingler::Resolver
     coerce_resource(UUIDTools::UUID.random_create.to_uri, as: as)
   end
 
-  # Get the canonical request URI from a {Rack::Request}.
+  # Get the canonical request URI from a {::Rack::Request}.
   #
-  # @param req [Rack::Request] a request object
+  # @param req [::Rack::Request] a request object
   # @param as [:rdf, :uri, false, nil] how to coerce the result
   #
   # @return [URI, RDF::URI, nil] the request-URI

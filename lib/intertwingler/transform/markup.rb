@@ -185,75 +185,203 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     req.body
   end
 
-  # stick a wad of backlinks everywhere they fit
+  private
+
+  BLOCK_ELEMS = %w[body main article section aside nav header footer
+             blockquote figure figcaption search div[not(parent::html:dl)]]
+  SUBJECT_XPATH = (
+    %w[/html:html/html:body|/html:html/html:body//html:*
+       [@id|@about|@resource|@href|@src]] +
+      ['[%s]' % BLOCK_ELEMS.map { |e| "self::html:#{e}" }.join(?|)] +
+      ['[not(ancestor-or-self::*[@property and not(@content|@datetime)])]']
+  ).join.freeze
+
+  public
+
+  # We do backlinks in a transform because that way it nets stuff like
+  # static content, where you don't know what the backlinks even are,
+  # and if you did, it would be a pain in the ass to maintain them. We
+  # tag the containing element with `role="ci:backlinks"` which also
+  # leaves an exit for something else to supply them.
+  #
   def add_backlinks req, params
     # have i mentioned it's remarkable that Rack::Request has a
     # different regime for header names than Rack::Response?
     loc = req.get_header 'HTTP_CONTENT_LOCATION'
 
+    raise Intertwingler::Handler::Error::Conflict.new(
+      'Transform must have a Content-Location header', method: :POST) unless loc
+
+    # make sure we're coercing a string
+    loc = RDF::URI(loc.to_s)
+
     engine.log.debug "adding backlinks to #{loc}"
 
     resolver = engine.resolver
 
-    if subject = resolver.uuid_for(loc)
-      # don't get this unless we have a subject since it autovivifies
-      doc = req.body.object
+    return req.body unless subject = resolver.uuid_for(loc)
 
-      # we should have already determined this is an html document
-      body = doc.at_xpath '/html:html/html:body|/html/body',
-        { html: 'http://www.w3.org/1999/xhtml' }
+    # don't get this unless we have a subject, since it autovivifies
+    # if it isn't already in there
+    doc = req.body.object
 
-      terms = Set[]
+    # we should have already determined this is an html document
+    return req.body unless
+      body = doc.at_xpath('/html:html/html:body|/html/body',
+      { html: 'http://www.w3.org/1999/xhtml' })
 
-      # don't touch it if there are no backlinks
-      if body and links = Intertwingler::Document.backlinks(
-        resolver, subject, published: false) do |*args|
-          args = args.map do |a|
-            a.respond_to?(:to_a) ? a.to_a : a
-          end.flatten.compact.uniq.map do |t|
-            t.literal? && t.datatype? ? t.datatype : t.uri? ? t : nil
-          end.compact
+    # okay so the problem is we need to do backlinks for not just the
+    # document, but anything the document embeds. we propose to use
+    # `id` attributes that match fragment identifiers in the embedded
+    # graph data. so an element that has an `id` attribute *and* an
+    # `about`/`resource`/`href`/`src` attribute is our de facto
+    # container element. note that the root `<html>` element, the
+    # `<head>` and its descendants, and the `<body>` all implicitly
+    # take the document (or rather the content of `<base href="…">`)
+    # as the subject unless modified (e.g. with `about`).
+    #
+    # with those exceptions then, we can scan the document for
+    # container elements. note that some container elements
+    # (e.g. `<tr>`) will have a content model that does not permit
+    # plunking a `<nav>` down into it, and so another strategy should
+    # be chosen.
+    #
+    # again, if an element containing the role `ci:backlinks` is
+    # already present in the subtree, we assume the origin or some
+    # other transform upstream has already done the job for us for
+    # that subject URI/container element.
+    #
+    # another thing to watch out for is the empty fragment, which is
+    # distinct from the document. that can't have an `id` but it *can*
+    # have an e.g. `about`. so the solution here would be to find the
+    # outermost one (and if there are multiple outermost ones, we pick
+    # either the first or last one of them).
 
-          terms |= args
-        end
+    # PROCEDURE: scan every node that asserts a new subject for its
+    # children (or has an id), perhaps with an xpath like
+    # SUBJECT_XPATH above:
+    #
+    # /html:html/html:body|/html:html/html:body//html:*
+    #  [@id|@about|@resource|@href|@src]
+    #  [not(ancestor-or-self::*[@property and not(@content|@datetime)])]
+    #
+    # (should also add [self::sectioning-element|self::html:a])
+    #
+    # no wait a second, `<a>` can't have `<a>` descendants (which is
+    # dumb frankly) so that rules it out
+    #
+    # valid elements look like: body, main, article, section, aside,
+    # nav, header, footer, blockquote, figure, search,
+    # div[not(parent::dl)]
+    #
+    # actually, do we *want* to include `href` and `src`? we are only
+    # interested in block elements that don't have them (although <a>
+    # can be coopted into one come to think of it).
+    #
+    # okay so here is the strategy: find the most "appropriate"
+    # element for each subject:
+    #
+    # * first check if `@id` matches `@resource|@href|@src|@about` (in
+    #   that order); if so this is it.
+    # * otherwise if `@id` is present and matches the subject in an
+    #   ancestor, this is it.
+    # * otherwise if no node with `@id` is found, we want the
+    #   "biggest" one that asserts the subject:
+    #   * closer to the root ranks higher than farther down
+    #   * closer to the front ranks higher than farther back
+    #
+    # subjects with zero elements appropriate for containing a block
+    # of backlinks can be collated at the bottom as the last element
+    # of the `<body>`.
+    #
 
-        # obtain prefixes from terms
-        tpfx = resolver.prefix_subset terms
-
-        if pfx = doc.root['prefix']
-          # chop up into an array
-          # engine.log.debug pfx.inspect
-          pfx = pfx.strip.split
-          # engine.log.debug pfx.length
-          # collect into a hash
-          h = {}
-          until (pair = pfx.slice! 0, 2).empty?
-            h[pair.first.chop] = pair.last
-          end
-          # engine.log.debug h.inspect
-          # normalize it
-          pfx = resolver.sanitize_prefixes h, nonnil: true
-        else
-          pfx = {}
-        end
-
-        pfx.merge! tpfx
-
-        # engine.log.debug pfx.inspect
-
-        doc.root['prefix'] =
-          XML::Mixup.flatten_attr(pfx.reject { |k, _| k.nil? })
-        doc.root['vocab'] = pfx[nil] if pfx.key? nil
-
-        # decided the magic word to include backlinks in a way that
-        # can be picked up by a transform but still comply with the
-        # spec is <noscript>.
-        XML::Mixup.markup parent: body, spec: links
-
-        # again, reassigning the object resets the faux-nad
-        req.body.object = doc
-      end
+    mapping = doc.xpath(SUBJECT_XPATH, XPATHNS).reduce({}) do |hash, elem|
+      Intertwingler::Document.subject_for resolver,
+      hash
     end
+
+    subjects = ([loc] + RDF::RDFa::Reader.new(doc).map do |stmt|
+      [stmt.subject, stmt.object]
+    end.flatten).uniq.select do |t|
+      if t.iri?
+        t = t.dup
+        t.fragment = nil
+        t == loc
+      end
+    end.sort { |a, b| b <=> a }.reduce({}) do |hash, s|
+      case s.fragment
+      when nil
+        # this is gonna be the <body> unless it isn't for some reason
+      when ''
+        # this is gonna be like `about="#"` or something
+      else
+        # this *should* be an `id` but the markup might not have one
+      end
+      # scan the document
+      hash
+    end
+
+    # bail out if there are already backlinks in here
+    return req.body if
+      doc.xpath(".//*[contains(@role, 'backlinks')]").any? do |node|
+        pfx = {
+          nil => RDF::Vocab::XHV
+        }.merge Intertwingler::Document.get_prefixes(node, coerce: :term)
+
+        node['role'].strip.split.map do |c|
+          resolver.resolve_curie c, prefixes: pfx, noop: true
+        end.include? CI.backlinks
+      end
+
+    # this will collect all the terms involved in the backlinks so we
+    # can amend the prefixes/vocab
+    terms = Set[]
+
+    return req.body unless links = Intertwingler::Document.backlinks(
+      resolver, subject, published: false) do |*args|
+        args = args.map do |a|
+          a.respond_to?(:to_a) ? a.to_a : a
+        end.flatten.compact.uniq.map do |t|
+          t.literal? && t.datatype? ? t.datatype : t.uri? ? t : nil
+        end.compact
+
+        terms |= args
+      end
+
+    # obtain prefixes from terms
+    tpfx = resolver.prefix_subset terms
+
+    if pfx = doc.root['prefix']
+      # chop up into an array
+      # engine.log.debug pfx.inspect
+      pfx = pfx.strip.split
+      # engine.log.debug pfx.length
+      # collect into a hash
+      h = {}
+      until (pair = pfx.slice! 0, 2).empty?
+        h[pair.first.chop] = pair.last
+      end
+      # engine.log.debug h.inspect
+      # normalize it
+      pfx = resolver.sanitize_prefixes h, nonnil: true
+    else
+      pfx = {}
+    end
+
+    pfx.merge! tpfx
+
+    # engine.log.debug pfx.inspect
+
+    doc.root['prefix'] = XML::Mixup.flatten_attr(pfx.reject { |k, _| k.nil? })
+    doc.root['vocab']  = pfx[nil] if pfx.key? nil
+
+    # decided the magic word to include backlinks in a way that
+    # can be picked up by a transform but still comply with the
+    # spec is <noscript>.
+    XML::Mixup.markup parent: body, spec: links
+
+    # again, reassigning the object resets the faux-nad
+    req.body.object = doc
 
     req.body
   end
