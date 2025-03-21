@@ -1057,7 +1057,7 @@ module Intertwingler
             c = RDF::Query::Variable.new ?c
 
             # we have to determine if this is a bgp or a sparql path
-            query = if path.is_a? SAO
+            q1 = if path.is_a? SAO
                       SAO::Path.new subject, path, o
                     else
                       # not sure why you gotta do it this way
@@ -1065,17 +1065,16 @@ module Intertwingler
                     end
 
             # this is WHERE { $subject $path ?o . ?o a ?c }
-            query = SAO::Sequence.new(query,
-              RDF::Query.new { pattern [o, RDF.type, c] })
+            q2 = SAO::Sequence.new(
+              q1, RDF::Query.new { pattern [o, RDF.type, c] })
 
             # conditionally add FILTER (?c in ($classes)) }
-            query = SAO::Filter.new(SAO::In.new(c, *tc), query) unless
-              tc.empty?
+            q3 = tc.empty? ? q2 : SAO::Filter.new(SAO::In.new(c, *tc), q2)
 
             # finally wrap with SELECT DISTINCT ?o, ?c
-            query = SAO::Distinct.new(SAO::Project.new([o, c], query))
+            query = SAO::Distinct.new(SAO::Project.new([o, c], q3))
 
-            # warn query.to_sparql
+            warn "completed query: #{query.to_sparql}"
 
             # this will collect the candidates into a hash of scores
             # which we turn into an array of arrays [?o, scores]

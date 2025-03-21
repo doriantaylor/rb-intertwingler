@@ -10,6 +10,7 @@ require 'intertwingler/representation/nokogiri'
 require 'xml-mixup'
 require 'md-noko'
 require 'tidy_ffi'
+require 'rdf/rdfa'
 
 # This class will probably be the template for
 # {Intertwingler::Transform} going forward.
@@ -295,31 +296,50 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # of the `<body>`.
     #
 
-    mapping = doc.xpath(SUBJECT_XPATH, XPATHNS).reduce({}) do |hash, elem|
-      Intertwingler::Document.subject_for resolver,
-      hash
-    end
+    # mapping = doc.xpath(SUBJECT_XPATH, XPATHNS).reduce({}) do |hash, elem|
+    #   Intertwingler::Document.subject_for resolver,
+    #   hash
+    # end
 
-    subjects = ([loc] + RDF::RDFa::Reader.new(doc).map do |stmt|
+    # XXX 2025-03-17 CHEAP OUT FOR NOW
+    #
+    # we are gonna just collate all the resources at the bottom
+
+    # anyway snag all the subjects already present in the document and
+    # turn them into a mapping
+
+    # XXX THESE CIRCUMVENT A DEFICIENCY IN THE RDFA PARSER <= 3.3.0
+    version = /RDFa 1.0/ =~ (
+      doc.children.detect { |c| c.is_a? ::Nokogiri::XML::DTD } ||
+        doc.root.attribute('version')).to_s ? :"rdfa1.0" : :"rdfa1.1"
+    hlang = doc.root&.namespace&.href == 'http://www.w3.org/1999/xhtml' ?
+      :xhtml5 : :html5
+
+    subjects = ([loc] + RDF::RDFa::Reader.new(
+      doc, version: version, host_language: hlang).map do |stmt|
       [stmt.subject, stmt.object]
     end.flatten).uniq.select do |t|
       if t.iri?
-        t = t.dup
+        t = resolver.as_alias t.dup, loc
+        engine.log.debug "FOUND TERM #{t}"
         t.fragment = nil
         t == loc
       end
-    end.sort { |a, b| b <=> a }.reduce({}) do |hash, s|
-      case s.fragment
-      when nil
-        # this is gonna be the <body> unless it isn't for some reason
-      when ''
-        # this is gonna be like `about="#"` or something
-      else
-        # this *should* be an `id` but the markup might not have one
-      end
-      # scan the document
+    end.sort { |a, b| a <=> b }.reduce({}) do |hash, s|
+      hash[resolver.uuid_for s, noop: true] = s
+      # case s.fragment
+      # when nil
+      #   # this is gonna be the <body> unless it isn't for some reason
+      # when ''
+      #   # this is gonna be like `about="#"` or something
+      # else
+      #   # this *should* be an `id` but the markup might not have one
+      # end
+      # # scan the document
       hash
     end
+
+    engine.log.debug subjects.inspect
 
     # bail out if there are already backlinks in here
     return req.body if
@@ -328,9 +348,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
           nil => RDF::Vocab::XHV
         }.merge Intertwingler::Document.get_prefixes(node, coerce: :term)
 
-        node['role'].strip.split.map do |c|
-          resolver.resolve_curie c, prefixes: pfx, noop: true
-        end.include? CI.backlinks
+        resolver.resolve_curies(
+          node['role'], prefixes: pfx, noop: true).include? CI.backlinks
       end
 
     # this will collect all the terms involved in the backlinks so we
@@ -338,7 +357,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     terms = Set[]
 
     return req.body unless links = Intertwingler::Document.backlinks(
-      resolver, subject, published: false) do |*args|
+      resolver, subject, resources: subjects.keys,
+      base: loc, published: false) do |*args|
         args = args.map do |a|
           a.respond_to?(:to_a) ? a.to_a : a
         end.flatten.compact.uniq.map do |t|

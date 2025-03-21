@@ -105,6 +105,14 @@
       - (at least i /assume/ that's an LLM doing that?)
   - at any rate, figuring out some non-stupid way to interface with LLMs, whether local (preferred) or saas (ugh), is not a bad idea #formarketingpurposes
     - as in, people keep asking where the AI goes; i would like an answer for them besides "it doesn't"
+- 2025-03-18 ideas
+  - "lensed" rdf store that only lasts the length of the request
+    - what about writing to it? won't that go away?
+    - need to maybe specify a context which is writable
+    - maybe we should be explicitly using contexts anyway
+    - the null/default context is kind of a pain in the ass to work with when mixed with explicit contexts
+    - idea behind "lensing" of the rdf store is to have an invisible second context "focused" on the "current user" (principal ID, however you want to provision it)
+    - will basically look and act like a null/default context
 * TODO a shippable ~Intertwingler~
 Around early August (2023) I decided to go with a much more ambitious design that does things I wasn't initially planning on doing. For example, I wasn't initially planning on doing the whole /transform/ infrastructure, but I think it will be a much more powerful product to have them than not to.
 ** TODO something you can run with ~rackup~

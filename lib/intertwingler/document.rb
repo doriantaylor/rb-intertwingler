@@ -1600,14 +1600,13 @@ class Intertwingler::Document
   # yo one thing we can do here is just collate all the backlinks for
   # each fragment in the same block.
   #
-  def self.backlinks resolver, subject, resource: nil, published: true,
-      ignore: nil, label: nil, tag: :nav, role: CI.backlinks, &block
+  def self.backlinks resolver, subject, resources: [], published: true,
+      base: nil, ignore: nil, label: nil, tag: :nav, role: CI.backlinks, &block
     repo = resolver.repo
 
-    resource ||= subject
-
-    uri = resolver.uri_for(
-      resource, as: :uri, slugs: true) || URI(resolver.preproc resource)
+    resources = (
+      [subject] + (resources.respond_to?(:to_a) ? resources.to_a : [resources])
+    ).flatten.uniq
 
     ignore ||= Set.new
     unless ignore.is_a? Proc
@@ -1616,64 +1615,80 @@ class Intertwingler::Document
       ignore = ignore.to_set
     end
 
+    base = base ? resolver.coerce_resource(base, as: :uri) :
+      resolver.uri_for(subject, as: :uri, slugs: true)
+
     structs = {}
     nodes   = {}
+    links   = []
 
-    repo.query([nil, nil, resource]).each do |stmt|
-      # XXX clutter
-      next if [
-        RDF.type, Intertwingler::Vocab::CI.canonical].include? stmt.predicate
+    resources.map do |resource|
+      uri = resolver.uri_for(resource, as: :uri, slugs: true, via: base) ||
+        URI(resolver.preproc resource)
 
-      sj = stmt.subject
-      next if ignore.is_a?(Proc) ? ignore.call(sj) : ignore.include?(sj)
-      next if ignore.include?(sj = stmt.subject)
-      # this collects the predicates by which the neighbour is
-      # connected to the subject
-      preds = nodes[sj] ||= Set.new
-      preds << stmt.predicate
+      repo.query([nil, nil, resource]).each do |stmt|
+        # XXX clutter
+        next if [
+          RDF.type, Intertwingler::Vocab::CI.canonical].include? stmt.predicate
 
-      # now we'll just grab the literals and type(s)
-      unless structs.key? sj
-        struct = structs[sj] = repo.struct_for sj, only: :literal
-        struct[RDF.type] = repo.types_for sj
+        sj = stmt.subject
+        next if ignore.is_a?(Proc) ? ignore.call(sj) : ignore.include?(sj)
+        next if ignore.include?(sj = stmt.subject)
+        # this collects the predicates by which the neighbour is
+        # connected to the subject
+        preds = nodes[sj] ||= Set.new
+        preds << stmt.predicate
+
+        # now we'll just grab the literals and type(s)
+        unless structs.key? sj
+          struct = structs[sj] = repo.struct_for sj, only: :literal
+          struct[RDF.type] = repo.types_for sj
+        end
+      end
+
+      # prune out unpublished resources if we are relegating to published
+      nodes.select! { |k, _| repo.published? k } if published
+
+      return if nodes.empty?
+
+      terms = Set[]
+      terms << role if role
+
+      lcmp = repo.cmp_label(cache: structs) { |comparand| comparand.first }
+
+      li = nodes.sort(&lcmp).map do |rsrc, preds|
+        next unless rsrc.uri?
+        next unless cu = resolver.uri_for(
+          rsrc, slugs: true, as: :uri, via: base)
+
+        st = structs[rsrc]
+        ct = repo.types_for rsrc, struct: st
+        lp, lo = repo.label_for rsrc, struct: st, noop: true
+
+        # add to the terms
+        terms |= [rsrc, preds.to_a, ct.to_a, lp, lo].flatten
+
+        { '#li' => link_tag(resolver, cu, base: uri, rev: preds,
+                            typeof: ct, property: lp, label: lo) }
+      end.compact.map { |li| [li, "\n"] }.flatten(1)
+
+      # currently the block returns nothing but it lets us see the terms
+      block.call(terms.to_a) if block
+
+      unless li.empty?
+        links << [label, "\n"] if label
+        links << { ["\n", li] => :ul, about: uri }
+        links << "\n"
       end
     end
 
-    # prune out unpublished resources if we are relegating to published
-    nodes.select! { |k, _| repo.published? k } if published
+    return if links.empty?
 
-    return if nodes.empty?
-
-    terms = Set[]
-    terms << role if role
-
-    lcmp = repo.cmp_label(cache: structs) { |comparand| comparand.first }
-
-    li = nodes.sort(&lcmp).map do |rsrc, preds|
-      next unless rsrc.uri?
-      next unless cu = resolver.uri_for(rsrc, slugs: true, as: :uri)
-
-      st = structs[rsrc]
-      ct = repo.types_for rsrc, struct: st
-      lp, lo = repo.label_for rsrc, struct: st, noop: true
-
-      # add to the terms
-      terms |= [rsrc, preds.to_a, ct.to_a, lp, lo].flatten
-
-      { '#li' => link_tag(resolver, cu, base: uri, rev: preds,
-                          typeof: ct, property: lp, label: lo) }
-    end.compact
-
-    # currently the block returns nothing but it lets us see the terms
-    block.call(terms.to_a) if block
-
-    links = [{ li => :ul }]
-    links.unshift label if label
+    nav = { ["\n", links] => tag }
+    nav[:role] = resolver.abbreviate role if role
+    out = [nav, "\n"]
 
     # warn "WTF #{out.inspect}"
-
-    out = { links => tag }
-    out[:role] = resolver.abbreviate role if role
 
     out
   end

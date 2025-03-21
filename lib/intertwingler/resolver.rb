@@ -14,8 +14,8 @@ require 'base64'
 # resolver, intended to persist only as long as it needs to, as the
 # cache is not very sophisticated.
 class Intertwingler::Resolver
+  extend Intertwingler::Util::Clean
   include Intertwingler::Loggable
-  include Intertwingler::Util::Clean
 
   private
 
@@ -57,7 +57,9 @@ class Intertwingler::Resolver
       fragments = RDF::List.new(
         subject: fragments.first, graph: repo).to_a.map do |f|
         # fragment class
-        c = repo.objects_for(f, ITCV[:'fragment-spec'], only: :uri)
+        # c = repo.objects_for(f, ITCV[:'fragment-class'], only: :uri)
+        # XXX I BROKE THIS INTENTIONALLY CF https://github.com/ruby-rdf/rdf/issues/450
+        c = []
         # via shacl property path
         v = repo.objects_for(f, ITCV.via, only: :resource).map do |path|
           repo.process_shacl_path path
@@ -105,40 +107,6 @@ class Intertwingler::Resolver
     uri
   end
 
-  # Sanitize a term as an {::RDF::Vocabulary}.
-  #
-  # @param term [#to_s,RDF::URI,URI] the term to sanitize.
-  # @param cache [Hash] an optional cache.
-  #
-  # @return [RDF::Vocabulary]
-  #
-  def self.sanitize_vocab vocab, cache: nil
-    cache = {} unless cache.is_a? Hash
-    # 2022-05-18 XXX THIS IS A CLUSTERFUCK
-    #
-    # what we want is the official vocab if it exists, an
-    # on-the-fly vocab if it doesn't, and to use RDF::RDFV
-    # instead of RDF if it shows up
-    #
-    # we notice that bibo:status/ resolves to bibo: with .find
-    # so we need to check if the uri is the same before accepting it
-    vocab = RDF::URI(vocab) unless vocab.is_a? RDF::URI
-    vocab = if cache[vocab.to_s]
-              cache[vocab.to_s]
-            elsif vocab.is_a?(Class) and
-                vocab.ancestors.include?(RDF::Vocabulary)
-              vocab # arrrrghhh
-            elsif vv = RDF::Vocabulary.find(vocab) # XXX SLOW AF hence cache
-              vv.to_uri == vocab ? vv : Class.new(RDF::Vocabulary(vocab))
-            else
-              Class.new(RDF::Vocabulary(vocab))
-            end
-    # GRRRR the punning on RDF messes things up so we have to replace it
-    vocab = RDF::RDFV if vocab == RDF
-
-    cache[vocab.to_s] = vocab
-  end
-
   # @!method sanitize_vocab(vocab)
   #
   # Sanitize a term as an {::RDF::Vocabulary}.
@@ -148,52 +116,15 @@ class Intertwingler::Resolver
   # @return [RDF::Vocabulary]
   #
   proc do
+    # warn singleton_methods.sort.inspect
     # is this how we do it?
-    meth = singleton_method(:sanitize_vocab).to_proc
+    # meth = singleton_method(:sanitize_vocab).to_proc
+    meth = self.method(:sanitize_vocab).to_proc
 
-    define_method :singleton_method do |vocab|
+    define_method :sanitize_vocab do |vocab|
       meth.call vocab, cache: @vocabs
     end
   end.call
-
-  # Return a hash mapping a set of RDF prefixes to their vocabularies.
-  #
-  # @param prefixes [Hash, #to_h, String, #to_s] the input prefixes
-  # @param downcase [true, false] whether to normalize key symbolss to downcase
-  # @param nonnil [false, true] whether to remove the nil prefix
-  # @param cache [Hash] an optional cache for the slowness
-  #
-  # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
-  #
-  def self.sanitize_prefixes prefixes, downcase: true, nonnil: false, cache: nil
-    prefixes = {} unless prefixes         # noop prefixes
-    cache    = {} unless cache.is_a? Hash # noop cache
-
-    # turn raw text from a `prefix` attribute into a hash
-    if !prefixes.respond_to?(:to_h) && prefixes.respond_to?(:to_s)
-      prefixes = prefixes.to_s.strip.split.each_slice(2).map do |k, v|
-        [k.split(?:).first, v]
-      end.to_h
-    end
-
-    raise ArgumentError, 'prefixes must be a hash' unless
-      prefixes.is_a? Hash or prefixes.respond_to? :to_h
-
-    prefixes = prefixes.to_h.map do |k, v|
-      unless k.nil?
-        k = k.to_s.strip
-        if k.empty?
-          k = nil
-        else
-          k.downcase! if downcase
-          k = k.to_sym
-        end
-      end
-      [k, sanitize_vocab(v, cache: cache)] if (k or !nonnil) and v
-    end.compact.to_h
-
-    prefixes
-  end
 
   # @!method sanitize_prefixes(prefixes, downcase: true, nonnil: false)
   #
@@ -206,7 +137,8 @@ class Intertwingler::Resolver
   # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
   #
   proc do
-    meth = singleton_method(:sanitize_prefixes).to_proc
+    # meth = singleton_method(:sanitize_prefixes).to_proc
+    meth = self.method(:sanitize_prefixes).to_proc
 
     define_method :sanitize_prefixes do |prefixes, downcase: true, nonnil: false|
       meth.call(prefixes, downcase: downcase, nonnil: nonnil, cache: @vocabs)
@@ -463,11 +395,22 @@ class Intertwingler::Resolver
   # lol ruby booleans do not coerce to integers so here we are
   BITS = { nil => 0, false => 0, true => 1 }.freeze
 
+  INSTANCE_COERCE = -> arg, as: :rdf do
+    begin
+      @base ? @base.merge(preproc arg.to_s.strip) : arg
+    rescue URI::InvalidURIError => e
+      warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
+      nil
+    end
+  end
+
   public
 
-  define_singleton_method :coerce_resource,
-    Intertwingler::Util::Clean.method(:coerce_resource).unbind
+  # define_singleton_method :coerce_resource,
+  #   Intertwingler::Util::Clean.instance_method(:coerce_resource)
 
+  # @!method coerce_resource(arg, as: :rdf)
+  #
   # Coerce the argument into a resource, either {::URI} or {::RDF::URI}
   # (or {::RDF::Node}). The type can be specified
   #
@@ -477,16 +420,34 @@ class Intertwingler::Resolver
   #
   # @return [RDF::URI, URI, RDF::Vocabulary::Term, RDF::Vocabulary, String]
   #
-  def coerce_resource arg, as: :rdf
-    # again self.class is suuuuuuuuper slow
-    Intertwingler::Util::Clean.coerce_resource arg, as: as do |arg|
-      begin
-        @base ? @base.merge(preproc arg.to_s.strip) : arg
-      rescue URI::InvalidURIError => e
-        warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
-        nil
-      end
+  proc do
+    meth = self.method(:coerce_resource).to_proc
+
+    wtf = -> arg, as: :rdf do
+      meth.call arg, as: as, &INSTANCE_COERCE
     end
+
+    define_method :coerce_resource, &wtf
+  end.call
+
+  # Apply #coerce_resource to each element of an array, returning an
+  # array of resources. If `arg` can't be turned into an array, it
+  # will be wrapped in one. Returns an array of whatever type `as:` is
+  # set to return.
+  #
+  # @param arg [#to_a, #to_s, URI, RDF::URI, RDF::Node] the thing(s)
+  #  to coerce
+  # @param as [:rdf, :uri, :term, false, nil] how to coerce the
+  #  result(s)
+  #
+  # @return [Array<RDF::URI, URI, RDF::Vocabulary::Term,
+  #  RDF::Vocabulary, String>] the coerced elements
+  #
+  def coerce_resources arg, as: :rdf
+    # note nil.to_a is []
+    (arg.respond_to?(:to_a) ? arg.to_a : [arg]).map do |c|
+      coerce_resource c, as: as
+    end.compact
   end
 
   # Return the UUID(s) associated with the subject. May return
@@ -1010,7 +971,7 @@ class Intertwingler::Resolver
       prefixes: nil, vocab: nil, cache: nil
 
     term  = coerce_resources term
-    as    = assert_uri_coercion as
+    as    = self.class.assert_uri_coercion as
     cache = {} unless cache.is_a? Hash
 
     # why was this not already like this?
@@ -1086,7 +1047,7 @@ class Intertwingler::Resolver
   #
   def prefix_subset terms
     # sniff out all the URIs and datatypes
-    terms = smush_struct terms, uris: true
+    terms = self.class.smush_struct terms, uris: true
 
     # now we abbreviate all the resources
     pfx = abbreviate(terms.to_a, noop: false,

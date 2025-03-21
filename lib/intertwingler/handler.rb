@@ -43,15 +43,15 @@ class Intertwingler::Handler
     def initialize message, status: nil, location: nil, as: :uri
       @location =
         Intertwingler::Resolver.coerce_resource location, as: as if location
-      super message, status || 302
+      super message, status: status || 302
     end
 
     attr_reader :location
 
     def response
-      hdr = {}
+      hdr = { 'content-type' => 'text/plain' }
       hdr['location'] = location.to_s if location
-      Rack::Response[status, hdr, [message]]
+      Rack::Response[status, hdr, StringIO.new(message)]
     end
   end
 

@@ -544,9 +544,9 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
                   typeof: st, label: asserted) => :td },
           { linkt(uri.route_to(ip.make_uri href), rel: CGTO['inferred-subjects'],
                   typeof: st, label: inferred) => :td },
-        ]
+        ].map { |c| [c, "\n"] }.flatten(1)
 
-        { cols => :tr, id: row, about: abt, typeof: obst }
+        [ { cols => :tr, id: row, about: abt, typeof: obst }, "\n"]
       end
 
       finalize({ [
@@ -742,6 +742,16 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         'At least one of asserted or inferred parameters must be true' unless
         params[:asserted] or params[:inferred]
 
+      # engine.log.debug "#{uri} #{params.to_s}"
+
+      # step 0.25: redirect
+      base = params.make_uri uri, defaults: :boundary
+      # engine.log.debug "#{base} <=> #{uri}"
+      raise Intertwingler::Handler::Redirect.new(
+        'Redirecting to window', status: 308, location: base) if
+        base.to_s != uri.to_s
+
+
       # XXX step 0.5: resolve all the curies in the three sets in lieu
       # of a functioning thing that will do this at the level of the
       # parameter registry.
@@ -864,7 +874,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         rev: resolver.abbreviate(CGTO[:window]),
         typeof: resolver.abbreviate(CGTO.Inventory),
       }, { '#nav' => { '#ul' =>  nav } }],
-        uri: params.make_uri(uri, defaults: :boundary),
+        uri: params.make_uri(base, defaults: :boundary),
         prefixes: resolver.prefixes, typeof: CGTO.Window
     end
   end
@@ -938,7 +948,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     # get the uri
     uri  = URI(req.url)
-    # orig = uri.dup
+    orig = uri.dup
 
     # clip off the query
     query = uri.query || ''
@@ -958,7 +968,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     # XXX this may raise an Intertwingler::Handler::AnyButSuccess
     begin
-      resp = resource.call req.request_method, uri, params: query,
+      resp = resource.call req.request_method, orig, params: query,
         headers: normalize_headers(req), user: user, body: req.body
     rescue Intertwingler::Handler::AnyButSuccess => e
       return e.response

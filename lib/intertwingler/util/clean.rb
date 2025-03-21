@@ -69,6 +69,8 @@ module Intertwingler::Util::Clean
     vocab: RDF::Vocabulary,
   }
 
+  public
+
   def assert_uri_coercion coerce
     if coerce
       coerce = coerce.to_s.to_sym if coerce.respond_to? :to_s
@@ -77,8 +79,6 @@ module Intertwingler::Util::Clean
     end
     coerce
   end
-
-  public
 
   # assertions and coercions
 
@@ -93,7 +93,7 @@ module Intertwingler::Util::Clean
   #
   # @return [RDF::URI, URI, RDF::Vocabulary::Term, RDF::Vocabulary, String]
   #
-  def coerce_resource arg, as: :rdf, &block
+  def coerce_resource arg, as: :rdf, base: nil, &block
     # noop if this is already done
     return arg if as and arg.is_a? URI_COERCION_TYPES[as]
 
@@ -103,7 +103,7 @@ module Intertwingler::Util::Clean
       # override the coercion if this is a blank node
       as = :rdf
     elsif arg.start_with?(?#) and
-        uuid = UUID::NCName.from_ncname(arg, format: :urn)
+        uuid = UUID::NCName.from_ncname(arg.delete_prefix(?#), format: :urn)
       return URI_COERCIONS[as].call uuid
     elsif block
       arg = block.call arg
@@ -118,7 +118,7 @@ module Intertwingler::Util::Clean
   # will be wrapped in one. Returns an array of whatever type `as:` is
   # set to return.
   #
-  # @param arg [#to_a, #to_s, UbRI, RDF::URI, RDF::Node] the thing(s)
+  # @param arg [#to_a, #to_s, URI, RDF::URI, RDF::Node] the thing(s)
   #  to coerce
   # @param as [:rdf, :uri, :term, false, nil] how to coerce the
   #  result(s)
@@ -126,10 +126,10 @@ module Intertwingler::Util::Clean
   # @return [Array<RDF::URI, URI, RDF::Vocabulary::Term,
   #  RDF::Vocabulary, String>] the coerced elements
   #
-  def coerce_resources arg, as: :rdf
+  def coerce_resources arg, as: :rdf, &block
     # note nil.to_a is []
     (arg.respond_to?(:to_a) ? arg.to_a : [arg]).map do |c|
-      coerce_resource c, as: as
+      coerce_resource c, as: as, &block
     end.compact
   end
 
@@ -323,14 +323,15 @@ module Intertwingler::Util::Clean
     string.gsub(WS_RE, ' ').strip
   end
 
-  # Sanitize a term as an {RDF::Vocabulary}.
+  # Sanitize a term as an {::RDF::Vocabulary}.
   #
   # @param term [#to_s,RDF::URI,URI] the term to sanitize.
   # @param cache [Hash] an optional cache.
   #
   # @return [RDF::Vocabulary]
   #
-  def self.sanitize_vocab vocab, cache: nil
+  def sanitize_vocab vocab, cache: nil
+  # def self.sanitize_vocab vocab, cache: nil
     cache = {} unless cache.is_a? Hash
     # 2022-05-18 XXX THIS IS A CLUSTERFUCK
     #
@@ -351,7 +352,7 @@ module Intertwingler::Util::Clean
             else
               Class.new(RDF::Vocabulary(vocab))
             end
-    # GRRRR
+    # GRRRR the punning on RDF messes things up so we have to replace it
     vocab = RDF::RDFV if vocab == RDF
 
     cache[vocab.to_s] = vocab
@@ -359,23 +360,41 @@ module Intertwingler::Util::Clean
 
   # Return a hash mapping a set of RDF prefixes to their vocabularies.
   #
-  # @param prefixes [Hash, #to_h] the input prefixes
+  # @param prefixes [Hash, #to_h, String, #to_s] the input prefixes
+  # @param downcase [true, false] whether to normalize key symbolss to downcase
   # @param nonnil [false, true] whether to remove the nil prefix
   # @param cache [Hash] an optional cache for the slowness
   #
   # @return [Hash{Symbol=>RDF::Vocabulary}] sanitized prefix map
   #
-  def self.sanitize_prefixes prefixes, nonnil: false, cache: nil
+  def sanitize_prefixes prefixes, downcase: true, nonnil: false, cache: nil
+  # def self.sanitize_prefixes prefixes, downcase: true, nonnil: false, cache: nil
     prefixes = {} unless prefixes         # noop prefixes
     cache    = {} unless cache.is_a? Hash # noop cache
+
+    # turn raw text from a `prefix` attribute into a hash
+    if !prefixes.respond_to?(:to_h) && prefixes.respond_to?(:to_s)
+      prefixes = prefixes.to_s.strip.split.each_slice(2).map do |k, v|
+        [k.split(?:).first, v]
+      end.to_h
+    end
+
     raise ArgumentError, 'prefixes must be a hash' unless
       prefixes.is_a? Hash or prefixes.respond_to? :to_h
+
     prefixes = prefixes.to_h.map do |k, v|
-      k = k.to_s.to_sym unless k.nil?
-      [k, sanitize_vocab(v, cache: cache)] if v
+      unless k.nil?
+        k = k.to_s.strip
+        if k.empty?
+          k = nil
+        else
+          k.downcase! if downcase
+          k = k.to_sym
+        end
+      end
+      [k, sanitize_vocab(v, cache: cache)] if (k or !nonnil) and v
     end.compact.to_h
 
-    prefixes.reject! { |k, _| k.nil? } if nonnil
     prefixes
   end
 
