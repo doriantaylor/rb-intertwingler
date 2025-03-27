@@ -231,6 +231,17 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       body = doc.at_xpath('/html:html/html:body|/html/body',
       { html: 'http://www.w3.org/1999/xhtml' })
 
+    # bail out if there are already backlinks in here
+    return req.body if
+      doc.xpath(".//*[contains(@role, 'backlinks')]").any? do |node|
+        pfx = {
+          nil => RDF::Vocab::XHV
+        }.merge Intertwingler::Document.get_prefixes(node, coerce: :term)
+
+        resolver.resolve_curies(
+          node['role'], prefixes: pfx, noop: true).include? CI.backlinks
+      end
+
     # okay so the problem is we need to do backlinks for not just the
     # document, but anything the document embeds. we propose to use
     # `id` attributes that match fragment identifiers in the embedded
@@ -315,18 +326,24 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     hlang = doc.root&.namespace&.href == 'http://www.w3.org/1999/xhtml' ?
       :xhtml5 : :html5
 
-    subjects = ([loc] + RDF::RDFa::Reader.new(
-      doc, version: version, host_language: hlang).map do |stmt|
+    # this is the graph embedded in the document
+    graph = RDF::RDFa::Reader.new(
+      doc, version: version, host_language: hlang)
+
+    # this will produce a map of (maybe) uuids to addresses found in the graph
+    subjects = ([loc] + graph.map do |stmt|
       [stmt.subject, stmt.object]
     end.flatten).uniq.select do |t|
       if t.iri?
         t = resolver.as_alias t.dup, loc
-        engine.log.debug "FOUND TERM #{t}"
+        # engine.log.debug "FOUND TERM #{t}"
         t.fragment = nil
         t == loc
       end
     end.sort { |a, b| a <=> b }.reduce({}) do |hash, s|
       hash[resolver.uuid_for s, noop: true] = s
+      # XXX deal with this later
+
       # case s.fragment
       # when nil
       #   # this is gonna be the <body> unless it isn't for some reason
@@ -339,18 +356,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       hash
     end
 
-    engine.log.debug subjects.inspect
-
-    # bail out if there are already backlinks in here
-    return req.body if
-      doc.xpath(".//*[contains(@role, 'backlinks')]").any? do |node|
-        pfx = {
-          nil => RDF::Vocab::XHV
-        }.merge Intertwingler::Document.get_prefixes(node, coerce: :term)
-
-        resolver.resolve_curies(
-          node['role'], prefixes: pfx, noop: true).include? CI.backlinks
-      end
+    # engine.log.debug subjects.inspect
 
     # this will collect all the terms involved in the backlinks so we
     # can amend the prefixes/vocab

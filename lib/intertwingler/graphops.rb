@@ -1028,6 +1028,7 @@ module Intertwingler
       # host or the subject has been asserted to be a document and
       # *not* also asserted to be a fragment.
       unless host or (isdoc and not frags)
+        allt = all_types
 
         # filter path/class pairs based on the subject type
         tests = fragments.map do |pattern|
@@ -1045,51 +1046,70 @@ module Intertwingler
         hosts = tests.reduce([]) do |array, test|
           score, paths, classes, except = test
 
-          # gin up a special
-          tc = type_strata(classes - BASE_TYPES, descend: true) & all_types
-
           # cargo cult; can't remember if &= is overloaded
+
+          # this is done here cause we want the asserted classes for scoring
+          tc = type_strata(classes - BASE_TYPES, descend: true) & allt
 
           # this will give us an array of arrays
           mine = paths.map do |path|
             # okay here is where we construct the query from the algebra
             o = RDF::Query::Variable.new ?o
-            c = RDF::Query::Variable.new ?c
+            # c = RDF::Query::Variable.new ?c
 
             # we have to determine if this is a bgp or a sparql path
             q1 = if path.is_a? SAO
-                      SAO::Path.new subject, path, o
-                    else
-                      # not sure why you gotta do it this way
-                      RDF::Query.new { pattern [subject, path, o] }
-                    end
+                   SAO::Path.new subject, path, o
+                 else
+                   # not sure why you gotta do it this way
+                   RDF::Query.new { pattern [subject, path, o] }
+                 end
 
-            # this is WHERE { $subject $path ?o . ?o a ?c }
-            q2 = SAO::Sequence.new(
-              q1, RDF::Query.new { pattern [o, RDF.type, c] })
+            # dunno about this quite yet; would change the scoring mechanism
+            qx = case
+                 when tc.empty?
+                   nil
+                 when tc.size == 1
+                   RDF::Query.new { pattern [o, RDF.type, tc.first] }
+                 else
+                   tc.map do |c|
+                     RDF::Query.new { pattern [o, RDF.type, c] }
+                   end.reduce { |u, q| SAO::Union.new(u, q) }
+                 end
 
-            # conditionally add FILTER (?c in ($classes)) }
-            q3 = tc.empty? ? q2 : SAO::Filter.new(SAO::In.new(c, *tc), q2)
+            q2 = qx ? SAO::Join.new(qx, q1) : q1
+
+            # # this is WHERE { $subject $path ?o . ?o a ?c }
+            # qt = RDF::Query.new { pattern [o, RDF.type, c] }
+            # qf = tc.empty? ? SAO::IsIRI.new(c) :
+            #   SAO::And.new(SAO::IsIRI.new(c), SAO::In.new(c, *classes))
+
+            # # conditionally add FILTER (isIRI(?c) && ?c in ($classes)) }
+            # q2 = SAO::Sequence.new(SAO::Filter.new(qf, qt), q1)
 
             # finally wrap with SELECT DISTINCT ?o, ?c
-            query = SAO::Distinct.new(SAO::Project.new([o, c], q3))
+            # query = SAO::Distinct.new(SAO::Project.new([o, c], q2))
+            query = SAO::Distinct.new(SAO::Project.new([o], q2))
 
-            warn "completed query: #{query.to_sparql}"
+            # warn "completed query: #{query.inspect}\n#{query.to_sparql}"
 
             # this will collect the candidates into a hash of scores
             # which we turn into an array of arrays [?o, scores]
             query.execute(self, debug: true).reduce({}) do |sols, sol|
-              unless (!except.empty? and type_is? sol[:c], except)
+              solc = asserted_types sol[:o]
+              unless (!except.empty? and type_is? solc, except)
+              # unless (!except.empty? and type_is? sol[:c], except)
                 # create a record
                 o   = sol[:o]
                 # these are in the order we wanna sort them in
                 rec = sols[o] ||= [score, attempt, Float::INFINITY]
                 # now get the type score
 
-                tscore = type_is? sol[:c], classes
+                # tscore = type_is? sol[:c], classes
+                tscore = type_is? solc, classes
                 # make sure this index is wherever the infinity is
                 rec[2] = tscore if tscore and tscore < rec[2]
-                # the accumulator
+                # the accumulator`
               end
 
               sols

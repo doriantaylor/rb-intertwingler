@@ -638,7 +638,18 @@ class Intertwingler::Document
         [@repo.property_set(RDF::Vocab::SKOS[k]), v]
       end
 
-      skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }.freeze
+      # collect up all the predicates we just generated
+      skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }
+
+      # 2025-03-23 we want the other ones too
+      other = @repo.property_set(RDF::Vocab::SKOS.semanticRelation) - skospreds
+      skospreds |= other
+      skospreds.freeze
+
+      # maybe come back and give this another label, or maybe i don't care
+      rels << [other, 'Other']
+
+      # well that was fun
 
       struct = @repo.struct_for subject
       neighbours = { subject => struct }
@@ -781,7 +792,7 @@ class Intertwingler::Document
                 # href = base.dup
                 # href.fragment = id
                 { link_tag(href, rel: ps, base: base,
-                  typeof: @repo.asserted_types(o, struct: struct),
+                  typeof: @repo.asserted_types(o, struct: neighbours[o]),
                   property: olp, label: olo,
                   prefixes: @resolver.prefixes ) => :dd }
               end
@@ -1632,8 +1643,9 @@ class Intertwingler::Document
           RDF.type, Intertwingler::Vocab::CI.canonical].include? stmt.predicate
 
         sj = stmt.subject
+        next if resources.include? sj # these should already be represented
         next if ignore.is_a?(Proc) ? ignore.call(sj) : ignore.include?(sj)
-        next if ignore.include?(sj = stmt.subject)
+
         # this collects the predicates by which the neighbour is
         # connected to the subject
         preds = nodes[sj] ||= Set.new

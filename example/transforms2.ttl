@@ -106,7 +106,10 @@
         itcv:via foaf:isPrimaryTopicOf ]
       [ itcv:fragment-class skos:Concept ;
         itcv:host-class skos:Collection ;
-        itcv:via [ sh:inversePath skos:member ], [ sh:inversePath ( skos:memberList [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ] ]
+        itcv:via [ sh:inversePath skos:member ],
+	# the sh:zeroOrMorePath blows up ruby sparql
+	# [ sh:inversePath ( skos:memberList [ sh:zeroOrMorePath rdf:rest ] rdf:first ) ] ]
+	[ sh:inversePath ( skos:memberList [ sh:alternativePath ( rdf:first ( [ sh:oneOrMorePath rdf:rest ] rdf:first ) ) ] ) ] ]
       [ itcv:fragment-class skos:Concept ;
         itcv:host-class skos:ConceptScheme ;
         itcv:via skos:topConceptOf, skos:inScheme ]

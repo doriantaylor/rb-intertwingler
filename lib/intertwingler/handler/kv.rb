@@ -33,9 +33,11 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
       %w[application/x-www-form-urlencoded
          multipart/form-data].include? req.content_type.to_s.downcase
 
-    kv = RDF::KV.new subject: RDF::URI(req.url), prefixes: resolver.prefixes,
+    subject = RDF::URI(req.url)
+
+    kv = RDF::KV.new subject: subject, prefixes: resolver.prefixes,
       callback: -> term do
-        log.debug term.inspect
+        log.debug "TERM: #{term.inspect}"
         if term.iri?
           # XXX THIS SHOULD PROBABLY BE LESS DUMB
           resolver.uuid_for(term) || term rescue term
@@ -45,19 +47,26 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
         end
       end
 
+    # XXX WATCH OUT THIS MIGHT SILENTLY THROW AWAY DATA
+    req.POST.each { |k, v| log.debug "POST #{k} => #{v}" }
+
     begin
       # generate the changeset
       cs = kv.process req.POST
 
-      log.debug "#{cs} inserts: #{cs.inserts} deletes: #{cs.deletes}"
+      log.debug "inserts: #{cs.inserts} deletes: #{cs.deletes}"
+
+      log.debug "graph size: #{repo.size}"
 
       # apply it to the graph
       cs.apply repo
 
+      log.debug "graph size: #{repo.size}"
+
       # XXX we should figure out a way to hook up a rider or otherwise
       # smuggle callback functions in; that would entail coming up
       # with a more robust solution for configuring handlers though.
-    rescue => e
+    rescue Exception => e
       log.error e.full_message
       return Rack::Response[409, {
         'content-type' => 'text/plain',
@@ -68,6 +77,8 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
     # requests that redirect to other sites or something, but so what?
 
     # now we redirect to self or whatever the new subject is
-    Rack::Response[303, { 'location' => kv.subject.to_s }, []]
+    redir = resolver.uri_for kv.subject, slugs: true, via: subject
+    engine.log.debug "RDF::KV redirecting to #{redir}"
+    Rack::Response[303, { 'location' => redir.to_s }, []]
   end
 end

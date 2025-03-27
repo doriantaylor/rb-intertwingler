@@ -539,7 +539,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           RDF::Literal(record.last,  datatype: XSD.nonNegativeInteger),
           about: abt, property: CGTO['inferred-subject-count'])
         cols = [
-          { linkt(type, typeof: tt, label: abbrs[type] || type) => :th },
+          { linkt(type, rel: CGTO.class, typeof: tt,
+                  label: abbrs[type] || type) => :th },
           { linkt(uri.route_to(ap.make_uri href), rel: CGTO['asserted-subjects'],
                   typeof: st, label: asserted) => :td },
           { linkt(uri.route_to(ip.make_uri href), rel: CGTO['inferred-subjects'],
