@@ -51,7 +51,8 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_runtime_dependency 'rackup',         '~> 2'
   spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
   spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
-  spec.add_runtime_dependency 'uri-urn',        '>= 0.0.3'
+  spec.add_runtime_dependency 'uri',            '~> 1', '>= 1.0.3' # bugs
+  spec.add_runtime_dependency 'uri-urn',        '~> 0.0', '>= 0.0.5' # git
   spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4.1' # mine
   spec.add_runtime_dependency 'uuidtools',      '>= 2.1.5'
 

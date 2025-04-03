@@ -895,9 +895,17 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       io = StringIO.new '', 'w+', encoding: Encoding::BINARY
       prefixes = resolver.prefixes.transform_values(&:to_uri)
 
+      # huh
+      base = resolver.coerce_resource uri
+
       RDF::Writer.for(:rdf).new(io, base_uri: base, prefixes: prefixes) do |writer|
         resolver.prefixes.values.each do |vocab|
-          repo.query({ graph_name: vocab.to_uri }).each do |stmt|
+
+          engine.log.debug "serializing #{vocab}"
+
+          vocab.each_statement do |stmt|
+
+          # repo.query({ graph_name: vocab.to_uri }).each do |stmt|
             # warn stmt.to_triple.inspect
             writer << stmt.to_triple
           end

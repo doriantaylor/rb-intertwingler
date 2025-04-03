@@ -16,6 +16,8 @@ WORKDIR /tmp/src
 
 # tried to do this with bundler; it absolutely did not cooperate
 
+# RUN git clone https://gitlab.com/doriantaylor/uri-urn.git && cd uri-urn && gem build && gem install *.gem && cd -
+
 RUN git clone -b aliases-etc https://github.com/doriantaylor/rb-mimemagic.git && cd rb-mimemagic && gem build && gem install *.gem && cd -
 
 RUN git clone -b add-prompt-to-collector https://github.com/doriantaylor/rb-tty-prompt.git && cd rb-tty-prompt && gem build && gem install *.gem && cd -
@@ -42,6 +44,11 @@ RUN gem install pry pry-byebug puma engtagger
 RUN find /usr/local/bundle/gems/engtagger* -type f -print0 | xargs -0 chmod 644
 RUN bundle install
 RUN gem build ; gem install *.gem
+
+RUN mkdir -p /var/lib/type
+
+# RUN mkdir -p /var/lib/app-ibis
+# RUN git clone https://github.com/doriantaylor/app-ibis-front-end.git ; cd app-ibis-front-end ; make ; rsync -av target/ /var/lib/app-ibis ; cd -
 
 RUN rm -rf /tmp/src
 

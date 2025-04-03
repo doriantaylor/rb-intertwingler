@@ -1,5 +1,9 @@
 source 'https://rubygems.org'
 
+# uggggggggggghhhhhhhh
+# gem 'uri-urn', '0.0.5',
+#   git: 'https://gitlab.com/doriantaylor/uri-urn.git', branch: 'master'
+
 # do this until upstream merges
 gem 'mimemagic', git: 'https://github.com/doriantaylor/rb-mimemagic.git',
   branch: 'aliases-etc'
@@ -17,6 +21,7 @@ gem 'store-digest', '0.1.4',
 gem 'store-digest-http', '0.1.1',
   git: 'https://github.com/doriantaylor/rb-store-digest-http.git'
 
+# XXX why is this in here??
 gem 'md-noko', '0.1.0', git: 'https://github.com/doriantaylor/rb-md-noko.git'
 
 # Specify your gem's dependencies in intertwingler.gemspec

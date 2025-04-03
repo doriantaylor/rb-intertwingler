@@ -10,6 +10,9 @@ require 'uuid/ncname'
 require 'digest'
 require 'base64'
 
+# apparently we need to greedy load these cause otherwise `find` won't find them
+Intertwingler::Vocab.load_vocabs
+
 # This class is intended to be a caching URI (and URI-adjacent)
 # resolver, intended to persist only as long as it needs to, as the
 # cache is not very sophisticated.

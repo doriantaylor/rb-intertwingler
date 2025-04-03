@@ -1070,7 +1070,7 @@ class Intertwingler::Document
 
     public
 
-    # 
+    # dunno man
     def generate published: true, backlinks: false
       alphabetized_list fwd: RDF::Vocab::DC.hasPart,
         published: published do |s, fp, rp, struct, base, seen|
@@ -2494,8 +2494,8 @@ class Intertwingler::Document
     # make a relative uri but only if we have a base, otherwise don't bother
     if base
       # warn [href, base].inspect
-      href = href.is_a?(URI) ? href : URI(resolver.preproc href.to_s)
-      base = base.is_a?(URI) ? base : URI(resolver.preproc base.to_s)
+      href = resolver.coerce_resource href, as: :uri
+      base = resolver.coerce_resource base, as: :uri
       # href = base.route_to(href)
     end
 
@@ -2748,7 +2748,7 @@ class Intertwingler::Document
       when RDF::Literal
         m = literal_tag resolver, o, name: otag, prefixes: prefixes, property: ps
         t = o.value.strip
-      when RDF::Resource
+      when RDF::URI
         ts = repo.struct_for o
         tt = repo.types_for o, struct: ts
 
@@ -2760,7 +2760,6 @@ class Intertwingler::Document
           prefixes: prefixes, property: labp, label: labo, typeof: tt, rel: ps) }
 
         t = (labo || o).value.strip
-
       when RDF::Node
         m, t = generate_fragment resolver, o, base: base, tag: otag, rel: ps
       end

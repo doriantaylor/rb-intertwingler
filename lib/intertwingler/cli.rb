@@ -437,6 +437,8 @@ EOS
     desc: 'Descriptor for the RDF store'
   option :rdf, aliases: %i[-r], type: :string, repeatable: true,
     desc: 'Read in an RDF file'
+  option :user, aliases: %i[-U], type: :string,
+    desc: 'override REMOTE_USER (noop for init)'
 
   def init
     # detect terminal
