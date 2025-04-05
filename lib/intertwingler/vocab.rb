@@ -3,7 +3,7 @@ require 'rdf'
 
 module Intertwingler
   module Vocab
-    %i[ADMS CI CGTO IBIS ITCV PAV QB SCOVO TFO].each do |sym|
+    %i[ADMS CI CGTO IBIS ITCV PAV PM QB SCOVO TFO].each do |sym|
       autoload sym, "intertwingler/vocab/#{sym.to_s.downcase}.rb"
     end
 
