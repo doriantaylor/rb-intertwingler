@@ -13,6 +13,14 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
 
   def handle req
 
+    # yaww
+    if repo.respond_to?(:mtime) and
+        ims = req.get_header('HTTP_IF_MODIFIED_SINCE')
+      ims = (Time.httpdate(ims) rescue Time.at(0)).utc
+      lm  = repo.mtime
+      return Rack::Response[304, {}, []] if lm.to_i <= ims.to_i
+    end
+
     # warn req.url.inspect
     # warn resolver.base.inspect
 
@@ -62,9 +70,12 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
 
     # warn 'ouate de phoque'
 
-    Rack::Response[200, {
+    hdrs = {
       'content-type'   => 'application/xhtml+xml',
       'content-length' => str.length.to_s,
-    }, StringIO.new(str, ?r, encoding: Encoding::BINARY)]
+    }
+    hdrs['last-modified'] = repo.mtime.httpdate if repo.respond_to? :mtime
+
+    Rack::Response[200, hdrs, StringIO.new(str, ?r, encoding: Encoding::BINARY)]
   end
 end

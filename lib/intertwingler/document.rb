@@ -2694,7 +2694,7 @@ class Intertwingler::Document
   # @return [Array] pair containing the markup spec and the string value
   #
   def self.generate_fragment resolver, term, struct: nil, base: nil, langs: [],
-      rel: nil, rev: nil, prefixes: {}, ncache: Set.new,
+      rel: nil, rev: nil, prefixes: {}, ncache: nil,
       tag: :div, ptag: :div, otag: :div, pskip: [], oskip: [], wrap_list: false
 
     repo = resolver.repo
@@ -2702,7 +2702,8 @@ class Intertwingler::Document
     # we need to collate the strings
     strings = []
 
-    ncache << term if ncache
+    ncache ||= Set.new
+    ncache << term
 
     # determine if subject is a list and return early
     if repo.query([term, RDF.first, nil]).first
@@ -2732,7 +2733,8 @@ class Intertwingler::Document
     # okay now we get to the actual thing
     struct ||= repo.struct_for term #, base: base
 
-    ncache |= repo.smush_struct struct
+    # |= doesn't modify the set and there is no `union!`
+    repo.smush_struct(struct).each { |n| ncache << n }
 
     # what we're probably gonna want to do then is get all the labels
     # for all the URI references as well as the string values of any
@@ -2752,7 +2754,13 @@ class Intertwingler::Document
         ts = repo.struct_for o
         tt = repo.types_for o, struct: ts
 
-        labp, labo = repo.label_for o, struct: ts
+        # same deal
+        # ncache |= repo.smush_struct ts
+        repo.smush_struct(ts).each { |n| ncache << n }
+
+        # warn ncache.inspect
+
+        labp, labo = repo.label_for o, struct: ts, noop: true
 
         href = resolver.uri_for(o) || o
 
@@ -2761,7 +2769,8 @@ class Intertwingler::Document
 
         t = (labo || o).value.strip
       when RDF::Node
-        m, t = generate_fragment resolver, o, base: base, tag: otag, rel: ps
+        m, t = generate_fragment resolver, o, base: base,
+          tag: otag, rel: ps, ncache: ncache
       end
       [o, pmax, t, m]
     end.compact.sort do |a, b|
@@ -2831,6 +2840,7 @@ class Intertwingler::Document
     # get the content of the title
     labp, labo = repo.label_for subject, struct: struct
 
+    # |= does not modify the set
     ncache |= repo.smush_struct struct
     ncache << labp
     ncache << labo
@@ -2852,12 +2862,12 @@ class Intertwingler::Document
       prefixes: prefixes, langs: langs, ncache: ncache,
       tag: :body, ptag: nil, otag: :p, pskip: pskip, oskip: oskip
 
+    # generate the title
+    ttag = title_tag resolver, labp, labo, prefixes: prefixes if labo
+
     # warn ncache.inspect
 
     pfx = resolver.prefix_subset ncache
-
-    # generate the title
-    ttag = title_tag resolver, labp, labo, prefixes: prefixes if labo
 
     XML::Mixup.xhtml_stub(
       base: uri, prefix: pfx, vocab: vocab, title: ttag, body: body

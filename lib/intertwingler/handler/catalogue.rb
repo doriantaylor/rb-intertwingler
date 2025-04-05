@@ -955,6 +955,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   def handle req
     # complain unless this is a GET or HEAD
 
+    if repo.respond_to?(:mtime) and
+        ims = req.get_header('HTTP_IF_MODIFIED_SINCE')
+      ims = (Time.httpdate(ims) rescue Time.at(0)).utc
+      lm  = repo.mtime
+      return Rack::Response[304, {}, []] if lm.to_i <= ims.to_i
+    end
+
     # get the uri
     uri  = URI(req.url)
     orig = uri.dup
@@ -979,6 +986,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     begin
       resp = resource.call req.request_method, orig, params: query,
         headers: normalize_headers(req), user: user, body: req.body
+      resp['last-modified'] ||= repo.mtime.httpdate if repo.respond_to? :mtime
     rescue Intertwingler::Handler::AnyButSuccess => e
       return e.response
     end
