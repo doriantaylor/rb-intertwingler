@@ -770,6 +770,9 @@ EOS
     enum: %i[turtle ttl jsonld rdfxml ntriples nquads trig],
     desc: 'Output format for data dump (overrides file extension)'
   def dump file = nil
+    require 'intertwingler/graphops'
+    require 'intertwingler/resolver'
+
     # load all the serializers
     load_formats
 

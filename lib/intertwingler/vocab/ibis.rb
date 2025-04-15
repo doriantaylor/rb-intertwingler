@@ -11,7 +11,7 @@ module Intertwingler::Vocab
   #   # IBIS
   #   #
   #   # This document specifies a vocabulary for describing an IBIS (issue-based information system).
-  #   # @version 0.5
+  #   # @version 0.6
   #   # @see http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf
   #   # @see https://web.archive.org/web/20120606063823/http://hyperdata.org/xmlns/ibis/
   #   # @see https://vocab.methodandstructure.com/ibis.rdf
@@ -45,6 +45,10 @@ module Intertwingler::Vocab
   #     # A Position asserts a moral, ethical, pragmatic, or similar kind of assertion, typically identifying what, if anything, should be done about an Issue.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Position
+  #
+  #     # A State can be understood as a snapshot of a system at a given time, such as before or after an event.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :State
   #
   #     # The subject is an issue concerning the object, which can be any resource.
   #     # @return [RDF::Vocabulary::Term]
@@ -94,7 +98,7 @@ module Intertwingler::Vocab
       comment: {en: "This document specifies a vocabulary for describing an IBIS (issue-based information system)."},
       "http://purl.org/dc/terms/created": "2012-12-11T22:22:53-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z", "2023-12-18T02:25:31Z", "2024-01-05T04:05:24Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z", "2023-12-18T02:25:31Z", "2024-01-05T04:05:24Z", "2025-04-10T02:30:11Z"],
       "http://purl.org/dc/terms/references": "http://www.w3.org/2004/02/skos/core#Concept",
       "http://purl.org/dc/terms/title": {en: "IBIS (bis) Vocabulary"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/ibis#",
@@ -105,7 +109,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://dublincore.org/documents/dcmi-terms/", "http://en.wikipedia.org/wiki/Issue-Based_Information_System", "http://www.cc.gatech.edu/~ellendo/rittel/rittel-issues.pdf", "http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf", "http://www.w3.org/TR/prov-o/", "https://vocab.methodandstructure.com/ibis.n3", "https://vocab.methodandstructure.com/ibis.rdf", "https://vocab.methodandstructure.com/process-model#", "https://web.archive.org/web/20120606063823/http://hyperdata.org/xmlns/ibis/"],
       "http://www.w3.org/2002/07/owl#imports": "http://www.w3.org/2004/02/skos/core#",
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.5",
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.6",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "IBIS"},
@@ -145,7 +149,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/2002/07/owl#disjointWith": "https://vocab.methodandstructure.com/ibis#Position",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "Issue"},
-      subClassOf: ["https://vocab.methodandstructure.com/ibis#Entity", term(
+      subClassOf: ["https://vocab.methodandstructure.com/ibis#State", term(
           allValuesFrom: "https://vocab.methodandstructure.com/ibis#Issue",
           onProperty: "http://www.w3.org/2004/02/skos/core#broaderTransitive",
           type: "http://www.w3.org/2002/07/owl#Restriction"
@@ -192,11 +196,17 @@ module Intertwingler::Vocab
           type: "http://www.w3.org/2002/07/owl#Restriction"
         )],
       type: "http://www.w3.org/2002/07/owl#Class"
+    term :State,
+      comment: {en: "A State can be understood as a snapshot of a system at a given time, such as before or after an event."},
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: "State",
+      note: {en: "A State is distinct from a particular instant, but it is analogous to it. At the time of observation, a State is either true or false."},
+      subClassOf: "https://vocab.methodandstructure.com/ibis#Entity",
+      type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
     property :"concern-of",
       comment: {en: "The subject is an issue concerning the object, which can be any resource."},
-      domain: "http://www.w3.org/2002/07/owl#Thing",
       inverseOf: "https://vocab.methodandstructure.com/ibis#concerns",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "concern-of"},
@@ -208,7 +218,6 @@ module Intertwingler::Vocab
       inverseOf: "https://vocab.methodandstructure.com/ibis#concern-of",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "concerns"},
-      range: "http://www.w3.org/2002/07/owl#Thing",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"endorsed-by",
       comment: {en: "A concept can be endorsed by an Agent without said Agent having mentioned or advanced it initially, and without any additional comment."},

@@ -14,7 +14,7 @@ RUN bundle config set path.system true
 RUN mkdir /tmp/src
 WORKDIR /tmp/src
 
-# tried to do this with bundler; it absolutely did not cooperate
+# tried to do these with bundler; it absolutely did not cooperate
 
 # RUN git clone https://gitlab.com/doriantaylor/uri-urn.git && cd uri-urn && gem build && gem install *.gem && cd -
 
