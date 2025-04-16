@@ -986,14 +986,17 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     begin
       resp = resource.call req.request_method, orig, params: query,
         headers: normalize_headers(req), user: user, body: req.body
-      resp['last-modified'] ||= repo.mtime.httpdate if repo.respond_to? :mtime
     rescue Intertwingler::Handler::AnyButSuccess => e
       return e.response
     end
 
+    # resp can be nil so 404 if it is
     return Rack::Response[404, {
       'content-type' => 'text/plain',
     }, ['no mapping']] unless resp
+
+    # add last-modified header to the response now that we know we have one
+    resp['last-modified'] ||= repo.mtime.httpdate if repo.respond_to? :mtime
 
     resp
   end
