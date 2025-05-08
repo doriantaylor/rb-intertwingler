@@ -1,13 +1,20 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix bibo: <http://purl.org/ontology/bibo/> .
 @prefix cgto: <https://vocab.methodandstructure.com/graph-tool#> .
-@prefix ci: <https://vocab.methodandstructure.com/content-inventory#> .
 @prefix dct: <http://purl.org/dc/terms/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix ibis: <https://vocab.methodandstructure.com/ibis#> .
+@prefix itcv: <https://vocab.methodandstructure.com/intertwingler#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix pm: <https://vocab.methodandstructure.com/process-model#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix qb: <http://purl.org/linked-data/cube#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix sioc: <http://rdfs.org/sioc/ns#> .
-@prefix xhv: <http://www.w3.org/1999/xhtml/vocab#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix tfo: <https://vocab.methodandstructure.com/transformation#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <urn:uuid:00676fe4-b256-4c72-ba55-fd0d88292956>
     dct:created "2024-04-02T02:22:53Z"^^xsd:dateTime ;
@@ -38,6 +45,14 @@
     rdf:value "Implement the network switcher as a dropdown." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:specializes <urn:uuid:37f5ec7d-1b86-4b5d-8e86-4743fc8d99d5> .
+
+<urn:uuid:07aebcea-9788-4850-b2be-f6a26837e31c>
+    dct:created "2025-04-22T02:55:53Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "There will need to be some kind of representation of foaf:Person (who can be attached to an authentication principal)." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:b8f721ca-263e-4db3-a68c-43b88dcfae3a> .
 
 <urn:uuid:0a5242b9-bd26-4868-a23e-cf949d2c835a>
     dct:created "2024-02-16T21:28:47Z"^^xsd:dateTime ;
@@ -96,6 +111,15 @@
     rdf:value "How does a client determine how to fill out the entire collection?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:questions <urn:uuid:45aa5cec-60dd-4091-af9d-3fc25722db38> .
+
+<urn:uuid:12f211da-7098-4b04-8fb8-19a10806affa>
+    dct:created "2025-04-22T21:30:51Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Ship a front end with interfaces for IBIS, PM, and a rudimentary FOAF/ORG editor." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    pm:achieves <urn:uuid:824ca9a7-7433-4f48-a2bb-27cb96e7db45> ;
+    pm:subtask <urn:uuid:3e5cfc09-a7f0-448e-8211-c86e421a26a8>, <urn:uuid:62f5cd81-7604-4172-9e23-29e71147de61>, <urn:uuid:85e939a4-e706-41e0-b38a-125cf4bcab4e>, <urn:uuid:b88befb1-8eec-4256-b1ab-66b42044951d>, <urn:uuid:c00f7e41-e56e-4cd5-96c3-956eb09fbebb>, <urn:uuid:c88bc29e-966b-467d-90f8-2ade624c3972> .
 
 <urn:uuid:14160a9f-f5a1-4ded-b307-8bf3e1dbe677>
     dct:created "2024-03-15T20:56:23Z"^^xsd:dateTime ;
@@ -160,6 +184,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:generalizes <urn:uuid:82181c35-3672-425d-aca9-863fd89886b7> ;
     ibis:questions <urn:uuid:6a693bc2-ac87-4b87-b982-2ae0437d430a> .
+
+<urn:uuid:198ee4a4-e059-410d-a2b6-ff463b4b8b7f>
+    dct:created "2025-04-22T20:24:56Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "The datetime-local input type does not seem to elicit form submission with the enter key like a text box does (in Firefox)." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:c00f7e41-e56e-4cd5-96c3-956eb09fbebb> .
 
 <urn:uuid:19b9d5d0-b32d-4651-a6ed-bb5127102646>
     dct:created "2024-09-12T01:37:30Z"^^xsd:dateTime ;
@@ -228,6 +260,14 @@
     a ibis:Network ;
     skos:prefLabel "ABC" .
 
+<urn:uuid:23df0fd1-494e-4d61-9dbc-2692094311e4>
+    dct:created "2025-04-22T03:08:22Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "The editing widgets show up even if there is no current logged-in user." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+
 <urn:uuid:24023ac9-6a5a-4971-830a-500561f1428b>
     dct:created "2024-09-12T01:47:32Z"^^xsd:dateTime ;
     a ibis:Position ;
@@ -250,6 +290,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a> ;
     ibis:specializes <urn:uuid:a4ce7c46-4499-431f-b318-e053753a4e13> .
+
+<urn:uuid:25505028-ff16-46cd-89fa-309b535bca44>
+    dct:created "2025-04-22T03:13:25Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "The UI for adding and connecting adjacents messes up in annoying and data-destructive ways." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
 
 <urn:uuid:260ebda6-2ac8-48fd-af3f-9c878181892b>
     dct:created "2025-01-24T03:17:16Z"^^xsd:dateTime ;
@@ -300,6 +348,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:26702743-b8b9-4279-971e-bf0a68ba777d> .
 
+<urn:uuid:2ff504b7-b362-4bc7-91ec-aa2e45a68ce0>
+    dct:created "2025-04-22T22:08:33Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "The template for ibis:Network (skos:ConceptScheme) is really shabby." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+
 <urn:uuid:34942d28-9d80-4ae8-9094-2d043411a2b7>
     dct:created "2024-09-12T01:30:08Z"^^xsd:dateTime ;
     a ibis:Position ;
@@ -336,6 +392,13 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:c91f5bee-c876-4d10-9307-c2c912ef009a> .
 
+<urn:uuid:3c42acb8-5a7f-42bd-94d4-4c89044d02be>
+    dct:created "2025-04-22T02:18:10Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "Do we want to be able to ascribe a value to the goal specifically, rather than the target—which has a budget?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> .
+
 <urn:uuid:3d79cf73-ba7d-431c-8ecc-e3346a738680>
     dct:created "2025-01-24T03:22:43Z"^^xsd:dateTime ;
     dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
@@ -343,6 +406,14 @@
     rdf:value "How do you make sure that you net resources that are subclasses of, or related by subproperties to, the supplied parameters?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:questions <urn:uuid:856b90f3-f0e3-403e-881b-b89ad07939e6> .
+
+<urn:uuid:3e5cfc09-a7f0-448e-8211-c86e421a26a8>
+    dct:created "2025-04-22T03:10:58Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Alter the template so that the editing widgets do not show up unless there is a registered user detected." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:23df0fd1-494e-4d61-9dbc-2692094311e4> .
 
 <urn:uuid:3f68a66b-13ba-4bbc-b040-e587d33b2643>
     dct:created "2024-09-12T01:50:35Z"^^xsd:dateTime ;
@@ -376,6 +447,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:7b75b305-aae5-4478-8daa-c9de013c5c76> ;
     ibis:specializes <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> .
+
+<urn:uuid:46b464ec-415f-4ec5-b03e-61d3f6fd815a>
+    dct:created "2025-04-22T02:19:45Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "Since the PM Ontology is untested, how do we proceed?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:824ca9a7-7433-4f48-a2bb-27cb96e7db45> .
 
 <urn:uuid:48707ee2-d5af-4882-9d7f-ab0f4517ea5c>
     dct:created "2024-03-18T18:09:07Z"^^xsd:dateTime ;
@@ -436,6 +515,14 @@
     rdf:value "How do we keep drafts and other works in progress from being exposed to the public?" ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:questions <urn:uuid:0b4080c1-f931-4abf-abb1-e5cd456667f5> .
+
+<urn:uuid:62f5cd81-7604-4172-9e23-29e71147de61>
+    dct:created "2025-04-22T02:34:02Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Create a template for pm:Target." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:specializes <urn:uuid:996ae659-1e77-4d56-96b6-652db106a481> .
 
 <urn:uuid:64f9d3f6-8cd8-4c28-8f59-2dc03614a4eb>
     dct:created "2025-01-24T02:50:12Z"^^xsd:dateTime ;
@@ -519,11 +606,21 @@
     ibis:responds-to <urn:uuid:c83e0d17-c742-43b5-a93b-2660f43dd9ba> ;
     ibis:supported-by <urn:uuid:108f09ba-cddd-4433-958e-1089545c7cb1> .
 
+<urn:uuid:73c4c7d7-98de-4180-91d1-533c7900b1ea>
+    dct:created "2025-04-22T02:32:36Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Create a new <datalist> for autofilling foaf:Agent entities." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    prov:endedAtTime "2025-04-22T08:30"^^xsd:dateTime ;
+    prov:startedAtTime "2025-04-22T06:30"^^xsd:dateTime ;
+    pm:supertask <urn:uuid:c7e8b394-0d36-4310-85e3-311c18aaafa5> .
+
 <urn:uuid:7421a1da-9009-448d-8f63-b021f398a4d9>
     dct:created "2024-04-02T02:28:48Z"^^xsd:dateTime ;
     dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
     a ibis:Position ;
-    rdf:value "Attach \"next\" and \"previous\" relations to the wiindow resources, when applicable." ;
+    rdf:value "Attach \"next\" and \"previous\" relations to the window resources, when applicable." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:11021658-81a7-4bcf-bc21-388f9e216d32> .
 
@@ -636,6 +733,14 @@
     ibis:response <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af> ;
     ibis:suggested-by <urn:uuid:f34ce5fd-188b-4a5e-84b6-c559f5e62e40> .
 
+<urn:uuid:824ca9a7-7433-4f48-a2bb-27cb96e7db45>
+    dct:created "2025-04-21T21:52:58Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Goal ;
+    rdf:value "Use the Process Model Ontology in conjunction with IBIS to plan projects." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:specializes <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+
 <urn:uuid:836cc0e1-e6ca-4935-9c79-ec892d2480d4>
     dct:created "2024-09-12T02:01:24Z"^^xsd:dateTime ;
     a ibis:Position ;
@@ -659,6 +764,14 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:generalizes <urn:uuid:160bcab3-b338-4fba-830d-a1811996102a>, <urn:uuid:653228f3-7b51-4467-9a09-2997bb39d1b9>, <urn:uuid:899eded0-a0c1-4ad1-80a2-2c68f4d6663d>, <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7> ;
     ibis:responds-to <urn:uuid:66b40985-42ec-4a42-a5cc-15d4c79e4c52> .
+
+<urn:uuid:85e939a4-e706-41e0-b38a-125cf4bcab4e>
+    dct:created "2025-04-22T02:26:34Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Create a template for pm:Goal." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:specializes <urn:uuid:996ae659-1e77-4d56-96b6-652db106a481> .
 
 <urn:uuid:8650031b-36fb-48a4-b7c1-4676deb376e0>
     dct:created "2024-02-16T22:53:01Z"^^xsd:dateTime ;
@@ -730,6 +843,15 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:questions <urn:uuid:6aa1b5cd-d3fa-4871-bcf4-c587bcd34dc8> .
 
+<urn:uuid:996ae659-1e77-4d56-96b6-652db106a481>
+    dct:created "2025-04-22T02:23:06Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Position ;
+    rdf:value "Rough out the new classes and try loading them with instance data; take notes for what can be improved." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questioned-by <urn:uuid:3c42acb8-5a7f-42bd-94d4-4c89044d02be> ;
+    ibis:responds-to <urn:uuid:46b464ec-415f-4ec5-b03e-61d3f6fd815a> .
+
 <urn:uuid:9a202d16-3938-44de-a7a4-3cf547f4853c>
     dct:created "2024-09-12T02:10:44Z"^^xsd:dateTime ;
     a ibis:Issue ;
@@ -753,7 +875,8 @@
     rdf:value "Client wants the ability to create multiple IBIS networks." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:generalizes <urn:uuid:148e1a33-eb7e-47a7-bbdf-a04bdb7a216a> ;
-    ibis:specializes <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+    ibis:specializes <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> ;
+    ibis:suggests <urn:uuid:b09756bf-ec92-419c-9b9e-e18102be4b64> .
 
 <urn:uuid:9eb53b67-634a-4cca-83f5-4ae9f106e027>
     dct:created "2024-09-12T01:33:03Z"^^xsd:dateTime ;
@@ -817,6 +940,22 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:7a55af8c-df7c-437e-9d2c-6676d12e6455> .
 
+<urn:uuid:ae0b8139-2aa7-4eb6-bf1c-0ffe6e5618c1>
+    dct:created "2025-04-22T20:26:36Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Create a keyboard event handler that submits the form for all forms that only contain a datetime-local widget (as a non-hidden control)." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:198ee4a4-e059-410d-a2b6-ff463b4b8b7f> .
+
+<urn:uuid:b09756bf-ec92-419c-9b9e-e18102be4b64>
+    dct:created "2025-04-22T03:01:33Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "For writing to the graph, the IBIS tool requires a \"focus\" node with which to associate new entries. This is associated with a state object, which is in turn associated with the current user." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:suggested-by <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+
 <urn:uuid:b28fc520-ec74-4acc-917a-f8e403a4f2af>
     dct:created "2024-03-18T16:56:03Z"^^xsd:dateTime ;
     dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
@@ -835,6 +974,22 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:d606935b-2e46-49fc-9463-141f3e37987b> ;
     ibis:specializes <urn:uuid:f8a03671-70fc-42ec-a25c-768f8788e738> .
+
+<urn:uuid:b88befb1-8eec-4256-b1ab-66b42044951d>
+    dct:created "2025-04-22T02:53:21Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Create ibis:endorsed-by relations widget, i.e. the ability to \"like\" an entity." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
+
+<urn:uuid:b8f721ca-263e-4db3-a68c-43b88dcfae3a>
+    dct:created "2025-04-22T02:54:11Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a ibis:Issue ;
+    rdf:value "How do you get the users into the system?" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:questions <urn:uuid:b88befb1-8eec-4256-b1ab-66b42044951d> .
 
 <urn:uuid:ba707676-6099-4ad1-8bca-996f45c580e0>
     dct:created "2024-03-18T18:40:51Z"^^xsd:dateTime ;
@@ -860,6 +1015,14 @@
     ibis:generalizes <urn:uuid:48707ee2-d5af-4882-9d7f-ab0f4517ea5c> ;
     ibis:responds-to <urn:uuid:7b06b386-3625-4e5d-b2eb-4764fdb3484e> .
 
+<urn:uuid:c00f7e41-e56e-4cd5-96c3-956eb09fbebb>
+    dct:created "2025-04-22T02:30:45Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Create a template for pm:Task." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:specializes <urn:uuid:996ae659-1e77-4d56-96b6-652db106a481> .
+
 <urn:uuid:c5f0efdb-a5ef-4062-9e13-0fbb32ccd030>
     dct:created "2024-03-18T18:06:46Z"^^xsd:dateTime ;
     dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
@@ -884,6 +1047,15 @@
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:suggested-by <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7> .
 
+<urn:uuid:c7e8b394-0d36-4310-85e3-311c18aaafa5>
+    dct:created "2025-04-22T20:32:45Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Expand the script that manages the adjacent entity controls so that it also attaches to the \"agent\" controls." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    pm:subtask <urn:uuid:ae0b8139-2aa7-4eb6-bf1c-0ffe6e5618c1> ;
+    pm:supertask <urn:uuid:62f5cd81-7604-4172-9e23-29e71147de61>, <urn:uuid:85e939a4-e706-41e0-b38a-125cf4bcab4e>, <urn:uuid:c00f7e41-e56e-4cd5-96c3-956eb09fbebb> .
+
 <urn:uuid:c83e0d17-c742-43b5-a93b-2660f43dd9ba>
     dct:created "2024-09-12T02:30:54Z"^^xsd:dateTime ;
     a ibis:Issue ;
@@ -898,6 +1070,14 @@
     rdf:value "Create an \"index\" resource that enumerates all the windowed resources." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:responds-to <urn:uuid:11021658-81a7-4bcf-bc21-388f9e216d32> .
+
+<urn:uuid:c88bc29e-966b-467d-90f8-2ade624c3972>
+    dct:created "2025-04-22T02:44:28Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Task ;
+    rdf:value "Improve the UI for ibis:Network and skos:ConceptScheme." ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:responds-to <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
 
 <urn:uuid:c8aa0aba-0710-482f-a2ec-cc98961d2026>
     dct:created "2024-02-16T21:18:06Z"^^xsd:dateTime ;
@@ -976,6 +1156,14 @@
     rdf:value "There is a concern of memory consumption of unused handlers." ;
     skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     ibis:opposes <urn:uuid:d8bd14b1-6091-41c8-a7e0-2e8ddd55d063> .
+
+<urn:uuid:d3c1cadd-b2d4-41e8-a9ad-3021fc5392e0>
+    dct:created "2025-04-21T22:36:18Z"^^xsd:dateTime ;
+    dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
+    a pm:Goal ;
+    rdf:value "Test lol" ;
+    skos:inScheme <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
+    ibis:specializes <urn:uuid:24c66a1f-2cf3-47aa-b8b6-53ca151d3474> .
 
 <urn:uuid:d521044a-91f1-48b5-9ce2-e4abdc5e52b7>
     dct:created "2025-01-24T02:47:15Z"^^xsd:dateTime ;
