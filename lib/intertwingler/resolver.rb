@@ -190,9 +190,10 @@ class Intertwingler::Resolver
   def initialize repo, base, aliases: [], prefixes: {}, subject: nil,
       documents: [], fragments: [], log: nil
 
-    @repo = repo
     raise ArgumentError, 'repo must be RDF::Queryable' unless
       repo.is_a? RDF::Queryable
+    # @repo = RDF::Graph.new data: repo, graph_name: RDF::URI("dns:#{base.host}")
+    @repo = repo
 
     # set the base uri; store it as as a URI rather than RDF::URI
     @base     = coerce_resource   base,    as: :uri
@@ -504,14 +505,14 @@ class Intertwingler::Resolver
           (uu = UUID::NCName.from_ncname(tu.fragment, validate: true))
         # this is the special case that the fragment is a compact uuid
         uu = RDF::URI("urn:uuid:#{uu}")
-        if !verify or @subjects[uu] ||= @repo.has_subject?(uu)
+        if !verify or @subjects[uu] ||= @repo.subject?(uu)
           uu = coerce_resource uu, as: as
           return scalar ? uu : [uu]
         end
       elsif tu.respond_to? :uuid
         # in this case the URI is already a UUID, so now we check
         # if it's a subject
-        if !verify or @subjects[uri] ||= @repo.has_subject?(uri)
+        if !verify or @subjects[uri] ||= @repo.subject?(uri)
           uri = coerce_resource uri, as: as
           return scalar ? uri : [uri]
         end

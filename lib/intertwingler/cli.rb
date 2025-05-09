@@ -199,9 +199,14 @@ class Intertwingler::CLI < Thor
           prompt.say "Loading #{msg}…"
         end
 
-        fs.each do |f|
-          load_one repo, f, interactive: interactive?
-        end
+        graph = if domain
+                  RDF::Graph.new data: repo,
+                    graph_name: RDF::URI("dns:#{domain}")
+                else
+                  repo
+                end
+
+        fs.each { |f| load_one graph, f, interactive: interactive? }
       end
     end
 
@@ -618,10 +623,14 @@ EOS
     desc: 'Answer only to this domain'
   option :detach, aliases: %i[-z], type: :boolean, default: false,
     desc: 'Detach process to background'
+  option :server, aliases: %i[-S], type: :string, default: 'puma'.freeze,
+    desc: 'Force the server to use'
   option :pid, aliases: %i[-P], type: :string,
     desc: 'Create a PID file when detached'
   option :user, aliases: %i[-U], type: :string,
     desc: 'override REMOTE_USER'
+  option :profile, type: :boolean, default: false,
+    desc: 'Enable the profiler'
 
   def engine
     # we imagine detecting whether the configuration has been initialized
@@ -649,10 +658,28 @@ EOS
       harness.call env
     end if options[:user]
 
+    if options[:profile]
+      warn 'enabling profiler'
+
+      require 'rack/builder'
+      require 'stackprof'
+      # require 'rack-mini-profiler'
+      tmp = app
+      app = Rack::Builder.new do
+        use StackProf::Middleware, enabled: true, mode: :cpu, raw: true,
+          path: '/tmp/stackprof-intertwingler.dump', save_every: 1
+        # interval: 1000, save_every: 5
+        # use Rack::MiniProfiler
+        #map(?/) { run tmp }
+        run tmp
+      end
+    end
+
     # initialize rack server
     Rackup::Server.start({
       app: app,
       # server: ...
+      server: options[:server],
       # environment: ...
       daemonize: options[:detach],
       Host: options[:host] || base_config[:host],
@@ -738,12 +765,13 @@ EOS
   def load *files
 
     if files.empty?
-      prompt.error_md 'No files speicfied. Quitting.'
+      prompt.error_md 'No files specified. Quitting.'
       exit 1
     end
 
     auth = default_authority options[:authority]
-    repo = authorities[auth]
+    repo = RDF::Graph.new data: authorities[auth],
+      graph_name: RDF::URI("dns:#{auth}")
 
     # load all the parsers
     load_formats

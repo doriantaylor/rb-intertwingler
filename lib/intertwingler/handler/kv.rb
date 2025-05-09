@@ -56,12 +56,15 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
 
       log.debug "inserts: #{cs.inserts} deletes: #{cs.deletes}"
 
-      log.debug "graph size: #{repo.size}"
+      graph = RDF::Graph.new data: repo,
+        graph_name: RDF::URI("dns:#{resolver.base.host}")
+
+      log.debug "graph size: #{graph.size}"
 
       # apply it to the graph
-      cs.apply repo
+      cs.apply graph
 
-      log.debug "graph size: #{repo.size}"
+      log.debug "graph size: #{graph.size}"
 
       # XXX we should figure out a way to hook up a rider or otherwise
       # smuggle callback functions in; that would entail coming up
