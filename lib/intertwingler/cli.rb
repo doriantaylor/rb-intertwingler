@@ -286,6 +286,9 @@ class Intertwingler::CLI < Thor
           @raw_config  = Psych.load_file config_file
           @base_config = Intertwingler::Types::HarnessConfig[@raw_config]
 
+          # 
+          # fix_paths @base_config
+
           # preload libraries
           if libs = @base_config[:libs]
             libs[:path].each do |rel|
@@ -363,7 +366,7 @@ EOS
 
     def display_path path
       # get this absolute but not tooo absolute
-      path = Pathname(path).expand_path
+      path = Pathname(path).expand_path(config_home)
 
       # make initial candidates including against pwd
       candidates = [path, path.relative_path_from(Pathname.getwd)]
@@ -384,11 +387,11 @@ EOS
             "Can't infer reader from an IO that isn't a File." unless
             file.respond_to? :path
 
-          path   = Pathname(file.path).expand_path
+          path   = Pathname(file.path).expand_path(config_home)
           reader = RDF::Reader.for path.basename.to_s
         end
       else
-        path = Pathname(file).expand_path
+        path = Pathname(file).expand_path(config_home)
         file = path.open # reassign file
         reader ||= RDF::Reader.for path.basename.to_s
       end
@@ -777,7 +780,7 @@ EOS
     load_formats
 
     pairs = files.map do |file|
-      file = Pathname(file).expand_path
+      file = Pathname(file).expand_path(config_home)
       [file, RDF::Reader.for(file.basename.to_s)]
     end
 
@@ -839,8 +842,15 @@ EOS
 
     fh = file ? file.open('wb') : $stdout
 
+    # only narrow if the authority is explicitly specified on the command line
+    graph = if options[:authority]
+              RDF::Graph.new data: repo, graph_name: RDF::URI("dns:#{auth}")
+            else
+              repo
+            end
+
     writer.new(fh, prefixes: resolver.prefixes ) do |writer|
-      repo.each_statement { |s| writer << s }
+      graph.each_statement { |s| writer << s }
     end
   end
 

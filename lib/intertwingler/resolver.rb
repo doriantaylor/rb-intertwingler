@@ -192,8 +192,8 @@ class Intertwingler::Resolver
 
     raise ArgumentError, 'repo must be RDF::Queryable' unless
       repo.is_a? RDF::Queryable
-    # @repo = RDF::Graph.new data: repo, graph_name: RDF::URI("dns:#{base.host}")
-    @repo = repo
+    @repo = RDF::Graph.new data: repo, graph_name: RDF::URI("dns:#{base.host}")
+    # @repo = repo
 
     # set the base uri; store it as as a URI rather than RDF::URI
     @base     = coerce_resource   base,    as: :uri

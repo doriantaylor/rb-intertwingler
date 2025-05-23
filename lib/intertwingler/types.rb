@@ -159,7 +159,7 @@ module Intertwingler
       preload?: Array.of(RubyURN)
 
     GraphConfig = SymbolHash.schema driver?: RubyURN,
-      init?: Array.of(ExtantPathname)
+      init?: Array.of(RelativePathname)
 
     StaticConfig = SymbolHash.schema target: ExtantPathname
 

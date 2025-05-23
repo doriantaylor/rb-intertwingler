@@ -40,7 +40,7 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
         log.debug "TERM: #{term.inspect}"
         if term.iri?
           # XXX THIS SHOULD PROBABLY BE LESS DUMB
-          resolver.uuid_for(term) || term rescue term
+          resolver.uuid_for(term) || term # rescue term
           # anyway note the parentheses.
         else
           term
@@ -59,12 +59,12 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
       graph = RDF::Graph.new data: repo,
         graph_name: RDF::URI("dns:#{resolver.base.host}")
 
-      log.debug "graph size: #{graph.size}"
+      log.debug "graph size before: #{graph.size}"
 
       # apply it to the graph
       cs.apply graph
 
-      log.debug "graph size: #{graph.size}"
+      log.debug "graph size after:  #{graph.size}"
 
       # XXX we should figure out a way to hook up a rider or otherwise
       # smuggle callback functions in; that would entail coming up
