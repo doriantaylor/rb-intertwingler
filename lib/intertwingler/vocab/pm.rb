@@ -403,6 +403,7 @@ module Intertwingler::Vocab
     property :subtask,
       comment: {en: "This property narrows the domain and range of ev:sub_event to pm:Task."},
       domain: "https://vocab.methodandstructure.com/process-model#Task",
+      inverseOf: "https://vocab.methodandstructure.com/process-model#supertask",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "subtask",
       range: "https://vocab.methodandstructure.com/process-model#Task",
