@@ -657,6 +657,7 @@ EOS
 
     # gin up a quick lil middleware to override REMOTE_USER
     app = -> env do
+      log.debug "setting user to #{options[:user]}"
       env['REMOTE_USER'] = options[:user]
       harness.call env
     end if options[:user]
@@ -688,7 +689,7 @@ EOS
       Host: options[:host] || base_config[:host],
       Port: options[:port] || base_config[:port],
     })
-  end
+123  end
 
   desc :pry, 'Run a debugging REPL (pry)'
   def pry

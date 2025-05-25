@@ -977,6 +977,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # stupid rack doesn't have this field
     user = req.env['REMOTE_USER']
 
+    log.debug "found user #{user}" if user
+
     # get uuid or return 404
     return Rack::Response[404, {
       'content-type' => 'text/plain',

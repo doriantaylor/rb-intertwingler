@@ -752,7 +752,7 @@ class Intertwingler::Resolver
                 # XXX what do we do about explicit graphs? also published?
                 host = host_for uuid
                 # note function-level scope of hosturi
-                uri_for(host, slugs: true, via: via) if host
+                uri_for(host, slugs: true, via: via, as: as) if host
               end
 
     # create an appropriate map function depending on whether there
@@ -824,7 +824,7 @@ class Intertwingler::Resolver
     # turn these into URIs if the thing says so
     out.map! do |u|
       u = as_alias u, via
-      u = URI(preproc u.to_s) if as == :uri
+      u = coerce_resource u, as: as
       u
     end
 

@@ -471,9 +471,11 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # resolve this if need be
     if params[:href]
       r = engine.resolver
-      href = params[:href] = r.uri_for params[:href]
+      href = params[:href] = r.uri_for params[:href], slugs: true, as: :rdf
       ruri = RDF::URI(req.url) # RDF::URI has authority= but URI does not
 
+      engine.log.debug href.inspect
+      
       if r.authorities.include? href.authority and
           r.authorities.include? ruri.authority
         href.authority = ruri.authority
