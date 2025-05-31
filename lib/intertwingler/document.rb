@@ -2342,7 +2342,9 @@ class Intertwingler::Document
 
     # we have a default closure we can override with a block
     block ||= -> text do
-      return text unless base
+      # we need a base uri to do anything with, and we don't rewrite bnodes
+      return text unless base and /^_:/ !~ text.strip
+
       # dereference with doc_base
       uri = resolver.as_alias doc_base.merge(resolver.preproc text), base
       # re-relativize with new base
@@ -2762,7 +2764,7 @@ class Intertwingler::Document
 
         labp, labo = repo.label_for o, struct: ts, noop: true
 
-        href = resolver.uri_for(o) || o
+        href = resolver.uri_for(o, slugs: true) || o
 
         m = { "##{otag}" => link_tag(resolver, href, base: base,
           prefixes: prefixes, property: labp, label: labo, typeof: tt, rel: ps) }

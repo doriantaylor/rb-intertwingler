@@ -653,7 +653,7 @@ EOS
 
     # give us a harness
     app = harness = Intertwingler::Harness.new authorities,
-      home: config_home, log: log
+      home: config_home, log: log, jwt: base_config[:jwt]
 
     # gin up a quick lil middleware to override REMOTE_USER
     app = -> env do

@@ -399,15 +399,6 @@ class Intertwingler::Resolver
   # lol ruby booleans do not coerce to integers so here we are
   BITS = { nil => 0, false => 0, true => 1 }.freeze
 
-  INSTANCE_COERCE = -> arg, as: :rdf do
-    begin
-      @base ? @base.merge(preproc arg.to_s.strip) : arg
-    rescue URI::InvalidURIError => e
-      warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
-      nil
-    end
-  end
-
   public
 
   # define_singleton_method :coerce_resource,
@@ -428,7 +419,17 @@ class Intertwingler::Resolver
     meth = self.method(:coerce_resource).to_proc
 
     wtf = -> arg, as: :rdf do
-      meth.call arg, as: as, &INSTANCE_COERCE
+      rider = -> arg do
+        begin
+          base ? base.merge(preproc arg.to_s.strip) : arg
+        rescue URI::InvalidURIError => e
+          m = "attempted to coerce #{arg} which turned out to be invalid: #{e}"
+          log ? log.error(m) : warn(m)
+          nil
+        end
+      end
+
+      meth.call arg, as: as, &rider
     end
 
     define_method :coerce_resource, &wtf

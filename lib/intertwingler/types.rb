@@ -165,12 +165,20 @@ module Intertwingler
 
     DomainConfig = SymbolHash.schema graph?: GraphConfig, static?: StaticConfig
 
-    # DevConfig = SymbolHash.schema map?: Hash.map(Authority, Authority)
+    JWTAlgo = String.default('HS256'.freeze).enum(
+      *(%w[ES256K ED25519] +
+        %w[HS ES RS PS].product([256, 384, 512]).map(&:join)))
 
-    HarnessConfig = SymbolHash.schema host?: Hostname, port?: Port,
+    JWTConfig = SymbolHash.schema(
+      algorithm?: JWTAlgo,
+      secret:     String,
+    ).hash_default
+
+    HarnessConfig = SymbolHash.schema(
+      host?: Hostname, port?: Port,
       libs?: LibsConfig, graph?: GraphConfig,
-      authorities?: Hash.map(Hostname, DomainConfig) #,
-    # development?: DevConfig
-
+      jwt?: JWTConfig,
+      authorities?: Hash.map(Hostname, DomainConfig),
+    )
   end
 end
