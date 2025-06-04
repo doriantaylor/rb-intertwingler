@@ -1266,7 +1266,7 @@
 <urn:uuid:f398478e-af15-4890-99ef-58375a73fff2>
     dct:created "2024-02-16T21:07:58Z"^^xsd:dateTime ;
     dct:creator <urn:uuid:ca637d4b-c11b-4152-be98-bde602e7abd4> ;
-    dct:title "IBIS Tool Space" ;
+    dct:title "Sense Atlas Workspace" ;
     sioc:space_of <urn:uuid:03891bfd-10a0-457f-9e15-378d62d30844>, <urn:uuid:2209c97e-cae3-4b78-900f-b663ae2bc4dc>, <urn:uuid:4bbcdde6-ed53-4f8d-b3f8-43f800fd05d5>, <urn:uuid:5020dc83-ac0c-4f75-9683-a70429e32c99>, <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905> ;
     a cgto:Space ;
     cgto:index <urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9> .

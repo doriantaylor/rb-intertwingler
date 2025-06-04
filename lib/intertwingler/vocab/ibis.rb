@@ -98,7 +98,7 @@ module Intertwingler::Vocab
       comment: {en: "This document specifies a vocabulary for describing an IBIS (issue-based information system)."},
       "http://purl.org/dc/terms/created": "2012-12-11T22:22:53-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z", "2023-12-18T02:25:31Z", "2024-01-05T04:05:24Z", "2025-04-10T02:30:11Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z", "2023-12-18T02:25:31Z", "2024-01-05T04:05:24Z", "2025-04-10T02:30:11Z", "2025-05-09T04:08:32Z"],
       "http://purl.org/dc/terms/references": "http://www.w3.org/2004/02/skos/core#Concept",
       "http://purl.org/dc/terms/title": {en: "IBIS (bis) Vocabulary"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/ibis#",
@@ -254,7 +254,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "opposed-by"},
       range: "https://vocab.methodandstructure.com/ibis#Argument",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggests",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :opposes,
       comment: {en: "Indicates a subject argument that opposes an object position."},
@@ -263,7 +263,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "opposes"},
       range: "https://vocab.methodandstructure.com/ibis#Position",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggested-by",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"questioned-by",
       comment: {en: "Indicates a belief called into question by an issue."},
@@ -354,7 +354,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "supported-by"},
       range: "https://vocab.methodandstructure.com/ibis#Argument",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggests",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :supports,
       comment: {en: "Indicates a subject argument that supports an object position."},
@@ -363,7 +363,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "supports"},
       range: "https://vocab.methodandstructure.com/ibis#Position",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggested-by",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
 
     RDF::Vocabulary.register :ibis, self if

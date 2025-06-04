@@ -533,7 +533,9 @@ class Intertwingler::Engine < Intertwingler::Handler
   private
 
   def subject_from_resolver resolver
-    subjects = resolver.repo.subjects_for(
+    repo = resolver.repo
+    repo = repo.data if repo.respond_to? :data
+    subjects = repo.subjects_for(
       ITCV.resolver, resolver.subject, only: :resource)
     case subjects.count
     when 0 then raise Intertwingler::Error::Config,
@@ -579,6 +581,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     if resolver
       @resolver = resolver
       @repo     = resolver.repo
+      @repo     = @repo.data if @repo.respond_to? :data
       @subject  = subject_from_resolver resolver
     elsif repo && subject
       @repo     = repo

@@ -1,0 +1,8 @@
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+DESCRIBE ?s
+WHERE {
+ GRAPH <dns:doriantaylor.com> {
+    ?s (skos:inScheme|skos:topConceptOf|^skos:hasTopConcept)? <urn:uuid:7b59bc41-a915-428a-9d2e-d62b123d1905>
+ }
+}

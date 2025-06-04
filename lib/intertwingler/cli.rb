@@ -199,9 +199,14 @@ class Intertwingler::CLI < Thor
           prompt.say "Loading #{msg}…"
         end
 
-        fs.each do |f|
-          load_one repo, f, interactive: interactive?
-        end
+        graph = if domain
+                  RDF::Graph.new data: repo,
+                    graph_name: RDF::URI("dns:#{domain}")
+                else
+                  repo
+                end
+
+        fs.each { |f| load_one graph, f, interactive: interactive? }
       end
     end
 
@@ -281,6 +286,9 @@ class Intertwingler::CLI < Thor
           @raw_config  = Psych.load_file config_file
           @base_config = Intertwingler::Types::HarnessConfig[@raw_config]
 
+          # 
+          # fix_paths @base_config
+
           # preload libraries
           if libs = @base_config[:libs]
             libs[:path].each do |rel|
@@ -358,7 +366,7 @@ EOS
 
     def display_path path
       # get this absolute but not tooo absolute
-      path = Pathname(path).expand_path
+      path = Pathname(path).expand_path(config_home)
 
       # make initial candidates including against pwd
       candidates = [path, path.relative_path_from(Pathname.getwd)]
@@ -379,11 +387,11 @@ EOS
             "Can't infer reader from an IO that isn't a File." unless
             file.respond_to? :path
 
-          path   = Pathname(file.path).expand_path
+          path   = Pathname(file.path).expand_path(config_home)
           reader = RDF::Reader.for path.basename.to_s
         end
       else
-        path = Pathname(file).expand_path
+        path = Pathname(file).expand_path(config_home)
         file = path.open # reassign file
         reader ||= RDF::Reader.for path.basename.to_s
       end
@@ -618,10 +626,14 @@ EOS
     desc: 'Answer only to this domain'
   option :detach, aliases: %i[-z], type: :boolean, default: false,
     desc: 'Detach process to background'
+  option :server, aliases: %i[-S], type: :string, default: 'puma'.freeze,
+    desc: 'Force the server to use'
   option :pid, aliases: %i[-P], type: :string,
     desc: 'Create a PID file when detached'
   option :user, aliases: %i[-U], type: :string,
     desc: 'override REMOTE_USER'
+  option :profile, type: :boolean, default: false,
+    desc: 'Enable the profiler'
 
   def engine
     # we imagine detecting whether the configuration has been initialized
@@ -641,24 +653,43 @@ EOS
 
     # give us a harness
     app = harness = Intertwingler::Harness.new authorities,
-      home: config_home, log: log
+      home: config_home, log: log, jwt: base_config[:jwt]
 
     # gin up a quick lil middleware to override REMOTE_USER
     app = -> env do
+      log.debug "setting user to #{options[:user]}"
       env['REMOTE_USER'] = options[:user]
       harness.call env
     end if options[:user]
+
+    if options[:profile]
+      warn 'enabling profiler'
+
+      require 'rack/builder'
+      require 'stackprof'
+      # require 'rack-mini-profiler'
+      tmp = app
+      app = Rack::Builder.new do
+        use StackProf::Middleware, enabled: true, mode: :cpu, raw: true,
+          path: '/tmp/stackprof-intertwingler.dump', save_every: 1
+        # interval: 1000, save_every: 5
+        # use Rack::MiniProfiler
+        #map(?/) { run tmp }
+        run tmp
+      end
+    end
 
     # initialize rack server
     Rackup::Server.start({
       app: app,
       # server: ...
+      server: options[:server],
       # environment: ...
       daemonize: options[:detach],
       Host: options[:host] || base_config[:host],
       Port: options[:port] || base_config[:port],
     })
-  end
+123  end
 
   desc :pry, 'Run a debugging REPL (pry)'
   def pry
@@ -738,18 +769,19 @@ EOS
   def load *files
 
     if files.empty?
-      prompt.error_md 'No files speicfied. Quitting.'
+      prompt.error_md 'No files specified. Quitting.'
       exit 1
     end
 
     auth = default_authority options[:authority]
-    repo = authorities[auth]
+    repo = RDF::Graph.new data: authorities[auth],
+      graph_name: RDF::URI("dns:#{auth}")
 
     # load all the parsers
     load_formats
 
     pairs = files.map do |file|
-      file = Pathname(file).expand_path
+      file = Pathname(file).expand_path(config_home)
       [file, RDF::Reader.for(file.basename.to_s)]
     end
 
@@ -811,8 +843,15 @@ EOS
 
     fh = file ? file.open('wb') : $stdout
 
+    # only narrow if the authority is explicitly specified on the command line
+    graph = if options[:authority]
+              RDF::Graph.new data: repo, graph_name: RDF::URI("dns:#{auth}")
+            else
+              repo
+            end
+
     writer.new(fh, prefixes: resolver.prefixes ) do |writer|
-      repo.each_statement { |s| writer << s }
+      graph.each_statement { |s| writer << s }
     end
   end
 

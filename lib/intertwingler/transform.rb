@@ -563,7 +563,7 @@ class Intertwingler::Transform
         next unless can_serve! transform, type
 
         # this already should be a uuid but eh
-        uuid = resolver.uuid_for transform.subject, as: :uri
+        uuid = resolver.uuid_for transform.subject, verify: false, as: :uri
         # first check if the transform matches typewise
         # XXX TODO handle `message/http`; not doing that one yet lol
         uri = URI(req.base_url) + uuid.uuid

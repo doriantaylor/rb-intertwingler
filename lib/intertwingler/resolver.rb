@@ -190,9 +190,10 @@ class Intertwingler::Resolver
   def initialize repo, base, aliases: [], prefixes: {}, subject: nil,
       documents: [], fragments: [], log: nil
 
-    @repo = repo
     raise ArgumentError, 'repo must be RDF::Queryable' unless
       repo.is_a? RDF::Queryable
+    @repo = RDF::Graph.new data: repo, graph_name: RDF::URI("dns:#{base.host}")
+    # @repo = repo
 
     # set the base uri; store it as as a URI rather than RDF::URI
     @base     = coerce_resource   base,    as: :uri
@@ -398,15 +399,6 @@ class Intertwingler::Resolver
   # lol ruby booleans do not coerce to integers so here we are
   BITS = { nil => 0, false => 0, true => 1 }.freeze
 
-  INSTANCE_COERCE = -> arg, as: :rdf do
-    begin
-      @base ? @base.merge(preproc arg.to_s.strip) : arg
-    rescue URI::InvalidURIError => e
-      warn "attempted to coerce #{arg} which turned out to be invalid: #{e}"
-      nil
-    end
-  end
-
   public
 
   # define_singleton_method :coerce_resource,
@@ -427,7 +419,17 @@ class Intertwingler::Resolver
     meth = self.method(:coerce_resource).to_proc
 
     wtf = -> arg, as: :rdf do
-      meth.call arg, as: as, &INSTANCE_COERCE
+      rider = -> arg do
+        begin
+          base ? base.merge(preproc arg.to_s.strip) : arg
+        rescue URI::InvalidURIError => e
+          m = "attempted to coerce #{arg} which turned out to be invalid: #{e}"
+          log ? log.error(m) : warn(m)
+          nil
+        end
+      end
+
+      meth.call arg, as: as, &rider
     end
 
     define_method :coerce_resource, &wtf
@@ -504,14 +506,14 @@ class Intertwingler::Resolver
           (uu = UUID::NCName.from_ncname(tu.fragment, validate: true))
         # this is the special case that the fragment is a compact uuid
         uu = RDF::URI("urn:uuid:#{uu}")
-        if !verify or @subjects[uu] ||= @repo.has_subject?(uu)
+        if !verify or @subjects[uu] ||= @repo.subject?(uu)
           uu = coerce_resource uu, as: as
           return scalar ? uu : [uu]
         end
       elsif tu.respond_to? :uuid
         # in this case the URI is already a UUID, so now we check
         # if it's a subject
-        if !verify or @subjects[uri] ||= @repo.has_subject?(uri)
+        if !verify or @subjects[uri] ||= @repo.subject?(uri)
           uri = coerce_resource uri, as: as
           return scalar ? uri : [uri]
         end
@@ -751,7 +753,7 @@ class Intertwingler::Resolver
                 # XXX what do we do about explicit graphs? also published?
                 host = host_for uuid
                 # note function-level scope of hosturi
-                uri_for(host, slugs: true, via: via) if host
+                uri_for(host, slugs: true, via: via, as: as) if host
               end
 
     # create an appropriate map function depending on whether there
@@ -823,7 +825,7 @@ class Intertwingler::Resolver
     # turn these into URIs if the thing says so
     out.map! do |u|
       u = as_alias u, via
-      u = URI(preproc u.to_s) if as == :uri
+      u = coerce_resource u, as: as
       u
     end
 

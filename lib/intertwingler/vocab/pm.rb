@@ -11,11 +11,11 @@ module Intertwingler::Vocab
   #   # This vocabulary encodes a model for expressing generic business processes. Its purpose is to provide a language and exchange format for software applications designed to facilitate project management.
   #   # @version 0.2
   #   class PM < RDF::StrictVocabulary
-  #     # An Action specializes an Event in that it is performed by (at least one) real, living Person.
+  #     # A pm:Action specializes an ev:Event in that it is performed by (at least one) real, living foaf:Person.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Action
   #
-  #     # A Goal extends a State by way of being explicitly desired by an Agent.
+  #     # A pm:Goal extends an ibis:Issue by way of being explicitly desired by a foaf:Agent.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Goal
   #
@@ -23,7 +23,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Method
   #
-  #     # A Target connects an abstract Goal to a specific Task, budget and deadline.
+  #     # A pm:Target connects a qualitative pm:Goal to a specific pm:Task, and a concrete, quantitative allocation of resources.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Target
   #
@@ -158,32 +158,32 @@ module Intertwingler::Vocab
 
     # Class definitions
     term :Action,
-      comment: {en: "An Action specializes an Event in that it is performed by (at least one) real, living Person."},
+      comment: {en: "A pm:Action specializes an ev:Event in that it is performed by (at least one) real, living foaf:Person."},
       "http://www.w3.org/2002/07/owl#disjointWith": "https://vocab.methodandstructure.com/ibis#State",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "Action",
       subClassOf: ["http://purl.org/NET/c4dm/event.owl#Event", "http://www.w3.org/ns/prov#Activity"],
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Goal,
-      comment: {en: "A Goal extends a State by way of being explicitly desired by an Agent."},
+      comment: {en: "A pm:Goal extends an ibis:Issue by way of being explicitly desired by a foaf:Agent."},
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "Goal",
-      note: {en: "A Goal is not actionable itself, although Tasks, which are Actions, must achieve at least one Goal. At the time of observation, a Goal, like its superclass, State, is either true or false. This entails that a Goal is not expressed in terms of quantitative results or deadlines. That is the job of a Target."},
+      note: {en: "A pm:Goal is not actionable itself, although a pm:Task, which is a pm:Action, must achieve at least one pm:Goal. At the time of observation, pm:Goal, like its superclass, ibis:Issue, is binary: either resolved or unresolved. This entails that a pm:Goal is not expressed in terms of quantitative results or deadlines. That is the job of a pm:Target."},
       subClassOf: "https://vocab.methodandstructure.com/ibis#Issue",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Method,
       comment: {en: "A method specifies an abstract sequence of events."},
-      editorialNote: {en: "This class is provisional. It isn't entirely clear that we need a distinct Method class, since Tasks and the like could be appropriated as prototypes of methods."},
+      editorialNote: {en: "This class is provisional. It isn't entirely clear that we need a distinct pm:Method class, since pm:Tasks and the like could be appropriated as prototypes of methods."},
       "http://www.w3.org/2002/07/owl#disjointWith": "https://vocab.methodandstructure.com/ibis#State",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "Method",
       subClassOf: "https://vocab.methodandstructure.com/process-model#Action",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Target,
-      comment: {en: "A Target connects an abstract Goal to a specific Task, budget and deadline."},
+      comment: {en: "A pm:Target connects a qualitative pm:Goal to a specific pm:Task, and a concrete, quantitative allocation of resources."},
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "Target",
-      note: {en: "The logical separation of a Target from a Goal makes it possible to speak of a Goal in abstract terms, and generate several equivalent candidate Tasks, each with one or more candidate Methods, which may achieve it."},
+      note: {en: "The reason why pm:Target is distinct from pm:Goal is because we can imagine more than one competing candidate pm:Task with different cost and effort profiles. Without this information, any goal—or target, for that matter—is merely aspirational. A target is therefore intended to marry a particular goal to a particular concrete strategy for achieving it."},
       subClassOf: "https://vocab.methodandstructure.com/process-model#Goal",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Task,
@@ -197,7 +197,7 @@ module Intertwingler::Vocab
     # Property definitions
     property :"achieved-by",
       comment: {en: "A pm:Goal is achieved by at least one candidate pm:Task."},
-      domain: ["https://vocab.methodandstructure.com/process-model#Goal", "https://vocab.methodandstructure.com/process-model#Target"],
+      domain: "https://vocab.methodandstructure.com/process-model#Goal",
       inverseOf: "https://vocab.methodandstructure.com/process-model#achieves",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "achieved-by",
@@ -224,7 +224,7 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :anchors,
       comment: {en: "By anchoring a pm:Goal to a pm:Target, we give it a concrete budget and deadline."},
-      domain: "https://vocab.methodandstructure.com/process-model#Task",
+      domain: ["https://vocab.methodandstructure.com/process-model#Target", "https://vocab.methodandstructure.com/process-model#Task"],
       inverseOf: "https://vocab.methodandstructure.com/process-model#anchored-by",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "anchors",
@@ -403,6 +403,7 @@ module Intertwingler::Vocab
     property :subtask,
       comment: {en: "This property narrows the domain and range of ev:sub_event to pm:Task."},
       domain: "https://vocab.methodandstructure.com/process-model#Task",
+      inverseOf: "https://vocab.methodandstructure.com/process-model#supertask",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "subtask",
       range: "https://vocab.methodandstructure.com/process-model#Task",

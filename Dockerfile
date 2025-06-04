@@ -18,6 +18,9 @@ WORKDIR /tmp/src
 
 # RUN git clone https://gitlab.com/doriantaylor/uri-urn.git && cd uri-urn && gem build && gem install *.gem && cd -
 
+# XXX TEMPORARY UNTIL 3.3.3 IS RELEASED
+RUN git clone -b speed-up-rdf-graph https://github.com/doriantaylor/rdf.git && cd rdf && gem build && gem install *.gem && cd -
+
 RUN git clone -b aliases-etc https://github.com/doriantaylor/rb-mimemagic.git && cd rb-mimemagic && gem build && gem install *.gem && cd -
 
 RUN git clone -b add-prompt-to-collector https://github.com/doriantaylor/rb-tty-prompt.git && cd rb-tty-prompt && gem build && gem install *.gem && cd -

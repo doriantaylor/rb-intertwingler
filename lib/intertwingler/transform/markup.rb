@@ -443,6 +443,32 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   # mangle mailto: URIs according to house style
   def mangle_mailto req, params
     engine.log.debug "mangling mailto: lol"
+    doc = req.body.object
+    if Intertwingler::Document.html? doc
+      doc = doc.dup
+      doc.xpath("//*[@href|@about|@resource]/@*" +
+                "[starts-with(normalize-space(.), 'mailto:')]").each do |attr|
+        address = attr.value.strip.delete_prefix('mailto:')
+        lp, dom = address.split(?@, 2).map do |x|
+          URI::encode_uri_component x
+        end
+        attr.value = %q[javascript:sendMail('%s','%s')] % [dom, lp]
+        elem = attr.parent
+        if elem.children.count == 1 && elem.children.first.text?
+          # XXX this is dumb lol, make it better
+          text = elem.children.first
+          tmp = text.content
+          if tmp.include? address
+            tmp.sub(/#{address}/,
+                    ["\u202e", dom.reverse, "\u202d",
+                     "\u1202e", ?@, lp.reverse, "\u202d"].join(''))
+            text.content = tmp
+          end
+        end
+      end
+
+      req.body.object = doc
+    end
     req.body
   end
 
@@ -471,8 +497,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # resolve this if need be
     if params[:href]
       r = engine.resolver
-      href = params[:href] = r.uri_for params[:href]
+      href = params[:href] = r.uri_for params[:href], slugs: true, as: :rdf
       ruri = RDF::URI(req.url) # RDF::URI has authority= but URI does not
+
+      engine.log.debug href.inspect
 
       if r.authorities.include? href.authority and
           r.authorities.include? ruri.authority

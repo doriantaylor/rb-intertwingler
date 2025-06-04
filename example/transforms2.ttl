@@ -445,9 +445,9 @@
   dct:title "All (RDF) Resources"@en ;
   tfo:parameter-list ( <urn:uuid:9ebe1146-b658-4dfb-9ae2-8036883a96ac> <urn:uuid:7170dcb2-aa31-4876-8817-dfe53ef79d69> <urn:uuid:3ef90f8b-a629-451e-94bf-da66c4a939bd> <urn:uuid:fe4d51e5-db44-4ebf-8d7b-8f5b3edaedbb> <urn:uuid:a6cf777a-2abf-46be-acc5-42625f335d03> <urn:uuid:b348a477-61c6-4ab0-9a88-d9eda964f256> ) .
 
-<urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca> a dcat:DataService ;
-  ci:canonical-slug "me"^^xsd:token ;
-  dct:title "Me"@en .
+# <urn:uuid:fe836b6d-11ef-48ef-9422-1747099b17ca> a dcat:DataService ;
+#   ci:canonical-slug "me"^^xsd:token ;
+#   dct:title "Me"@en .
 
 # Partial invocations
 
@@ -458,4 +458,4 @@
 <urn:uuid:982e771a-98d2-4023-938b-bde29e278c5b> a tfo:Partial ;
   tfo:transform <urn:uuid:fb680265-b62f-4fb5-af35-52f18c186d01> ;
   <urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f> "text/xsl"^^tfo:content-type ;
-  <urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253> <https://doriantaylor.com/transform> .
+  <urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253> <urn:uuid:a5c43171-93c5-48ca-bb63-145b5aca9686> .

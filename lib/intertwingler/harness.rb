@@ -14,9 +14,26 @@ class Intertwingler::Harness < Intertwingler::Handler
   # @param mapping [Hash{String=>RDF::Repository}] The relation
   #  mapping authorities (domains) to RDF repositories.
   #
-  def initialize mapping, home: nil, log: nil
+  def initialize mapping, home: nil, log: nil, jwt: {}
     @home = home
     @log  = log
+
+    if jwt and not jwt.empty?
+      begin
+        log.debug "Enabling user set by JWT"
+        require 'jwt'
+        require 'jwt-eddsa' if %w[ED25519].include? jwt[:algorithm]
+        @jwt = jwt
+      rescue LoadError => e
+        if e.path == 'eddsa'
+          warn "The 'rbnacl' gem is required for ED25519."
+        else
+          warn "You have a JWT configured but no 'jwt' gem installed."
+        end
+
+        raise e
+      end
+    end
 
     @engines = mapping.reduce({}) do |hash, pair|
       authority, repo = pair
@@ -37,6 +54,12 @@ class Intertwingler::Harness < Intertwingler::Handler
 
   end
 
+  private
+
+  BEARER = /^\s*Bearer\s+([0-9A-Za-z_-]+(?:\.[0-9A-Za-z_-]+)*)/
+
+  public
+
   attr_reader :engines, :home
 
   # Dispatch the request to the appropriate engine.
@@ -50,6 +73,36 @@ class Intertwingler::Harness < Intertwingler::Handler
 
     # match the authority to an engine or otherwise 404
     engine = @engines[authority] or return Rack::Response[404, {}, []]
+
+    # log.debug "Authorization: #{req.env['HTTP_AUTHORIZATION']}"
+    # log.debug 'Bearer matches' if BEARER.match? req.env['HTTP_AUTHORIZATION']
+    # log.debug @jwt.inspect
+
+    # handle jwt
+    if @jwt and bearer = req.env['HTTP_AUTHORIZATION'] and
+        m = BEARER.match(bearer)
+
+      token = m.captures.first
+
+      key, algo = @jwt.values_at :secret, :algorithm
+
+      begin
+        obj = JWT.decode(token, key, true, { algorithm: algo })
+      rescue JWT::DecodeError => e
+        return [409, {}, ["Could not decode JWT (#{token}), #{e} (#{e.class})"]]
+      rescue e
+        warn e.message
+        return [500, {}, ["Server error (check logs)"]]
+      end
+
+      # XXX better logging ???
+      if obj and obj.first.is_a? Hash and principal = obj.first['sub']
+        req.env['REMOTE_USER'] = principal
+        log.debug "Retrieved #{req.env['REMOTE_USER']} from JWT"
+      else
+        log.debug "JWT: #{obj.inspect}"
+      end
+    end
 
     # forward request to engine
     engine.handle req
