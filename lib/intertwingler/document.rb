@@ -2460,7 +2460,7 @@ class Intertwingler::Document
     out[:content]  = content if content
     out[:about]    = about if about
     out[:property] = resolver.abbreviate(
-      property, prefixes: prefixes, vocab: vocab) if property
+      property, scalar: false, prefixes: prefixes, vocab: vocab) if property
 
     # almost certain this is true, but not completely
     if value.literal?
@@ -2517,7 +2517,7 @@ class Intertwingler::Document
     # make the attributes
     { rel: rel, rev: rev, about: about,
      typeof: typeof, resource: resource }.each do |attr, term|
-      out[attr] = resolver.abbreviate term,
+      out[attr] = resolver.abbreviate term, scalar: !(%i[rel rev].include? attr),
         prefixes: prefixes, vocab: vocab if term
     end
 
