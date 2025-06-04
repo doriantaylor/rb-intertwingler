@@ -7,6 +7,8 @@ module Intertwingler::Vocab
   #   # Vocabulary for <https://vocab.methodandstructure.com/content-inventory#>
   #   #
   #   # A Content Inventory Vocabulary
+  #   #
+  #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
   #   # @version 0.16
   #   class CI < RDF::StrictVocabulary
   #     # This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware.
@@ -41,6 +43,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Section
   #
+  #     # A template operates over some input format.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Template
+  #
   #     # Identifies a variable which can be embedded into a document and assigned an rdf:value.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Variable
@@ -72,6 +78,10 @@ module Intertwingler::Vocab
   #     # This indicates the number of characters in a document, with punctuation and the XPath normalize-space function applied. Note this is characters, not bytes.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :characters
+  #
+  #     # An rdfs:Class associated with a ci:Template.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :class
   #
   #     # The document explicitly depicts this concept (or other entity).
   #     # @return [RDF::Vocabulary::Term]
@@ -172,6 +182,10 @@ module Intertwingler::Vocab
   #     # Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :representation
+  #
+  #     # A particular rdfs:Resource to be transformed by a ci:Template.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :resource
   #
   #     # The number of scripts in the document.
   #     # @return [RDF::Vocabulary::Term]
@@ -290,15 +304,12 @@ module Intertwingler::Vocab
 
     # Ontology definition
     ontology :"https://vocab.methodandstructure.com/content-inventory#",
+      comment: {en: "This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies."},
       "http://purl.org/dc/terms/created": "2012-01-23T11:52:00-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z"],
-      "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
-      "http://purl.org/dc/terms/subject": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", term(
-          comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
-          "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy","http://vocab.org/frbr/core","http://vocab.org/frbr/extended","https://www.w3.org/TR/prov-o/"],
-          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","https://www.w3.org/TR/vocab-org/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
-        )],
+      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z", "2025-06-04T11:19:06Z"],
+      "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy", "http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://vocab.org/frbr/core", "http://vocab.org/frbr/extended", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
+      "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/dc/terms/title": {en: "A Content Inventory Vocabulary"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "ci",
@@ -307,14 +318,10 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#license": "http://creativecommons.org/licenses/by/2.5/ca/",
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
-      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#"],
+      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/NET/c4dm/event.owl#", "http://purl.org/dc/terms/", "http://purl.org/linked-data/cube#", "http://purl.org/ontology/bibo/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2004/02/skos/core#", "http://xmlns.com/foaf/0.1/", "https://www.w3.org/TR/vocab-org/"],
       "http://www.w3.org/2002/07/owl#versionInfo": "0.16",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
-      "http://xmlns.com/foaf/0.1/primaryTopic": ["https://vocab.methodandstructure.com/content-inventory#", "https://vocab.methodandstructure.com/content-inventory#sec-classes", "https://vocab.methodandstructure.com/content-inventory#sec-dsd", "https://vocab.methodandstructure.com/content-inventory#sec-individuals", "https://vocab.methodandstructure.com/content-inventory#sec-properties", "https://www.w3.org/TR/turtle/", term(
-          comment: %(This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.),
-          "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy","http://vocab.org/frbr/core","http://vocab.org/frbr/extended","https://www.w3.org/TR/prov-o/"],
-          "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/dc/terms/","http://purl.org/ontology/bibo/","http://www.w3.org/2004/02/skos/core#","http://xmlns.com/foaf/0.1/","https://www.w3.org/TR/vocab-org/","http://purl.org/NET/c4dm/event.owl#","http://purl.org/linked-data/cube#"]
-        )],
+      "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/content-inventory#",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       type: ["http://purl.org/ontology/bibo/Webpage", "http://www.w3.org/2002/07/owl#Ontology"]
 
@@ -370,6 +377,12 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "Section",
       subClassOf: "http://purl.org/ontology/bibo/DocumentPart",
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :Template,
+      comment: {en: "A template operates over some input format."},
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "Template",
+      subClassOf: "http://xmlns.com/foaf/0.1/Document",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Variable,
       comment: {en: "Identifies a variable which can be embedded into a document and assigned an rdf:value."},
@@ -453,6 +466,13 @@ module Intertwingler::Vocab
       label: "characters",
       range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
       type: "http://purl.org/linked-data/cube#MeasureProperty"
+    property :class,
+      comment: {en: "An rdfs:Class associated with a ci:Template."},
+      domain: "https://vocab.methodandstructure.com/content-inventory#Template",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "class",
+      range: "http://www.w3.org/2000/01/rdf-schema#Class",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :depicts,
       comment: {en: "The document explicitly depicts this concept (or other entity)."},
       domain: "http://xmlns.com/foaf/0.1/Document",
@@ -678,6 +698,13 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "representation",
       subPropertyOf: "http://purl.org/dc/terms/hasFormat",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :resource,
+      comment: {en: "A particular rdfs:Resource to be transformed by a ci:Template."},
+      domain: "https://vocab.methodandstructure.com/content-inventory#Template",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "resource",
+      range: "http://www.w3.org/2000/01/rdf-schema#Resource",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :scripts,
       comment: {en: "The number of scripts in the document."},
