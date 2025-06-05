@@ -489,28 +489,85 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   def stylesheet_pi req, params
     # warn "lol stylesheet pi: #{params.inspect}"
     body = req.body
-    doc = body.object
+    doc  = body.object
 
     # coerce Params::Registry::Instance to plain hash
     params = params.to_h
 
-    # resolve this if need be
+    r = engine.resolver
+
+    # if a parameter is passed in explicitly, use that
     if params[:href]
-      r = engine.resolver
-      href = params[:href] = r.uri_for params[:href], slugs: true, as: :rdf
-      ruri = RDF::URI(req.url) # RDF::URI has authority= but URI does not
+      template = params[:href]
+      format   = params[:type]
+    elsif params[:subject] and subject = r.uuid_for(params[:subject])
+      # otherwise rummage around the graph and find the best-matching
+      # template associated with the subject
 
-      engine.log.debug href.inspect
+      # there won't be many of these and anyway this can stand to be cached
+      candidates = r.repo.all_of_type(CI.Template).map do |t|
+        out = {
+          resource: r.repo.objects_for(t, CI.resource),
+          class:    r.repo.objects_for(t, CI.class)
+        }
 
-      if r.authorities.include? href.authority and
-          r.authorities.include? ruri.authority
-        href.authority = ruri.authority
-        href.scheme    = ruri.scheme
+        [t, out]
+      end.to_h
+
+      # now we rearrange; XXX note if there are collisions, this will
+      # blow away duplicates arbitrarily
+      resources, classes = candidates.reduce([{}, {}]) do |accumulator, pair|
+        t = pair.first
+        rsrc, cls = pair.last.values_at(:resource, :class)
+        rsrc.each { |r| accumulator.first[r] = t }
+        cls.each  { |c| accumulator.last[c]  = t }
+
+        accumulator
       end
 
+      # first attempt to match the subject exactly (unlikely but w/e)
+      unless template = resources[subject]
+        # welp that was easy, let's track down the best match by type
+        types = r.repo.types_for subject
+        types << RDF::RDFS.Resource if types.empty? # not sure if dumb
+        tc = {} # type_is? score cache
+
+        template = classes.select do |k, _|
+          x = r.repo.type_is? types, k
+          tc[k] ||= x if x
+        end.sort { |a, b| tc[a.first] <=> tc[b.first] }.first
+      end
+
+      # note we know the things is there cause we just selected from it
+      format = candidates[template][:format]
+    else
+      template = params[:default]
     end
 
-    if doc.root
+    if template
+      # rewrite the template as a routable address
+      template = r.uri_for template, slugs: true, as: :rdf
+      ruri = RDF::URI(req.url) # RDF::URI has authority= but URI does not
+
+      # deal with domain aliasing
+      template = r.as_alias template, ruri
+
+      # what are we looking at here
+      engine.log.debug template.inspect
+
+      format = r.repo.objects_for(
+        t, RDF::Vocab::DC.format, only: :literal).sort.first
+      out[:format] = format.object.to_s.downcase if format
+
+      # assign back to the params cause they're there already
+      params[:href] = template
+      params[:type] = format || 'text/xsl' # XXX do we want a default?
+
+      # override this because of browsers wah wah boo hoo
+      params[:type] = 'text/xsl' if params[:type] == 'application/xslt+xml'
+    end
+
+    if params[:href] and doc.root
       doc.xpath("/processing-instruction('xml-stylesheet')").each do |c|
         c.unlink
       end
