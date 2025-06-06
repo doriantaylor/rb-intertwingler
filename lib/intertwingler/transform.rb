@@ -1014,6 +1014,29 @@ class Intertwingler::Transform
 
     public
 
+    # Extract the `Content-Location` header out of the transform
+    # subrequest.
+    #
+    # @param req [Rack::Request] the request object
+    # @param as  [:rdf, :uri] optional type coercion
+    #
+    # @raise [Intertwingler::Handler::Error::Conflict] if there is no
+    #  such header present
+    #
+    # @return [RDF::URI] the subject URI
+    #
+    def subject_from req, as: :rdf
+      # have i mentioned it's remarkable that Rack::Request has a
+      # different regime for header names than Rack::Response?
+      loc = req.get_header 'HTTP_CONTENT_LOCATION'
+
+      raise Intertwingler::Handler::Error::Conflict.new(
+        'Transform must have a Content-Location header',
+        method: req.request_method.to_sym) unless loc
+
+      resolver.coerce_resource loc, as: as
+    end
+
     def handle req
       # first we check if the request method is POST; if not this is over quickly
       return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST

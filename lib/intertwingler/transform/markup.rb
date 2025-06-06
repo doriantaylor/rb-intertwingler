@@ -197,6 +197,9 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       ['[not(ancestor-or-self::*[@property and not(@content|@datetime)])]']
   ).join.freeze
 
+  CI  = Intertwingler::Vocab::CI
+  TFO = Intertwingler::Vocab::TFO
+
   public
 
   # We do backlinks in a transform because that way it nets stuff like
@@ -206,15 +209,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   # leaves an exit for something else to supply them.
   #
   def add_backlinks req, params
-    # have i mentioned it's remarkable that Rack::Request has a
-    # different regime for header names than Rack::Response?
-    loc = req.get_header 'HTTP_CONTENT_LOCATION'
-
-    raise Intertwingler::Handler::Error::Conflict.new(
-      'Transform must have a Content-Location header', method: :POST) unless loc
-
-    # make sure we're coercing a string
-    loc = RDF::URI(loc.to_s)
+    loc = subject_from req
 
     engine.log.debug "adding backlinks to #{loc}"
 
@@ -491,6 +486,12 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     body = req.body
     doc  = body.object
 
+    # nothing to do if this is the case
+    return body unless doc.root
+
+    # this is the raw content-location header
+    subject = subject_from req
+
     # coerce Params::Registry::Instance to plain hash
     params = params.to_h
 
@@ -499,8 +500,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # if a parameter is passed in explicitly, use that
     if params[:href]
       template = params[:href]
-      format   = params[:type]
-    elsif params[:subject] and subject = r.uuid_for(params[:subject])
+      mimetype = params[:type]
+    elsif subject = r.uuid_for(subject)
       # otherwise rummage around the graph and find the best-matching
       # template associated with the subject
 
@@ -538,8 +539,6 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
         end.sort { |a, b| tc[a.first] <=> tc[b.first] }.first
       end
 
-      # note we know the things is there cause we just selected from it
-      format = candidates[template][:format]
     else
       template = params[:default]
     end
@@ -555,27 +554,34 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       # what are we looking at here
       engine.log.debug template.inspect
 
-      format = r.repo.objects_for(
-        t, RDF::Vocab::DC.format, only: :literal).sort.first
-      out[:format] = format.object.to_s.downcase if format
+      if !mimetype and not params[:href]
+        mimetype = r.repo.objects_for(
+          t, RDF::Vocab::DC.format,
+          only: :literal, datatype: TFO[:"content-type"]
+        ).sort.first
+        mimetype = mimetype.object.to_s.downcase if mimetype
+      end
 
-      # assign back to the params cause they're there already
+      # assign default and override because of browsers wah wah boo hoo
+      mimetype ||= 'text/xsl'
+      mimetype = 'text/xsl' if mimetype == 'application/xslt+xml'
+
+      # assign back to the params cause they're in a hash already lol
       params[:href] = template
-      params[:type] = format || 'text/xsl' # XXX do we want a default?
+      params[:type] = mimetype
 
-      # override this because of browsers wah wah boo hoo
-      params[:type] = 'text/xsl' if params[:type] == 'application/xslt+xml'
-    end
-
-    if params[:href] and doc.root
+      # okay now we actually do the surgery; first we remove anything
+      # that's already there
       doc.xpath("/processing-instruction('xml-stylesheet')").each do |c|
         c.unlink
       end
 
+      # then we find the node we're gonna stick this in front of
       node = doc.external_subset || doc.internal_subset || doc.root
 
       engine.log.debug "adding stylesheet PI: #{params[:href]}"
 
+      # et voilà
       XML::Mixup.markup before: node,
         spec: { '#pi' => 'xml-stylesheet' }.merge(params.slice :type, :href)
     end
