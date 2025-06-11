@@ -55,9 +55,13 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :dependency
   #
-  #     # Every pm:Target must have a due date, or expiry date after which the target is no longer viable.
+  #     # The due date of a pm:Target is a conventional deadline.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :due
+  #
+  #     # This serves as a hard expiry date for a given pm:Goal, such that after it elapses, any valuation ascribed to the goal goes to zero.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :expires
   #
   #     # A valid pm:Target must initiate exactly one pm:Task to carry it out.
   #     # @return [RDF::Vocabulary::Term]
@@ -111,6 +115,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :supertask
   #
+  #     # A pm:Goal can be ascribed a quantity that represents, in some unspecified unit, the marginal, potentially discounted value of achieving the goal.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :valuation
+  #
   #     # A variant is an alternate method of performing the same action.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :variant
@@ -118,6 +126,10 @@ module Intertwingler::Vocab
   #     # A foaf:Agent may want a pm:Goal.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :wants
+  #
+  #     # This is a stand-in datatype for an abstract resource quantity. Its purpose is to differentiate from xsd:decimal, which is indistinguishable from other real numbers.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :ARQ
   #
   #     # The task is aborted.
   #     # @return [RDF::Vocabulary::Term]
@@ -235,11 +247,11 @@ module Intertwingler::Vocab
       cardinality: "1",
       comment: {en: "Every pm:Target has to have a quantitative budget of resources assigned to it. It need not be denominated in currency (e.g. it could be person-hours)."},
       domain: "https://vocab.methodandstructure.com/process-model#Target",
-      editorialNote: {en: "It is not clear, prior to implementation, if we should keep the budget as a raw quantity, or create some kind of resource envelope object."},
-      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://www.youtube.com/watch?v=fiSjxr8xG6A",
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["https://vocab.methodandstructure.com/process-model#ARQ", "https://www.youtube.com/watch?v=fiSjxr8xG6A"],
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "budget",
       range: "http://www.w3.org/2001/XMLSchema#decimal",
+      subPropertyOf: "https://vocab.methodandstructure.com/process-model#valuation",
       type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :context,
       comment: {en: "A pm:Action may have an ibis:State as a context."},
@@ -270,12 +282,23 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :due,
       cardinality: "1",
-      comment: "Every pm:Target must have a due date, or expiry date after which the target is no longer viable.",
+      comment: "The due date of a pm:Target is a conventional deadline.",
       domain: "https://vocab.methodandstructure.com/process-model#Target",
       editorialNote: {en: "I am contemplating changing this to pm:expires to refer to the value-based process model."},
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://www.youtube.com/watch?v=fiSjxr8xG6A",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: {en: "due"},
+      range: "http://www.w3.org/2001/XMLSchema#dateTime",
+      subPropertyOf: "https://vocab.methodandstructure.com/process-model#expires",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
+    property :expires,
+      cardinality: "1",
+      comment: "This serves as a hard expiry date for a given pm:Goal, such that after it elapses, any valuation ascribed to the goal goes to zero.",
+      domain: "https://vocab.methodandstructure.com/process-model#Goal",
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://www.youtube.com/watch?v=fiSjxr8xG6A",
+      "http://www.w3.org/2004/02/skos/core#usageNote": {en: "You would use pm:expires (ideally in conjunction with pm:valuation) to express a window of opportunity."},
+      isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
+      label: {en: "expires"},
       range: "http://www.w3.org/2001/XMLSchema#dateTime",
       type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :"initiated-by",
@@ -418,6 +441,16 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/process-model#Task",
       subPropertyOf: "https://vocab.methodandstructure.com/ibis#specializes",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :valuation,
+      cardinality: "1",
+      comment: {en: "A pm:Goal can be ascribed a quantity that represents, in some unspecified unit, the marginal, potentially discounted value of achieving the goal."},
+      domain: "https://vocab.methodandstructure.com/process-model#Goal",
+      editorialNote: {en: "This property is provisional, and if it remains, will be relegated to a computed outcome from some depreciation function, which has yet to be defined."},
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["https://vocab.methodandstructure.com/process-model#ARQ", "https://www.youtube.com/watch?v=fiSjxr8xG6A"],
+      isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
+      label: "valuation",
+      range: "http://www.w3.org/2001/XMLSchema#decimal",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :variant,
       comment: {en: "A variant is an alternate method of performing the same action."},
       domain: "https://vocab.methodandstructure.com/process-model#Action",
@@ -444,6 +477,15 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/process-model#Goal",
       subPropertyOf: "https://vocab.methodandstructure.com/ibis#endorses",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+
+    # Datatype definitions
+    term :ARQ,
+      comment: {en: "This is a stand-in datatype for an abstract resource quantity. Its purpose is to differentiate from xsd:decimal, which is indistinguishable from other real numbers."},
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://en.wikipedia.org/wiki/Unidade_real_de_valor",
+      isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
+      label: "ARQ",
+      subClassOf: "http://www.w3.org/2001/XMLSchema#decimal",
+      type: "http://www.w3.org/2000/01/rdf-schema#Datatype"
 
     # Extra definitions
     term :ABORTED,

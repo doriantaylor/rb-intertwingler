@@ -47,12 +47,27 @@ class Intertwingler::Handler::KV < Intertwingler::Handler
         end
       end
 
+    # FUUUUUUUUUU this is annoying
+    post = req.POST # to actually parse
+    if post = req.env['rack.request.form_pairs']
+      post = post.reduce({}) do |hash, pair|
+        (hash[pair.first] ||= []) << pair.last
+        hash
+      end
+    elsif post = req.env['rack.request.form_vars']
+      post = Rack::Utils.default_query_parser.parse_query post
+    else
+      post = {}
+    end
+
+    log.debug post.inspect
+
     # XXX WATCH OUT THIS MIGHT SILENTLY THROW AWAY DATA
-    req.POST.each { |k, v| log.debug "POST #{k} => #{v}" }
+    # req.POST.each { |k, v| log.debug "POST #{k} => #{v}" }
 
     begin
       # generate the changeset
-      cs = kv.process req.POST
+      cs = kv.process post
 
       log.debug "inserts: #{cs.inserts} deletes: #{cs.deletes}"
 

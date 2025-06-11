@@ -2789,10 +2789,12 @@ class Intertwingler::Document
     end.to_h
 
     out = { "##{tag}" => nodes.values }
-    out[:typeof] = resolver.abbreviate(
-      struct[RDF.type], prefixes: prefixes) if struct[RDF.type]
-    out[:rel] = resolver.abbreviate(rel, prefixes: prefixes) if rel
-    out[:rev] = resolver.abbreviate(rev, prefixes: prefixes) if rev
+    out[:typeof] = resolver.abbreviate(struct[RDF.type], prefixes: prefixes,
+                                       scalar: false) if struct[RDF.type]
+    out[:rel] = resolver.abbreviate(
+      rel, prefixes: prefixes, scalar: false) if rel
+    out[:rev] = resolver.abbreviate(
+      rev, prefixes: prefixes, scalar: false) if rev
 
     # we actually want to return some metadata along with this, in
     # particular the fragment's string value (ie the concatenation of

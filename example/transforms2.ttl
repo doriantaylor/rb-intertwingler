@@ -457,5 +457,5 @@
 
 <urn:uuid:982e771a-98d2-4023-938b-bde29e278c5b> a tfo:Partial ;
   tfo:transform <urn:uuid:fb680265-b62f-4fb5-af35-52f18c186d01> ;
-  <urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f> "text/xsl"^^tfo:content-type ;
-  <urn:uuid:f37f7fa2-c208-4d81-8b93-6470b52fa253> <urn:uuid:a5c43171-93c5-48ca-bb63-145b5aca9686> .
+  <urn:uuid:773b77b2-ad28-4d4a-baf1-425ad9441f1f> "application/xslt+xml"^^tfo:content-type ;
+  <urn:uuid:d678dc7c-2b5c-409a-82ea-bff3376afb43> <urn:uuid:a5c43171-93c5-48ca-bb63-145b5aca9686> .

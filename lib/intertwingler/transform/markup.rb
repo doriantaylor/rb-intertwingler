@@ -505,7 +505,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       # otherwise rummage around the graph and find the best-matching
       # template associated with the subject
 
-      # there won't be many of these and anyway this can stand to be cached
+      # there won't be many of these, though this can stand to be cached
+      #
+      # XXX alTHOUGH this and the next stanza could probably be merged
+      # because this doesn't get used a second time
       candidates = r.repo.all_of_type(CI.Template).map do |t|
         out = {
           resource: r.repo.objects_for(t, CI.resource),
@@ -535,15 +538,23 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
         template = classes.select do |k, _|
           x = r.repo.type_is? types, k
+          # engine.log.debug "#{types.join ', '} -> #{k} score: #{x}"
           tc[k] ||= x if x
-        end.sort { |a, b| tc[a.first] <=> tc[b.first] }.first
+        end.sort do |a, b|
+          # engine.log.debug("#{b.first} (#{tc[b.first]}) <=> #{a.first} (#{tc[a.first]})");
+          tc[a.first] <=> tc[b.first]
+        end.map(&:last).first
       end
-
     else
       template = params[:default]
     end
 
     if template
+      engine.log.debug template.inspect
+
+      # ensure this is in fact a stable identifier
+      uu = r.uuid_for template
+
       # rewrite the template as a routable address
       template = r.uri_for template, slugs: true, as: :rdf
       ruri = RDF::URI(req.url) # RDF::URI has authority= but URI does not
@@ -554,9 +565,9 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       # what are we looking at here
       engine.log.debug template.inspect
 
-      if !mimetype and not params[:href]
+      if !mimetype and uu and not params[:href]
         mimetype = r.repo.objects_for(
-          t, RDF::Vocab::DC.format,
+          uu, RDF::Vocab::DC.format,
           only: :literal, datatype: TFO[:"content-type"]
         ).sort.first
         mimetype = mimetype.object.to_s.downcase if mimetype

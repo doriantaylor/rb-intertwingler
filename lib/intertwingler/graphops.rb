@@ -1868,7 +1868,8 @@ module Intertwingler
 
       # return a closure that can be passed into Enumerable#sort
       lambda do |a, b|
-        raise 'Comparands must be instances of RDF::Resource' unless
+        raise "Comparands #{a.inspect} and #{b.inspect} " +
+          'must be instances of RDF::Resource' unless
           [a, b].all? { |x| x.is_a? RDF::Resource }
 
         # let's not forget to reverse
