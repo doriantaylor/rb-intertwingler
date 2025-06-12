@@ -140,7 +140,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       Intertwingler::Document.literal_tag resolver, label, **args
     end
 
-    def xhtml_response body, uri: nil, label: nil, prefixes: nil, typeof: nil
+    def xhtml_response body,
+        uri: nil, label: nil, prefixes: nil, typeof: nil, cache: nil
       uri      ||= resolver.uri_for subject, slugs: true
       label    ||= repo.label_for(subject, noop: true).reverse
 
@@ -171,10 +172,20 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       rep = Intertwingler::Representation::Nokogiri.new doc,
         type: 'application/xhtml+xml'
 
-      Rack::Response[200, {
+      hdr = {
         'content-type'   => rep.type,
         'content-length' => rep.size.to_s,
-      }, rep]
+      }
+
+      if cache
+        cache = cache.map do |k, v|
+          v.nil? ? k.to_s : "#{k}=#{v}"
+        end.join(', ') if cache.is_a? Hash
+
+        hdr['cache-control'] = cache.to_s
+      end
+
+      Rack::Response[200, hdr, rep]
     end
 
     # this is more or less copied from perl
@@ -324,20 +335,25 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       generic_set_for PROPERTIES, prop, include: include
     end
 
-    def finalize body, uri: nil, prefixes: nil, typeof: nil
+    def finalize body, uri: nil, prefixes: nil, typeof: nil, cache: nil
       # XXX should we get this from the request??
       uri ||= resolver.uri_for subject, slugs: true
 
       case body
       when nil then nil
       when Hash, Array
-        xhtml_response body, uri: uri, prefixes: prefixes, typeof: typeof
+        xhtml_response body, uri: uri,
+          prefixes: prefixes, typeof: typeof, cache: cache
       when Rack::Response then body
       else nil
       end
     end
 
     public
+
+    def cacheable?
+      true
+    end
 
     def get uri, params: {}, headers: {}, user: nil, body: nil
       raise NotImplementedError, 'you should really implement this method, lol'
@@ -356,6 +372,10 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   #
   class Index < Resource
     SUBJECT = RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9')
+
+    def cacheable?
+      false
+    end
 
     # XXX lol one day we will localize
     LABELS = {
@@ -452,7 +472,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
            src: src, typeof: type } => :section, rel: rel }
       end
 
-      finalize out, uri: uri, prefixes: %i[cgto dct], typeof: CGTO.Index
+      finalize out, uri: uri, prefixes: %i[cgto dct], typeof: CGTO.Index,
+        cache: { "no-cache": nil }
     end
   end
 
@@ -550,6 +571,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         [ { cols => :tr, id: row, about: abt, typeof: obst }, "\n"]
       end
 
+      cache = { public: nil, "max-age": 5 }
+
       finalize({ [
         { { [
           { ['Class'] => :th },
@@ -557,7 +580,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           { ['Inferred Subjects'] => :th },
         ] => :tr } => :thead },
         { body => :tbody, rev: resolver.abbreviate(QB.dataSet) }
-        ] => :table }, uri: uri, prefixes: prefixes, typeof: CGTO.Summary)
+      ] => :table }, uri: uri, prefixes: prefixes,
+               typeof: CGTO.Summary, cache: cache)
     end
   end
 
@@ -633,14 +657,22 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         PROPLIST.each_with_index do |prop, i|
           # we need the property and the count
           cp = RDF::URI(prop.to_s.chop + '-count')
-          cv = litt(
-            RDF::Literal(record[i], datatype: XSD.nonNegativeInteger),
-            about: abt, property: cp)
-          cols << { linkt(hrefs[i], rel: prop, label: cv) => :td }
+
+          c = record[i]
+
+          args = { property: cp }
+          (c == 0) ? args[:name] = 'td' : args[:about] = abt
+
+          cv = litt(RDF::Literal(c, datatype: XSD.nonNegativeInteger), **args)
+
+          cols << (
+            (c > 0) ? { linkt(hrefs[i], rel: prop, label: cv) => :td } : cv)
         end
 
         { cols => :tr, id: row, about: abt, typeof: obst }
       end
+
+      cache = { public: nil, "max-age": 5 }
 
       finalize({ [
         { [
@@ -659,7 +691,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         {
           body => :tbody,
           rev: resolver.abbreviate(QB.dataSet, prefixes: prefixes)
-        } ] => :table }, uri: uri, prefixes: prefixes, typeof: CGTO.Summary)
+        } ] => :table }, uri: uri, prefixes: prefixes,
+               typeof: CGTO.Summary, cache: cache)
     end
   end
 
@@ -955,13 +988,6 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   def handle req
     # complain unless this is a GET or HEAD
 
-    if repo.respond_to?(:mtime) and
-        ims = req.get_header('HTTP_IF_MODIFIED_SINCE')
-      ims = (Time.httpdate(ims) rescue Time.at(0)).utc
-      lm  = repo.mtime
-      return Rack::Response[304, {}, []] if lm.to_i <= ims.to_i
-    end
-
     # get the uri
     uri  = URI(req.url)
     orig = uri.dup
@@ -974,15 +1000,23 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     subject  = resolver.uuid_for uri, verify: false
     resource = @manifest[subject] if subject
 
-    # stupid rack doesn't have this field
-    user = req.env['REMOTE_USER']
-
-    log.debug "found user #{user}" if user
-
     # get uuid or return 404
     return Rack::Response[404, {
       'content-type' => 'text/plain',
     }, ['no catalogue']] unless subject and resource
+
+    # okay NOW check if it's cacheable
+    if resource.cacheable? and repo.respond_to?(:mtime) and
+        ims = req.get_header('HTTP_IF_MODIFIED_SINCE')
+      ims = (Time.httpdate(ims) rescue Time.at(0)).utc
+      lm  = repo.mtime
+      return Rack::Response[304, {}, []] if lm.to_i <= ims.to_i
+    end
+
+    # stupid rack doesn't have this field
+    user = req.env['REMOTE_USER']
+
+    log.debug "found user #{user}" if user
 
     # XXX this may raise an Intertwingler::Handler::AnyButSuccess
     begin

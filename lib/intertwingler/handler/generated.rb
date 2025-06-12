@@ -70,9 +70,13 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
 
     # warn 'ouate de phoque'
 
+    cache = %w[max-age=0 must-revalidate]
+    cache.unshift(req.env['REMOTE_USER'] ? 'private' : 'public')
+
     hdrs = {
       'content-type'   => 'application/xhtml+xml',
       'content-length' => str.length.to_s,
+      'cache-control'  => cache.join(', '),
     }
     hdrs['last-modified'] = repo.mtime.httpdate if repo.respond_to? :mtime
 
