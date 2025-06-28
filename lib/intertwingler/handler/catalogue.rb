@@ -1026,6 +1026,79 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Inventory < Resource
     SUBJECT = RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228')
 
+    private
+
+    # XXX we want to just do the work of pulling and sorting these
+    # only once per GET on a given graph state. need a structure
+    # that's like: { host => parameter set => [mtime, content] } .
+    # content is something like [subject, types, label pred, label].
+    # we won't screw around with language (at this time). if the
+    # modification time is stale, we nuke and replace. otherwise we
+    # just take a slice for the window.
+    #
+    # note that the caching here is purely internal; from the outside
+    # you'll just see a 304. this is for the entire sequence which
+    # (potentially unwisely) is held in ram
+    #
+    def full_list params, records: nil
+      # i'm not sure if the host is even necessary because every engine
+      # has its own handler stack; oh well whatever we'll leave it in
+      scache = @subjects ||= {}
+      qcache = (@records ||= {})[resolver.base] ||= [nil, {}]
+
+      # so we actually just make the cache key the actual thing
+      key = [instance_of, in_domain, in_range]
+
+      # fetch the store mtime if it's available
+      mtime = repo.mtime if repo.respond_to? mtime
+
+      # if the store mtime is nil or newer than the cache (or the
+      # mtime of the cache itself is nil), retrieve the records
+
+    end
+
+    def generate_body uri, params, mtime: nil, &block
+      # do the boundary
+      boundary = Range.new(*params[:boundary].minmax.map { |x| x - 1 })
+
+      full_list(params).slice(boundary).map do |s, types, lp, lo|
+        yp = {
+        }
+
+        instance_exec yp, block
+      end
+    end
+
+    DISPATCH = {
+      'application/ld+json'   => -> uri, params {
+        length = nil
+        body = generate_body uri, params do |yp|
+          # smuggle out the total length
+          length ||= yp[:length]
+        end
+
+        out = {
+          "@context": {
+            "@version": 1.1,
+            "@base": uri,
+          }.merge(prefixes.slice(*pfx.to_a.sort).transform_values(&:to_s)),
+          "@id": '',
+        }
+
+        finalize(out.to_json, type: 'application/ld+json',
+                 cache: { public: nil, "max-age": 5 })
+      },
+      'application/xhtml+xml' => -> uri, params {
+        length = nil
+        body = generate_body uri, params do |yp|
+          # smuggle out the total length
+          length ||= yp[:length]
+        end
+      },
+    }
+
+    public
+
     def get uri, params: {}, headers: {}, user: nil, body: nil
       # The job of this thing is to list individual resources, in a
       # consistent order, with "best" label if applicable. Passing no
@@ -1162,7 +1235,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
       # this is trash but we're using a dynamic language sooo
       abt = params.dup
-      abt[:boundary] = nil
+      abt[boundary] = nil
       abt = abt.make_uri uri
 
       nav = { first: 'First', prev: 'Previous',

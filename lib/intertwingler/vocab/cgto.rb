@@ -43,6 +43,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Window
   #
+  #     # Specifies whether the inventory includes resources that are asserted from the parameters (assumed to be true).
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :asserted
+  #
   #     # Specifies the owl:Class found in the rdf:type of the subjects.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :class
@@ -54,6 +58,10 @@ module Intertwingler::Vocab
   #     # Connects the cgto:Space to its cgto:Index of resources.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :index
+  #
+  #     # Specifies whether the inventory includes resources that are inferred from the parameters, irrespective of whether they are asserted.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :inferred
   #
   #     # This property relates a cgto:State to the foaf:Agent associated with it.
   #     # @return [RDF::Vocabulary::Term]
@@ -91,7 +99,7 @@ module Intertwingler::Vocab
       comment: {en: "Ontologies like the IBIS vocabulary are intended to only convey their essential semantic content. There are nevertheless additional constructs, that do not belong in the core vocabulary, that need to be expressed in order to fully operationalize the information it describes as a piece of user-facing software. Such constructs include the users of the environment, and the graphical representation of the network itself, from colour palette to the relative (or absolute) geometry of the individual nodes."},
       "http://purl.org/dc/terms/created": "2022-12-04T20:12:02Z",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z", "2025-02-23T01:28:27Z", "2025-02-28T14:20:07Z"],
+      "http://purl.org/dc/terms/modified": ["2023-01-22T02:09:02Z", "2023-12-12T21:48:55Z", "2024-10-06T19:16:59Z", "2025-02-23T01:28:27Z", "2025-02-28T14:20:07Z", "2025-06-28T22:27:24Z"],
       "http://purl.org/dc/terms/title": {en: "Collaborative Graph Tool Ontology"},
       "http://purl.org/ontology/bibo/status": "http://purl.org/ontology/bibo/status/draft",
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/graph-tool#",
@@ -159,6 +167,13 @@ module Intertwingler::Vocab
       type: "http://www.w3.org/2002/07/owl#Class"
 
     # Property definitions
+    property :asserted,
+      comment: {en: "Specifies whether the inventory includes resources that are asserted from the parameters (assumed to be true)."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "asserted",
+      range: "http://www.w3.org/2001/XMLSchema#boolean",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :"asserted-object-count",
       comment: {en: ""},
       domain: "http://purl.org/linked-data/cube#Observation",
@@ -232,6 +247,20 @@ module Intertwingler::Vocab
       label: "focus-of",
       range: "https://vocab.methodandstructure.com/graph-tool#State",
       type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"in-domain-of",
+      comment: {en: "The parameter specifying the property that resources selected into the inventory are in the domain of."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "in-domain-of",
+      range: "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"in-range-of",
+      comment: {en: "The parameter specifying the property that resources selected into the inventory are in the range of."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "in-range-of",
+      range: "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :index,
       comment: {en: "Connects the cgto:Space to its cgto:Index of resources."},
       domain: "https://vocab.methodandstructure.com/graph-tool#Space",
@@ -240,6 +269,13 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/graph-tool#Index",
       subPropertyOf: ["http://rdfs.org/sioc/ns#space_of", "http://www.w3.org/1999/xhtml/vocab#index"],
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :inferred,
+      comment: {en: "Specifies whether the inventory includes resources that are inferred from the parameters, irrespective of whether they are asserted."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "inferred",
+      range: "http://www.w3.org/2001/XMLSchema#boolean",
+      type: "http://www.w3.org/2002/07/owl#DatatypeProperty"
     property :"inferred-object-count",
       comment: {en: ""},
       domain: "http://purl.org/linked-data/cube#Observation",
@@ -268,6 +304,13 @@ module Intertwingler::Vocab
       label: "inferred-subjects",
       range: "https://vocab.methodandstructure.com/graph-tool#Inventory",
       type: ["http://purl.org/linked-data/cube#AttributeProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"instance-of",
+      comment: {en: "The parameter specifying the classes that resources selected into the inventory are instances of."},
+      domain: "https://vocab.methodandstructure.com/graph-tool#Inventory",
+      isDefinedBy: "https://vocab.methodandstructure.com/graph-tool#",
+      label: "instance-of",
+      range: "http://www.w3.org/2000/01/rdf-schema#Class",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :owner,
       comment: {en: "This property relates a cgto:State to the foaf:Agent associated with it."},
       domain: "https://vocab.methodandstructure.com/graph-tool#State",
