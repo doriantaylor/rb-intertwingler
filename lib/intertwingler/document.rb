@@ -631,7 +631,7 @@ class Intertwingler::Document
       # (concept scheme, collection, ordered collection)
 
       # run this once
-      rels = {
+      rels = @rels ||= {
         broader: 'Has Broader',
         narrower: 'Has Narrower',
         related: 'Has Related' }.map do |k, v|
@@ -642,7 +642,8 @@ class Intertwingler::Document
       skospreds = rels.map(&:first).reduce(Set[]) { |s, a| s | a }
 
       # 2025-03-23 we want the other ones too
-      other = @repo.property_set(RDF::Vocab::SKOS.semanticRelation) - skospreds
+      other = @other ||=
+        @repo.property_set(RDF::Vocab::SKOS.semanticRelation) - skospreds
       skospreds |= other
       skospreds.freeze
 
@@ -876,6 +877,7 @@ class Intertwingler::Document
 
           # id  = UUID::NCName.to_ncname_64(s.value.dup, version: 1)
           resource = @resolver.uri_for(s, slugs: true, as: :uri) || URI(s.to_s)
+          # warn "#{s} => #{resource.inspect}"
           id = resource.fragment || UUID::NCName.to_ncname_64(s.value.dup, version: 1)
           sec = { el => :section, id: id, resource: uri.route_to(resource) }
           if typ = @repo.asserted_types(s, struct: struct)
@@ -1892,6 +1894,9 @@ class Intertwingler::Document
   def self.get_prefixes elem, traverse: true, coerce: nil, descend: false
     coerce = assert_uri_coercion coerce
 
+    # bail out if this is nil
+    return {} unless elem
+
     # deal with a common phenomenon
     elem = elem.root if elem.is_a? Nokogiri::XML::Document
 
@@ -2449,14 +2454,16 @@ class Intertwingler::Document
   def self.literal_tag resolver, value, name: :span, about: nil, property: nil,
       text: nil, prefixes: {}, vocab: nil
 
-    prefixes ||= resolver.prefixes
+    prefixes = resolver.prefixes.merge(prefixes || {})
+
+    # copy value to text
+    text ||= value.value
 
     # literal text content if different from the value
-    content = if value.literal? and text and text != value.value
-                value.value
-              end
+    content = value.value if value.literal? and
+      (name.to_s == 'meta' or text != value.value)
 
-    out = { [text || value.value] => name.to_sym }
+    out = { "##{name}" => (name.to_s == 'meta' ? nil : [text]) }
     out[:content]  = content if content
     out[:about]    = about if about
     out[:property] = resolver.abbreviate(
@@ -2484,6 +2491,8 @@ class Intertwingler::Document
   def self.link_tag resolver, target, rel: nil, rev: nil, href: nil, about: nil,
       typeof: nil, label: nil, property: nil, name: :a, placeholder: nil,
       base: nil, prefixes: nil, vocab: nil
+
+    prefixes = resolver.prefixes.merge(prefixes || {})
 
     # * target is href= by default
     # * if we supply an href=, target becomes resource=

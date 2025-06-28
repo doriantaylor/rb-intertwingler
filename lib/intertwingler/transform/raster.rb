@@ -77,6 +77,10 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     # XXX sanitize params
     # width, height = params.values_at :width, :height
 
+    loc  = req.get_header 'HTTP_CONTENT_LOCATION'
+
+    engine.log.debug "scaling #{loc} by #{params}"
+
     body = req.body
     img  = body.object
     img  = img.thumbnail_image params[:width].first.to_i

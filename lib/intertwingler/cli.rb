@@ -670,8 +670,9 @@ EOS
       # require 'rack-mini-profiler'
       tmp = app
       app = Rack::Builder.new do
-        use StackProf::Middleware, enabled: true, mode: :cpu, raw: true,
-          path: '/tmp/stackprof-intertwingler.dump', save_every: 1
+        use StackProf::Middleware, enabled: true, mode: :wall, raw: true,
+          path: '/tmp/', #'/tmp/stackprof-intertwingler.dump',
+          save_every: 1
         # interval: 1000, save_every: 5
         # use Rack::MiniProfiler
         #map(?/) { run tmp }

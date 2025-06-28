@@ -2194,6 +2194,21 @@ module Intertwingler
       invert ? invert_struct(struct) : struct
     end
 
+    # Invert a statement around `owl:inverseOf` or `owl:SymmetricProperty`.
+    #
+    # @param statement [RDF::Statement] the statement to invert
+    #
+    # @return [nil, RDF::Statement] either the inverted statement or nothing
+    def invert_statement statement
+      return if statement.object.literal?
+      s, p, o, g = statement.to_quad
+
+      # we just sort to make sure it's consistent
+      return unless symmetric?(p) or p = p.inverseOf&.sort&.first
+
+      RDF::Statement.new(o, p, s, graph_name: g)
+    end
+
     # Given a structure of the form +{ predicate => [objects] }+,
     # rearrange the structure into one more amenable to rendering
     # RDFa. Returns a hash of the form +{ resources: { r1 => Set[p1, pn]

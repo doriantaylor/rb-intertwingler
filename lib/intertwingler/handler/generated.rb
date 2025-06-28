@@ -70,7 +70,7 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
 
     # warn 'ouate de phoque'
 
-    cache = %w[max-age=0 must-revalidate]
+    cache = %w[must-revalidate]
     cache.unshift(req.env['REMOTE_USER'] ? 'private' : 'public')
 
     hdrs = {

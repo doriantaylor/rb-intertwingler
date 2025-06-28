@@ -5,6 +5,7 @@ require 'intertwingler/document'
 require 'intertwingler/representation/nokogiri'
 require 'xml/mixup'
 require 'rdf/rdfxml'
+require 'http/negotiate'
 
 # This is a `GET` handler for what I'm calling "_catalogue_ resources"
 # (sorry Americans). Its purpose is to tell us things like what's in
@@ -140,6 +141,16 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       Intertwingler::Document.literal_tag resolver, label, **args
     end
 
+    # Flatten a hash representation of a `Cache-Control` header to a string.
+    def flatten_cc hdr
+
+      hdr = hdr.map do |k, v|
+        v.nil? ? k.to_s : "#{k}=#{v}"
+      end.join(', ') if hdr.is_a? Hash
+
+      hdr.to_s
+    end
+
     def xhtml_response body,
         uri: nil, label: nil, prefixes: nil, typeof: nil, cache: nil
       uri      ||= resolver.uri_for subject, slugs: true
@@ -177,13 +188,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         'content-length' => rep.size.to_s,
       }
 
-      if cache
-        cache = cache.map do |k, v|
-          v.nil? ? k.to_s : "#{k}=#{v}"
-        end.join(', ') if cache.is_a? Hash
-
-        hdr['cache-control'] = cache.to_s
-      end
+      hdr['cache-control'] = flatten_cc(cache) if cache
 
       Rack::Response[200, hdr, rep]
     end
@@ -335,12 +340,20 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       generic_set_for PROPERTIES, prop, include: include
     end
 
-    def finalize body, uri: nil, prefixes: nil, typeof: nil, cache: nil
+    # XXX yes i know there's (MIME) :type and (RDF) :typeof. sue me.
+    def finalize body, uri: nil,
+        prefixes: nil, typeof: nil, type: nil, cache: nil
       # XXX should we get this from the request??
       uri ||= resolver.uri_for subject, slugs: true
 
       case body
       when nil then nil
+      when String
+        ct = type || 'application/octet-stream'
+        # engine.log.debug body
+        hdr = { 'content-length' => body.b.length, 'content-type' => ct }
+        hdr.merge!({ 'cache-control' => flatten_cc(cache) }) if cache
+        Rack::Response[200, hdr, StringIO.new(body)]
       when Hash, Array
         xhtml_response body, uri: uri,
           prefixes: prefixes, typeof: typeof, cache: cache
@@ -463,6 +476,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
         '611ed2d0-1544-4e0b-a4db-de942e1193e2' => CGTO['by-property'],
       }.map do |uu, pred|
+        uu = RDF::URI("urn:uuid:#{uu}")
         href = resolver.uri_for uu, slugs: true, as: :uri, via: uri
         src  = uri.route_to href
         # we could hard-code these i suppose but this affords changing them
@@ -488,7 +502,9 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class AllClasses < Resource
     SUBJECT = RDF::URI('urn:uuid:4ab10425-d970-4280-8da2-7172822929ea')
 
-    def get uri, params: {}, headers: {}, user: nil, body: nil
+    private
+
+    def generate_body uri, params, &block
       # we also need what's going on in the inventory down there so we
       # can present the counts
 
@@ -521,31 +537,32 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
       # log.debug abbrs.select {|_, v| v.nil? }.inspect
 
-      obst = resolver.abbreviate QB.Observation
-      st   = resolver.abbreviate CGTO.Inventory
-
-      # XXX we should figure out a way to resolve these if the subject
-      # UUIDs get overridden
       href = resolver.uri_for(
         RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228'),
         slugs: true, via: uri)
 
       # okay now we can sort it
-      body = counts.sort do |a, b|
+      counts.sort do |a, b|
         # log.debug({ a.first => abbrs[a.first], b.first => abbrs[b.first]}).inspect
         abbrs[a.first] <=> abbrs[b.first]
       end.map do |type, record|
         # XXX we have decided to make the sequence number into stable
         # fragments so we can point back to them
         row = resolver.stable_fragment subject, type
-        abt = "##{row}"
 
-        # this is the class of the class, which will be either
-        # rdfs:Class or owl:Class, or potentially something else we
-        # haven't seen yet
-        tt = resolver.abbreviate(
-          type.respond_to?(:type) ? type.type : RDF::RDFS.Class,
-          prefixes: prefixes)
+        yp = {
+          id:         row,
+          about:      "##{row}",
+          class:      type,
+          asserted:   record.first,
+          inferred:   record.last,
+          # this is the class of the class, which will be either
+          # rdfs:Class or owl:Class, or potentially something else we
+          # haven't seen yet
+          class_type: resolver.abbreviate(
+            type.respond_to?(:type) ? type.type : RDF::RDFS.Class,
+            prefixes: prefixes, scalar: false)
+        }
 
         # asserted and inferred params
         ap = params.dup
@@ -553,35 +570,146 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         ip = ap.dup
         ip[:inferred] = true
 
-        asserted = litt(
-          RDF::Literal(record.first, datatype: XSD.nonNegativeInteger),
-          about: abt, property: CGTO['asserted-subject-count'])
-        inferred = litt(
-          RDF::Literal(record.last,  datatype: XSD.nonNegativeInteger),
-          about: abt, property: CGTO['inferred-subject-count'])
-        cols = [
-          { linkt(type, rel: CGTO.class, typeof: tt,
-                  label: abbrs[type] || type) => :th },
-          { linkt(uri.route_to(ap.make_uri href), rel: CGTO['asserted-subjects'],
-                  typeof: st, label: asserted) => :td },
-          { linkt(uri.route_to(ip.make_uri href), rel: CGTO['inferred-subjects'],
-                  typeof: st, label: inferred) => :td },
-        ].map { |c| [c, "\n"] }.flatten(1)
+        yp[:a_params] = ap
+        yp[:i_params] = ip
+        yp[:a_href] = uri.route_to(ap.make_uri href).to_s
+        yp[:i_href] = uri.route_to(ip.make_uri href).to_s
 
-        [ { cols => :tr, id: row, about: abt, typeof: obst }, "\n"]
+        instance_exec yp, &block
+      end
+    end
+
+    # decided to do json-ld variants by hand because the (x)html is
+    # way too slow to generate after a POST. this is just a warmup
+    # btw; the real gnarly one is `all-resources`.
+    DISPATCH = {
+      'application/ld+json' => -> uri, params {
+        prefixes = PREFIXES.merge resolver.prefixes
+
+        obst = resolver.abbreviate QB.Observation, prefixes: prefixes
+        invt = resolver.abbreviate CGTO.Inventory, prefixes: prefixes
+        clsp = resolver.abbreviate CGTO.class, prefixes: prefixes
+        nint = resolver.abbreviate XSD.nonNegativeInteger, prefixes: prefixes
+
+        preds = %w[asserted inferred].product(%w[s -count]).reduce({}) do |h, x|
+          slug = '%s-subject%s' % x
+          z = CGTO[slug]
+          (h[x.first.to_sym] ||= []) <<
+            resolver.abbreviate(z, prefixes: prefixes)
+          h
+        end
+
+        # collect the prefixes from the abbreviated terms
+        pfx = Set[:cgto, :qb, :xsd]
+
+        body = generate_body uri, params do |yp|
+          yp[:class_type].each do |t|
+            p = /^([^:]+):/.match(t)&.captures&.first&.to_sym
+            pfx << p if p
+          end
+
+          o = {
+            "@id": yp[:about],
+            "@type": obst,
+            clsp => { "@id": yp[:class].to_s, "@type": yp[:class_type] },
+            preds[:asserted].last  => {
+              "@value": yp[:asserted], "@datatype": nint },
+            preds[:inferred].last  => {
+              "@value": yp[:inferred], "@datatype": nint },
+          }
+          o[preds[:asserted].first] = { "@id": yp[:a_href], "@type": invt } if
+            yp[:asserted] > 0
+          o[preds[:inferred].first] = { "@id": yp[:i_href], "@type": invt } if
+            yp[:inferred] > 0
+          o # rly?
+        end
+
+        # XXX uhh yo do we wanna do other backlinks?
+        index = resolver.uri_for(
+          RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9'),
+          slugs: true, via: uri)
+        bcls = resolver.abbreviate CGTO['by-class'], prefixes: prefixes
+        qbs  = resolver.abbreviate QB.structure, prefixes: prefixes
+
+        out = {
+          "@context": {
+            "@version": 1.1,
+            "@base": uri,
+          }.merge(prefixes.slice(*pfx.to_a.sort).transform_values(&:to_s)),
+          "@id": '',
+          "@type": resolver.abbreviate(CGTO.Summary, prefixes: prefixes),
+          qbs => resolver.abbreviate(
+            CGTO['resources-by-class'], prefixes: prefixes),
+          "@reverse": {
+            "qb:dataSet": body,
+            bcls => uri.route_to(index).to_s,
+          }
+        }
+
+        finalize(out.to_json, type: 'application/ld+json',
+                 cache: { public: nil, "max-age": 5 })
+      },
+      'application/xhtml+xml' => -> uri, params {
+        prefixes = PREFIXES.merge resolver.prefixes
+
+        obst = resolver.abbreviate QB.Observation, prefixes: prefixes
+        st   = resolver.abbreviate CGTO.Inventory, prefixes: prefixes
+
+        abbrs = {}
+
+        body = generate_body uri, params do |yp|
+          type = abbrs[yp[:class]] ||=
+            resolver.abbreviate(yp[:class], prefixes: prefixes) || yp[:class]
+          asserted = litt(
+            RDF::Literal(yp[:asserted], datatype: XSD.nonNegativeInteger),
+            about: yp[:about], property: CGTO['asserted-subject-count'])
+          inferred = litt(
+            RDF::Literal(yp[:inferred],  datatype: XSD.nonNegativeInteger),
+            about: yp[:about], property: CGTO['inferred-subject-count'])
+          cols = [ "\n",
+            { linkt(yp[:class], rel: CGTO.class, typeof: yp[:class_type],
+                    label: type) => :th }, "\n",
+            { linkt(yp[:a_href], rel: CGTO['asserted-subjects'],
+                    typeof: st, label: asserted) => :td }, "\n",
+            { linkt(yp[:i_href], rel: CGTO['inferred-subjects'],
+                    typeof: st, label: inferred) => :td }, "\n",
+          ].map { |c| [c, "\n"] }.flatten(1)
+
+          [ { cols => :tr, id: yp[:id], about: yp[:about], typeof: obst }, "\n"]
+        end
+
+        cache = { public: nil, "max-age": 5 }
+
+        finalize({ [ "\n",
+          { { [ "\n",
+            { ['Class'] => :th }, "\n",
+            { ['Asserted Subjects'] => :th }, "\n",
+            { ['Inferred Subjects'] => :th }, "\n",
+          ] => :tr } => :thead }, "\n",
+          { body => :tbody, rev: resolver.abbreviate(QB.dataSet) }, "\n",
+        ] => :table }, uri: uri, prefixes: prefixes,
+                 typeof: CGTO.Summary, cache: cache)
+      }
+    }
+    # make sure we cover our bases
+    %w[text/html application/xml].each do |t|
+      DISPATCH[t] = DISPATCH['application/xhtml+xml']
+    end
+
+    # meh i had something way more clever before
+    VARIANTS = DISPATCH.map do |k, v|
+      [k, { type: k }]
+    end.to_h
+
+    public
+
+    def get uri, params: {}, headers: {}, user: nil, body: nil
+      unless variant = HTTP::Negotiate.negotiate(headers, VARIANTS)
+        return Rack::Response[
+          406, { 'content-type' => 'text/plain' }, ['no variant chosen']]
       end
 
-      cache = { public: nil, "max-age": 5 }
-
-      finalize({ [
-        { { [
-          { ['Class'] => :th },
-          { ['Asserted Subjects'] => :th },
-          { ['Inferred Subjects'] => :th },
-        ] => :tr } => :thead },
-        { body => :tbody, rev: resolver.abbreviate(QB.dataSet) }
-      ] => :table }, uri: uri, prefixes: prefixes,
-               typeof: CGTO.Summary, cache: cache)
+      instance_exec uri, params, &DISPATCH[variant]
     end
   end
 
@@ -593,8 +721,9 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class AllProperties < Resource
     SUBJECT = RDF::URI('urn:uuid:611ed2d0-1544-4e0b-a4db-de942e1193e2')
 
-    def get uri, params: {}, headers: {}, user: nil, body: nil
+    private
 
+    def generate_body uri, params, &block
       prefixes = PREFIXES.merge resolver.prefixes
 
       # property => asserted (domain, range), inferred (domain, range)
@@ -621,12 +750,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
             end
           end
         end
-
       end
-
-      obst = resolver.abbreviate QB.Observation
-      st   = resolver.abbreviate CGTO.Inventory
-      wt   = resolver.abbreviate CGTO.Window
 
       # XXX we should figure out a way to resolve these if the subject
       # UUIDs get overridden
@@ -634,66 +758,217 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         RDF::URI('urn:uuid:bf4647be-7b02-4742-b482-567022a8c228'),
         slugs: true, via: uri)
 
-      body = counts.sort do |a, b|
+      counts.sort do |a, b|
         abbrs[a.first] <=> abbrs[b.first]
       end.map do |prop, record|
         row = resolver.stable_fragment subject, prop
-        abt = "##{row}"
 
-        tt = resolver.abbreviate(
-          prop.respond_to?(:type) ? prop.type : RDF::RDFV.Property,
-          prefixes: prefixes)
+        # generate all the row-specific data
+        yp = {
+          id: row,
+          about: "##{row}",
+          prop: prop,
+          prop_type: resolver.abbreviate(
+            prop.respond_to?(:type) ? prop.type : RDF::RDFV.Property,
+            prefixes: prefixes, scalar: false),
+        }.merge(%i[asserted inferred].product(
+          %i[domain range]).reduce({}) do |h, pair|
+                  # lol this is crazy person shit
 
-        cols = [{ linkt(prop, typeof: tt, label: abbrs[prop] || prop) => :th }]
+                  # param/link stuff
+                  x = params.dup
+                  x["in-#{pair.last}-of".to_sym] = Set[prop]
+                  x[:inferred] = (pair.first == :inferred)
+                  u = uri.route_to(x.make_uri href)
 
-        # this will make an array of links with appropriate parameters
-        hrefs = %i[in-domain-of in-range-of].product([false, true]).map do |p|
-          x = params.dup
-          x[p.first] = Set[prop]
-          x[:inferred] = p.last
-          uri.route_to(x.make_uri href)
+                  # now we do the counts
+                  z = { asserted: :a_href, inferred: :i_href }
+                  i = z.keys.index pair.first
+                  j = %i[domain range].index pair.last
+
+                  # warn "#{i} #{j} #{record}"
+
+                  # this is our product
+                  (h[pair.first] ||= [])[j]    = record[i << 1 | j]
+                  (h[z[pair.first]] ||= [])[j] = u
+
+                  h # return accumulator
+                end)
+
+        instance_exec yp, &block
+      end
+    end
+
+    DISPATCH = {
+      'application/ld+json' => -> uri, params {
+
+        prefixes = PREFIXES.merge resolver.prefixes
+
+        obst = resolver.abbreviate QB.Observation, prefixes: prefixes
+        invt = resolver.abbreviate CGTO.Inventory, prefixes: prefixes
+        prop = resolver.abbreviate CGTO.property, prefixes: prefixes
+        nint = resolver.abbreviate XSD.nonNegativeInteger, prefixes: prefixes
+
+        abbrs = {}
+
+        # collect the prefixes from the abbreviated terms
+        pfx = Set[:cgto, :qb, :xsd]
+
+        body = generate_body uri, params do |yp|
+          yp[:prop_type].each do |t|
+            p = /^([^:]+):/.match(t)&.captures&.first&.to_sym
+            pfx << p if p
+          end
+
+          o = {
+            "@id": yp[:about],
+            "@type": obst,
+            prop => { "@id": yp[:prop].to_s, "@type": yp[:prop_type] },
+          }
+          # add to it
+          %i[asserted inferred].product([0, 1]).each do |slug, i|
+            # property base, numeric property
+            pb = '%s-%s' % [slug, %w[subject object][i]]
+            np = abbrs[CGTO["#{pb}-count"]] ||=
+              resolver.abbreviate(CGTO["#{pb}-count"], prefixes: prefixes)
+
+            # numeric value
+            nv = yp[slug][i]
+            o[np] = { "@value": nv, "@datatype": nint }
+
+            if nv > 0
+              # href property, href value
+              hp = abbrs[CGTO["#{pb}s"]] ||=
+                resolver.abbreviate(CGTO["#{pb}s"], prefixes: prefixes)
+              hv = yp[{ asserted: :a_href, inferred: :i_href }[slug]][i]
+              o[hp] = { "@id": hv, "@type": invt }
+            end
+          end
+
+          o # the observation
         end
 
-        PROPLIST.each_with_index do |prop, i|
-          # we need the property and the count
-          cp = RDF::URI(prop.to_s.chop + '-count')
+        # XXX uhh yo do we wanna do other backlinks?
+        index = resolver.uri_for(
+          RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9'),
+          slugs: true, via: uri)
+        bprp = resolver.abbreviate CGTO['by-property'], prefixes: prefixes
+        qbd  = resolver.abbreviate QB.dataSet, prefixes: prefixes
+        qbs  = resolver.abbreviate QB.structure, prefixes: prefixes
 
-          c = record[i]
+        out = {
+          "@context": {
+            "@version": 1.1,
+            "@base": uri,
+          }.merge(prefixes.slice(*pfx.to_a.sort).transform_values(&:to_s)),
+          "@id": '',
+          "@type": resolver.abbreviate(CGTO.Summary, prefixes: prefixes),
+          qbs => resolver.abbreviate(
+            CGTO['resources-by-property'], prefixes: prefixes),
+          "@reverse": {
+            qbd => body,
+            bprp => uri.route_to(index).to_s,
+          }
+        }
 
-          args = { property: cp }
-          (c == 0) ? args[:name] = 'td' : args[:about] = abt
+        finalize(out.to_json, type: 'application/ld+json',
+                 cache: { public: nil, "max-age": 5 })
+      },
+      'application/xhtml+xml' => -> uri, params {
+        prefixes = PREFIXES.merge resolver.prefixes
 
-          cv = litt(RDF::Literal(c, datatype: XSD.nonNegativeInteger), **args)
+        obst = resolver.abbreviate QB.Observation, prefixes: prefixes
+        invt = resolver.abbreviate CGTO.Inventory, prefixes: prefixes
+        prop = resolver.abbreviate CGTO.property,  prefixes: prefixes
 
-          cols << (
-            (c > 0) ? { linkt(hrefs[i], rel: prop, label: cv) => :td } : cv)
+        # collect curies
+        abbrs = {}
+        # collect the prefixes from the abbreviated terms
+        pfx = Set[:cgto, :qb, :xsd]
+
+        # why didn't we just translate this to the same thing? i have no idea
+
+        body = generate_body uri, params do |yp|
+          yp[:prop_type].each do |t|
+            p = /^([^:]+):/.match(t)&.captures&.first&.to_sym
+            pfx << p if p
+          end
+
+          pabbr = abbrs[yp[:prop]] ||=
+            resolver.abbreviate yp[:prop], prefixes: prefixes
+
+          cols = [{ '#th' =>
+                   linkt(yp[:prop], typeof: yp[:prop_type], rel: prop,
+                         label: pabbr, prefixes: prefixes)}]
+
+          # warn yp.inspect
+
+          PROPLIST.each_with_index do |hp, i|
+            # we need the property and the count
+            cp = RDF::URI(hp.to_s.chop + '-count')
+
+            # mask and shift down
+            j = i & 3 >> 1
+
+            c = yp[%i[asserted inferred][j]][i & 1]
+            h = yp[%i[a_href     i_href][j]][i & 1]
+
+            args = { prefixes: prefixes, property: cp }
+            (c == 0) ? args[:name] = 'td' : args[:about] = yp[:about]
+
+            cv = litt(RDF::Literal(c, datatype: XSD.nonNegativeInteger), **args)
+
+            cols << ( (c > 0) ? {
+              '#td' => linkt(h, rel: hp, label: cv, typeof: invt) } : cv)
+          end
+
+          { cols => :tr, id: yp[:id], about: yp[:about], typeof: obst }
         end
 
-        { cols => :tr, id: row, about: abt, typeof: obst }
+        cache = { public: nil, "max-age": 5 }
+
+        finalize({ [
+          { [
+            { [
+              { ['Property'] => :th, rowspan: 2 },
+              { ['Asserted'] => :th, colspan: 2 },
+              { ['Inferred'] => :th, colspan: 2 },
+              ] => :tr },
+            { [
+              { ['In Domain'] => :th },
+              { ['In Range']  => :th },
+              { ['In Domain'] => :th },
+              { ['In Range']  => :th }
+              ] => :tr },
+            ] => :thead },
+          {
+            body => :tbody,
+            rev: resolver.abbreviate(QB.dataSet, prefixes: prefixes)
+          } ] => :table }, uri: uri, prefixes: prefixes,
+                 typeof: CGTO.Summary, cache: cache)
+      },
+    }
+    # make sure we cover our bases
+    %w[text/html application/xml].each do |t|
+      DISPATCH[t] = DISPATCH['application/xhtml+xml']
+    end
+
+    # meh i had something way more clever before
+    VARIANTS = DISPATCH.map do |k, v|
+      [k, { type: k }]
+    end.to_h
+
+    public
+
+    def get uri, params: {}, headers: {}, user: nil, body: nil
+      unless variant = HTTP::Negotiate.negotiate(headers, VARIANTS)
+        return Rack::Response[
+          406, { 'content-type' => 'text/plain' }, ['no variant chosen']]
       end
 
-      cache = { public: nil, "max-age": 5 }
-
-      finalize({ [
-        { [
-          { [
-            { ['Property'] => :th, rowspan: 2 },
-            { ['Asserted'] => :th, colspan: 2 },
-            { ['Inferred'] => :th, colspan: 2 },
-            ] => :tr },
-          { [
-            { ['In Domain'] => :th },
-            { ['In Range']  => :th },
-            { ['In Domain'] => :th },
-            { ['In Range']  => :th }
-            ] => :tr },
-          ] => :thead },
-        {
-          body => :tbody,
-          rev: resolver.abbreviate(QB.dataSet, prefixes: prefixes)
-        } ] => :table }, uri: uri, prefixes: prefixes,
-               typeof: CGTO.Summary, cache: cache)
+      instance_exec uri, params, &DISPATCH[variant]
     end
+
   end
 
   # Return an inventory of resources found in the graph. Three
