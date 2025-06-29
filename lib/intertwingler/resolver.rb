@@ -1000,32 +1000,48 @@ class Intertwingler::Resolver
 
     # note since hash key order is preserved this will clobber any
     # explicit namespace prefix for the vocab
-    rev = prefixes.invert
+    rev = prefixes.reduce({}) do |hash, pair|
+      pfx, vocab = pair
+      uri = vocab.to_uri
+
+      a = hash[uri.scheme] ||= {}
+      b = a[uri.authority] ||= {}
+      b[vocab] = pfx
+
+      hash
+    end
 
     term.map! do |t|
-      t = t.to_s
-      slug = nil # we want this value to be nil if no match and !noop
+      if cache.key? t
+        slug = cache[t]
+      else
+        s = t.to_s
+        slug = nil # we want this value to be nil if no match and !noop
 
-      # try matching each prefix URI from longest to shortest
-      rev.sort do |a, b|
-        b.first.to_uri.to_s.length <=> a.first.to_uri.to_s.length
-      end.each do |vocab, pfx|
-        # this will start us off with the terminating slug
-        slug = t.delete_prefix vocab.to_s
-        # warn [slug, pfx].inspect
-        # this is saying the URI either doesn't match or abbreviates to ""
-        if slug == t or pfx.nil? && slug.empty?
-          slug = nil
-        else
-          # it's already a slug so we add a prefix if there is one
-          slug = '%s:%s' % [pfx, slug] unless pfx.nil?
-          break # we have our match
+        if table = rev.dig(t.scheme, t.authority)
+          # try matching each prefix URI from longest to shortest
+          table.sort do |a, b|
+            b.first.to_uri.to_s.length <=> a.first.to_uri.to_s.length
+          end.each do |vocab, pfx|
+            # this will start us off with the terminating slug
+            slug = s.delete_prefix vocab.to_s
+            # warn [slug, pfx].inspect
+            # this is saying the URI either doesn't match or abbreviates to ""
+            if slug == s or pfx.nil? && slug.empty?
+              slug = nil
+            else
+              # it's already a slug so we add a prefix if there is one
+              slug = '%s:%s' % [pfx, slug] unless pfx.nil?
+              break # we have our match
+            end
+          end
         end
+
+        cache[t] = slug
       end
 
       # at this point slug is either an abbreviated term or nil, so:
-      slug ||= t if noop
-
+      slug ||= t.to_s if noop
       slug
     end
 

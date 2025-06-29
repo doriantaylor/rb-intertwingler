@@ -133,6 +133,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     private
 
+
     def linkt target, **args
       Intertwingler::Document.link_tag resolver, target, **args
     end
@@ -311,6 +312,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     PROPLIST = (%w[asserted inferred].product %w[subjects objects]).map do |p|
       Intertwingler::Vocab::CGTO[p.join ?-]
+    end
+
+    def abbr term, multi = false
+      # XXX this will no doubt make bugs lol
+      @prefixes ||= PREFIXES.merge resolver.prefixes
+      resolver.abbreviate term,
+        scalar: !multi, prefixes: @prefixes, cache: (@curies ||= {})
     end
 
     def generic_set_for stack, term, include: false
@@ -1028,6 +1036,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     private
 
+    def expand resource
+      x = { RDF.type => repo.types_for(resource) }
+      lp, lo = repo.label_for resource
+      x[lp] = [lo] if lp
+      x
+    end
+
     # XXX we want to just do the work of pulling and sorting these
     # only once per GET on a given graph state. need a structure
     # that's like: { host => parameter set => [mtime, content] } .
@@ -1040,62 +1055,295 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     # you'll just see a 304. this is for the entire sequence which
     # (potentially unwisely) is held in ram
     #
-    def full_list params, records: nil
+    def full_list params
+
+      # do the terms first because we need them
+      terms = %i[instance-of in-domain-of in-range-of].map do |k|
+        [k, (params[k] || []).map do |t|
+          resolver.resolve_curie t, noop: true
+        end.to_set]
+      end.to_h
+
       # i'm not sure if the host is even necessary because every engine
       # has its own handler stack; oh well whatever we'll leave it in
-      scache = @subjects ||= {}
-      qcache = (@records ||= {})[resolver.base] ||= [nil, {}]
+      # scache = @subjects ||= {}
+      qcache = (@qcache ||= {})[resolver.base] ||= {}
 
       # so we actually just make the cache key the actual thing
-      key = [instance_of, in_domain, in_range]
+      key = terms.values +
+        [params[:asserted] || true, params[:inferred] || false]
+
+      entry = qcache[key]
 
       # fetch the store mtime if it's available
-      mtime = repo.mtime if repo.respond_to? mtime
+      cm = (entry || []).first
+      rm = begin
+             # arrrgh RDF::Graph
+             rp = repo.respond_to?(:data) ? repo.data : rp
+             rp.mtime if rp.respond_to? :mtime
+           end
+
+      engine.log.debug "cache mtime: #{cm.inspect} repo mtime: #{rm.inspect}"
 
       # if the store mtime is nil or newer than the cache (or the
-      # mtime of the cache itself is nil), retrieve the records
+      # mtime of the cache itself is nil), retrieve the records, sort,
+      # and cache them
+      unless rm && cm && rm <= cm
+        # okay now we bring this in line with the original code
+        terms.transform_values! { |t| [t, Set[]] }
 
+        alts = [0]
+        alts << 1 if params[:inferred]
+
+        # step 1: map domain and range properties to asserted types
+        { "in-domain-of": :domain, "in-range-of": :range}.each do |k, m|
+          # add to inferred
+          terms[k][1] |= repo.property_set terms[k][0] if params[:inferred]
+
+          # ohh this adds instances of the domain/range, duh
+          alts.each do |v|
+            terms[:"instance-of"][v] |= terms[k][v].map do |t|
+            t.respond_to?(m) ? t.send(m) : nil
+            end.flatten.compact.select(&:iri?)
+          end
+        end
+
+        # *now* this adds to the inferencing to the types (if requested)
+        terms[:"instance-of"][1] |=
+          repo.type_strata(terms[:"instance-of"][0], descend: true) if
+          params[:inferred]
+
+        # collect the resources into a set for now
+        resources = {}
+
+        if terms.values.flatten.reduce(&:|).empty?
+          # just fetch everything
+          %i[subjects objects].each do |m|
+            repo.send(m).select(&:iri?).each do |r|
+              resources[r] ||= expand r
+            end
+          end
+        else
+          # there is something in at least one of these, so we filter
+
+          # let's get all the types that are actually in the graph
+          all = repo.all_types
+
+          alts.each do |v|
+            # do the properties
+            { "in-domain-of": :subjects, "in-range-of": :objects }.each do |k, m|
+              # XXX this is wrong; actually what this should do is
+              # something like p.domain
+              terms[k][v].each do |p|
+                repo.query([nil, p, nil]).send(m).select(&:iri?).each do |r|
+                  resources[r] ||= expand r
+                end
+              end
+            end
+
+            #
+            (terms[:"instance-of"][v] & all).each do |t|
+              repo.query([nil, RDF.type, t]).subjects.select(&:iri?).each do |r|
+                resources[r] ||= expand r
+              end
+            end
+          end
+        end
+
+        # but we want to use it as a cache for this comparator
+        lcmp = repo.cmp_label cache: resources, nocase: true, &:first
+
+        # so now we sort and do the final transformation
+        resources = resources.sort(&lcmp).to_h.transform_values do |v|
+          [v[RDF.type]] + v.except(RDF.type).first.flatten
+        end
+
+        # and now we store
+        entry = [rm, resources]
+        qcache[key] = entry if rm
+      end
+
+      entry.last
     end
 
-    def generate_body uri, params, mtime: nil, &block
+    def generate_body uri, params, &block
       # do the boundary
       boundary = Range.new(*params[:boundary].minmax.map { |x| x - 1 })
 
-      full_list(params).slice(boundary).map do |s, types, lp, lo|
-        yp = {
-        }
+      # duh this is a hash
+      list = full_list params
+      len  = list.length
 
-        instance_exec yp, block
+      # engine.log.debug "list length: #{len}, slice: #{boundary}"
+
+      # aduh try to_a first before slicing
+      list.to_a.slice(boundary).map do |s, rest|
+        # engine.log.debug(rest)
+        types, lp, lo = rest
+
+        su = (@uricache ||= {})[s] ||=
+          uri.route_to(resolver.uri_for s, slugs: true, via: uri)
+
+        yp = { about: su, length: len }
+        yp[:type] = types if types && !types.empty?
+        if lp
+          yp[:lprop] = lp
+          yp[:label] = lo
+        end
+
+        instance_exec yp, &block
       end
     end
 
     DISPATCH = {
-      'application/ld+json'   => -> uri, params {
+      'application/ld+json' => -> uri, params {
+        prefixes = PREFIXES.merge resolver.prefixes
+
+        terms = Set[]
+
+        # get the body
         length = nil
         body = generate_body uri, params do |yp|
-          # smuggle out the total length
+          # may as well smuggle out the total length now
           length ||= yp[:length]
+
+          # add these to terms
+          terms |= yp.values_at(:type, :lprop, :label).flatten.compact
+
+          o = {
+            "@id": yp[:about],
+            "@type": abbr(yp[:type], true),
+          }
+
+          if yp[:lprop] and yp[:label] and yp[:label].literal?
+            v, ln, dt = %i[value language datatype].map do |m|
+              yp[:label].send m
+            end
+
+            o[abbr(yp[:lprop])] = if ln
+                                  { "@value": v, "@language": ln }
+                                elsif dt
+                                  { "@value": v, "@datatype": abbr(dt) }
+                                else
+                                  v
+                                end
+          end
+
+          o # mah gerd
         end
 
-        out = {
+        # okay now we wrap the body in the inventory
+        np = params.dup
+        np[:boundary] = nil
+        inv = uri.route_to(np.make_uri uri)
+
+        inventory = {
+          "@id": inv.to_s,
+          "@type": abbr(CGTO.Inventory),
+          abbr(CGTO.asserted) => params[:asserted],
+          abbr(CGTO.inferred) => params[:inferred],
+        }
+        %i[instance-of in-domain-of in-range-of].each do |slug|
+          inventory[abbr(CGTO[slug])] = params[slug].to_a.sort.map do |c|
+            { "@id": abbr(c) }
+          end unless params[slug].empty?
+        end
+        inventory[abbr(RDF::RDFS.member)] = body
+
+        pfx = prefixes.slice(:cgto, :rdf, :rdfs, :xhv, nil).merge(
+          resolver.prefix_subset(terms)).map do |k, v|
+          [(k.nil? ? :@vocab : k), v.to_s]
+        end.sort { |a, b| a.first.to_s <=> b.first.to_s }.to_h
+
+        # and finally we wrap the inventory in the window
+        window = {
           "@context": {
             "@version": 1.1,
             "@base": uri,
-          }.merge(prefixes.slice(*pfx.to_a.sort).transform_values(&:to_s)),
+          }.merge(pfx),
           "@id": '',
+          "@type": abbr(CGTO.Window),
+          abbr(CGTO['window-of']) => inventory,
         }
+        # do the paginations
+        pp = pagination_params params, :boundary, length
+        pp.each do |k, v|
+          ku = uri.route_to(v.make_uri uri, defaults: :boundary)
+          window[abbr(XHV[k])] = { "@id": ku.to_s, "@type": abbr(CGTO.Window) }
+        end
 
-        finalize(out.to_json, type: 'application/ld+json',
+        finalize(window.to_json, type: 'application/ld+json',
                  cache: { public: nil, "max-age": 5 })
       },
       'application/xhtml+xml' => -> uri, params {
+        prefixes = PREFIXES.merge resolver.prefixes
+
+        mem = abbr(RDF::RDFS.member)
+
+        terms = Set[]
+
         length = nil
-        body = generate_body uri, params do |yp|
+        li = generate_body uri, params do |yp|
           # smuggle out the total length
           length ||= yp[:length]
+
+          terms |= yp.values_at(:type, :lprop, :label).flatten.compact
+
+          # href = uri.route_to yp[:about]
+          href = yp[:about]
+
+          # lol watch out, `types` is a valid mixed-in method
+          types = abbr(yp[:type], true)
+
+          lp, lo = yp.values_at :lprop, :label
+
+          a = linkt href, rel: mem,
+          typeof: types, label: lp ? litt(lo, property: lp) : lo
+
+          { '#li' => a }
         end
+
+        pp  = pagination_params params, :boundary, length
+
+        # this is trash but we're using a dynamic language sooo
+        abt = params.dup
+        abt[:boundary] = nil
+        abt = abt.make_uri uri
+
+        nav = { first: 'First', prev: 'Previous',
+               next: 'Next', last: 'Last'}.map do |k, label|
+          if pp[k]
+            ku = pp[k].make_uri uri, defaults: :boundary
+            { '#li' => linkt(uri.route_to(ku), rel: XHV[k], label: label) }
+          else
+            { '#li' => label }
+          end
+        end
+
+        pfx = prefixes.slice(
+          :cgto, :rdf, :rdfs, :xhv).merge resolver.prefix_subset(terms)
+
+        # XXX don't forget backlinks
+
+        finalize [{
+          li => :ol, start: params[:boundary].begin + 1, resource: abt,
+          rel: abbr(CGTO['window-of']),
+          rev: abbr(CGTO[:window]),
+          typeof: abbr(CGTO.Inventory),
+        }, { '#nav' => { '#ul' =>  nav } }],
+        uri: params.make_uri(uri, defaults: :boundary),
+        prefixes: pfx, typeof: CGTO.Window
       },
     }
+    # make sure we cover our bases
+    %w[text/html application/xml].each do |t|
+      DISPATCH[t] = DISPATCH['application/xhtml+xml']
+    end
+
+    # meh i had something way more clever before
+    VARIANTS = DISPATCH.map do |k, v|
+      [k, { type: k }]
+    end.to_h
 
     public
 
@@ -1133,131 +1381,12 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         'Redirecting to window', status: 308, location: base) if
         base.to_s != uri.to_s
 
-
-      # XXX step 0.5: resolve all the curies in the three sets in lieu
-      # of a functioning thing that will do this at the level of the
-      # parameter registry.
-
-      # instance-of OR (in-domain-of AND in-range-of)
-      terms = %i[instance-of in-domain-of in-range-of].reduce({}) do |h, k|
-        p    = params[k] || Set[]
-        h[k] = [p.map { |t| resolver.resolve_curie t, noop: true }.to_set, Set[]]
-        h
+      unless variant = HTTP::Negotiate.negotiate(headers, VARIANTS)
+        return Rack::Response[
+          406, { 'content-type' => 'text/plain' }, ['no variant chosen']]
       end
 
-      # an easy way to do this is just make an array of one element
-      # and append a 1 to it
-      variants = [0]
-      variants << 1 if params[:inferred]
-
-      # step 1: map domain and range properties to asserted types
-      { "in-domain-of": :domain, "in-range-of": :range}.each do |k, m|
-        # add to inferred
-        terms[k][1] |= repo.property_set terms[k][0] if params[:inferred]
-
-        variants.each do |v|
-          terms[:"instance-of"][v] |= terms[k][v].map do |t|
-            t.respond_to?(m) ? t.send(m) : nil
-          end.flatten.compact.select(&:iri?)
-        end
-      end
-
-      terms[:"instance-of"][1] |=
-        repo.type_strata(terms[:"instance-of"][0], descend: true) if
-        params[:inferred]
-
-      # warn terms.inspect
-
-      resources = Set[]
-
-      if terms.values.flatten.reduce(&:|).empty?
-        # just fetch everything
-        resources |= %i[subjects objects].map do |x|
-          repo.send(x).select &:iri?
-        end.reduce(&:+)
-      else
-        # there is something in at least one of these, so we filter
-
-        # let's get all the types that are actually in the graph
-        all = repo.all_types
-
-        variants.each do |v|
-          # do the properties
-          { "in-domain-of": :subjects, "in-range-of": :objects }.each do |k, m|
-            terms[k][v].each do |p|
-              resources |= repo.query([nil, p, nil]).send(m).select(&:iri?)
-            end
-          end
-
-          #
-          (terms[:"instance-of"][v] & all).each do |t|
-            resources |= repo.query([nil, RDF.type, t]).subjects.select(&:iri?)
-          end
-        end
-      end
-
-      # warn params.inspect
-
-      # do the boundary
-      boundary = Range.new(*params[:boundary].minmax.map { |x| x - 1 })
-
-      # transform resources initially
-      resources = resources.map do |r|
-        x = { RDF.type => repo.types_for(r) }
-        lp, lo = repo.label_for r
-        x[lp] = [lo] if lp
-        [r, x]
-      end.to_h
-
-      # but we want to use it as a cache for this comparator
-      lcmp = repo.cmp_label cache: resources, nocase: true
-
-      mem = resolver.abbreviate RDF::RDFS.member
-
-      li = resources.sort do |a, b|
-        lcmp.(a.first, b.first)
-      end.slice(boundary).map do |s, struct|
-        href = resolver.uri_for s, slugs: true, via: uri.dup
-        href = uri.route_to href
-
-        # lol watch out, `types` is a valid mixed-in method
-        types = repo.types_for s
-
-        lp, lo = repo.label_for s, struct: struct, noop: true
-
-        a = linkt href, rel: mem,
-          typeof: types, label: lp ? litt(lo, property: lp) : lo
-
-        { '#li' => a }
-      end
-
-      pp  = pagination_params params, :boundary, resources.size
-
-      # this is trash but we're using a dynamic language sooo
-      abt = params.dup
-      abt[boundary] = nil
-      abt = abt.make_uri uri
-
-      nav = { first: 'First', prev: 'Previous',
-             next: 'Next', last: 'Last'}.map do |k, label|
-        if pp[k]
-          ku = pp[k].make_uri uri, defaults: :boundary
-          { '#li' => linkt(uri.route_to(ku), rel: XHV[k], label: label) }
-        else
-          { '#li' => label }
-        end
-      end
-
-      # XXX don't forget backlinks
-
-      finalize [{
-        li => :ol, start: boundary.begin + 1, resource: abt,
-        rel: resolver.abbreviate(CGTO['window-of']),
-        rev: resolver.abbreviate(CGTO[:window]),
-        typeof: resolver.abbreviate(CGTO.Inventory),
-      }, { '#nav' => { '#ul' =>  nav } }],
-        uri: params.make_uri(base, defaults: :boundary),
-        prefixes: resolver.prefixes, typeof: CGTO.Window
+      instance_exec uri, params, &DISPATCH[variant]
     end
   end
 
