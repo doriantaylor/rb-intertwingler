@@ -204,7 +204,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       style  = head.xpath('html:style|style', XPATHNS).map(&:unlink)
       other  = head.xpath(HTML_HEAD_OTHER, XPATHNS).map(&:unlink)
       # nuke remaining child nodes
-      head.children.map(&:unlink)
+      head.children.each(&:unlink)
 
       # do title
       lp, lo = resolver.repo.label_for subject
@@ -233,7 +233,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
         head << base
       else
         base = XML::Mixup.markup parent: head,
-          spec: ["\n", { '#base' => nil, href => loc.to_s }]
+          spec: ["\n", { '#base' => nil, href: loc.to_s }]
       end
 
       # next is all links
@@ -348,9 +348,16 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # this one relinks
   def rehydrate req, params
-    #req.body.object
-    #Intertwingler::Document.rehydrate
+    loc = subject_from req
+    doc = req.body.object
+
     engine.log.debug "rehydrating lol"
+
+    @lemmas ||= {}
+
+    # Intertwingler::Document.rehydrate resolver, doc, base: loc, cache: @lemmas
+
+    req.body.object = doc
     req.body
   end
 

@@ -6,7 +6,8 @@ FROM ruby:latest
 RUN apt-get -y update
 RUN apt-get install -y liblmdb-dev libvips-dev libxml2-dev libxslt1-dev libsass-dev less vim
 
-RUN adduser --ingroup users --home /var/lib/intertwingler intertwingler
+RUN adduser --ingroup users --uid 116 --home /var/lib/intertwingler intertwingler
+RUN usermod -aG www-data intertwingler
 
 RUN gem install bundler
 RUN bundle config set path.system true
@@ -42,7 +43,7 @@ COPY . /tmp/src/intertwingler
 
 WORKDIR /tmp/src/intertwingler
 
-RUN gem install pry pry-byebug puma engtagger
+RUN gem install pry pry-byebug puma engtagger jwt
 # this one, i mean wtf
 RUN find /usr/local/bundle/gems/engtagger* -type f -print0 | xargs -0 chmod 644
 RUN bundle install

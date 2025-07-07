@@ -9,7 +9,7 @@ module Intertwingler::Vocab
   #   # A Content Inventory Vocabulary
   #   #
   #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
-  #   # @version 0.16
+  #   # @version 0.17
   #   class CI < RDF::StrictVocabulary
   #     # This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware.
   #     # @return [RDF::Vocabulary::Term]
@@ -99,7 +99,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :embeds
   #
-  #     # This property relates an Audience to a SKOS concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values.
+  #     # This property relates a ci:Audience to a skos:Concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :eschews
   #
@@ -107,9 +107,13 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :evokes
   #
-  #     # This property relates an Audience to a specific foaf:Person who is an exemplar of the audience.
+  #     # This property relates an ci:Audience to a specific foaf:Person who is an exemplar of the audience.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :exemplar
+  #
+  #     # Relates a foaf:Person who is an example member of a ci:Audience.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :exemplifies
   #
   #     # This property specifies form target, which may or may not be visible to the user.
   #     # @return [RDF::Vocabulary::Term]
@@ -183,6 +187,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :primary
   #
+  #     # This property relates a ci:Audience to a skos:Concept that is likely to be in the orbit of the audience's members: they are aware that the concept exists, although they may not necessarily understand it.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :recognizes
+  #
   #     # Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :representation
@@ -219,11 +227,11 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :target
   #
-  #     # This property relates an Audience to a SKOS concept that members of the audience are known to comprehend, and thereby do not need any additional explanation.
+  #     # This property relates a ci:Audience to a skos:Concept that members of the audience are known to comprehend, and thereby do not need any additional explanation.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :understands
   #
-  #     # This property relates an Audience to a SKOS concept that members of the audience are known to value, that is, to find meaningful in an axiological sense.
+  #     # This property relates a ci:Audience to a skos:Concept that members of the audience are known to value, that is, to find meaningful in an axiological sense.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :values
   #
@@ -311,7 +319,7 @@ module Intertwingler::Vocab
       comment: {en: "This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies."},
       "http://purl.org/dc/terms/created": "2012-01-23T11:52:00-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z", "2025-06-04T11:19:06Z", "2025-06-16T03:15:29Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z", "2025-06-04T11:19:06Z", "2025-06-16T03:15:29Z", "2025-07-07T00:33:53Z"],
       "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy", "http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://vocab.org/frbr/core", "http://vocab.org/frbr/extended", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
       "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/dc/terms/title": {en: "A Content Inventory Vocabulary"},
@@ -323,7 +331,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/NET/c4dm/event.owl#", "http://purl.org/dc/terms/", "http://purl.org/linked-data/cube#", "http://purl.org/ontology/bibo/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2004/02/skos/core#", "http://xmlns.com/foaf/0.1/", "https://www.w3.org/TR/vocab-org/"],
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.16",
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.17",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/content-inventory#",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
@@ -430,12 +438,8 @@ module Intertwingler::Vocab
       subPropertyOf: "http://purl.org/dc/terms/references",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"aware-of",
-      comment: {en: "This property relates an Audience to a SKOS concept that is likely to be in the orbit of the audience's members: they are aware that the concept exists, although they may not necessarily understand it."},
       domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
-      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "aware-of",
-      range: "http://www.w3.org/2004/02/skos/core#Concept",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#related",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :backlinks,
       comment: {en: "This a role to identify a particular HTML element (e.g. a  <nav> element) as a designated container for backlinks."},
@@ -516,14 +520,25 @@ module Intertwingler::Vocab
       label: "embeds",
       range: "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
       type: "http://purl.org/linked-data/cube#MeasureProperty"
+    property :"eschewed-by",
+      comment: {en: "Relates a skos:Concept to a ci:Audience that eschews it."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://vocab.methodandstructure.com/content-inventory#valued-by",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#eschews",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "eschewed-by",
+      range: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#recognized-by",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :eschews,
-      comment: {en: "This property relates an Audience to a SKOS concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values."},
+      comment: {en: "This property relates a ci:Audience to a skos:Concept that members of the audience are known to actively avoid or regard with contempt. This relation is intended to represent the complement of values."},
       domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://vocab.methodandstructure.com/content-inventory#values",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#eschewed-by",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "eschews",
       range: "http://www.w3.org/2004/02/skos/core#Concept",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#related",
+      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#recognizes",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :evokes,
       comment: {en: "The document evokes the given concept without mentioning it explicitly."},
@@ -534,11 +549,21 @@ module Intertwingler::Vocab
       subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#assumes",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :exemplar,
-      comment: {en: "This property relates an Audience to a specific foaf:Person who is an exemplar of the audience."},
+      comment: {en: "This property relates an ci:Audience to a specific foaf:Person who is an exemplar of the audience."},
       domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#exemplifies",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "exemplar",
       range: "http://xmlns.com/foaf/0.1/Person",
+      subPropertyOf: "http://www.w3.org/2004/02/skos/core#example",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :exemplifies,
+      comment: {en: "Relates a foaf:Person who is an example member of a ci:Audience."},
+      domain: "http://xmlns.com/foaf/0.1/Person",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#exemplar",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "exemplifies",
+      range: "https://vocab.methodandstructure.com/content-inventory#Audience",
       subPropertyOf: "http://www.w3.org/2004/02/skos/core#example",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :form,
@@ -702,6 +727,25 @@ module Intertwingler::Vocab
       label: "primary",
       subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#variant",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
+    property :"recognized-by",
+      comment: {en: "Relates a skos:Concept to a ci:Audience that recognizes it."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#recognizes",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "recognized-by",
+      range: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :recognizes,
+      comment: {en: "This property relates a ci:Audience to a skos:Concept that is likely to be in the orbit of the audience's members: they are aware that the concept exists, although they may not necessarily understand it."},
+      domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      equivalentProperty: "https://vocab.methodandstructure.com/content-inventory#aware-of",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#recognized-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "recognizes",
+      range: "http://www.w3.org/2004/02/skos/core#Concept",
+      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :representation,
       comment: {en: "Denotes a resource that is a concrete representation of the subject, which assumed to be more abstract."},
       "http://www.w3.org/2002/07/owl#deprecated": "true",
@@ -767,22 +811,43 @@ module Intertwingler::Vocab
       range: "http://xmlns.com/foaf/0.1/Document",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :understands,
-      comment: {en: "This property relates an Audience to a SKOS concept that members of the audience are known to comprehend, and thereby do not need any additional explanation."},
+      comment: {en: "This property relates a ci:Audience to a skos:Concept that members of the audience are known to comprehend, and thereby do not need any additional explanation."},
       domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": "http://purl.org/dc/terms/educationLevel",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#understood-by",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "understands",
       range: "http://www.w3.org/2004/02/skos/core#Concept",
-      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#aware-of",
+      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#recognizes",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"understood-by",
+      comment: {en: "Relates a skos:Concept to a ci:Audience that understands it."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#understands",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "understood-by",
+      range: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#recognized-by",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"valued-by",
+      comment: {en: "Relates a skos:Concept to a ci:Audience that values it."},
+      domain: "http://www.w3.org/2004/02/skos/core#Concept",
+      "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://vocab.methodandstructure.com/content-inventory#eschewed-by",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#valued-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "valued-by",
+      range: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#recognized-by",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :values,
-      comment: {en: "This property relates an Audience to a SKOS concept that members of the audience are known to value, that is, to find meaningful in an axiological sense."},
+      comment: {en: "This property relates a ci:Audience to a skos:Concept that members of the audience are known to value, that is, to find meaningful in an axiological sense."},
       domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": "https://vocab.methodandstructure.com/content-inventory#eschews",
+      inverseOf: "https://vocab.methodandstructure.com/content-inventory#valued-by",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "values",
       range: "http://www.w3.org/2004/02/skos/core#Concept",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#related",
+      subPropertyOf: "https://vocab.methodandstructure.com/content-inventory#recognizes",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :variant,
       comment: {en: "Denotes a resource that is a variant of a concrete representation of the subject, which assumed to be more abstract."},

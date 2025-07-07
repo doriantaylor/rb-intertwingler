@@ -394,9 +394,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   class Index < Resource
     SUBJECT = RDF::URI('urn:uuid:f4792b48-92d8-4dcb-ae8a-c17199601cb9')
 
-    def cacheable?
-      false
-    end
+    private
 
     # XXX lol one day we will localize
     LABELS = {
@@ -407,15 +405,23 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     }
     # (actually hate to be that guy but could probably do l10n in a transform)
 
-    def get uri, params: {}, headers: {}, user: nil, body: nil
+    def generate_jsonld uri, user
 
-      # user, state, by-class, by-property
+      preds = {
+        '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
+        '611ed2d0-1544-4e0b-a4db-de942e1193e2' => CGTO['by-property'],
+      }.map do |uu, pred|
+        uu = RDF::URI("urn:uuid:#{uu}")
+        href = resolver.uri_for uu, slugs: true, as: :uri, via: uri
 
-      dd = []
+        [abbr(pred),
+         { "@id": uri.route_to(href), "@type": abbr(CGTO.Summary) }]
+      end.to_h
 
-      # XXX PERHAPS THIS WHOLE USER BUSINESS SHOULD BE PARCELED OUT??
+      terms = Set[]
+
       if user
-        # resolve the user
+        # resolve the raw http user to something in the graph
         unless user.is_a? RDF::URI
           user = resolver.preproc user.to_s
           if user.include? ?@
@@ -428,18 +434,6 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
             user = RDF::URI("urn:x-user-id:#{user}")
           end
         end
-
-        # uu = resolver.uri_for user, slugs: true, as: :uri, via: uri
-        # ut = repo.types_for user
-        # up, uo = repo.label_for user, noop: true
-
-        # dd << { '#dt' => LABELS[CGTO.user] }
-        # dd << { '#dd' => linkt(uu, base: uri, rel: CGTO.user,
-        #                        typeof: ut, property: up, label: uo) }
-
-        # XXX don't get rid of this quite yet
-
-        # this is the actual user we want
         agent = repo.subjects_for(FOAF.account, user).sort.first
 
         if agent
@@ -447,55 +441,172 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           au = resolver.uri_for agent, slugs: true, as: :uri, via: uri
           ap, ao = repo.label_for agent
 
-          dd << { '#dt' => LABELS[CGTO.user] }
-          dd << { '#dd' => linkt(au, base: uri, rel: CGTO.user,
-                                 typeof: at, property: ap, label: ao) }
+          terms |= [at, ap, ao].flatten.compact
 
-          # resolve the user's state object
-
-          # ruh roh, didn't think about this: the user could conceivably
-          # have multiple state objects because the same site (moreover
-          # the same rdf store) could have multiple app instances
-
-          states = repo.subjects_for(CGTO.owner, agent).sort
-          unless states.empty?
-            dd << { '#dt' => LABELS[CGTO.state] }
-            states.each do |s|
-              su = resolver.uri_for s, slugs: true, as: :uri, via: uri
-              st = repo.types_for s
-
-              # doubtful but whatever
-              lp, lo = repo.label_for s, noop: true
-              dd << { '#dd' => linkt(su, rel: CGTO.state, typeof: st,
-                                     property: lp, label: lo )}
-            end
+          # add cgto:user
+          arec = { "@id": au.to_s, "@type": abbr(at, true)}
+          if ap
+            lrec = if ao.language?
+                     { "@value": ao.value, "@language": ao.language }
+                   elsif ao.datatype?
+                     { "@value": ao.value, "@datatype": abbr(ao.datatype) }
+                   else
+                     ao.value
+                   end
+            arec[abbr(ap)] = lrec
           end
+
+          preds[abbr(CGTO.user)] = arec
+
+          # now do states
+
+          states = repo.subjects_for(CGTO.owner, agent).sort.map do |st|
+            u = resolver.uri_for st, slugs: true, as: :uri, via: uri
+            { "@id": u.to_s, type: abbr(CGTO.State) }
+          end
+          preds[abbr(CGTO.state)] = states unless states.empty?
         end
       end
 
-      out = []
-      out << { dd => :dl } unless dd.empty?
+      pfx = resolver.prefixes.slice(
+        :cgto, :rdf, :rdfs, :xsd, :foaf, :xhv, nil).merge(
+      resolver.prefix_subset(terms)).map do |k, v|
+        [(k.nil? ? :@vocab : k), v.to_s]
+      end.sort { |a, b| a.first.to_s <=> b.first.to_s }.to_h
 
-      # link to the two summaries
-      type = resolver.abbreviate CGTO.Summary
+      types = (repo.types_for(subject) + [CGTO.Index]).uniq
 
-      # note the keys are method names not URL slugs
-      out += {
-        '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
-        '611ed2d0-1544-4e0b-a4db-de942e1193e2' => CGTO['by-property'],
-      }.map do |uu, pred|
-        uu = RDF::URI("urn:uuid:#{uu}")
-        href = resolver.uri_for uu, slugs: true, as: :uri, via: uri
-        src  = uri.route_to href
-        # we could hard-code these i suppose but this affords changing them
-        rel  = resolver.abbreviate pred
-        # XXX do we want alternate representations of this??
-        { { [''] => :script, type: 'application/xhtml+xml',
-           src: src, typeof: type } => :section, rel: rel }
+      {
+        "@context": {
+          "@base": uri,
+        }.merge(pfx),
+        "@id": '',
+        "@type": abbr(types, true),
+      }.merge(preds)
+    end
+
+    # lol this one actually uses the user
+    DISPATCH = {
+      'application/ld+json' => -> uri, params, user {
+        jsonld = generate_jsonld uri, user
+
+        finalize(jsonld.to_json, type: 'application/ld+json',
+                 cache: { "no-cache": nil })
+      },
+      'application/xhtml+xml' => -> uri, params, user {
+        # user, state, by-class, by-property
+
+        dd = []
+
+        # XXX PERHAPS THIS WHOLE USER BUSINESS SHOULD BE PARCELED OUT??
+        if user
+          # resolve the user
+          unless user.is_a? RDF::URI
+            user = resolver.preproc user.to_s
+            if user.include? ?@
+              # XXX we are assuming there is no query string crap on
+            # this email and we are making the executive decision to
+              # downcase it here
+              user = RDF::URI("mailto:#{user.downcase}")
+            else
+              # XXX change this to something less ad-hoc
+              user = RDF::URI("urn:x-user-id:#{user}")
+            end
+          end
+
+          # uu = resolver.uri_for user, slugs: true, as: :uri, via: uri
+          # ut = repo.types_for user
+          # up, uo = repo.label_for user, noop: true
+
+          # dd << { '#dt' => LABELS[CGTO.user] }
+          # dd << { '#dd' => linkt(uu, base: uri, rel: CGTO.user,
+          #                        typeof: ut, property: up, label: uo) }
+
+          # XXX don't get rid of this quite yet
+
+          # this is the actual user we want
+          agent = repo.subjects_for(FOAF.account, user).sort.first
+
+          if agent
+            at = repo.types_for agent
+            au = resolver.uri_for agent, slugs: true, as: :uri, via: uri
+            ap, ao = repo.label_for agent
+
+            dd << { '#dt' => LABELS[CGTO.user] }
+            dd << { '#dd' => linkt(au, base: uri, rel: CGTO.user,
+                                   typeof: at, property: ap, label: ao) }
+
+            # resolve the user's state object
+
+            # ruh roh, didn't think about this: the user could conceivably
+            # have multiple state objects because the same site (moreover
+            # the same rdf store) could have multiple app instances
+
+            states = repo.subjects_for(CGTO.owner, agent).sort
+            unless states.empty?
+              dd << { '#dt' => LABELS[CGTO.state] }
+              states.each do |s|
+                su = resolver.uri_for s, slugs: true, as: :uri, via: uri
+                st = repo.types_for s
+
+                # doubtful but whatever
+                lp, lo = repo.label_for s, noop: true
+                dd << { '#dd' => linkt(su, rel: CGTO.state, typeof: st,
+                                       property: lp, label: lo )}
+              end
+            end
+          end
+        end
+
+        out = []
+        out << { dd => :dl } unless dd.empty?
+
+        # link to the two summaries
+        type = resolver.abbreviate CGTO.Summary
+
+        # note the keys are method names not URL slugs
+        out += {
+          '4ab10425-d970-4280-8da2-7172822929ea' => CGTO['by-class'],
+          '611ed2d0-1544-4e0b-a4db-de942e1193e2' => CGTO['by-property'],
+        }.map do |uu, pred|
+          uu = RDF::URI("urn:uuid:#{uu}")
+          href = resolver.uri_for uu, slugs: true, as: :uri, via: uri
+          src  = uri.route_to href
+          # we could hard-code these i suppose but this affords changing them
+          rel  = resolver.abbreviate pred
+          # XXX do we want alternate representations of this??
+          { { [''] => :script, type: 'application/xhtml+xml',
+             src: src, typeof: type } => :section, rel: rel }
+        end
+
+        finalize out, uri: uri, prefixes: %i[cgto dct], typeof: CGTO.Index,
+        cache: { "no-cache": nil }
+      }
+    }
+    # make sure we cover our bases
+    %w[text/html application/xml].each do |t|
+      DISPATCH[t] = DISPATCH['application/xhtml+xml']
+    end
+
+    # meh i had something way more clever before
+    VARIANTS = DISPATCH.map do |k, v|
+      [k, { type: k }]
+    end.to_h
+
+    public
+
+    def cacheable?
+      false
+    end
+
+
+    def get uri, params: {}, headers: {}, user: nil, body: nil
+      unless variant = HTTP::Negotiate.negotiate(headers, VARIANTS)
+        return Rack::Response[
+          406, { 'content-type' => 'text/plain' }, ['no variant chosen']]
       end
 
-      finalize out, uri: uri, prefixes: %i[cgto dct], typeof: CGTO.Index,
-        cache: { "no-cache": nil }
+      instance_exec uri, params, user, &DISPATCH[variant]
     end
   end
 
@@ -646,11 +757,16 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           }.merge(prefixes.slice(*pfx.to_a.sort).transform_values(&:to_s)),
           "@id": '',
           "@type": resolver.abbreviate(CGTO.Summary, prefixes: prefixes),
-          qbs => resolver.abbreviate(
-            CGTO['resources-by-class'], prefixes: prefixes),
+          qbs => {
+            "@id": abbr(CGTO['resources-by-class']),
+            "@type": abbr(QB.DataStructureDefinition),
+          },
           "@reverse": {
             "qb:dataSet": body,
-            bcls => uri.route_to(index).to_s,
+            bcls => {
+              "@id": uri.route_to(index).to_s,
+              "@type": abbr(CGTO.Index),
+            }
           }
         }
 
@@ -1155,7 +1271,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
         # so now we sort and do the final transformation
         resources = resources.sort(&lcmp).to_h.transform_values do |v|
-          [v[RDF.type]] + v.except(RDF.type).first.flatten
+          [v[RDF.type]] + (v.except(RDF.type).first || []).flatten
         end
 
         # and now we store

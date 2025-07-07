@@ -2202,14 +2202,20 @@ class Intertwingler::Document
     elem
   end
 
-  def rehydrate elem, base: nil, cache: {}, rescan: false, &block
+  def self.rehydrate resolver, elem, base: nil, cache: {}, rescan: false, &block
+    repo = resolver.repo
+
     # collect all the literals
-    @repo.each_object do |o|
-      lemma = Intertwingler::NLP.lemmatize o.value
-      (cache[lemma.downcase] ||= Set.new) << o if o.literal?
+    if cache.empty?
+      repo.each_object do |o|
+        if o.literal?
+          lemma = Intertwingler::NLP.lemmatize o.value
+          (cache[lemma.downcase] ||= Set.new) << o
+        end
+      end
     end
 
-    node.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
+    elem.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
       # split the xpath up so it isn't as costly to run
       next if e.at_xpath(XPATH[:rh_filter], XPATHNS)
 
@@ -2240,10 +2246,10 @@ class Intertwingler::Document
 
       # candidates
       cand = {}
-      lit.map { |t| @repo.query([nil, nil, t]).to_a }.flatten.each do |x|
+      lit.map { |t| repo.query([nil, nil, t]).to_a }.flatten.each do |x|
         y = cand[x.subject] ||= {}
         (y[:stmts] ||= []) << x
-        y[:types]  ||= @repo.query([x.subject, RDF.type, nil]).objects.sort
+        y[:types]  ||= repo.query([x.subject, RDF.type, nil]).objects.sort
       end
 
       # passing a block to this method enables e.g. interactive
@@ -2266,8 +2272,8 @@ class Intertwingler::Document
         cc = cand[chosen]
         unless cc
           cc = cand[chosen] = {}
-          cc[:stmts] = @repo.query([chosen, nil, lit.first]).to_a.sort
-          cc[:types] = @repo.query([chosen, RDF.type, nil]).objects.sort
+          cc[:stmts] = repo.query([chosen, nil, lit.first]).to_a.sort
+          cc[:types] = repo.query([chosen, RDF.type, nil]).objects.sort
           # if either of these are empty then the graph was not
           # appropriately populated
           raise 'Missing a statement relating #{chosen} to #{text}' if
@@ -2281,10 +2287,10 @@ class Intertwingler::Document
         ebase = get_base e, default: base
 
         # find the subject for this node
-        subject = subject_for(e, prefixes: pfx, base: ebase)
+        subject = subject_for(resolver, e, prefixes: pfx, base: ebase)
         preds = if subject
-                  su = @resolver.uuid_for(subject) || subject
-                  pp = @repo.query([su, nil, chosen]).predicates.uniq
+                  su = resolver.uuid_for(subject) || subject
+                  pp = repo.query([su, nil, chosen]).predicates.uniq
 
                   if pp.empty?
                     pp << Intertwingler::Vocab::CI.mentions
@@ -2301,14 +2307,16 @@ class Intertwingler::Document
         # here we have pretty much everything except for the prefixes
         # and wherever we want to actually link to.
 
+        href = resolver.uri_for chosen, slugs: true, fragments: true, via: base
+
         inner = e.dup
-        spec  = { [inner] => :a, href: chosen.to_s }
+        spec  = { '#a' => [inner], href: base.route_to(href) }
         spec[:rel] = resolver.abbreviate preds, prefixes: pfx unless preds.empty?
         # we should have types
         spec[:typeof] = resolver.abbreviate cc[:types], prefixes: pfx unless
           cc[:types].empty?
 
-        markup replace: e, spec: spec
+        XML::Mixup.markup replace: e, spec: spec
       end
     end
     # return maybe the elements that did/didn't get changed?

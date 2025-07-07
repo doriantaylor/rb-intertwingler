@@ -1014,7 +1014,7 @@ class Intertwingler::Resolver
     term.map! do |t|
       if cache.key? t
         slug = cache[t]
-      else
+      elsif t.iri?
         s = t.to_s
         slug = nil # we want this value to be nil if no match and !noop
 
