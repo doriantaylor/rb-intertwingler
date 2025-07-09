@@ -771,7 +771,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         }
 
         finalize(out.to_json, type: 'application/ld+json',
-                 cache: { public: nil, "max-age": 5 })
+                 cache: { public: nil, "max-age": 0 })
       },
       'application/xhtml+xml' => -> uri, params {
         prefixes = PREFIXES.merge resolver.prefixes
@@ -802,7 +802,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           [ { cols => :tr, id: yp[:id], about: yp[:about], typeof: obst }, "\n"]
         end
 
-        cache = { public: nil, "max-age": 5 }
+        cache = { public: nil, "max-age": 0 }
 
         finalize({ [ "\n",
           { { [ "\n",
@@ -996,7 +996,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         }
 
         finalize(out.to_json, type: 'application/ld+json',
-                 cache: { public: nil, "max-age": 5 })
+                 cache: { public: nil, "max-age": 0 })
       },
       'application/xhtml+xml' => -> uri, params {
         prefixes = PREFIXES.merge resolver.prefixes
@@ -1049,7 +1049,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           { cols => :tr, id: yp[:id], about: yp[:about], typeof: obst }
         end
 
-        cache = { public: nil, "max-age": 5 }
+        cache = { public: nil, "max-age": 0 }
 
         finalize({ [
           { [
@@ -1389,7 +1389,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         end
 
         finalize(window.to_json, type: 'application/ld+json',
-                 cache: { public: nil, "max-age": 5 })
+                 cache: { public: nil, "max-age": 0 })
       },
       'application/xhtml+xml' => -> uri, params {
         prefixes = PREFIXES.merge resolver.prefixes

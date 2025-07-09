@@ -308,6 +308,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "initiated-by",
       range: "https://vocab.methodandstructure.com/process-model#Target",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#responds-to",
       type: ["http://www.w3.org/2002/07/owl#InverseFunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :initiates,
       cardinality: "1",
@@ -317,6 +318,7 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "initiates",
       range: "https://vocab.methodandstructure.com/process-model#Task",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#response",
       type: ["http://www.w3.org/2002/07/owl#FunctionalProperty", "http://www.w3.org/2002/07/owl#ObjectProperty"]
     property :instance,
       comment: {en: "A pm:Action is an instance of a pm:Method."},
