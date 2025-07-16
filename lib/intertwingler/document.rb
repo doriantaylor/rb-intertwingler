@@ -958,10 +958,11 @@ class Intertwingler::Document
       out = { body => tag }
       out[:id] = frag if id and frag and !frag.empty?
       out[resource ? :resource : :about] = base.route_to uri
-      out[:rel] = resolver.abbreviate rel if rel
-      out[:rev] = resolver.abbreviate rev if rev
+      out[:rel] = resolver.abbreviate rel, scalar: false if rel
+      out[:rev] = resolver.abbreviate rev, scalar: false if rev
       types = repo.types_for subject, struct: struct
-      out[:typeof] = resolver.abbreviate(types) unless types.empty?
+      out[:typeof] = resolver.abbreviate types, scalar: false unless
+        types.empty?
 
       # punt it
       out
@@ -1067,7 +1068,27 @@ class Intertwingler::Document
     # XXX TODO
     def do_person subject, rel, rev, struct, base, seen, published: false,
         bl: false, tag: :section, depth: 0, id: true, resource: false
-      { out => :section }
+
+      h = depth > 3 ? 3 : depth + 3
+      lp, lv = repo.label_for subject, struct: struct, noop: true
+      out = [literal_tag(
+        lv, name: "h#{h}".to_sym, property: lp, prefixes: resolver.prefixes)]
+
+      # begin with personal attributes? photo/avatar, nicknames,
+      # contact info, location, birthdate, websites, online accounts
+
+      # maybe begin with the more socially important relationships?
+      # who you spend your time with, where you work
+
+      # head of, member of org
+
+      # fuck it just do this for now
+      frag, _ = generate_fragment subject, struct: struct
+      out += frag.values.first
+
+      # punt it
+      outer_tag subject, rel, rev, struct, base, out,
+        id: id, resource: resource, tag: tag
     end
 
     public

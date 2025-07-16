@@ -76,6 +76,7 @@ class Intertwingler::Handler::Generated < Intertwingler::Handler
     hdrs = {
       'content-type'   => 'application/xhtml+xml',
       'content-length' => str.length.to_s,
+      'vary'           => %w[Accept Accepte-Language].join(', '),
       'cache-control'  => cache.join(', '),
     }
     hdrs['last-modified'] = repo.mtime.httpdate if repo.respond_to? :mtime

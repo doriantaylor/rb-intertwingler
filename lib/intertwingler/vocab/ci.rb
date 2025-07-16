@@ -6,6 +6,16 @@ module Intertwingler::Vocab
   # @!parse
   #   # Vocabulary for <https://vocab.methodandstructure.com/content-inventory#>
   #   #
+  #   # Classes
+  #   #
+  #   # Editorial Action
+  #   #
+  #   # Document Classes/Decorators
+  #   #
+  #   # Variation
+  #   #
+  #   # Audience Modelling
+  #   #
   #   # A Content Inventory Vocabulary
   #   #
   #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
@@ -335,7 +345,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/content-inventory#",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
-      type: ["http://purl.org/ontology/bibo/Webpage", "http://www.w3.org/2002/07/owl#Ontology"]
+      type: ["http://purl.org/ontology/bibo/Specification", "http://www.w3.org/2002/07/owl#Ontology"]
 
     # Class definitions
     term :Abstract,
@@ -438,7 +448,7 @@ module Intertwingler::Vocab
       subPropertyOf: "http://purl.org/dc/terms/references",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"aware-of",
-      domain: "https://vocab.methodandstructure.com/content-inventory#Audience",
+      "http://www.w3.org/2002/07/owl#deprecated": "true",
       label: "aware-of",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :backlinks,
@@ -942,6 +952,8 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "rewrite",
       type: "https://vocab.methodandstructure.com/content-inventory#Action"
+    term :"sec-properties",
+      "http://purl.org/dc/terms/title": {en: "Conceptual Relations"}
     term :split,
       comment: {en: "Split this document into multiple pieces."},
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
