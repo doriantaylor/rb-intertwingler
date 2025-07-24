@@ -256,6 +256,7 @@ module Intertwingler
       config[:fragment] = {} unless config[:fragment].is_a? Hash
       config[:fragment] = config[:fragment].map do |frag, paths|
         paths = (paths.respond_to?(:to_a) ? paths.to_a : [paths]).map do |path|
+          warn path
           Intertwingler::GraphOps.parse_property_path path, pfx
         end
         [[Intertwingler::Resolver.resolve_curie(frag.to_s, prefixes: pfx)], paths]

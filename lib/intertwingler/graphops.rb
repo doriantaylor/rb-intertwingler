@@ -2447,7 +2447,7 @@ module Intertwingler
     def self.parse_property_path sparql, prefixes, entail: false
       begin
         out = SPARQL::Grammar::Parser.new(
-          sparql.to_s, prefixes: prefixes).parse(:Path).last
+          sparql.to_s, prefixes: prefixes).parse(:Path) # .last # not sure why
         entail ? entail_property_path(out): out
       rescue EBNF::LL1::Parser::Error
         raise ArgumentError, "Malformed property path: #{sparql}"
