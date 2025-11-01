@@ -485,6 +485,11 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       }.merge(preds)
     end
 
+    WEIGHTS = {
+      'application/ld+json' => 0.5,
+      'application/xhtml+xml' => 1,
+    }
+
     # lol this one actually uses the user
     DISPATCH = {
       'application/ld+json' => -> uri, params, user {
@@ -590,7 +595,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     # meh i had something way more clever before
     VARIANTS = DISPATCH.map do |k, v|
-      [k, { type: k }]
+      [k, { type: k, weight: WEIGHTS[k] || 0.5 }]
     end.to_h
 
     public

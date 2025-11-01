@@ -9,7 +9,7 @@ module Intertwingler::Vocab
   #   # A Process Model Ontology
   #   #
   #   # This vocabulary encodes a model for expressing generic business processes. Its purpose is to provide a language and exchange format for software applications designed to facilitate project management.
-  #   # @version 0.2.1
+  #   # @version 0.3
   #   class PM < RDF::StrictVocabulary
   #     # A pm:Action specializes an ev:Event in that it is performed by (at least one) real, living foaf:Person.
   #     # @return [RDF::Vocabulary::Term]
@@ -51,7 +51,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :contextualizes
   #
-  #     # An ibis:State the pm:Action depends on to be actionable.
+  #     # Any ibis:Entity (and thus pm:Goal, pm:Task) may depend on the resolution of an ibis:Issue the pm:Action depends on to be actionable.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :dependency
   #
@@ -151,7 +151,7 @@ module Intertwingler::Vocab
       comment: {en: "This vocabulary encodes a model for expressing generic business processes. Its purpose is to provide a language and exchange format for software applications designed to facilitate project management."},
       "http://purl.org/dc/terms/created": "2009-07-23T00:56:12Z",
       "http://purl.org/dc/terms/creator": "http://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2014-02-06T22:26:21Z", "2017-04-06T22:24:06Z", "2020-03-08T18:58:53Z", "2025-04-09T23:18:53Z", "2025-06-11T03:15:09Z"],
+      "http://purl.org/dc/terms/modified": ["2014-02-06T22:26:21Z", "2017-04-06T22:24:06Z", "2020-03-08T18:58:53Z", "2025-04-09T23:18:53Z", "2025-06-11T03:15:09Z", "2025-10-31T22:26:31Z"],
       "http://purl.org/dc/terms/title": {en: "A Process Model Ontology"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/process-model#",
       "http://purl.org/vocab/vann/preferredNamespacePrefix": "pm",
@@ -161,7 +161,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/NET/c4dm/event.owl#", "http://www.w3.org/2004/02/skos/core#", "http://www.w3.org/ns/prov#", "https://vocab.methodandstructure.com/ibis#"],
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.2.1",
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.3",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://www.w3.org/ns/shacl#namespace": "https://vocab.methodandstructure.com/process-model#",
       "http://www.w3.org/ns/shacl#prefix": "pm",
@@ -272,13 +272,22 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/process-model#Action",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :dependency,
-      comment: {en: "An ibis:State the pm:Action depends on to be actionable."},
-      domain: "https://vocab.methodandstructure.com/process-model#Action",
+      comment: {en: "Any ibis:Entity (and thus pm:Goal, pm:Task) may depend on the resolution of an ibis:Issue the pm:Action depends on to be actionable."},
+      domain: ["https://vocab.methodandstructure.com/ibis#Entity", "https://vocab.methodandstructure.com/process-model#Action"],
       inverseOf: "https://vocab.methodandstructure.com/process-model#dependency-of",
       isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
       label: "dependency",
       range: "https://vocab.methodandstructure.com/ibis#State",
-      subPropertyOf: "https://vocab.methodandstructure.com/ibis#suggests",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#implies",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"dependency-of",
+      comment: {en: "The object ibis:Entity depends on the resolution of the subject ibis:State to be resolved, or otherwise proceed."},
+      domain: "https://vocab.methodandstructure.com/ibis#State",
+      inverseOf: "https://vocab.methodandstructure.com/process-model#dependency",
+      isDefinedBy: "https://vocab.methodandstructure.com/process-model#",
+      label: "dependency-of",
+      range: "https://vocab.methodandstructure.com/ibis#Entity",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#implied-by",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :due,
       cardinality: "1",

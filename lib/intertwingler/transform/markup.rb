@@ -312,10 +312,11 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     engine.log.debug "Found missing prefixes: #{missing.inspect}"
 
-    fix = resolver.prefixes.slice(*missing.to_a.sort).transform_values(&:to_s)
+    fix = resolver.prefixes.slice(
+      *missing.to_a.compact.sort).transform_values(&:to_s)
     if missing.size > fix.keys.size
       rest = RDF::Vocabulary.vocab_map.slice(
-        *(missing.to_a.sort - fix.keys)).transform_values { |v| v[:uri] }
+        *(missing.to_a.compact.sort - fix.keys)).transform_values { |v| v[:uri] }
       fix.merge! rest
 
       engine.log.debug "Still missing #{missing - fix.keys}" if
@@ -355,7 +356,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     @lemmas ||= {}
 
-    # Intertwingler::Document.rehydrate resolver, doc, base: loc, cache: @lemmas
+    Intertwingler::Document.rehydrate resolver, doc, base: loc, cache: @lemmas
 
     req.body.object = doc
     req.body

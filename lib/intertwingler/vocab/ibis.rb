@@ -11,7 +11,7 @@ module Intertwingler::Vocab
   #   # IBIS
   #   #
   #   # This document specifies a vocabulary for describing an IBIS (issue-based information system).
-  #   # @version 0.6
+  #   # @version 0.7
   #   # @see http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf
   #   # @see https://web.archive.org/web/20120606063823/http://hyperdata.org/xmlns/ibis/
   #   # @see https://vocab.methodandstructure.com/ibis.rdf
@@ -62,6 +62,10 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :generalizes
   #
+  #     # The existence of an ibis:Entity implies an ibis:State.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :implies
+  #
   #     # Indicates a subject argument that opposes an object position.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :opposes
@@ -82,7 +86,7 @@ module Intertwingler::Vocab
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :specializes
   #
-  #     # Indicates when the subject belief suggests the object issue.
+  #     # An ibis:Entity may suggest an ibis:Issue.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :suggests
   #
@@ -98,7 +102,7 @@ module Intertwingler::Vocab
       comment: {en: "This document specifies a vocabulary for describing an IBIS (issue-based information system)."},
       "http://purl.org/dc/terms/created": "2012-12-11T22:22:53-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z", "2023-12-18T02:25:31Z", "2024-01-05T04:05:24Z", "2025-04-10T02:30:11Z", "2025-05-09T04:08:32Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-12T16:04:50-08:00", "2014-02-24T21:14:13Z", "2018-02-22T03:39:14Z", "2019-03-24T22:37:22Z", "2023-12-18T02:25:31Z", "2024-01-05T04:05:24Z", "2025-04-10T02:30:11Z", "2025-05-09T04:08:32Z", "2025-10-31T22:26:31Z"],
       "http://purl.org/dc/terms/references": "http://www.w3.org/2004/02/skos/core#Concept",
       "http://purl.org/dc/terms/title": {en: "IBIS (bis) Vocabulary"},
       "http://purl.org/ontology/bibo/uri": "https://vocab.methodandstructure.com/ibis#",
@@ -109,7 +113,7 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/2000/01/rdf-schema#seeAlso": ["http://dublincore.org/documents/dcmi-terms/", "http://en.wikipedia.org/wiki/Issue-Based_Information_System", "http://www.cc.gatech.edu/~ellendo/rittel/rittel-issues.pdf", "http://www.cs.hut.fi/Opinnot/T-93.850/2005/Papers/gIBIS1988-conklin.pdf", "http://www.w3.org/TR/prov-o/", "https://vocab.methodandstructure.com/ibis.n3", "https://vocab.methodandstructure.com/ibis.rdf", "https://vocab.methodandstructure.com/process-model#", "https://web.archive.org/web/20120606063823/http://hyperdata.org/xmlns/ibis/"],
       "http://www.w3.org/2002/07/owl#imports": "http://www.w3.org/2004/02/skos/core#",
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.6",
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.7",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "IBIS"},
@@ -247,6 +251,24 @@ module Intertwingler::Vocab
       range: "https://vocab.methodandstructure.com/ibis#Entity",
       subPropertyOf: "http://www.w3.org/2004/02/skos/core#narrower",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :"implied-by",
+      comment: {en: "An ibis:State may be implied by an ibis:Entity."},
+      domain: "https://vocab.methodandstructure.com/ibis#State",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#implies",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "implied-by"},
+      range: "https://vocab.methodandstructure.com/ibis#Entity",
+      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
+    property :implies,
+      comment: {en: "The existence of an ibis:Entity implies an ibis:State."},
+      domain: "https://vocab.methodandstructure.com/ibis#Entity",
+      inverseOf: "https://vocab.methodandstructure.com/ibis#implied-by",
+      isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
+      label: {en: "implies"},
+      range: "https://vocab.methodandstructure.com/ibis#State",
+      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"opposed-by",
       comment: {en: "Indicates a subject position opposed by an object argument."},
       domain: "https://vocab.methodandstructure.com/ibis#Position",
@@ -330,22 +352,22 @@ module Intertwingler::Vocab
       subPropertyOf: "http://www.w3.org/2004/02/skos/core#broader",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"suggested-by",
-      comment: {en: "Indicates when the subject issue is suggested by the object belief."},
+      comment: {en: "An ibis:Issue may be suggested by an ibis:Entity."},
       domain: "https://vocab.methodandstructure.com/ibis#Issue",
       inverseOf: "https://vocab.methodandstructure.com/ibis#suggests",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "suggested-by"},
       range: "https://vocab.methodandstructure.com/ibis#Entity",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      subPropertyOf: "ibis:implied-by",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :suggests,
-      comment: {en: "Indicates when the subject belief suggests the object issue."},
+      comment: {en: "An ibis:Entity may suggest an ibis:Issue."},
       domain: "https://vocab.methodandstructure.com/ibis#Entity",
       inverseOf: "https://vocab.methodandstructure.com/ibis#suggested-by",
       isDefinedBy: "https://vocab.methodandstructure.com/ibis#",
       label: {en: "suggests"},
       range: "https://vocab.methodandstructure.com/ibis#Issue",
-      subPropertyOf: "http://www.w3.org/2004/02/skos/core#semanticRelation",
+      subPropertyOf: "https://vocab.methodandstructure.com/ibis#implies",
       type: "http://www.w3.org/2002/07/owl#ObjectProperty"
     property :"supported-by",
       comment: {en: "Indicates a subject position supported by an object argument."},

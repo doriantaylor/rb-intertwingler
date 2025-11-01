@@ -2204,7 +2204,8 @@ module Intertwingler
       s, p, o, g = statement.to_quad
 
       # we just sort to make sure it's consistent
-      return unless symmetric?(p) or p = p.inverseOf&.sort&.first
+      return unless symmetric?(p) or (p.respond_to?(:inverseOf) and
+        p = p.inverseOf&.select(&:iri?)&.sort&.first)
 
       RDF::Statement.new(o, p, s, graph_name: g)
     end

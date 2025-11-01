@@ -2330,8 +2330,11 @@ class Intertwingler::Document
 
         href = resolver.uri_for chosen, slugs: true, fragments: true, via: base
 
+        # goddamn annoying, this
+        ubase = resolver.coerce_resource base, as: :uri
+
         inner = e.dup
-        spec  = { '#a' => [inner], href: base.route_to(href) }
+        spec  = { '#a' => [inner], href: ubase.route_to(href) }
         spec[:rel] = resolver.abbreviate preds, prefixes: pfx unless preds.empty?
         # we should have types
         spec[:typeof] = resolver.abbreviate cc[:types], prefixes: pfx unless
@@ -2380,7 +2383,8 @@ class Intertwingler::Document
       return text unless base and /^_:/ !~ text.strip
 
       # dereference with doc_base
-      uri = resolver.as_alias doc_base.merge(resolver.preproc text), base
+      uri = doc_base ? resolver.as_alias(
+        doc_base.merge(resolver.preproc text), base) : base.dup
       # re-relativize with new base
       rel = base.route_to uri
 
