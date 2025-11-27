@@ -385,7 +385,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       method   = req.request_method.to_sym # we always want this as a symbol
       uri, *pp = resolver.split_pp req.url # split out the path parameters
       uri      = resolver.uri_for uri, as: :uri # canonicalize the uri
-      uuid     = engine.resolver.uuid_for uri, as: :uri # also get the uuid
+      uuid     = resolver.uuid_for uri, as: :uri # also get the uuid
 
       # default response
       resp = Rack::Response[404,
@@ -438,7 +438,8 @@ class Intertwingler::Engine < Intertwingler::Handler
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
-      warn "dispatcher #{subrequest ? '(subrequest) ' : ''}sees content type: #{req.content_type.inspect}"
+      warn "dispatcher #{subrequest ? '(subrequest) ' : ''}sees" +
+        "content type: #{req.content_type.inspect}"
 
       # the transform harness may return an empty chain; that's fine
       unless subrequest
@@ -478,6 +479,48 @@ class Intertwingler::Engine < Intertwingler::Handler
       end
 
       resp
+    end
+
+    # i don't know if this is how this is going to
+
+    def wrap_cache req, subrequest: false
+      # * Step zero is we determine if the request if the request is
+      #   even eligible to be cached; if not go directly to dispatch.
+
+      # disqualifying conditions:
+      #
+      # * request method: HEAD is cacheable, GET is cacheable, POST
+      #   *may* be cacheable, QUERY *is* cacheable; just about nothing
+      #   else.
+
+      # * cache-specific headers: Pragma: no-cache, Cache-Control:
+      #   no-cache, no-store, max-age, etc
+
+      # * Assuming the request is eligible, we try to match it to our
+      #   hot little key-value store. (note all response headers with
+      #   some exceptions need to be in the cache metadata; cf RFC9111 §3.1)
+
+      # * If found (and still fresh) then try retrieving the blob from
+      #   the CAS.
+
+      # (ISSUE how do resolve the blob submit/resolution resource?)
+
+      # * If the blob comes back, then reassemble the response (if the
+      #   blob doesn't come back, invalidate the cache entry).
+
+      if resp = cache.fetch(req)
+        return resp
+      end
+
+      # can just do this lol
+      cache.fetch_or_store(req) do
+        dispatcher.dispatch(req, subrequest: subrequest)
+      end
+
+      # * Otherwise dispatch the request and collect the response.
+
+      # * store the response in the CAS only if the response is cacheable.
+      cache.store req, dispatcher.dispatch(req, subrequest: subrequest)
     end
 
   end # END Dispatcher
@@ -695,10 +738,15 @@ class Intertwingler::Engine < Intertwingler::Handler
     req = dup_request req, uri: uri, method: method,
       headers: headers, body: body if uri
 
-    resp = dispatcher.dispatch req
+    # x
+    resp = dispatcher.dispatch req, subrequest: true
 
     # XXX actually do the thing
+    resp
   end
+
+  # it should really be `request`, not `fetch`
+  alias_method :request, :fetch
 
   # This is the master handler that runs the engine and marshals all
   # other handlers and transforms.

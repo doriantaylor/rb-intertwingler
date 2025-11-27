@@ -507,6 +507,8 @@ class Intertwingler::Transform
     # @note {::Rack::Response} has no reference back to the
     #  {::Rack::Request} that it responds to, so the request is always needed.
     #
+    # @note A cache intervention should happen at the beginning of the queue, but per RFC 9110 § 
+    #
     # @param req [Rack::Request] the request, upon which to base the subrequest.
     # @param resp [Rack::Response, nil] the response, to use in response queues.
     #

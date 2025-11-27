@@ -455,10 +455,32 @@ class Intertwingler::Resolver
     end.compact
   end
 
+  # Return the durable URI (or URIs, in order of precedence). May return
+  # `nil` or be a no-op, if specified.
+  #
+  # @param uri [URI, RDF::URI, #to_s] the URI to resolve
+  # @param scalar [true, false] whether to return only one UUID if
+  #  more than one is resolved; always returns an array if false
+  # @param verify [true, false] whether any UUID found in the input
+  #  should be resolved against the graph
+  # @param as [:rdf, :uri, :str] coerce the output to either
+  #  {::RDF::URI}, {::URI}, or string literal, respectively
+  # @param noop [false, true] whether to return `nil` or otherwise
+  #  just echo back the input if a UUID can't be resolved
+  #
+  # @return [URI, RDF::URI, Array<URI, RDF::URI>, nil] the durable
+  #  identifier(s), or the input URI (if noop), or `nil`.
+  #
+  def durable_for uri, scalar: true, verify: true, as: :rdf, noop: false
+    # basically we are assuming we are getting any kind of URI or RDF::URI object
+    # pick the best one
+    # so the uuid driver can resolve 
+  end
+
   # Return the UUID(s) associated with the subject. May return
   # `nil` or be a no-op, if specified.
   #
-  # @param subject [URI, RDF::URI, #to_s] the URI to resolve
+  # @param uri [URI, RDF::URI, #to_s] the URI to resolve
   # @param scalar [true, false] whether to return only one UUID if
   #  more than one is resolved; always returns an array if false
   # @param verify [true, false] whether any UUID found in the input
@@ -467,6 +489,8 @@ class Intertwingler::Resolver
   #  {::RDF::URI}, {::URI}, or string literal, respectively
   # @param published [false, true] whether to constrain the
   #  UUID resolution to published documents only
+  # @param circulated [false, true] whether to constrain the
+  #  UUID resolution to circulated documents only
   # @param noop [false, true] whether to return `nil` or otherwise
   #  just echo back the input if a UUID can't be resolved
   #
