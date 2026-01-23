@@ -64,9 +64,9 @@ describe Intertwingler::Cache do
 
   # do not complete retrieval if stale
 
-  # return 304 not modified if not newer than IMS
+  # return 304 not modified if not newer than `If-Modified-Since`
 
-  # return 304 not modified if etag match
+  # return 304 not modified if `ETag` matches
 
   # return 503 if `only-if-cached` and response not present in cache
 
