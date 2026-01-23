@@ -159,7 +159,10 @@ class Intertwingler::Handler::FileSystem < Intertwingler::Handler
     end
 
     # if there are no variants then this is a genuine 404
-    return Rack::Response[404, {}, []] if variants.empty?
+    if variants.empty?
+      engine.log.debug "No variants for #{paths.inspect}"
+      return Rack::Response[404, {}, []]
+    end
 
     # okay now subsequently process the variants
     variants.transform_values! do |val|
@@ -192,7 +195,10 @@ class Intertwingler::Handler::FileSystem < Intertwingler::Handler
       # warn selected
 
       # test if readable
-      return Rack::Response[403, {}, []] unless var[:ok]
+      unless var[:ok]
+        engine.log.debug "Selected variant #{selected} not readable"
+        return Rack::Response[403, {}, []]
+      end
 
       # test if uri matches requested
       # redirect if requested uri was not just a uuid
@@ -212,6 +218,8 @@ class Intertwingler::Handler::FileSystem < Intertwingler::Handler
         'last-modified'  => var[:mtime].httpdate,
       }, selected.open]
     end
+
+    engine.log.debug "No acceptable variant for #{path}"
 
     # there were variants but none were chosen so 406
     Rack::Response[406, {}, []]

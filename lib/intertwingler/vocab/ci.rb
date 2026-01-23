@@ -19,7 +19,7 @@ module Intertwingler::Vocab
   #   # A Content Inventory Vocabulary
   #   #
   #   # This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies.
-  #   # @version 0.17
+  #   # @version 0.18
   #   class CI < RDF::StrictVocabulary
   #     # This is an explicit document abstract/executive summary class, intended to belong to BIBO, which appears to be abandonware.
   #     # @return [RDF::Vocabulary::Term]
@@ -48,6 +48,10 @@ module Intertwingler::Vocab
   #     # In order to merge a document, we must define the target to which it ought to be merged. This class is identical to an Action, save for such a property.
   #     # @return [RDF::Vocabulary::Term]
   #     attr_reader :Merge
+  #
+  #     # This class maps to org:Role so that it can be treated as a subclass of ci:Audience.
+  #     # @return [RDF::Vocabulary::Term]
+  #     attr_reader :Role
   #
   #     # This is an explicit document section (i.e., sub-chapter) class.
   #     # @return [RDF::Vocabulary::Term]
@@ -329,7 +333,7 @@ module Intertwingler::Vocab
       comment: {en: "This vocabulary defines a number of concepts peculiar to content strategy which are not accounted for by other vocabularies."},
       "http://purl.org/dc/terms/created": "2012-01-23T11:52:00-08:00",
       "http://purl.org/dc/terms/creator": "https://doriantaylor.com/person/dorian-taylor#me",
-      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z", "2025-06-04T11:19:06Z", "2025-06-16T03:15:29Z", "2025-07-07T00:33:53Z"],
+      "http://purl.org/dc/terms/modified": ["2012-12-11T22:22:00-08:00", "2014-02-06T14:10:00-08:00", "2015-02-03T14:39:00-08:00", "2017-04-06T15:24:00-07:00", "2018-10-06T16:23:52Z", "2019-03-05T23:38:59Z", "2019-04-07T16:36:10Z", "2019-04-18T01:01:09Z", "2019-07-07T22:10:55Z", "2019-07-10T22:28:06Z", "2019-07-21T23:05:32Z", "2019-09-04T20:27:32Z", "2020-01-26T05:02:30Z", "2020-04-24T23:16:20Z", "2020-04-30T01:05:51Z", "2020-06-29T02:24:58Z", "2020-07-04T01:24:22Z", "2020-11-13T03:27:35Z", "2021-05-17T17:57:27Z", "2022-10-05T10:36:04Z", "2022-11-02T19:19:18Z", "2024-07-22T20:52:29Z", "2025-03-09T20:46:09Z", "2025-06-04T11:19:06Z", "2025-06-16T03:15:29Z", "2025-07-07T00:33:53Z", "2025-12-22T03:39:33Z"],
       "http://purl.org/dc/terms/references": ["http://en.wikipedia.org/wiki/Content_strategy", "http://en.wikipedia.org/wiki/Five-number_summary", "http://en.wikipedia.org/wiki/Mean", "http://en.wikipedia.org/wiki/Standard_deviation", "http://vocab.org/frbr/core", "http://vocab.org/frbr/extended", "http://www.w3.org/TR/vocab-data-cube/", "http://www.w3.org/TR/vocab-data-cube/#ref_qb_DataSet", "https://www.w3.org/TR/prov-o/", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DataStructureDefinition", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_DimensionProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_MeasureProperty", "https://www.w3.org/TR/vocab-data-cube/#ref_qb_Observation"],
       "http://purl.org/dc/terms/subject": "https://vocab.methodandstructure.com/content-inventory#",
       "http://purl.org/dc/terms/title": {en: "A Content Inventory Vocabulary"},
@@ -340,8 +344,8 @@ module Intertwingler::Vocab
       "http://www.w3.org/1999/xhtml/vocab#license": "http://creativecommons.org/licenses/by/2.5/ca/",
       "http://www.w3.org/1999/xhtml/vocab#top": "https://vocab.methodandstructure.com/",
       "http://www.w3.org/1999/xhtml/vocab#up": "https://vocab.methodandstructure.com/",
-      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/NET/c4dm/event.owl#", "http://purl.org/dc/terms/", "http://purl.org/linked-data/cube#", "http://purl.org/ontology/bibo/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2004/02/skos/core#", "http://xmlns.com/foaf/0.1/", "https://www.w3.org/TR/vocab-org/"],
-      "http://www.w3.org/2002/07/owl#versionInfo": "0.17",
+      "http://www.w3.org/2002/07/owl#imports": ["http://purl.org/NET/c4dm/event.owl#", "http://purl.org/dc/terms/", "http://purl.org/linked-data/cube#", "http://purl.org/ontology/bibo/", "http://www.w3.org/2001/XMLSchema#", "http://www.w3.org/2002/07/owl#", "http://www.w3.org/2004/02/skos/core#", "http://www.w3.org/ns/org#", "http://xmlns.com/foaf/0.1/", "https://www.w3.org/TR/vocab-org/"],
+      "http://www.w3.org/2002/07/owl#versionInfo": "0.18",
       "http://www.w3.org/ns/rdfa#usesVocabulary": "http://www.w3.org/1999/xhtml/vocab#",
       "http://xmlns.com/foaf/0.1/primaryTopic": "https://vocab.methodandstructure.com/content-inventory#",
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
@@ -393,6 +397,13 @@ module Intertwingler::Vocab
       isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
       label: "Merge",
       subClassOf: "https://vocab.methodandstructure.com/content-inventory#Action",
+      type: "http://www.w3.org/2002/07/owl#Class"
+    term :Role,
+      comment: {en: "This class maps to org:Role so that it can be treated as a subclass of ci:Audience."},
+      equivalentClass: "http://www.w3.org/ns/org#Role",
+      isDefinedBy: "https://vocab.methodandstructure.com/content-inventory#",
+      label: "Role",
+      subClassOf: "https://vocab.methodandstructure.com/content-inventory#Audience",
       type: "http://www.w3.org/2002/07/owl#Class"
     term :Section,
       comment: {en: "This is an explicit document section (i.e., sub-chapter) class."},
@@ -1036,8 +1047,5 @@ module Intertwingler::Vocab
         )],
       label: "words-and-blocks",
       type: "http://purl.org/linked-data/cube#DataStructureDefinition"
-
-    RDF::Vocabulary.register :ci, self if
-      RDF::Vocabulary.respond_to? :register
   end
 end

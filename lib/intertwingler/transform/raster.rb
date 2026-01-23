@@ -31,6 +31,7 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     '2fe3049b-bc1e-496f-9abc-dafa45746ef5' => [:gamma,      IN, OUT],
   }.freeze
 
+  # XXX what am i thinking here?
   def accept_header req
     accept =
       req.get_header('HTTP_ACCEPT').to_s.split(/\s*,+\s*/).first or return
@@ -40,12 +41,16 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
 
   # do nothing but convert
   def convert req, params
+    # for now lol
+    return
 
     body = req.body
 
     # this will have been set
 
     accept = accept_header req
+
+    engine.log.debug "body: #{body.type} accept: #{accept}"
 
     # this fast-tracks to 304 upstream
     return if body.type == accept

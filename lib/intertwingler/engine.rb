@@ -438,7 +438,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
-      warn "dispatcher #{subrequest ? '(subrequest) ' : ''}sees" +
+      warn "dispatcher #{subrequest ? '(subrequest) ' : ''}sees " +
         "content type: #{req.content_type.inspect}"
 
       # the transform harness may return an empty chain; that's fine
