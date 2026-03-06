@@ -74,7 +74,7 @@ describe Intertwingler::Cache do
 
   # get the object with a user
 
-  # a subsequent response with a `public` directive to an identical
+  # a subsequent, newer response with a `public` directive to an identical
   # (authenticated) request supersede any `private` entry
 
 end

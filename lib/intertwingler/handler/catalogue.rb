@@ -153,7 +153,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     end
 
     def xhtml_response body,
-        uri: nil, label: nil, prefixes: nil, typeof: nil, cache: nil
+        uri: nil, label: nil, prefixes: nil, typeof: nil, cache: nil, vary: nil
       uri      ||= resolver.uri_for subject, slugs: true
       label    ||= repo.label_for(subject, noop: true).reverse
 
@@ -190,6 +190,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       }
 
       hdr['cache-control'] = flatten_cc(cache) if cache
+
+      if vary
+        vary = [vary] unless vary.is_a? Array
+        vary.map! { |x| x.to_s.downcase.tr(?_, ?-) }
+
+        hdr['vary'] = vary.join(', ')
+      end
 
       Rack::Response[200, hdr, rep]
     end
@@ -350,7 +357,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     # XXX yes i know there's (MIME) :type and (RDF) :typeof. sue me.
     def finalize body, uri: nil,
-        prefixes: nil, typeof: nil, type: nil, cache: nil
+        prefixes: nil, typeof: nil, type: nil, cache: nil, vary: nil
       # XXX should we get this from the request??
       uri ||= resolver.uri_for subject, slugs: true
 
@@ -361,10 +368,18 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         # engine.log.debug body
         hdr = { 'content-length' => body.b.length, 'content-type' => ct }
         hdr.merge!({ 'cache-control' => flatten_cc(cache) }) if cache
+
+        if vary
+          vary = [vary] unless vary.is_a? Array
+          vary.map! { |x| x.to_s.downcase.tr(?_, ?-) }
+
+          hdr.merge!({ 'vary' => vary.join(', ') })
+        end
+
         Rack::Response[200, hdr, StringIO.new(body)]
       when Hash, Array
         xhtml_response body, uri: uri,
-          prefixes: prefixes, typeof: typeof, cache: cache
+          prefixes: prefixes, typeof: typeof, cache: cache, vary: vary
       when Rack::Response then body
       else nil
       end
@@ -496,7 +511,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         jsonld = generate_jsonld uri, user
 
         finalize(jsonld.to_json, type: 'application/ld+json',
-                 cache: { "no-cache": nil })
+                 cache: { "no-cache": nil }, vary: %w[accept])
       },
       'application/xhtml+xml' => -> uri, params, user {
         # user, state, by-class, by-property
@@ -585,7 +600,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         end
 
         finalize out, uri: uri, prefixes: %i[cgto dct], typeof: CGTO.Index,
-        cache: { "no-cache": nil }
+        cache: { "no-cache": nil }, vary: %w[accept]
       }
     }
     # make sure we cover our bases
@@ -776,7 +791,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         }
 
         finalize(out.to_json, type: 'application/ld+json',
-                 cache: { public: nil, "max-age": 0 })
+                 cache: { public: nil, "max-age": 0 }, vary: %w[accept])
       },
       'application/xhtml+xml' => -> uri, params {
         prefixes = PREFIXES.merge resolver.prefixes
@@ -817,7 +832,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
           ] => :tr } => :thead }, "\n",
           { body => :tbody, rev: resolver.abbreviate(QB.dataSet) }, "\n",
         ] => :table }, uri: uri, prefixes: prefixes,
-                 typeof: CGTO.Summary, cache: cache)
+                 typeof: CGTO.Summary, cache: cache, vary: %w[accept])
       }
     }
     # make sure we cover our bases
@@ -1001,7 +1016,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         }
 
         finalize(out.to_json, type: 'application/ld+json',
-                 cache: { public: nil, "max-age": 0 })
+                 cache: { public: nil, "max-age": 0 }, vary: %w[accept])
       },
       'application/xhtml+xml' => -> uri, params {
         prefixes = PREFIXES.merge resolver.prefixes
@@ -1074,7 +1089,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
             body => :tbody,
             rev: resolver.abbreviate(QB.dataSet, prefixes: prefixes)
           } ] => :table }, uri: uri, prefixes: prefixes,
-                 typeof: CGTO.Summary, cache: cache)
+                 typeof: CGTO.Summary, cache: cache, vary: %w[accept])
       },
     }
     # make sure we cover our bases
@@ -1394,7 +1409,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         end
 
         finalize(window.to_json, type: 'application/ld+json',
-                 cache: { public: nil, "max-age": 0 })
+                 cache: { public: nil, "max-age": 0 }, vary: %w[accept])
       },
       'application/xhtml+xml' => -> uri, params {
         prefixes = PREFIXES.merge resolver.prefixes
@@ -1447,13 +1462,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         # XXX don't forget backlinks
 
         finalize [{
-          li => :ol, start: params[:boundary].begin + 1, resource: abt,
+          li => :ol, start: params[:boundary].begin, resource: abt,
           rel: abbr(CGTO['window-of']),
           rev: abbr(CGTO[:window]),
           typeof: abbr(CGTO.Inventory),
         }, { '#nav' => { '#ul' =>  nav } }],
         uri: params.make_uri(uri, defaults: :boundary),
-        prefixes: pfx, typeof: CGTO.Window
+        prefixes: pfx, typeof: CGTO.Window, vary: %w[accept]
       },
     }
     # make sure we cover our bases
@@ -1499,7 +1514,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       base = params.make_uri uri, defaults: :boundary
       # engine.log.debug "#{base} <=> #{uri}"
       raise Intertwingler::Handler::Redirect.new(
-        'Redirecting to window', status: 308, location: base) if
+        'Redirecting to window', status: 303, location: base) if
         base.to_s != uri.to_s
 
       unless variant = HTTP::Negotiate.negotiate(headers, VARIANTS)

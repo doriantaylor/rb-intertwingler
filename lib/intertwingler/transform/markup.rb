@@ -188,6 +188,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     subject = resolver.uuid_for loc, noop: true
 
+    engine.log.debug "#{subject} -> #{resolver.repo.types_for subject}"
+
     # we need separate prefix sets for head and body lol
     pfx  = resolver.prefixes
     hpfx = pfx.merge(D.get_prefixes head, coerce: :term)
@@ -264,11 +266,11 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     end
 
     # body set about="" if not already set
-    body[:about] = '' unless body[:about]
+    # body[:about] = '' unless body[:about]
     # body unconditionally set types
-    types = resolver.repo.types_for subject
-    body[:typeof] = resolver.abbreviate(
-      types, scalar: false, prefixes: bpfx).sort.join(' ') unless types.empty?
+    # types = resolver.repo.types_for subject
+    # body[:typeof] = resolver.abbreviate(
+    #   types, scalar: false, prefixes: bpfx).sort.join(' ') unless types.empty?
 
     # XXX do something about this one day lol
     req.body.object = doc

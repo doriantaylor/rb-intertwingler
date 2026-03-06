@@ -40,7 +40,7 @@ class Intertwingler::Cache
   }
   REQS[:HEAD] = REQS[:GET]
 
-  # Validate that the request is cacheable.
+  # Validate that the request (from the client) is cacheable.
   #
   # @param req [Rack::Request] the request
   #
@@ -51,7 +51,7 @@ class Intertwingler::Cache
     # headers
   end
 
-  # Validate that the response is cacheable.
+  # Validate that the response (from the origin) is cacheable.
   #
   # @param resp [Rack::Response] the response
   #
