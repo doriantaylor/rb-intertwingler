@@ -15,8 +15,8 @@ class Intertwingler::Harness < Intertwingler::Handler
   #  mapping authorities (domains) to RDF repositories.
   #
   def initialize mapping, home: nil, log: nil, jwt: {}
-    @home = home
-    @log  = log
+    @home  = home
+    @log   = log
 
     if jwt and not jwt.empty?
       begin
@@ -35,7 +35,7 @@ class Intertwingler::Harness < Intertwingler::Handler
       end
     end
 
-    @engines = mapping.reduce({}) do |hash, pair|
+    @engines = mapping.each_with_object({}) do |pair, hash|
       authority, repo = pair
       # get the resolver for the authority
       resolver = Intertwingler::Resolver.configure repo,
@@ -48,8 +48,6 @@ class Intertwingler::Harness < Intertwingler::Handler
       ([resolver.base] + resolver.aliases).each do |uri|
         hash[uri.authority] = engine if /^https?$/i.match? uri.scheme
       end
-
-      hash
     end
 
   end

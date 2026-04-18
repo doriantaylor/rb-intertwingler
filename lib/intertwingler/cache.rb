@@ -26,10 +26,6 @@ class Intertwingler::Cache
 
   private
 
-  REQ_HDR = %i[Accept Accept-Language Accept-Charset Accept-Encoding]
-
-  HEADERS = %i[Content-Type Content-Encoding Content-Language]
-
   # this data structure (theoretically) controls whether the request
   # method is cacheable and what headers to consider (although i guess
   # the Vary header in the response is ultimately supposed to control
@@ -85,6 +81,27 @@ class Intertwingler::Cache
 
     # return the response
     resp
+  end
+
+  # Normalize an HTTP header.
+  #
+  # @param name  [String, #to_s] the header name
+  # @param value [String, #to_s] the header value
+  #
+  # @return [String] the normalized header value
+  #
+  def normalize_header name, value
+    #
+  end
+
+  # Normalize all the headers for an HTTP message.
+  #
+  # @param message [Rack::Request, Rack::Response, #to_h]
+  #
+  # @return [Hash] the normalized header set
+  #
+  def normalize_headers message
+    #
   end
 
   public
@@ -169,68 +186,98 @@ class Intertwingler::Cache
 
   # The driver module is just a namespace for cache drivers.
   module Driver
-    # mkay we need to have a chitchat about just what the hell goes
-    # into this database.
+    # Okay so this is super simple: we begin with a key-value store
+    # with *one* table keyed by sha256 hash, and two kinds of entry:
     #
-    # I mean, it's a key-value store where the key is the cache key
-    # and the value is the respective hash locations of the headers
-    # and body.
+    # * "signposts" whose job it is to encode the contents of the
+    #   `Vary` header,
+    # * "terminals" which actually contain the cache index.
     #
-    # The cache key can vary (user, Vary: headers, request body) on
-    # top of the minimal cache key which consists of the request
-    # method and URI. We'll do a scheme where we hash the full cache
-    # key for the main index, and then we have a secondary index with
-    # the minimal (unhashed, as it is likely to be shorter, or is it?)
-    # key. The latter will tell us how the full cache key can vary.
+    # The cache key is composed of the sha256 of the following entities:
     #
-    # Actually no, because if the response is public, *that's* the
-    # response. If it's private, we do the same, but we attach the
-    # request's user.
+    # * message body (an empty message body is the initial sha256 state)
+    # * request method
+    # * fully-qualified, normalized request URI (minus scheme?)
+    # * optionally `REMOTE_USER`
+    # * optionally, request headers found in `Vary`.
     #
-    # okay so the cache stores *responses* which may or may not
-    # contain `Vary:` headers
+    # These fields, minus the body hash state, are delimited by the
+    # ASCII record separator character (0x1e).
     #
+    # (The reason why the message body goes first is because if we
+    # know its hash already, we can just begin with that, and we won't
+    # have to waste resources rehashing it on the end of the key.)
     #
+    # The hash state is built up incrementally, and the state is saved
+    # at certain checkpoints. For instance, we save a checkpoint
+    # before adding the `REMOTE_USER`, and again before we add the
+    # `Vary` headers. This enables us to test multiple keys
+    # efficiently.
     #
-    # of course if we *don't* supply the headers in the Vary
+    # The algorithm to generate the hash key and perform the lookup
+    # goes like this:
     #
-    # so i'm thinking we have
-
-
+    # * hash the message body (if present), for the initial state.
+    # * add the request method (these are case-sensitive!) to the hash.
+    # * add `\x1e`.
+    # * normalize the request-URI (using the `Host` header) and add it.
+    # * stash the hash state at this time.
+    # * add `\x1e` and the value of `REMOTE_USER` if present.
+    # * stash this state (for private cache entries).
+    # * try to look up the "private" cache key first, if present,
+    #   then the "public" one.
+    # * if there is a hit at this point, determine if the record is a
+    #   signpost or a terminal.
+    # * if it is a signpost, extract the list of `Vary` header names.
+    # * select the relevant headers from the request (which could be zero)
+    # * normalize the headers, alphabetize and serialize them, using
+    #   `Name: value` for the pairs, and \x1f between them.
+    # * add `\x1e` and the serialized headers (which may be the empty
+    #   string) to whichever variant of the hash matched the signpost.
+    # * now try looking up the new key. if it hits, that's the
+    #   terminal entry for that resource.
     #
-    # cache key -> (header set, body)
+    # Now we discuss cache entry layouts.
     #
-    # we begin with a minimal cache key which stores options for
-    # composite cache keys
+    # The first byte of the entry will consist of control flags. The
+    # MSB determines whether the entry is a signpost (1) or terminal
+    # (0). The rest of the bits flag aspects of the terminal
+    # record. On a signpost record, the only thing that follows is the
+    # list of `Vary` headers, delineated by `\x1f`. These may be
+    # compressed.
     #
-    # expires, flags (has user, has vary, has request body);
-    #  * user if user,
-    #  * vary headers + header hash if vary
-    #  * request body hash if body
-    #  * response header hash
-    #  * response body hash (may be null)
-
-    # nah we should just do minimal cache key to all the ways it can
-    # vary, then a binary sha256 -> (sha256, sha256) for the response
-    # headers and body
-
-    # minimal cache key is method + request-uri
+    # For the terminal entries, the next two bytes represent an
+    # unsigned short (which we may eventually steal up to six or seven
+    # bits from) containing the status code, followed by a 64-bit
+    # timestamp (overkill?) representing the original `Date` header of
+    # the origin response. Following that are uint32 deltas whose
+    # presence are contingent on bits in the control flags for
+    # `max-age`/`Expires`/`s-maxage`, `stale-while-revalidate`,
+    # `stale-if-error`, followed by the sha-256 hash of the response
+    # body, if present. the rest of the record is the serialized
+    # header set (which may be compressed).
     #
-    # minimal cache key -> (expiry vary user varyhash reqbodyhash)
-    #
-    # next is user for private cache
-    #
-    # next is request headers present in the response's Vary: header
-    #
-    # minimal cache key -> variants ()
-    # composite cache key
-    # cache key -> internal key
-    # internal key -> body
-    # internal key -> headers
+    # Once we have resolved the terminal entry, we can actually do
+    # some fkn logic to it.
 
     # We're sticking to LMDB because we're using it in the RDF store
     # and {Store::Digest}.
     module LMDB
+      # actually fuck it here's how we're gonna do it:
+      #
+      # * one table; key is sha256(body + method + normalized full uri + maybe user)
+      #
+      # * if there are Vary: headers, the basic entry should indicate
+      #   which ones they are
+      #
+      # * second lookup: sha256(body + method + uri + user + normalized Vary headers)
+      #
+      # * payload is (compressed) response header set plus hash
+      #   identifier of representation
+
+      # keep the hash around and just add to it for the second lookup
+      # to save (the minuscule amount of) reprocessing
+
     end
 
     # we can do redis or whatever later lol

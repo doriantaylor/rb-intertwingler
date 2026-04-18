@@ -4,6 +4,7 @@ require 'intertwingler/transform'
 require 'intertwingler/util/clean'
 require 'intertwingler/error'
 require 'intertwingler/loggable'
+require 'intertwingler/cache'
 
 require 'params/registry'
 
@@ -637,6 +638,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     @home = Pathname(home.to_s).expand_path
     @log  = log || resolver.log
+    @cache = Intertwingler::Cache.new self
 
     @registry   = Intertwingler::Params.configure self
     @dispatcher = Dispatcher.new self
