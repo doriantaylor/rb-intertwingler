@@ -1,4 +1,5 @@
 require_relative 'engine'
+require 'strscan'
 
 # This is a toy cache index. Its job is to map cache keys to
 # cryptographic digests. It uses Intertwingler's opaque blob
@@ -17,12 +18,271 @@ require_relative 'engine'
 #  not, since it could conceivably have the same interface as one.
 #
 class Intertwingler::Cache
-  # mkay basic facts about cache
 
-  # we need the cache to store the *exact* headers of the original
-  # response, minus headers that make no sense to cache
+  # This module is for parsing parametrized headers like `Accept`.
   #
-  # probably wouldn't hurt to normalize them as well, also gzip or whatever
+  module HeaderParser
+    # scan a token
+    TOKEN = /[!#$%&'*+\-.^_`|~0-9A-Za-z]+/
+    # optional whitespace
+    OWS   = /[ \t]*/
+    FLOAT = /^[+-]?(?=\.?\d)\d*\.?\d*(?:[Ee][+-]?\d+)?\z/
+
+    # Scan a quoted string.
+    #
+    # @param ss [StringScanner] the string scanner instance
+    #
+    # @raise [ArgumentError] the grammar is malformed.
+    #
+    # @return [String] the erstwhile-quoted string.
+    #
+    def self.scan_quoted ss
+      ss.scan(/"/) or return
+      out = String.new
+      until ss.eos?
+        if (chunk = ss.scan(/[\t \x21\x23-\x5b\x5d-\x7e\x80-\xff]+/n))
+          out << chunk
+        elsif ss.scan(/\\/)
+          ch = ss.scan(/[\t \x21-\x7e\x80-\xff]/n) or
+            raise ArgumentError, "invalid escape at #{ss.pos}"
+          out << ch
+        elsif ss.scan(/"/)
+          return out
+        else
+          peek = ss.peek(10).inspect
+          raise ArgumentError,
+            "invalid character in quoted string at #{ss.pos}: #{peek}"
+        end
+      end
+      raise ArgumentError, 'unterminated quoted string'
+    end
+
+    # Scan an individual parameter value.
+    #
+    # @param ss [StringScanner] the string scanner instance
+    #
+    # @raise [ArgumentError] the value is malformed.
+    #
+    # @return [String] the erstwhile-quoted string.
+    #
+    def self.scan_value ss
+      value = ss.scan TOKEN
+      return value.downcase.to_sym if value
+
+      scan_quoted ss
+    end
+
+    # Scan an individual parameter pair.
+    #
+    # @param ss [StringScanner] the string scanner instance
+    #
+    # @return [Array(Symbol, Object)] the parameter name and its value
+    #
+    def self.scan_param ss
+      name = ss.scan(TOKEN) or return
+
+      ss.skip OWS
+
+      ss.scan(/=/) or
+        raise ArgumentError, "expected '=' after parameter name #{name.inspect}"
+
+      ss.skip OWS
+      value = scan_value(ss) or
+        raise ArgumentError, "expected value for parameter #{name.inspect}"
+
+      name  = name.downcase.to_sym
+      value = value.to_s.to_f if value.is_a?(Symbol) && FLOAT.match?(value.to_s)
+
+      [name, value]
+    end
+
+    # Scan a member of the list
+    #
+    # @param ss [StringScanner] the string scanner instance
+    #
+    # @return [Array(Symbol,Hash)] the
+    #
+    def self.scan_member ss
+      ss.skip OWS
+      value = scan_value(ss) or return nil
+      params = {}
+
+      while ss.skip(/[ \t]*;[ \t]*/) && !ss.eos?
+        # peek ahead — trailing semicolon with no parameter is tolerated
+        break unless ss.check TOKEN
+
+        name, val = scan_param ss
+        params[name] = val
+      end
+
+      ss.skip OWS
+
+      [value, params]
+    end
+
+    # Parse a ranked header value (e.g. `Accept`)
+    #
+    # @param value [String] the header value
+    #
+    # @return [Array]
+    #
+    def self.parse value
+      ss = StringScanner.new value
+      members = []
+      loop do
+        ss.skip OWS
+        break if ss.eos?
+
+        member = scan_member ss
+        members << member if member
+
+        ss.skip OWS
+        break unless ss.scan /,/
+      end
+      members
+    end
+
+    # Normalize a parsed header
+    #
+    # @param values [Array<Array(Symbol,Hash{Symbol=>Object})>]
+    # @param strip [false, true]
+    # @param cmp [Proc] an optional comparator function
+    #
+    # @yieldparam a [Array(Symbol,Hash{Symbol=>Object})] comparand A
+    # @yieldparam b [Array(Symbol,Hash{Symbol=>Object})] comparand B
+    #
+    # @yieldreturn [Integer] preferably -1, 0, or 1
+    #
+    # @return [Array<Array(Symbol,Hash{Symbol=>Object})>]
+    #
+    def self.normalize values, strip: false, &cmp
+      cmp ||= -> a, b do
+      end
+    end
+
+    # Serialize a parsed header to a string.
+    def self.serialize values, &cmp
+    end
+  end
+
+  # The driver module is just a namespace for cache drivers.
+  module Driver
+    # Okay so this is super simple: we begin with a key-value store
+    # with *one* table keyed by sha256 hash, and two kinds of entry:
+    #
+    # * "signposts" whose job it is to encode the contents of the
+    #   `Vary` header,
+    # * "terminals" which actually contain the cache index.
+    #
+    # The cache key is composed of the sha256 of the following entities:
+    #
+    # * message body (an empty message body is the initial sha256 state)
+    # * request method
+    # * fully-qualified, normalized request URI (minus scheme?)
+    # * optionally `REMOTE_USER`
+    # * optionally, request headers found in `Vary`.
+    #
+    # These fields, minus the body hash state, are delimited by the
+    # ASCII record separator character (0x1e).
+    #
+    # (The reason why the message body goes first is because if we
+    # know its hash already, we can just begin with that, and we won't
+    # have to waste resources rehashing it on the end of the key.)
+    #
+    # The hash state is built up incrementally, and the state is saved
+    # at certain checkpoints. For instance, we save a checkpoint
+    # before adding the `REMOTE_USER`, and again before we add the
+    # `Vary` headers. This enables us to test multiple keys
+    # efficiently.
+    #
+    # The algorithm to generate the hash key and perform the lookup
+    # goes like this:
+    #
+    # * hash the message body (if present), for the initial state.
+    # * add the request method (these are case-sensitive!) to the hash.
+    # * add `\x1e`.
+    # * normalize the request-URI (using the `Host` header) and add it.
+    # * stash the hash state at this time.
+    # * add `\x1e` and the value of `REMOTE_USER` if present.
+    # * stash this state (for private cache entries).
+    # * try to look up the "private" cache key first, if present,
+    #   then the "public" one.
+    # * if there is a hit at this point, determine if the record is a
+    #   signpost or a terminal.
+    # * if it is a signpost, extract the list of `Vary` header names.
+    # * select the relevant headers from the request (which could be zero)
+    # * normalize the headers, alphabetize and serialize them, using
+    #   `Name: value` for the pairs, and `\x1f` between them.
+    # * If the request had `no-transform` in the `Cache-Control`
+    #   header, add `\x1d`. Otherwise, add `\x1e`.
+    # * add the serialized headers (which may be the empty
+    #   string) to whichever variant of the hash matched the signpost.
+    # * now try looking up the new key. if it hits, that's the
+    #   terminal entry for that resource.
+    #
+    # Now we discuss cache entry layouts.
+    #
+    # The first byte of the entry will consist of control flags. The
+    # MSB determines whether the entry is a signpost (1) or terminal
+    # (0). The rest of the bits flag aspects of the terminal
+    # record. On a signpost record, the only thing that follows is the
+    # list of `Vary` headers, delineated by `\x1f`. These may be
+    # compressed. (We rely on the GZip header to indicate compression.)
+    #
+    # Here are the flags for the control byte:
+    #
+    # 0. record is "signpost"
+    # 1. body hash present
+    # 2. `no-transform` flag
+    # 3. `immutable` flag
+    # 4. `must-understand` flag
+    # 5. `max-age` delta present
+    # 6. `stale-while-revalidate` delta present
+    # 7. `stale-if-error` delta present
+    #
+    # For the terminal entries, the next two bytes represent an
+    # unsigned short (which we may eventually steal up to six or seven
+    # bits from) containing the status code, followed by a 64-bit
+    # timestamp (overkill?) representing the original `Date` header of
+    # the origin response. Following that are uint32 deltas whose
+    # presence are contingent on bits in the control flags for
+    # `max-age`/`Expires`/`s-maxage`, `stale-while-revalidate`,
+    # `stale-if-error`, followed by the sha-256 hash of the response
+    # body, if present. the rest of the record is the serialized
+    # header set (which may be compressed).
+    #
+    # Once we have resolved the terminal entry, we can actually do
+    # some fkn logic to it.
+
+    # We're sticking to LMDB because we're using it in the RDF store
+    # and {Store::Digest}.
+    module LMDB
+      require 'lmdb'
+
+      private
+
+      # driver-specific installation
+      def bootstrap dir: 'index', mapsize: 2**27
+        dir = engine.home + dir
+        @db = ::LMDB.new dir, mapsize: mapsize
+        @index = @db.database 'index', create: true
+      end
+
+      def store_internal req, resp
+        # construct the hash key(s)
+
+        # stash the response body (unless it has a `Content-Location`
+        # with an `ni:` URI, in which case it's already stashed)
+      end
+
+      # @return [nil, Array]
+      #
+      def fetch_internal req
+      end
+    end
+
+    # we can do redis or whatever later lol
+  end
 
   private
 
@@ -182,104 +442,5 @@ class Intertwingler::Cache
     return resp unless cacheable_resp? resp
 
     store_internal req, resp
-  end
-
-  # The driver module is just a namespace for cache drivers.
-  module Driver
-    # Okay so this is super simple: we begin with a key-value store
-    # with *one* table keyed by sha256 hash, and two kinds of entry:
-    #
-    # * "signposts" whose job it is to encode the contents of the
-    #   `Vary` header,
-    # * "terminals" which actually contain the cache index.
-    #
-    # The cache key is composed of the sha256 of the following entities:
-    #
-    # * message body (an empty message body is the initial sha256 state)
-    # * request method
-    # * fully-qualified, normalized request URI (minus scheme?)
-    # * optionally `REMOTE_USER`
-    # * optionally, request headers found in `Vary`.
-    #
-    # These fields, minus the body hash state, are delimited by the
-    # ASCII record separator character (0x1e).
-    #
-    # (The reason why the message body goes first is because if we
-    # know its hash already, we can just begin with that, and we won't
-    # have to waste resources rehashing it on the end of the key.)
-    #
-    # The hash state is built up incrementally, and the state is saved
-    # at certain checkpoints. For instance, we save a checkpoint
-    # before adding the `REMOTE_USER`, and again before we add the
-    # `Vary` headers. This enables us to test multiple keys
-    # efficiently.
-    #
-    # The algorithm to generate the hash key and perform the lookup
-    # goes like this:
-    #
-    # * hash the message body (if present), for the initial state.
-    # * add the request method (these are case-sensitive!) to the hash.
-    # * add `\x1e`.
-    # * normalize the request-URI (using the `Host` header) and add it.
-    # * stash the hash state at this time.
-    # * add `\x1e` and the value of `REMOTE_USER` if present.
-    # * stash this state (for private cache entries).
-    # * try to look up the "private" cache key first, if present,
-    #   then the "public" one.
-    # * if there is a hit at this point, determine if the record is a
-    #   signpost or a terminal.
-    # * if it is a signpost, extract the list of `Vary` header names.
-    # * select the relevant headers from the request (which could be zero)
-    # * normalize the headers, alphabetize and serialize them, using
-    #   `Name: value` for the pairs, and \x1f between them.
-    # * add `\x1e` and the serialized headers (which may be the empty
-    #   string) to whichever variant of the hash matched the signpost.
-    # * now try looking up the new key. if it hits, that's the
-    #   terminal entry for that resource.
-    #
-    # Now we discuss cache entry layouts.
-    #
-    # The first byte of the entry will consist of control flags. The
-    # MSB determines whether the entry is a signpost (1) or terminal
-    # (0). The rest of the bits flag aspects of the terminal
-    # record. On a signpost record, the only thing that follows is the
-    # list of `Vary` headers, delineated by `\x1f`. These may be
-    # compressed.
-    #
-    # For the terminal entries, the next two bytes represent an
-    # unsigned short (which we may eventually steal up to six or seven
-    # bits from) containing the status code, followed by a 64-bit
-    # timestamp (overkill?) representing the original `Date` header of
-    # the origin response. Following that are uint32 deltas whose
-    # presence are contingent on bits in the control flags for
-    # `max-age`/`Expires`/`s-maxage`, `stale-while-revalidate`,
-    # `stale-if-error`, followed by the sha-256 hash of the response
-    # body, if present. the rest of the record is the serialized
-    # header set (which may be compressed).
-    #
-    # Once we have resolved the terminal entry, we can actually do
-    # some fkn logic to it.
-
-    # We're sticking to LMDB because we're using it in the RDF store
-    # and {Store::Digest}.
-    module LMDB
-      # actually fuck it here's how we're gonna do it:
-      #
-      # * one table; key is sha256(body + method + normalized full uri + maybe user)
-      #
-      # * if there are Vary: headers, the basic entry should indicate
-      #   which ones they are
-      #
-      # * second lookup: sha256(body + method + uri + user + normalized Vary headers)
-      #
-      # * payload is (compressed) response header set plus hash
-      #   identifier of representation
-
-      # keep the hash around and just add to it for the second lookup
-      # to save (the minuscule amount of) reprocessing
-
-    end
-
-    # we can do redis or whatever later lol
   end
 end

@@ -515,7 +515,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
       # can just do this lol
       cache.fetch_or_store(req) do
-        dispatcher.dispatch(req, subrequest: subrequest)
+        dispatch(req, subrequest: subrequest)
       end
 
       # * Otherwise dispatch the request and collect the response.
@@ -750,6 +750,26 @@ class Intertwingler::Engine < Intertwingler::Handler
   # it should really be `request`, not `fetch`
   alias_method :request, :fetch
 
+  # Fetch a blob from content-addressable storage. Shorthand for a
+  # subrequest that attempts to `GET` from
+  # `/.well-known/ni/<algo>/<digest>`.
+  #
+  # @param digest [URI::NI] the digest URI of the blob
+  #
+  # @return [Store::Digest::Object]
+  #
+  def fetch_blob digest
+  end
+
+  # Store a blob in content-addressable storage. Shorthand for a
+  # subrequest that `POST`s to `/.well-known/ni/`.
+  #
+  # @param blob [Store::Digest::Object, Rack::Request, Rack::Response, #to_s, #each, #call]
+  #
+  def store_blob blob, type: nil, language: nil, charset: nil, encoding: nil
+    # request 
+  end
+
   # This is the master handler that runs the engine and marshals all
   # other handlers and transforms.
   #
@@ -781,7 +801,10 @@ class Intertwingler::Engine < Intertwingler::Handler
       # this should tell the transform harness which handler was used
       # and therefore if it has an initial response queue that differs
       # from the default
+
       resp = dispatcher.dispatch req
+
+      # resp = cache.fetch_or_store req { dispatcher.dispatch req }
 
       # this can do all sorts of things; it can blow up, it can redirect…
     rescue Intertwingler::Handler::AnyButSuccess => e
