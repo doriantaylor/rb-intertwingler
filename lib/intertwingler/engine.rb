@@ -638,7 +638,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     @home = Pathname(home.to_s).expand_path
     @log  = log || resolver.log
-    @cache = Intertwingler::Cache.new self
+    # @cache = Intertwingler::Cache.new self
 
     @registry   = Intertwingler::Params.configure self
     @dispatcher = Dispatcher.new self
@@ -767,7 +767,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @param blob [Store::Digest::Object, Rack::Request, Rack::Response, #to_s, #each, #call]
   #
   def store_blob blob, type: nil, language: nil, charset: nil, encoding: nil
-    # request 
+    # request
   end
 
   # This is the master handler that runs the engine and marshals all
@@ -804,6 +804,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
       resp = dispatcher.dispatch req
 
+      # XXX this is how we do caching maybe?
       # resp = cache.fetch_or_store req { dispatcher.dispatch req }
 
       # this can do all sorts of things; it can blow up, it can redirect…

@@ -1,5 +1,7 @@
 require_relative 'engine'
 require 'strscan'
+require 'digest'
+require 'uri/ni'
 
 # This is a toy cache index. Its job is to map cache keys to
 # cryptographic digests. It uses Intertwingler's opaque blob
@@ -231,9 +233,9 @@ class Intertwingler::Cache
     #
     # Here are the flags for the control byte:
     #
-    # 0. record is "signpost"
+    # 0. record is a "signpost"
     # 1. body hash present
-    # 2. `no-transform` flag
+    # 2. `no-transform` flag in the *response*
     # 3. `immutable` flag
     # 4. `must-understand` flag
     # 5. `max-age` delta present
@@ -261,6 +263,16 @@ class Intertwingler::Cache
 
       private
 
+      # record flag fields
+      IS_SIGNPOST  = 1 << 0
+      BODY_PRESENT = 1 << 1
+      NO_TRANSFORM = 1 << 2
+      IMMUTABLE    = 1 << 3
+      M_UNDERSTAND = 1 << 4
+      MAX_AGE_P    = 1 << 5
+      STALE_REV_P  = 1 << 6
+      STALE_ERR_P  = 1 << 7
+
       # driver-specific installation
       def bootstrap dir: 'index', mapsize: 2**27
         dir = engine.home + dir
@@ -268,16 +280,96 @@ class Intertwingler::Cache
         @index = @db.database 'index', create: true
       end
 
+      def vary_headers val
+        return unless val
+
+        # lol get all that?
+        val.to_s.strip.split(/\s*,\s*/).map do |v|
+          v = v.upcase.tr ?-, ?_
+        end.sort.map do |v|
+          # of course it would be incredibly cursed if the Vary header
+          # *did* contain these, but i'm not here to judge
+          %w[CONTENT_TYPE CONTENT_LENGTH].include?(v) ? v : "HTTP_#{v}"
+        end
+      end
+
+      #
+      def construct_key_state req, state: nil, vary: nil
+        if state
+          raise ArgumentError, 'state must be a Digest::SHA256' unless
+            state.is_a? Digest::SHA256
+        else
+          # start fresh
+          state = Digest::SHA256.new
+
+          # add the main key elements
+
+          # first we do the request body which we either get from
+          # `Content-Location: ni:///…` or hash ourselves
+
+          # XXX what do we do about `Content-Encoding` in requests?
+
+          # if the request is HEAD, store GET
+        end
+
+        # now append the vary stuff
+        if vary.is_a? Array and !vary.empty?
+        end
+
+        state
+      end
+
       def store_internal req, resp
         # construct the hash key(s)
+
+        state = construct_key_state req
+        vary  = vary_headers resp.get_header 'Vary'
 
         # stash the response body (unless it has a `Content-Location`
         # with an `ni:` URI, in which case it's already stashed)
       end
 
-      # @return [nil, Array]
+      # @return [nil, Array(Integer, Hash, Store::Digest::Object)]
       #
       def fetch_internal req
+        state = construct_key_state req
+        key   = state.digest
+
+        @index.transaction do
+          raw = @index.get key
+          break if rec.nil? or rec.empty?
+          ctrl, rest = rec.unpack 'Ca*'
+
+          # now we test if it's a signpost or not
+          if (ctrl & IS_SIGNPOST).nonzero?
+            # retrieve the vary headers
+
+            # select the headers from the request
+            # normalize and serialize
+            # add them to the hash state
+            # look up terminal record
+            # (if it isn't there that's an error)
+          end
+
+          # now we construct the response
+
+          # test for presence of deltas in control byte; adjust pack
+          # template accordingly
+
+          # unpack the rest of the record
+
+          # if the record is expired, delete it (them) and return
+
+          # if the body hash is present, turn it into an `ni:` URI and
+          # dereference it
+
+          # if it's missing that counts as a cache miss; delete the record(s)
+
+          # now unpack the status and headers and turn them into a hash
+          # (test for gzip header)
+
+          # [status, headers, body]
+        end
       end
     end
 

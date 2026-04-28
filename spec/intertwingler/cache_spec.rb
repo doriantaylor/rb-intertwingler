@@ -45,6 +45,8 @@ describe Intertwingler::Cache do
 
   # store a varied private response
 
+  # store a different key if *request* is `no-transform`
+
   # store a QUERY with request body
 
   # expect a cache miss with different request body

@@ -11,8 +11,41 @@
     - [ ] implement for LMDB
   - [ ] design engine interface
     - [ ] configuration parameters
+      - [ ] what they are
+      - [ ] where they are stored
+      - [ ] how they get there
     - [ ] content-addressable store/fetch
     - [ ] optimizations in transform pipeline
+      - like do we just put it at the beginning and the end of the transform queue or do we cache each step in the queue?
+*** Rationale and Discussion
+- Why are we implementing internal caching?
+  - Some content-originating operations are irreducibly slow as a matter of course.
+  - Lots of responses are being generated on the fly that /could/ be served from cache.
+    - The catalogue resources, which are the /second/-highest cause of slowness in [[https://senseatlas.net/][Sense Atlas]], are absolutely in this category.
+      - They have ~Cache-Control~ headers but the first hit from any individual browser is always going to be an origin request, and therefore slow.
+      - (I tried putting in ~mod_cache~ at the edge and the result was /extremely/ broken.)
+      - They also change only when the graph state changes (and the quad store only has a global modification time and only because I hacked one in there, but that's a separate problem), so the computation only has to be done once per state change anyway.
+  - Many representations served to the edge are the result of a sequence of /transforms/.
+  - Transforms are mostly deterministic, and thus every bit as cacheable as whatever is piped into them.
+    - (If they produce a composite then it's the least-cacheable thing in the composition.)
+    - Running XSLT on the server side — which we need /stat/ and will have to do until we have a permanent solution for client-side page composition — will be too slow otherwise.
+    - Backlink generation, which is the chief cause of slowness in [[https://senseatlas.net/][Sense Atlas]], will need internal cache to be properly fixed with a paginated solution.
+    - The *addressable transform queue*, which is how things like programmatic image manipulations are going to be implemented, is waiting on internal caching.
+      - (It's too expensive computationally not to have caching for this.)
+      - The lack of addressable transforms is what is holding up the migrations of [[https://doriantaylor.com/][doriantaylor.com]], [[https://methodandstructure.com/][methodandstructure.com]], and [[https://intertwingler.net][intertwingler.net]] fully to a live instance of Intertwingler.
+- What are the benefits?
+  - Aside from no longer being painfully slow?
+  - Aside from getting out from under the torching of client-side XSLT by Google, Mozilla, /and/ the WHATWG?
+  - When the time comes, this work will provide a template for how to implement the same infrastructure in [[https://github.com/doriantaylor/rs-intermingler][Intermingler]].
+- Why can't we use an off-the-shelf HTTP cache?
+  - Needs are too integrated; we need fine-grained control.
+  - The cache furthermore has to be running /inside/ the Intertwingler engine process.
+  - It also has to support ~Vary~ and request bodies, which most off-the-shelf solutions don't.
+- How is internal caching going to work in Intertwingler?
+  - We have a cache index that stores the response code and headers, with the response body in the general-purpose content-addressable storage.
+    - This is because a non-trivial amount of responses will /originate/ from the CAS.
+  - ~Store::Digest~ is implemented as just another handler but now I'm thinking the Intertwingler engine proper needs a directly-attached instance of it as an entity cache.
+    - (Whether the handler uses the same instance of ~Store::Digest~ can be a configuration parameter.)
 * 2025-03-18 and earlier items (to be reorganized)
 ** DONE initial port of IBIS tool (Sense Atlas)
 *** DONE front-end separated
