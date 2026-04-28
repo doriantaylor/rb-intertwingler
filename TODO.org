@@ -17,6 +17,16 @@
     - [ ] content-addressable store/fetch
     - [ ] optimizations in transform pipeline
       - like do we just put it at the beginning and the end of the transform queue or do we cache each step in the queue?
+- [ ] refactor ~Intertwingler::Engine~ to include a more strongly-coupled instance of ~Store::Digest~
+  - [ ] hack bootstrapping config
+    - [ ] (may as well hack in the cache config stuff too)
+  - [ ] hack CLI initialization to reflect changes to config
+  - [ ] do the actual refactor
+    - [ ] mess with ~initialize~
+    - [ ] ~store_blob~ method
+    - [ ] ~fetch_blob~ method
+    - [ ] whatever else needs to happen in ~Intertwingler::Harness~
+  - [ ] change ~Intertwingler::Handler::CAS~ to have an "internal" driver option??
 *** Rationale and Discussion
 - Why are we implementing internal caching?
   - Some content-originating operations are irreducibly slow as a matter of course.
@@ -46,6 +56,9 @@
     - This is because a non-trivial amount of responses will /originate/ from the CAS.
   - ~Store::Digest~ is implemented as just another handler but now I'm thinking the Intertwingler engine proper needs a directly-attached instance of it as an entity cache.
     - (Whether the handler uses the same instance of ~Store::Digest~ can be a configuration parameter.)
+- What conditions close the ~internal-cache~ branch?
+  - [ ] Internal caching JFW
+  - [ ] necessary refactors
 * 2025-03-18 and earlier items (to be reorganized)
 ** DONE initial port of IBIS tool (Sense Atlas)
 *** DONE front-end separated
