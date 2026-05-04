@@ -54,7 +54,7 @@ class Intertwingler::CLI < Thor
 
       prompt.collect do
         key(:driver).ask 'Driver to use',
-          default: STORE unless prompt.no? 'Specify graph driver?'
+          default: REPO unless prompt.no? 'Specify graph driver?'
 
         prompt.say_md(message) if message
 
@@ -83,7 +83,10 @@ class Intertwingler::CLI < Thor
   ENV_CONFIG  = 'INTERTWINGLER_CONFIG'
 
   # other defaults
-  STORE = 'urn:x-ruby:rdf/lmdb;RDF::LMDB::Repository?=dir=rdf&mapsize=128M'
+  REPO  = 'urn:x-ruby:rdf/lmdb;RDF::LMDB::Repository?=dir=rdf&mapsize=128M'
+  STORE = 'urn:x-ruby:store/digest;Store::Digest?=driver=LMDB&dir=cas&mapsize=128M'
+  CACHE = 'urn:x-ruby:;Intertwingler::Cache?=driver=LMDB&dir=cache&mapsize=128M'
+
   HOST  = '127.0.0.1'
   PORT  = 10101
 
@@ -220,17 +223,8 @@ class Intertwingler::CLI < Thor
     raise TypeError,
       "URN refers to #{cls} which is not an RDF::Repository" unless
       cls.ancestors.include? RDF::Repository
-    oldpwd = Dir.getwd
-    begin
-      Dir.chdir config_home
 
-      # this can still raise, of course
-      repo = cls.new(**urn.q_component_hash)
-    ensure
-      Dir.chdir oldpwd
-    end
-
-    repo
+    Dir.chdir config_home { cls.new(**urn.q_component_hash) }
   end
 
   FORMATS = %w[rdf/turtle rdf/rdfxml rdf/ntriples rdf/nquads rdf/trig json/ld]
@@ -537,6 +531,19 @@ urn:x-ruby:module/path;Class::Name?=constructor=parameter&other=param
           while lu = prompt.ask('Module URN (leave blank to stop):')
             key(:preload).values.add_answer lu.strip if lu and !lu.strip.empty?
           end
+        end
+      end
+
+      # add store and cache configuration
+      {
+        store: ['Content-addressable store', 'cas'],
+        cache: ['Cache index', 'cache']
+      }.each do |k, pair|
+        prompt.say_md "\n#{pair.first}\n"
+        key k do
+          key(:driver).ask 'Driver:', default: 'LMDB'
+          key(:dir).ask 'Directory (relative to home):', default: pair.last
+          key(:mapsize).ask 'Map size:', default: '128M'
         end
       end
 

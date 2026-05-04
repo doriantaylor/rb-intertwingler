@@ -233,7 +233,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
     super path if path and !path.empty?
   end
 
-  # This will #require the #path and then `eval` whatever's in #constant.
+  # This will #require the #path and then `const_get` whatever's in #constant.
   #
   # @raise [LoadError] if loading the module fails.
   # @raise [URI::InvalidComponentError] if the constant is invalid.
@@ -247,7 +247,7 @@ class Intertwingler::RubyURN < URI::URN::Generic
       raise URI::InvalidComponentError, "#{ref} is not a valid constant" unless
         /\A\p{Lu}\p{Word}*(?:::\p{Lu}\p{Word}*)*\z/.match? ref
       # this may raise a NameError
-      @object ||= eval ref
+      @object ||= Module.const_get "::#{ref}"
     end
   end
 end

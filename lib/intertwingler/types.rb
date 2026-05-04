@@ -108,7 +108,7 @@ module Intertwingler
       format: /^[^\/]+\/[^\/]+$/)
 
     # An unprocessed CURIE or IRI, i.e. prior to prefix expansion.
-    CURIEOrIRIString = String.constrained format: URI.regexp
+    CURIEOrIRIString = String.constrained format: ::URI.regexp
 
     # A "negatable" CURIE/IRI borrows from SPARQL's invert property notation.
     # Coerces `^foo:bar` to a pair of the form `["foo:bar", true]`.
@@ -174,10 +174,32 @@ module Intertwingler
       secret:     String,
     ).hash_default
 
+    LMDBDriver = Coercible::Symbol.constrained(is: :LMDB).default(:LMDB)
+
+    LMDBStoreConfig = SymbolHash.schema(
+      driver:  LMDBDriver,
+      dir:     RelativePathname.default { Pathname('cas') },
+      mapsize: Bytes.default(2**27),
+    )
+
+    # have this for unioning together other drivers
+    StoreConfig = LMDBStoreConfig
+
+    LMDBCacheConfig = SymbolHash.schema(
+      driver:  LMDBDriver,
+      dir:     RelativePathname.default { Pathname('cache') },
+      mapsize: Bytes.default(2**27),
+    )
+
+    # ditto drivers
+    CacheConfig = LMDBCacheConfig
+
     HarnessConfig = SymbolHash.schema(
       host?: Hostname, port?: Port,
       libs?: LibsConfig, graph?: GraphConfig,
       jwt?: JWTConfig,
+      store: StoreConfig,
+      cache: CacheConfig,
       authorities?: Hash.map(Hostname, DomainConfig),
     )
   end

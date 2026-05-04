@@ -551,18 +551,19 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   # Resolve the engine and all of its handlers and transforms and
   # queues and such out of the graph.
-  def self.configure repo: nil, subject: nil, resolver: nil,
-      authority: nil, home: nil
+  def self.configure repo: nil, store: nil, cache: nil,
+      subject: nil, resolver: nil, authority: nil, home: nil
     # you either need a resolver, or a repo + { subject or authority }
 
     if resolver
-      self.new resolver: resolver, home: home
+      self.new resolver: resolver, home: home, store: store, cache: cache
     elsif repo
       if subject
-        self.new repo: repo, subject: subject, home: home
+        self.new repo: repo, subject: subject,
+          home: home, store: store, cache: cache
       elsif authority
         resolver = Intertwingler::Resolver.configure repo, authority: authority
-        self.new resolver: resolver, home: home
+        self.new resolver: resolver, home: home, store: store, cache: cache
       else
         raise Intertwingler::Error::Config,
           'A repository must be accompanied by an authority or a subject URI.'

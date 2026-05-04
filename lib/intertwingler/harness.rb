@@ -2,21 +2,28 @@ require 'intertwingler/handler'
 require 'intertwingler/resolver'
 require 'intertwingler/engine'
 require 'intertwingler/loggable'
+require 'intertwingler/storable'
 require 'pathname'
 
 # This is the multiplexing harness introduced to partition the
 # bootstrapping configuration
 class Intertwingler::Harness < Intertwingler::Handler
   include Intertwingler::Loggable
+  include Intertwingler::Cacheable
 
   # Create a new instance of the harness.
   #
   # @param mapping [Hash{String=>RDF::Repository}] The relation
   #  mapping authorities (domains) to RDF repositories.
+  # @param home [String, Pathname] directory
+  # @param store [Store::Digest, Hash] a content-addressable store or config
+  # @param log [Logger] a {Logger} instance
   #
-  def initialize mapping, home: nil, log: nil, jwt: {}
+  def initialize mapping, home: nil, store: nil, cache: nil, log: nil, jwt: {}
     @home  = home
     @log   = log
+    init_store store
+    init_cache cache
 
     if jwt and not jwt.empty?
       begin
@@ -36,13 +43,14 @@ class Intertwingler::Harness < Intertwingler::Handler
     end
 
     @engines = mapping.each_with_object({}) do |pair, hash|
-      authority, repo = pair
+      authority, repo = pairq
       # get the resolver for the authority
       resolver = Intertwingler::Resolver.configure repo,
         authority: authority, log: self.log # note this is to call Loggable
 
       # from there, load the engine
-      engine = Intertwingler::Engine.configure resolver: resolver, home: home
+      engine = Intertwingler::Engine.configure resolver: resolver,
+        home: home, store: store, cache: cache
 
       # map the domain aliases as well
       ([resolver.base] + resolver.aliases).each do |uri|

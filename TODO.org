@@ -13,25 +13,25 @@
     - [ ] configuration parameters
       - [ ] what they are
       - [ ] where they are stored
-      - [ ] how they get there
-    - [ ] content-addressable store/fetch
-    - [ ] optimizations in transform pipeline
-      - like do we just put it at the beginning and the end of the transform queue or do we cache each step in the queue?
-- [ ] refactor ~Intertwingler::Engine~ to include a more strongly-coupled instance of ~Store::Digest~
-  - [ ] hack bootstrapping config
-    - [ ] (may as well hack in the cache config stuff too)
-  - [ ] hack CLI initialization to reflect changes to config
+        - [ ] how they get there
+  - [ ] content-addressable store/fetch
+  - [ ] optimizations in transform pipeline
+    - like do we just put it at the beginning and the end of the transform queue or do we cache each step in the queue?
+- [-] refactor ~Intertwingler::Engine~ to include a more strongly-coupled instance of ~Store::Digest~
+  - [X] hack bootstrapping config
+    - [X] (may as well hack in the cache config stuff too)
+  - [X] hack CLI initialization to reflect changes to config
   - [ ] do the actual refactor
     - [ ] mess with ~initialize~
-    - [ ] ~store_blob~ method
-    - [ ] ~fetch_blob~ method
+    - [ ] mess with ~self.configure~
     - [ ] whatever else needs to happen in ~Intertwingler::Harness~
-  - [ ] change ~Intertwingler::Handler::CAS~ to have an "internal" driver option??
+    - [ ] accessors can just use ~.store.add~ etc
+  - [ ] change ~Intertwingler::Handler::CAS~ itself to have an "internal" driver option??
 *** Rationale and Discussion
 - Why are we implementing internal caching?
   - Some content-originating operations are irreducibly slow as a matter of course.
   - Lots of responses are being generated on the fly that /could/ be served from cache.
-    - The catalogue resources, which are the /second/-highest cause of slowness in [[https://senseatlas.net/][Sense Atlas]], are absolutely in this category.
+    - The catalogue resources, which are the /second/-most acute cause of slowness in [[https://senseatlas.net/][Sense Atlas]], are absolutely in this category.
       - They have ~Cache-Control~ headers but the first hit from any individual browser is always going to be an origin request, and therefore slow.
       - (I tried putting in ~mod_cache~ at the edge and the result was /extremely/ broken.)
       - They also change only when the graph state changes (and the quad store only has a global modification time and only because I hacked one in there, but that's a separate problem), so the computation only has to be done once per state change anyway.
