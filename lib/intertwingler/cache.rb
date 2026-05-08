@@ -713,8 +713,8 @@ class Intertwingler::Cache
       resp.is_a? Rack::Response
 
     # only store the response if cacheable, duh
-    return resp unless cacheable_resp? resp
+    cache_internal req, resp if cacheable_resp? resp
 
-    cache_internal req, resp
+    resp
   end
 end

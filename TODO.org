@@ -3,20 +3,6 @@
 ** TODO INTERNAL CACHING FINALLY
 - [X] retrofit ~Store::Digest~ with caching primitives
   - [X] realize that won't do it
-- [-] design cache index (~Intertwingler::Cache~)
-  - [X] design lookup mechanism
-  - [X] design cache key serialization function
-  - [X] design record layout
-  - [ ] design storage driver interface
-    - [ ] implement for LMDB
-  - [ ] design engine interface
-    - [ ] configuration parameters
-      - [ ] what they are
-      - [ ] where they are stored
-        - [ ] how they get there
-  - [ ] content-addressable store/fetch
-  - [ ] optimizations in transform pipeline
-    - like do we just put it at the beginning and the end of the transform queue or do we cache each step in the queue?
 - [-] refactor ~Intertwingler::Engine~ to include a more strongly-coupled instance of ~Store::Digest~
   - [X] hack bootstrapping config
     - [X] (may as well hack in the cache config stuff too)
@@ -26,14 +12,51 @@
     - [X] mess with ~self.configure~
     - [X] whatever else needs to happen in ~Intertwingler::Harness~
     - [X] accessors can just use ~.store.add~ etc
-  - [ ] change ~Intertwingler::Handler::CAS~ itself to have an "internal" driver option??
-- [ ] make ~Store::Digest~ the rewindable request body
-  - [ ] make yet another proxy/wrapper class?
-  - [ ] basically any attempt to read it should trigger the scan/add to the onboard store
+  - [ ] change ~Intertwingler::Handler::CAS~ itself to have an ~internal~ driver option??
+- [-] make ~Store::Digest~ the rewindable request body
+  - [X] make yet another proxy/wrapper class?
+    - ooh why not just modify the existing one to delay
+  - [X] basically any attempt to read the input should trigger the scan/add to the onboard store
   - [ ] add a ~max_bytes~ or equivalent parameter so we don't just naïvely store whatever
 - [ ] fix ~Store::Digest~'s cache flags for object creation
+  - [ ] this is a huge mess
   - [ ] make it so you can pass in a ~Time~ for desired expiration
-    - [ ] or an ~Integer~
+    - [ ] or an ~Integer~ delta taken from ~ctime~
+- [-] design cache index (~Intertwingler::Cache~)
+  - [X] design lookup mechanism
+  - [X] design cache key serialization function
+  - [X] design record layout
+  - [X] design engine interface
+    - [X] configuration parameters
+      - [X] what they are
+      - [X] where they are stored
+        - [X] how they get there
+  - [X] design storage driver interface
+  - [-] implement for LMDB
+    - [X] encapsulate the key state (~Intertwingler::Cache::KeyState~)
+    - [ ] normalize/serialize request headers
+      - [ ] dispatch table of headers that need special handling
+        - (~Accept~ and ~Accept-Language~ in particular)
+    - [ ] implement ~cache_internal~
+      - [ ] serialize signpost records
+      - [ ] serialize terminal records
+    - [ ] implement ~fetch_internal~
+      - [ ] implement signpost logic
+        - [ ] parse signpost records
+        - [ ] extract ~Vary~ header list
+      - [ ] parse terminal records
+        - [ ] determine freshness from abridged cache records
+        - [ ] reinflate header set
+        - [ ] reattach body from content-addressable store
+          - [ ] add ~Content-Location~ header pointing to store address
+  - [ ] implement ~cacheable_req?~
+  - [ ] implement ~cacheable_resp?~
+  - [ ] implement ~cache~
+  - [ ] implement ~fetch~
+  - [X] content-addressable store/fetch
+- [ ] deploy internal caching throughout ~Intertwingler::Engine~
+  - [ ] optimizations in transform pipeline
+    - like do we just put it at the end of each transform queue or do we cache each step in the queue?
 *** Rationale and Discussion
 - Why are we implementing internal caching?
   - Some content-originating operations are irreducibly slow as a matter of course.

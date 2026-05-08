@@ -177,7 +177,7 @@ class Intertwingler::CLI < Thor
     repo = @repo_urn[urn] or raise ArgumentError,
       "there should be a repo at #{urn}"
 
-    warn @repo_urn
+    # warn @repo_urn
 
     if repo.empty?
       load_formats
