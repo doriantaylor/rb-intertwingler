@@ -34,6 +34,9 @@
   - [X] design storage driver interface
   - [-] implement for LMDB
     - [X] encapsulate the key state (~Intertwingler::Cache::KeyState~)
+      - [X] get request body either from ~ni:///~ URI in request's ~Content-Location~ header or from ~Store::Digest::Object::IOWrapper~ conveniently stashed in request body
+      - [X] produce SHA-256 hash states for plain, with ~REMOTE_USER~ and both with header sets found in response ~Vary~
+      - [X] make a ~vary=~ mutator that updates the respective states
     - [ ] normalize/serialize request headers
       - [ ] dispatch table of headers that need special handling
         - (~Accept~ and ~Accept-Language~ in particular)
@@ -47,6 +50,8 @@
       - [ ] parse terminal records
         - [ ] determine freshness from abridged cache records
         - [ ] reinflate header set
+          - may need to determine if ~Cache-Control~ headers need to be adjusted
+          - ~Date~ definitely does
         - [ ] reattach body from content-addressable store
           - [ ] add ~Content-Location~ header pointing to store address
   - [ ] implement ~cacheable_req?~
@@ -54,6 +59,7 @@
   - [ ] implement ~cache~
   - [ ] implement ~fetch~
   - [X] content-addressable store/fetch
+    - (i don't remember what this means but the only thing it could mean, i did)
 - [ ] deploy internal caching throughout ~Intertwingler::Engine~
   - [ ] optimizations in transform pipeline
     - like do we just put it at the end of each transform queue or do we cache each step in the queue?
