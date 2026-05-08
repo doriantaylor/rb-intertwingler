@@ -22,8 +22,8 @@ class Intertwingler::Harness < Intertwingler::Handler
   def initialize mapping, home: nil, store: nil, cache: nil, log: nil, jwt: {}
     @home  = home
     @log   = log
-    init_store store
-    init_cache cache
+    @store = init_store store
+    @cache = init_cache cache
 
     if jwt and not jwt.empty?
       begin
@@ -43,14 +43,14 @@ class Intertwingler::Harness < Intertwingler::Handler
     end
 
     @engines = mapping.each_with_object({}) do |pair, hash|
-      authority, repo = pairq
+      authority, repo = pair
       # get the resolver for the authority
       resolver = Intertwingler::Resolver.configure repo,
         authority: authority, log: self.log # note this is to call Loggable
 
       # from there, load the engine
       engine = Intertwingler::Engine.configure resolver: resolver,
-        home: home, store: store, cache: cache
+        home: home, store: self.store, cache: self.cache
 
       # map the domain aliases as well
       ([resolver.base] + resolver.aliases).each do |uri|

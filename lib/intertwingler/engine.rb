@@ -4,7 +4,8 @@ require 'intertwingler/transform'
 require 'intertwingler/util/clean'
 require 'intertwingler/error'
 require 'intertwingler/loggable'
-require 'intertwingler/cache'
+require 'intertwingler/cacheable'
+require 'store/digest/object'
 
 require 'params/registry'
 
@@ -13,6 +14,7 @@ require 'rack/mock_request' # for env_for
 # This is the engine. This is the thing that is run.
 class Intertwingler::Engine < Intertwingler::Handler
   include Intertwingler::Loggable
+  include Intertwingler::Cacheable # implies Storable
 
   ITCV = Intertwingler::Vocab::ITCV
   TFO  = Intertwingler::Vocab::TFO
@@ -621,7 +623,8 @@ class Intertwingler::Engine < Intertwingler::Handler
   #  which relative file system paths are resolved. Uses the current
   #  working directory by default.
   #
-  def initialize repo: nil, subject: nil, resolver: nil, home: nil, log: nil
+  def initialize repo: nil, subject: nil, resolver: nil,
+      home: nil, log: nil, store: nil, cache: nil
     # step 1: the basics
     if resolver
       @resolver = resolver
@@ -639,8 +642,12 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     @home = Pathname(home.to_s).expand_path
     @log  = log || resolver.log
-    # @cache = Intertwingler::Cache.new self
 
+    # do store and cache
+    @store = init_store store
+    @cache = init_cache cache
+
+    # parameter registry and request dispatcher
     @registry   = Intertwingler::Params.configure self
     @dispatcher = Dispatcher.new self
 
@@ -779,6 +786,16 @@ class Intertwingler::Engine < Intertwingler::Handler
   # @return [Rack::Response]
   #
   def handle req
+
+    # rewrite the input to use the content-addressable store
+    # XXX do we keep this in the engine? iunno
+    if input = req.env['rack.input'] and
+        !input.is_a?(Store::Digest::Object::IOWrapper)
+      # get the type
+      type = req.content_type
+
+      req.env['rack.input'] = store.lazy_add input, type: type, cache: true
+    end
 
     # XXX handle OPTIONS *
 

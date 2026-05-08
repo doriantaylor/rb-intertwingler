@@ -61,7 +61,7 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_runtime_dependency 'params-registry',   '~> 0.2', '>= 0.2.2' # mine
   spec.add_runtime_dependency 'rdf-kv',            '~> 0.1', '>= 0.1.8' # mine
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
-  spec.add_runtime_dependency 'store-digest',      '>= 0.1.4'  # mine
+  spec.add_runtime_dependency 'store-digest',      '>= 0.3.2'  # mine
   spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine
   spec.add_runtime_dependency 'vips',              '>= 8.12.2'
   spec.add_runtime_dependency 'xml-mixup',         '~> 0.2', '>= 0.2.1' # mine

@@ -1,4 +1,5 @@
-require_relative 'engine'
+require_relative 'storable'
+
 require 'strscan'
 require 'digest'
 require 'uri/ni'
@@ -20,6 +21,7 @@ require 'uri/ni'
 #  not, since it could conceivably have the same interface as one.
 #
 class Intertwingler::Cache
+  include Intertwingler::Storable
 
   # This module is for parsing parametrized headers like `Accept`.
   #
@@ -167,6 +169,161 @@ class Intertwingler::Cache
     end
   end
 
+  # This is a little toy class that encapsulates the cache key digest
+  # state, which gets bifurcated twice (authenticated vs not; with
+  # `Vary` headers vs not).
+  #
+  class KeyState
+    private
+
+    def set_initial_state
+      # get the hash for the request body:
+
+      # get the request method
+      meth = @req.request_method
+
+      # get the normalized request-URI
+      uri = Intertwingler::Resolver.coerce_resource(@req.url, as: :uri)
+
+      # now we should get the state
+      state = @states.first
+
+      # if the request is other than HEAD/GET:
+      unless %w[HEAD GET].include? meth
+
+        # check to see if there's a `Content-Location` request header
+        if cl = @req.get_header('HTTP_CONTENT_LOCATION')
+          # resolve the content-location against the request-URI
+          cl = uri + cl
+        end
+
+        # if the Content-Location contains an RFC6920 URI, then we
+        # will just use that. if that fails or if otherwise it's
+        # missing (likely), scan the request body i guess.
+
+        unless cl.is_a? URI::NI
+          body = @req.body
+
+          raise TypeError,
+            'request body should be a Store::Digest::Object::IOWrapper, not %s' %
+            body.class unless body.is_a? Store::Digest::Object::IOWrapper
+
+          cl = body.object[:"sha-256"]
+        end
+
+        # add the body digest to the state
+        state << "#{cl.digest}#{cl.algorithm}\x1e"
+      end
+
+      state << [uri.normalize.to_s, meth].join("\x1e")
+
+      # if there is a user, do the initial bifurcation
+      if user = @req.env['REMOTE_USER'] and not user.strip.empty?
+        (@states[1] = @states.first.dup) << "\x1e#{user}"
+      end
+    end
+
+    public
+
+    # Initialize the state object.
+    #
+    # @param cache [Intertwingler::Cache] obligatory backlink to cache
+    # @param req [Rack::Request] the request to be turned into a cache key
+    # @param vary [nil, Array<String>] request headers to `Vary`
+    #
+    def initialize cache, req, vary: nil
+      @cache  = cache
+      @states = [Digest::SHA256.new, nil, nil, nil]
+      @req    = req
+
+      # just parcel this out
+      set_initial_state
+
+      # this will just invoke the accessor
+      self.vary = vary if vary.is_a?(Array) && !vary.empty?
+    end
+
+    # Determine if the encapsulated request is authenticated and
+    # thus whether we should attempt a private cache lookup.
+    #
+    # @return [false, true]
+    #
+    def authed?
+      # if this is set then the request is authenticated
+      !!@states[1]
+    end
+
+    # Set which headers were found in the response's `Vary` to be
+    # used for the request.
+    #
+    # @param headers [Array<String>]
+    #
+    def vary= headers
+      # check input
+      raise ArgumentError, "headers must be an array" unless
+        headers.is_a? Array
+
+      # empty these out if there are no vary headers
+      if headers.empty?
+        @states[2] = @states[3] = nil
+        return
+      end
+
+      # map the canonical request headers to cgi/rack env (eyeroll)
+      # XXX FUTURE ME: rack 3.3 will have `headers`
+      mapping = headers.map do |h|
+        rh = h.upcase.tr(?-, ?_)
+
+        # these would be weird to be in here but w/e
+        rh = "HTTP_#{rh}" unless /^CONTENT_(?:TYPE|LENGTH)$/ =~ rh
+
+        [h.downcase, rh]
+      end.to_h
+
+      # give us the reverse
+      rev = mapping.invert
+
+      # take subset of headers
+      reqh = req.env.slice(*mapping.values).map do |k, v|
+        # normalize request headers
+        [rev[k], v]
+      end.sort.to_h
+
+      # now serialize them
+      serialized = reqh.map { |k, v| "#{k}\x1f{#v}" }.join("\x1e")
+
+      st = [0]
+      st << 1 if authed?
+
+      st.each do |i|
+        (@states[2 | i] = @states[i].dup) << "\x1e#{serialized}"
+      end
+    end
+
+    # Get one of the state variants
+    #
+    # @param authed [false, true]
+    # @param vary [nil, false, true, Array<String>]
+    #
+    # @return [Digest::SHA256, nil] a duplicate of the hash state,
+    #  if it exists.
+    #
+    def state authed: false, vary: nil
+      # overwrite new vary states
+      if vary.is_a? Array
+        self.vary = vary
+        vary = false if vary.empty?
+      end
+
+      # construct the index this fun way
+      i = authed ? 1 : 0
+      j = vary   ? 2 : 0
+
+      # pick which hash state we want and return a duplicate
+      @states[i | j].dup
+    end
+  end
+
   # The driver module is just a namespace for cache drivers.
   module Driver
     # Okay so this is super simple: we begin with a key-value store
@@ -200,7 +357,7 @@ class Intertwingler::Cache
     # The algorithm to generate the hash key and perform the lookup
     # goes like this:
     #
-    # * hash the message body (if present), for the initial state.
+    # * add the binary SHA-256 hash of the message body, if present.
     # * add the request method (these are case-sensitive!) to the hash.
     # * add `\x1e`.
     # * normalize the request-URI (using the `Host` header) and add it.
@@ -222,14 +379,19 @@ class Intertwingler::Cache
     # * now try looking up the new key. if it hits, that's the
     #   terminal entry for that resource.
     #
+    # (Note the original plan was to actually hash the message body
+    # first for the initial state, as I mistakenly thought you could
+    # resume a SHA-256 hash. It turns out you can't, on purpose.)
+    #
     # Now we discuss cache entry layouts.
     #
     # The first byte of the entry will consist of control flags. The
-    # MSB determines whether the entry is a signpost (1) or terminal
-    # (0). The rest of the bits flag aspects of the terminal
-    # record. On a signpost record, the only thing that follows is the
-    # list of `Vary` headers, delineated by `\x1f`. These may be
-    # compressed. (We rely on the GZip header to indicate compression.)
+    # first bit in that byte determines whether the entry is a
+    # signpost (1) or terminal (0). The rest of the bits flag aspects
+    # of the terminal record. On a signpost record, the only thing
+    # that follows is the list of `Vary` headers, delineated by
+    # `\x1f`. These may be compressed. (We rely on the GZip header to
+    # indicate compression.)
     #
     # Here are the flags for the control byte:
     #
@@ -274,10 +436,12 @@ class Intertwingler::Cache
       STALE_ERR_P  = 1 << 7
 
       # driver-specific installation
-      def bootstrap dir: 'index', mapsize: 2**27
-        dir = engine.home + dir
-        @db = ::LMDB.new dir, mapsize: mapsize
-        @index = @db.database 'index', create: true
+      def bootstrap dir: 'cache', mapsize: 2**27
+        dir = Pathname(dir).expand_path
+        dir.mkpath unless dir.exist?
+
+        @env = ::LMDB.new dir, mapsize: mapsize
+        @index = @env.database 'index', create: true
       end
 
       def vary_headers val
@@ -319,7 +483,7 @@ class Intertwingler::Cache
         state
       end
 
-      def store_internal req, resp
+      def cache_internal req, resp
         # construct the hash key(s)
 
         state = construct_key_state req
@@ -333,7 +497,7 @@ class Intertwingler::Cache
       #
       def fetch_internal req
         state = construct_key_state req
-        key   = state.digest
+        key   = state.dup.digest
 
         @index.transaction do
           raw = @index.get key
@@ -410,7 +574,7 @@ class Intertwingler::Cache
     # headers
   end
 
-  # Unconditionally store a response, assuming both it and the
+  # Unconditionally cache a response, assuming both it and the
   # concomitant request have already been verified as cacheable.
   #
   # @param req [Rack::Request] the request to match
@@ -418,7 +582,7 @@ class Intertwingler::Cache
   #
   # @return [Rack::Response] the response passed in as `resp`
   #
-  def store_internal req, resp
+  def cache_internal req, resp
     # store the body
 
     # XXX note the response could indicate that its body already
@@ -465,11 +629,27 @@ class Intertwingler::Cache
   #
   # @return [void]
   #
-  def initialize engine, driver: :LMDB, **options
+  def initialize store: nil, driver: :LMDB, **options
+    raise ArgumentError, "`store` must be a Store::Digest" unless
+      store.is_a? Store::Digest
+    @store = init_store store
+
+    # warn self.store
+    # warn options
+
     # bolt on the driver or whatever
+    mod = /^(?:Driver)?::/.match?(driver.to_s) ? driver : "Driver::#{driver}"
+    raise ArgumentError, "No driver #{mod}" unless self.class.const_defined? mod
+    mod = self.class.const_get(mod)
+
+    # warn mod
+
+    extend mod
+
+    bootstrap **options
   end
 
-  # Store the response associated with a request.
+  # Attempt to cache the response associated with a request.
   #
   # @note here is where it would be really handy to have something
   #  like perl's `HTTP::Message` but that implemented the rack spec.
@@ -481,11 +661,11 @@ class Intertwingler::Cache
   #
   # @return [Rack::Response] the response passed in as `resp`
   #
-  def store req, resp, force: false
+  def cache req, resp, force: false
     # validate the request and response as cacheable
     return resp unless cacheable_req?(req) && cacheable_resp?(resp) || force
 
-    store_internal req, resp
+    cache_internal req, resp
   end
 
   # Attempt to fetch a cache entry based on a given request. Returns
@@ -506,6 +686,8 @@ class Intertwingler::Cache
     # file through candidates
 
     # process conditionals
+
+    fetch_internal req
   end
 
   # Attempt to fetch a cache entry, or otherwise run the block.
@@ -517,7 +699,7 @@ class Intertwingler::Cache
   #
   # @return [Rack::Response] the response, either from cache or the block
   #
-  def fetch_or_store req, &block
+  def fetch_or_cache req, &block
     # attempt to fetch the cache
     if resp = fetch(req)
       return resp
@@ -527,12 +709,12 @@ class Intertwingler::Cache
     resp = block.call req
 
     raise ArgumentError,
-      "Block must return a Rack::Response, not resp.class" unless
+      "Block must return a Rack::Response, not #{resp.class}" unless
       resp.is_a? Rack::Response
 
     # only store the response if cacheable, duh
     return resp unless cacheable_resp? resp
 
-    store_internal req, resp
+    cache_internal req, resp
   end
 end

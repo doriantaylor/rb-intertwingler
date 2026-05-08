@@ -177,6 +177,8 @@ class Intertwingler::CLI < Thor
     repo = @repo_urn[urn] or raise ArgumentError,
       "there should be a repo at #{urn}"
 
+    warn @repo_urn
+
     if repo.empty?
       load_formats
 
@@ -224,7 +226,7 @@ class Intertwingler::CLI < Thor
       "URN refers to #{cls} which is not an RDF::Repository" unless
       cls.ancestors.include? RDF::Repository
 
-    Dir.chdir config_home { cls.new(**urn.q_component_hash) }
+    Dir.chdir(config_home) { cls.new(**urn.q_component_hash) }
   end
 
   FORMATS = %w[rdf/turtle rdf/rdfxml rdf/ntriples rdf/nquads rdf/trig json/ld]

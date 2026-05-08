@@ -178,7 +178,7 @@ module Intertwingler
 
     LMDBStoreConfig = SymbolHash.schema(
       driver:  LMDBDriver,
-      dir:     RelativePathname.default { Pathname('cas') },
+      dir:     RelativePathname.default { Pathname('store') },
       mapsize: Bytes.default(2**27),
     )
 

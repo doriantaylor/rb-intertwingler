@@ -21,12 +21,19 @@
   - [X] hack bootstrapping config
     - [X] (may as well hack in the cache config stuff too)
   - [X] hack CLI initialization to reflect changes to config
-  - [ ] do the actual refactor
-    - [ ] mess with ~initialize~
-    - [ ] mess with ~self.configure~
-    - [ ] whatever else needs to happen in ~Intertwingler::Harness~
-    - [ ] accessors can just use ~.store.add~ etc
+  - [X] do the actual refactor
+    - [X] mess with ~initialize~
+    - [X] mess with ~self.configure~
+    - [X] whatever else needs to happen in ~Intertwingler::Harness~
+    - [X] accessors can just use ~.store.add~ etc
   - [ ] change ~Intertwingler::Handler::CAS~ itself to have an "internal" driver option??
+- [ ] make ~Store::Digest~ the rewindable request body
+  - [ ] make yet another proxy/wrapper class?
+  - [ ] basically any attempt to read it should trigger the scan/add to the onboard store
+  - [ ] add a ~max_bytes~ or equivalent parameter so we don't just naïvely store whatever
+- [ ] fix ~Store::Digest~'s cache flags for object creation
+  - [ ] make it so you can pass in a ~Time~ for desired expiration
+    - [ ] or an ~Integer~
 *** Rationale and Discussion
 - Why are we implementing internal caching?
   - Some content-originating operations are irreducibly slow as a matter of course.

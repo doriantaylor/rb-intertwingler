@@ -20,7 +20,7 @@
 
 # handlers
 
-# <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem?=root=~/projects/active/doriantaylor.com/trunk&root=~/projects/active/summer-of-protocols/source&root=~/clients/me/extranet-boilerplate&root=~/cilents/me/app-ibis-front-end/source> a itcv:Handler ;
+# <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem?=root=~/projects/active/doriantaylor.com/trunk&root=~/projects/active/summer-of-protocols/source&root=~/clients/me/extranet-boilerplate&root=~/clients/me/app-ibis-front-end/source> a itcv:Handler ;
 <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem> a itcv:Handler ;
 #  tfo:parameter itcv:root ;
   tfo:parameter <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem;root> ;
@@ -47,7 +47,7 @@
   rdfs:label "Local Filesystem Handler" ;
   a itcv:Instance ;
   itcv:of <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem> ;
-  <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem;root> ( "~/clients/me/app-ibis-front-end/target"^^itcv:path "~/projects/active/doriantaylor.com/trunk"^^itcv:path "~/projects/active/summer-of-protocols/target"^^itcv:path "~/clients/me/extranet-boilerplate"^^itcv:path ) .
+  <urn:x-ruby:intertwingler/handler/filesystem;Intertwingler::Handler::FileSystem;root> ( "~/clients/me/sense-atlas/front-end/target"^^itcv:path "~/projects/active/doriantaylor.com/trunk"^^itcv:path "~/projects/active/summer-of-protocols/target"^^itcv:path "~/clients/me/extranet-boilerplate"^^itcv:path ) .
 
 <urn:x-ruby:intertwingler/handler/generated;Intertwingler::Handler::Generated> a itcv:Handler ;
   rdfs:label "Generated Content Handler"@en .
@@ -65,7 +65,7 @@
   rdfs:domain itcv:Instance ;
   rdfs:range itcv:path .
 
-<urn:x-ruby:intertwingler/handler/cas;Intertwingler::Handler::CAS?=driver=LMDB&dir=cas&mapsize=128M> a itcv:Handler ;
+<urn:x-ruby:intertwingler/handler/cas;Intertwingler::Handler::CAS?=driver=LMDB&dir=store&mapsize=128M> a itcv:Handler ;
   rdfs:label "Content-Addressable Store Handler"@en .
 
 <urn:x-ruby:intertwingler/handler/kv;Intertwingler::Handler::KV> a itcv:Handler ;
@@ -123,7 +123,7 @@
 
 <urn:uuid:d62dfddf-9e84-45b8-8da9-8fd3d830a1bc> a itcv:Engine ;
   rdfs:label "The Intertwingler Engine"@en ;
-  itcv:handler-list ( <urn:x-ruby:intertwingler/handler/kv;Intertwingler::Handler::KV> <urn:x-ruby:intertwingler/handler/catalogue;Intertwingler::Handler::Catalogue> <urn:uuid:b960a798-bed5-4c2d-b772-ea5e2856d39c> <urn:x-ruby:intertwingler/handler/generated;Intertwingler::Handler::Generated> <urn:x-ruby:intertwingler/handler/cas;Intertwingler::Handler::CAS?=driver=LMDB&dir=cas&mapsize=128M> ) ;
+  itcv:handler-list ( <urn:x-ruby:intertwingler/handler/kv;Intertwingler::Handler::KV> <urn:x-ruby:intertwingler/handler/catalogue;Intertwingler::Handler::Catalogue> <urn:uuid:b960a798-bed5-4c2d-b772-ea5e2856d39c> <urn:x-ruby:intertwingler/handler/generated;Intertwingler::Handler::Generated> <urn:x-ruby:intertwingler/handler/cas;Intertwingler::Handler::CAS?=driver=LMDB&dir=store&mapsize=128M> ) ;
   itcv:request-queue <urn:uuid:9696ee94-b6d3-441e-83cd-9181987488a4> ;
   itcv:resolver <urn:uuid:3b7f95f0-5eea-4f86-adc7-27ad18be1979> ;
   itcv:response-queue <urn:uuid:4474528f-0345-4fcb-9437-aea24667f2ca> .
