@@ -214,7 +214,7 @@ class Intertwingler::Field
     # Applies `#strip` to the original string.
     #
     def to_s
-      @value
+      @value.freeze
     end
   end
 
@@ -233,10 +233,14 @@ class Intertwingler::Field
 
     public
 
+    # This just takes the parsed value instead of the original.
+    #
     def to_s
-      @value.to_s
+      @value.to_s.freeze
     end
 
+    # Overriding `#inspect` to get rid of the quotation marks.
+    #
     def inspect
       "<#{self.class} (#{to_s})>"
     end
@@ -263,6 +267,12 @@ class Intertwingler::Field
     #
     def to_s
       (@uri ? @uri.route_to(@value) : @value).to_s
+    end
+
+    # Overriding `#inspect` to get rid of the quotation marks.
+    #
+    def inspect
+      "<#{self.class} #{to_s}>"
     end
   end
 
@@ -368,7 +378,7 @@ class Intertwingler::Field
   # Weighted header values like `Accept` have a `q` parameter from 0 to
   # 1 (which when omitted implies 1) among other possible parameters.
   #
-  class Weighted < Set
+  class Weighted < ParamPairs
 
     private
 
@@ -389,6 +399,7 @@ class Intertwingler::Field
       cmp ||= -> a, b do
       end
     end
+
     def parse!
     end
   end
@@ -396,6 +407,7 @@ class Intertwingler::Field
   # The `Accept` header is weighted and with parameters, and has a special
   #
   class Accept < Weighted
+    # we override here to preserve 
     def parse!
     end
 
@@ -412,7 +424,7 @@ class Intertwingler::Field
 
   # `Authorization` headers also have special contents.
   #
-  class Credentials < self
+  class Credentials < Verbatim
   end
 
   private

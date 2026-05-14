@@ -8,7 +8,7 @@ describe Intertwingler::Field do
     expect { Intertwingler::Field.new('test').to_s }.to raise_error(NotImplementedError)
   end
 
-  it 'should properly handle a verbatim header' do
+  it 'should properly handle an integer header' do
     val = Intertwingler::Field['CONTENT_LENGTH'].new '31337'
 
     expect(val).to be_a(Intertwingler::Field::NonNegativeInteger)
