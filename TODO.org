@@ -22,6 +22,15 @@
   - [ ] this is a huge mess
   - [ ] make it so you can pass in a ~Time~ for desired expiration
     - [ ] or an ~Integer~ delta taken from ~ctime~
+- [-] create ~Intertwingler::Field~ to parse/sanitize/normalize/serialize request headers
+  - [X] unified interface for all field value types
+  - [ ] tokens and values normalized and type-coerced
+    - e.g. ~q~ parameter weights clamped and quantized
+  - [ ] addressable data structures
+  - [ ] /one/ serialized lexical representation per given semantic content
+    - (needs to be hashable cryptographically)
+  - [ ] dispatch table of headers that need special handling
+    - (~Accept~ and ~Accept-Language~ in particular)
 - [-] design cache index (~Intertwingler::Cache~)
   - [X] design lookup mechanism
   - [X] design cache key serialization function
@@ -37,9 +46,6 @@
       - [X] get request body either from ~ni:///~ URI in request's ~Content-Location~ header or from ~Store::Digest::Object::IOWrapper~ conveniently stashed in request body
       - [X] produce SHA-256 hash states for plain, with ~REMOTE_USER~ and both with header sets found in response ~Vary~
       - [X] make a ~vary=~ mutator that updates the respective states
-    - [ ] normalize/serialize request headers
-      - [ ] dispatch table of headers that need special handling
-        - (~Accept~ and ~Accept-Language~ in particular)
     - [ ] implement ~cache_internal~
       - [ ] serialize signpost records
       - [ ] serialize terminal records

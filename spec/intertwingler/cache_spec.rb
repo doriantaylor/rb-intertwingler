@@ -1,5 +1,7 @@
 require 'spec_helper'
 
+require 'intertwingler/cache'
+
 describe Intertwingler::Cache do
   # XXX note i am organizing this by storage and retrieval for now but
   # they will likely be intermixed because how are you gonna test this
