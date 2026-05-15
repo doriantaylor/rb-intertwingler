@@ -17,7 +17,7 @@ describe Intertwingler::Field do
   end
 
   it 'should parse an individual type with parameters' do
-    val = Intertwingler::Field['Content-Type'].new 'Text/HTML;version=5;foo="lol wut"'
+    val = Intertwingler::Field['Content-Type'].new 'Text/HTML;version=5;q=7;foo="lol wut"'
     # should downcase and rearrange and truncate the integer
     expect(val.to_s).to eq 'text/html;foo="lol wut";version=5'
   end
@@ -26,7 +26,7 @@ describe Intertwingler::Field do
     val = Intertwingler::Field['Content-Encoding'].new 'gzip, base64'
 
     expect(val).to be_a(Intertwingler::Field::List)
-    expect(val.value).to eq %w[gzip base64]
+    expect(val.value).to eq %i[gzip base64]
   end
 
   it 'should correctly normalize a set' do
@@ -38,25 +38,36 @@ describe Intertwingler::Field do
   end
 
   it 'should correctly handle pairs of values' do
-    val = Intertwingler::Field['Cache-Control'].new 'max-age=500, must-revalidate'
+    val = Intertwingler::Field['Cache-Control'].new 'must-revalidate, max-age=500'
     expect(val).to be_a(Intertwingler::Field::Pairs)
 
     # pairs should be sorted by key
+    expect(val.to_s).to eq 'max-age=500, must-revalidate'
   end
 
   it 'should handle ranked/weighted values' do
     # weighted values should be normalized and sorted descending by weight
-    val = Intertwingler::Field['Content-Language'].new 'en-CA, en-US, fr;q=0.8'
+    val = Intertwingler::Field['Accept-Language'].new 'fr, en-US;q=0.8, en-CA;q=7'
+    expect(val.to_s).to eq 'en-ca, fr, en-us;q=0.8'
   end
 
   it 'should handle an `Accept` header' do
+    val = Intertwingler::Field['HTTP_ACCEPT'].new 'application/x-POTATO;q=0, Text/HTML;q=1;version=6, text/html;q=0.9, application/xhtml+xml, application/xml;q=3.14159, */*;q=0.001'
     # media type parameters should be sorted lexically ex `q` which
-    # should be added last; tokens should
+
+    expect(val.to_s).to eq 'application/xhtml+xml, application/xml, text/html;version=6, text/html;q=0.9, */*;q=0.001, application/x-potato;q=0'
+
+  end
+
+  it 'should handle a `Date` header' do
+    # TBD lol
   end
 
   it 'should handle a `Link` header' do
+    # TBD lol
   end
 
   it 'should handle an `Authorization` header' do
+    # TBD lol
   end
 end

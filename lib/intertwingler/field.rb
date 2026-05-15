@@ -18,6 +18,12 @@ require 'set'
 #  not consider the structured fields in RFC9651.
 #
 class Intertwingler::Field
+  # We introduce an error class that doesn't do much besides
+  # disambiguate from a generic {ArgumentError}.
+  #
+  class ParseError < ArgumentError
+  end
+
   private
 
   # scan a token
@@ -32,65 +38,65 @@ class Intertwingler::Field
 
   # Scan a quoted string.
   #
-  # @param ss [StringScanner] the string scanner instance
+  # @param scanner [StringScanner] the string scanner instance
   #
   # @raise [ArgumentError] the grammar is malformed.
   #
   # @return [String] the erstwhile-quoted string.
   #
-  def self.scan_quoted ss
-    ss.scan(/"/) or return
+  def self.scan_quoted scanner
+    scanner.scan(/"/) or return
     out = String.new
-    until ss.eos?
-      if (chunk = ss.scan(/[\t \x21\x23-\x5b\x5d-\x7e\x80-\xff]+/n))
+    until scanner.eos?
+      if (chunk = scanner.scan(/[\t \x21\x23-\x5b\x5d-\x7e\x80-\xff]+/n))
         out << chunk
-      elsif ss.scan(/\\/)
-        ch = ss.scan(/[\t \x21-\x7e\x80-\xff]/n) or
-          raise ArgumentError, "invalid escape at #{ss.pos}"
+      elsif scanner.scan(/\\/)
+        ch = scanner.scan(/[\t \x21-\x7e\x80-\xff]/n) or
+          raise ParseError, "invalid escape at #{scanner.pos}"
         out << ch
-      elsif ss.scan(/"/)
+      elsif scanner.scan(/"/)
         return out
       else
-        peek = ss.peek(10).inspect
-        raise ArgumentError,
-          "invalid character in quoted string at #{ss.pos}: #{peek}"
+        peek = scanner.peek(10).inspect
+        raise ParseError,
+          "invalid character in quoted string at #{scanner.pos}: #{peek}"
       end
     end
-    raise ArgumentError, 'unterminated quoted string'
+    raise ParseError, 'unterminated quoted string'
   end
 
   # Scan an individual parameter value.
   #
-  # @param ss [StringScanner] the string scanner instance
+  # @param scanner [StringScanner] the string scanner instance
   #
-  # @raise [ArgumentError] the value is malformed.
+  # @raise [ParseError] the value is malformed.
   #
   # @return [String] the erstwhile-quoted string.
   #
-  def self.scan_value ss
-    value = ss.scan TOKEN
+  def self.scan_value scanner
+    value = scanner.scan TOKEN
     return value.downcase.to_sym if value
 
-    scan_quoted ss
+    scan_quoted scanner
   end
 
   # Scan an individual parameter pair.
   #
-  # @param ss [StringScanner] the string scanner instance
+  # @param scanner [StringScanner] the string scanner instance
   #
   # @return [Array(Symbol, Object)] the parameter name and its value
   #
-  def self.scan_param ss
-    name = ss.scan(TOKEN) or return
+  def self.scan_param scanner
+    name = scanner.scan(TOKEN) or return
 
-    ss.skip OWS
+    scanner.skip OWS
 
-    ss.scan(/=/) or
-      raise ArgumentError, "expected '=' after parameter name #{name.inspect}"
+    scanner.scan(/=/) or
+      raise ParseError, "expected '=' after parameter name #{name.inspect}"
 
-    ss.skip OWS
-    value = scan_value(ss) or
-      raise ArgumentError, "expected value for parameter #{name.inspect}"
+    scanner.skip OWS
+    value = scan_value(scanner) or
+      raise ParseError, "expected value for parameter #{name.inspect}"
 
     name  = name.downcase.to_sym
     value = value.to_s.to_f if value.is_a?(Symbol) && FLOAT.match?(value.to_s)
@@ -100,41 +106,64 @@ class Intertwingler::Field
 
   # Scan the full parameter set.
   #
-  # @param ss [StringScanner] the string scanner instance
+  # @param scanner [StringScanner] the string scanner instance
   #
   # @return [Hash{Symbol=>Object}] the parameter set
   #
-  def self.scan_params ss
-    ss.skip OWS
+  def self.scan_params scanner
+    scanner.skip OWS
 
     params = {}
 
-    while ss.skip(/[ \t]*;[ \t]*/) && !ss.eos?
+    while scanner.skip(/[ \t]*;[ \t]*/) && !scanner.eos?
       # peek ahead — trailing semicolon with no parameter is tolerated
-      break unless ss.check TOKEN
+      break unless scanner.check TOKEN
 
-      name, val = scan_param ss
+      name, val = scan_param scanner
       params[name] = val
     end
 
-    ss.skip OWS
+    scanner.skip OWS
 
     params
   end
 
-  # Scan a member of the list
+  # Scan for a (parametrized) header element
   #
-  # @param ss [StringScanner] the string scanner instance
+  # @param scanner [StringScanner] the string scanner instance
   #
   # @return [Array(Symbol,Hash)] the
   #
-  def self.scan_member ss
-    ss.skip OWS
+  def self.scan_element scanner
+    scanner.skip OWS
 
-    value  = scan_value(ss) or return
-    params = scan_params ss
+    value  = scan_value(scanner) or return
+    params = scan_params scanner
 
     [value, params]
+  end
+
+  # Scan all elements in a list
+  #
+  # @param scanner [StringScanner] the string scanner instance
+  #
+  # @return [Array] the elements
+  #
+  def self.scan_elements scanner
+    elements = []
+
+    loop do
+      scanner.skip OWS
+      break if scanner.eos?
+
+      elem = scan_element scanner
+      elements << elem if elem
+
+      scanner.skip OWS
+      break unless scanner.scan /,/
+    end
+
+    elements
   end
 
   # Parse a ranked header value (e.g. `Accept`)
@@ -145,18 +174,18 @@ class Intertwingler::Field
   #
   def self.parse value
     ss = StringScanner.new value
-    members = []
-    loop do
-      ss.skip OWS
-      break if ss.eos?
+    scan_elements ss
+  end
 
-      member = scan_member ss
-      members << member if member
-
-      ss.skip OWS
-      break unless ss.scan /,/
-    end
-    members
+  # Return a quoted string with escapes.
+  #
+  # @param string [String,#to_s] the input string
+  #
+  # @return [String] a string in double quotes with any internal
+  #  double quotes (and backslashes) escaped.
+  #
+  def self.quote_string string
+    '"%s"' % string.to_s.gsub(/[\x22\x5c]/, '\\&')
   end
 
   # Instantiate a parsed HTTP field.
@@ -225,7 +254,7 @@ class Intertwingler::Field
     private
 
     def parse!
-      raise ArgumentError, "#{@original} is not numeric" unless
+      raise ParseError, "#{@original} is not a recognizable integer" unless
         /^\s*\d+\s*$/ =~ @original
 
       @value = @original.strip.to_i
@@ -256,7 +285,7 @@ class Intertwingler::Field
         @value = (@uri ? @uri + value : ::URI.new(value)).normalize
       rescue ::URI::Error => e
         # re-raise with a different message
-        raise ArgumentError, e.message
+        raise ParseError, e.message
       end
     end
 
@@ -276,13 +305,20 @@ class Intertwingler::Field
     end
   end
 
+  # XXX add http date parsing
+  #
+  class Date < Verbatim
+  end
+
   # A media type is (unfortunately) not a token.
   #
   class MediaType < self
     private
 
     def parse!
-      @value = self.class.scan_element StringScanner.new(@original)
+      elem = self.class.scan_element StringScanner.new(@original)
+      elem.last.delete :q # there should not be a q key
+      @value = elem
     end
 
     public
@@ -309,10 +345,14 @@ class Intertwingler::Field
     def self.serialize type, params
       params ||= {}
 
-      out = [type] + params.slice(*params.keys.sort).map do |k, v|
+      # we include q here for Accept
+      keys = params.keys.sort - [:q]
+      keys << :q if params.key? :q
+
+      out = [type] + params.slice(*keys).map do |k, v|
         v = case v
             when Float then (v == v.truncate ? v.to_i : v).to_s
-            when String then '"%s"' % v.gsub(/[\x22\x5c]/, '\\&')
+            when String then quote_string v
             else v.to_s
             end
 
@@ -338,10 +378,15 @@ class Intertwingler::Field
     private
 
     def parse!
-      @value = @original.strip.split /\s*,+\s*/
+      @value = self.class.scan_elements(StringScanner.new @original).compact
     end
 
     public
+
+    def self.scan_element scanner
+      elem = scanner.scan(TOKEN) or return
+      elem.downcase.to_sym
+    end
 
     def to_s
       @value.join ', '
@@ -370,9 +415,39 @@ class Intertwingler::Field
   # (which may be a quoted string), such as `Cache-Control`.
   #
   class Pairs < List
+    def parse!
+      ss = StringScanner.new @original
+      @value = self.class.scan_elements(ss).to_h
+    end
+
+    # We get a special `scan_element` here
+    #
+    def self.scan_element scanner
+      name = scanner.scan(TOKEN) or return
+      scanner.skip OWS
+
+      value = if scanner.scan(/=/)
+        scanner.skip OWS
+
+        scan_value scanner
+      end
+
+      name  = name.downcase.to_sym
+      value = value.to_s.to_i if /^\d+$/.match? value.to_s
+
+      [name, value]
+    end
+
+    def to_s
+      @value.map { |k, v| v ? "#{k}=#{v}" : k.to_s }.sort.join ', '
+    end
   end
 
   class ParamPairs < Pairs
+    def self.scan_element scanner
+      # it's weird that this is the default; we should probably move it.
+      Intertwingler::Field.scan_element scanner
+    end
   end
 
   # Weighted header values like `Accept` have a `q` parameter from 0 to
@@ -382,36 +457,64 @@ class Intertwingler::Field
 
     private
 
-    # Normalize a parsed header
-    #
-    # @param values [Array<Array(Symbol,Hash{Symbol=>Object})>]
-    # @param strip [false, true]
-    # @param cmp [Proc] an optional comparator function
-    #
-    # @yieldparam a [Array(Symbol,Hash{Symbol=>Object})] comparand A
-    # @yieldparam b [Array(Symbol,Hash{Symbol=>Object})] comparand B
-    #
-    # @yieldreturn [Integer] preferably -1, 0, or 1
-    #
-    # @return [Array<Array(Symbol,Hash{Symbol=>Object})>]
-    #
-    def self.normalize values, strip: false, &cmp
-      cmp ||= -> a, b do
+    def parse!
+      ss = StringScanner.new @original
+      @value = self.class.scan_elements(ss).each_with_object({}) do |pair, h|
+        q = (pair.last[:q] || 1.0).to_f.clamp(0.0, 1.0).round 3
+        h[pair.first] = q
       end
     end
 
-    def parse!
+    public
+
+    def to_s
+      keys = @value.keys.sort do |a, b|
+        c = @value[b] <=> @value[a]
+        c == 0 ? a <=> b : c
+      end
+
+      keys.map do |k|
+        @value[k] == 1.0 ? k.to_s : "#{k};q=#{@value[k]}"
+      end.join ', '
     end
   end
 
-  # The `Accept` header is weighted and with parameters, and has a special
+  # The `Accept` header is weighted and the elements also have
+  # parameters. We permit the `q` values to be mixed in with those
+  # parameters on parse but we serialize with them always at the end.
   #
   class Accept < Weighted
-    # we override here to preserve 
+    private
+
+    # we override here to preserve
     def parse!
+      ss = StringScanner.new @original
+      @value = self.class.scan_elements(ss).each_with_object({}) do |pair, h|
+        q = (pair.last.delete(:q) || 1.0).to_f.clamp(0.0, 1.0).round 3
+        (h[pair.first] ||= []) << [pair.last, q]
+      end
+    end
+
+    public
+
+    # This just wraps {MediaType.scan_element}.
+    #
+    def self.scan_element scanner
+      # c wut we did thar???
+      MediaType.scan_element scanner
     end
 
     def to_s
+      @value.map { |k, v| [k].product v }.flatten(1).sort do |a, b|
+        c = b.last.last <=> a.last.last # weight
+        c = c == 0 ? a <=> b : c # type identifier
+        c == 0 ? a.last.first.to_s <=> b.last.first.to_s : c # params
+      end.map do |pair|
+        type, pair     = pair
+        params, weight = pair
+        params = params.merge({ q: weight }) if weight != 1.0
+        MediaType.serialize type, params
+      end.join ', '
     end
   end
 
@@ -420,6 +523,9 @@ class Intertwingler::Field
   # that can be quoted strings in both keys _and_ values.
   #
   class Link < Set
+    # def self.scan_element scanner
+    #   # < link > followed by params
+    # end
   end
 
   # `Authorization` headers also have special contents.
@@ -548,7 +654,7 @@ class Intertwingler::Field
   def self.[] header
     # normalize the header
     m = HDR_RE.match(header.to_s) or
-      raise ArgumentError, "header #{header} not found"
+      raise ParseError, "header #{header} not found"
 
     # normalized header
     nh = m.captures.detect { |x| !x.nil? }.downcase.tr(?_, ?-)
