@@ -5,7 +5,9 @@ require 'intertwingler/field'
 describe Intertwingler::Field do
   # base class to_s should complain about not being implemented
   it 'should complain if you attempt to serialize it' do
-    expect { Intertwingler::Field.new('test').to_s }.to raise_error(NotImplementedError)
+    expect do
+      Intertwingler::Field.new('test').to_s
+    end.to raise_error(NotImplementedError)
   end
 
   it 'should properly handle an integer header' do

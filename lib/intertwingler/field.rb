@@ -36,6 +36,29 @@ class Intertwingler::Field
 
   public
 
+  # Coerce the (potentially unknown) field name to CGI/{Rack::Request}
+  # format.
+  #
+  # @note Rack 3.3 will FINALLY have consistent field names in
+  #  requests/responses.
+  #
+  # @param name [String] the field name
+  #
+  # @return [String] the converted name
+  #
+  def self.to_req name
+  end
+
+  # Coerce the (potentially unknown) field name to the standard HTTP/2
+  # (lower-case) format used in {Rack::Response}.
+  #
+  # @param name [String] the field name
+  #
+  # @return [String] the converted name
+  #
+  def self.to_resp name
+  end
+
   # Scan a quoted string.
   #
   # @param scanner [StringScanner] the string scanner instance
@@ -208,6 +231,9 @@ class Intertwingler::Field
              Intertwingler::Resolver.coerce_resource uri, as: :uri
            elsif message.is_a? ::Rack::Request
              URI(message.url.to_s)
+           elsif message.is_a? ::Hash
+             @message = Rack::Request.new message
+             URI(@message.url.to_s)
            end
 
     # then we parse
@@ -595,7 +621,7 @@ class Intertwingler::Field
   # elements have true parameters; for the rest the weight is the only
   # valid parameter.)
 
-  HEADERS = {
+  FIELDS = {
     'accept'                    => Accept,
     'accept-charset'            => Weighted,
     'accept-encoding'           => Weighted,
@@ -627,7 +653,7 @@ class Intertwingler::Field
     'last-modified'             => Date,
     'location'                  => URI,
     'max-forwards'              => NonNegativeInteger,
-    'pragma'                    => ParamPairs, # 9111; deprecated
+    'pragma'                    => Pairs, # 9111; deprecated
     'proxy-authenticate'        => Credentials, # a challenge is the same
     'proxy-authentication-info' => Pairs,
     'proxy-authorization'       => Credentials,
@@ -644,22 +670,81 @@ class Intertwingler::Field
     'www-authenticate'          => Credentials, # "challenge" is the same
   }
 
-  HDR_RE = %r{^(CONTENT_(?:TYPE|LENGTH))|
-    HTTP_([0-9A-Z_]+)|([A-Za-z](?:-?[0-9A-Za-z]+)*)\Z}x
+  REQ_CTCL = /(CONTENT_(?:TYPE|LENGTH))/
+  REQ_HDR  = /^#{REQ_CTCL}|HTTP_([0-9A-Z_]+)\Z/o
+  RESP_HDR = /^([A-Za-z](?:-?[0-9A-Za-z]+)*)\Z/o
+  HDR_RE   = %r{(?:#{REQ_HDR}|#{RESP_HDR})}o
+
+  def self.dispatch name
+    @fields ||= {}
+
+    # normalize the field name
+    name = to_http name
+
+    @fields[name] ||= Class.new(FIELDS.fetch name, Verbatim) do
+      define_singleton_method(:field_name) { name.freeze }
+    end
+  end
 
   public
 
-  # Select the appropriate header class
+  # Select the appropriate field class for the given name.
   #
-  def self.[] header
-    # normalize the header
-    m = HDR_RE.match(header.to_s) or
-      raise ParseError, "header #{header} not found"
-
-    # normalized header
-    nh = m.captures.detect { |x| !x.nil? }.downcase.tr(?_, ?-)
-
-    # default to verbatim
-    HEADERS.fetch nh, Verbatim
+  # @param 
+  #
+  def self.[] arg
+    # on-the-fly fields
+    return from(arg) if respond_to?(:field_name)
+    dispatch arg
   end
+
+  def self.from message, uri = nil
+    val = case message
+          when String then return new(message)
+          when Rack::Request
+            uri ||= message.url
+            message.get_header(to_req_env field_name)
+          when Hash
+            message = Rack::Request.new message
+            uri ||= message.url
+            message.get_header(to_req_env field_name)
+          when Rack::Response then message.get_header(field_name)
+          else
+            raise ArgumentError,
+              "cannot handle message of type #{message.class}"
+          end
+
+    if [Rack::Request, Rack::Response].any? { |c| message.is_a? c }
+      mobj = message
+    end
+
+    new(val, message: mobj, uri: uri) if val
+  end
+
+  def self.to_req_env name
+    name = name.to_s.strip.upcase.tr ?-, ?_
+    raise ParseError, "Field name must not be empty" if name.empty?
+    /^#{REQ_CTCL}\Z/o.match?(name) ? name : "HTTP_#{name}"
+  end
+
+  def self.to_http name
+    raise ParseError, "invalid field name #{name}" unless
+      m = HDR_RE.match(name.to_s.strip)
+    m.captures.detect { |x| !x.nil? }.downcase.tr(?_, ?-)
+  end
+
+  def self.inspect
+    return "#{ancestors[1]}(#{field_name})" if respond_to? :field_name
+    super
+  end
+
+  # Return a string representation of the class
+  def self.to_s
+    inspect
+  end
+
+  def field_name
+    self.class.field_name
+  end
+
 end
