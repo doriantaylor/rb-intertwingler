@@ -1,8 +1,9 @@
 require_relative 'resolver'
 require 'rack/request'
-require 'strscan'
-require 'uri'
 require 'set'
+require 'strscan'
+require 'time'
+require 'uri'
 
 # This is a set of classes that represent HTTP header/trailer field
 # values of various structures. It serves the dual purpose of input
@@ -308,7 +309,8 @@ class Intertwingler::Field
 
     def parse!
       begin
-        @value = (@uri ? @uri + value : ::URI.new(value)).normalize
+        orig = @original.strip
+        @value = (@uri ? @uri + orig : ::URI.new(orig)).normalize
       rescue ::URI::Error => e
         # re-raise with a different message
         raise ParseError, e.message
@@ -334,6 +336,17 @@ class Intertwingler::Field
   # XXX add http date parsing
   #
   class Date < Verbatim
+    def parse!
+      @value = Time.httpdate @original
+    end
+
+    def to_s
+      @value.httpdate
+    end
+
+    def inspect
+      "<#{self.class} (#{@value.iso8601})>"
+    end
   end
 
   # A media type is (unfortunately) not a token.
@@ -690,14 +703,16 @@ class Intertwingler::Field
 
   # Select the appropriate field class for the given name.
   #
-  # @param 
+  # @param arg [String, ]
   #
-  def self.[] arg
+  def self.[] *args
     # on-the-fly fields
-    return from(arg) if respond_to?(:field_name)
-    dispatch arg
+    return from(*args[0,2]) if respond_to?(:field_name)
+    dispatch args.first
   end
 
+  # Coerce a 
+  #
   def self.from message, uri = nil
     val = case message
           when String then return new(message)
@@ -705,10 +720,15 @@ class Intertwingler::Field
             uri ||= message.url
             message.get_header(to_req_env field_name)
           when Hash
-            message = Rack::Request.new message
-            uri ||= message.url
-            message.get_header(to_req_env field_name)
-          when Rack::Response then message.get_header(field_name)
+            # we want rack\..* or FOO_BAR
+            if message.keys.any? { |k| /^(rack\..+|[A-Z]+(?:_[0-9A-Z]+)+)$/ }
+              message = Rack::Request.new message
+              uri ||= message.url
+              message.get_header(to_req_env field_name)
+            else
+              message[to_http field_name]
+            end
+          when Rack::Response then message.get_header(to_http field_name)
           else
             raise ArgumentError,
               "cannot handle message of type #{message.class}"

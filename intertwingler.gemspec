@@ -47,14 +47,17 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_runtime_dependency 'http-negotiate', '>= 0.2.2' # mine
   spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
   spec.add_runtime_dependency 'mimemagic',      '>= 0.5.3' # my patch
-  spec.add_runtime_dependency 'rack',           '~> 3'
-  spec.add_runtime_dependency 'rackup',         '~> 2'
+  spec.add_runtime_dependency 'rack',           '~> 3.2'
+  spec.add_runtime_dependency 'rackup',         '~> 2.3'
   spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
   spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
-  spec.add_runtime_dependency 'uri',            '~> 1', '>= 1.0.3' # bugs
+  spec.add_runtime_dependency 'uri',            '~> 1',   '>= 1.0.3' # bugs
   spec.add_runtime_dependency 'uri-urn',        '~> 0.0', '>= 0.0.5' # git
   spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4.1' # mine
   spec.add_runtime_dependency 'uuidtools',      '>= 2.1.5'
+
+  # stuff for engine specifically
+  spec.add_runtime_dependency 'lmdb',           '~> 0.7', '>= 0.7.4'
 
   # stuff for handlers/transforms
   spec.add_runtime_dependency 'md-noko',           '~> 0.1', '>= 0.1.1' # mine

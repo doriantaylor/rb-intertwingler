@@ -1,4 +1,5 @@
 require_relative 'storable'
+require_relative 'loggable'
 require_relative 'field'
 require_relative 'representation'
 
@@ -24,6 +25,495 @@ require 'zlib'
 #
 class Intertwingler::Cache
   include Intertwingler::Storable
+  include Intertwingler::Loggable
+
+  private
+
+  # request methods show up here if they are cacheable in principle
+  # and the value refers to whether the request body is to be
+  # considered in the cache.
+  METHODS = { GET: false, HEAD: false, QUERY: true }
+  SAFE = Set[*%w[GET HEAD OPTIONS PRI PROPFIND QUERY REPORT SEARCH TRACE]]
+  # dunno if we need this but we'll chuck it in to save having to go get it
+  # IDEM = Set[*%w[ACL BASELINE-CONTROL BIND CHECKIN CHECKOUT COPY DELETE
+  #                LABEL LINK MERGE MKACTIVITY MKCALENDAR MKCOL MKREDIRECTREF
+  #                MKWORKSPACE MOVE ORDERPATCH PROPPATCH PUT REBIND UNBIND
+  #                UNCHECKOUT UNLINK UNLOCK UPDATE UPDATEREDIRECTREF
+  #                VERSION-CONTROL]]
+
+  # list of response codes that are okay to cache irrespective of
+  # `Cache-Control` or `Expires` header, followed by list of codes
+  # that are unconditionally never okay to cache. note that 206 would
+  # be in the OK bucket if we cached ranges but lol @ that
+  CACHE_OK = Set[200, 203, 204, 300, 301, 404, 405, 410, 414, 501]
+  # these responses are never cacheable (except maybe 206 one day)
+  NO_CACHE = Set[206, 401, 407, 412, 416, 503]
+
+  # Determine whether the request is authenticated.
+  #
+  # @param req [Rack::Request, Hash, false, true, nil] the request or
+  #  environment or pass-through value
+  #
+  # @return [false, true] whether the request is authenticated
+  #
+  def authed? req
+    user = case req
+           when Rack::Request then req.env['REMOTE_USER']
+           when Hash then req['REMOTE_USER']
+           when false, true then return req
+           when nil then return false
+           else
+             raise ArgumentError, "Can't act on a #{req.class}"
+           end
+
+    # coerce to string; empty means no
+    !user.to_s.strip.empty?
+  end
+
+  # Determine if the response is public.
+  #
+  # @param resp [Rack::Response] the response
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated (or the request itself)
+  #
+  # @return [false, true] whether the response is public
+  #
+  def public? resp, authed: false
+    authed = authed?(authed)
+    # get the cache-control header from the response
+    cc = Intertwingler::Field['cache-control'][resp] || {}
+
+    # assume the response is private if the request is authenticated
+    # and the response's `Cache-Control` is not explicitly public;
+    # likewise assume it is private if the request is not
+    # authenticated and the response is explicitly private
+
+    authed ? cc.key?(:public) : !cc.key?(:private)
+  end
+
+  # Get an absolute `Content-Location` header for the response, if
+  # present. Turn it into an RFC6920 URI if possible.
+  #
+  # @param resp [Rack::Response] the response
+  # @param uri [URI, #to_s, Rack::Request] where to get the base URI from
+  #
+  def absolute_cl resp, base
+    base = req.url if base.is_a? Rack::Request
+    base = URI(base.to_s) unless base.is_a? URI
+
+    if cl = Intertwingler::Field['content-location'][resp, base]
+      # now we resolve
+      if out.scheme.downcase.start_with? 'http' and
+          m = %r{^/+\.well-known/+ni/+([^/]+)/+(.*)}.match(out.path)
+        algo, hash = m.captures
+        return URI("ni:///#{algo};#{hash}") if URI::NI.valid_algo? algo
+      end
+
+      out
+    end
+  end
+
+  # Return a harmonized set of `Cache-Control` values for the message.
+  #
+  # @param message [Rack::Request, Rack::Response]
+  # @param reqt [nil, Time] time request was issued
+  # @param respt [nil, Time] time response was received
+  #
+  # @return [Hash] cache-control directives
+  #
+  def cache_control message, authed: false, reqt: nil, respt: nil
+    case message
+    when Rack::Request
+      # get both `Cache-Control` and obsolete `Pragma` header
+      cc, pragma = %w[cache-control pragma].map do |hdr|
+        Intertwingler::Field[hdr][message] || {}
+      end
+
+      # cache-control supersedes pragma
+      pragma.slice(:'no-cache').merge cc
+    when Rack::Response
+      authed = authed?(authed)
+      # expires header
+      respd = Intertwingler::Field['date'][message]
+      exp   = Intertwingler::Field['expires'][message]
+      cc    = Intertwingler::Field['cache-control'][message] || {}
+    else
+      raise ArgumentError,
+        "Rack::Request or Rack::Response only, not #{message.class}"
+    end
+  end
+
+  # Validate that the request (from the client) is cacheable.
+  #
+  # @param req [Rack::Request] the request
+  #
+  # @return [false, true] whether the request is cacheable
+  #
+  def cacheable_req? req, cc = nil
+    # method
+    return false unless METHODS.key? req.request_method.to_sym
+
+    cc ||= cache_control req
+
+    # get both `Cache-Control` and obsolete `Pragma` header
+    cc, pragma = %w[cache-control pragma].map do |hdr|
+      Intertwingler::Field[hdr][req] || {}
+    end
+
+    # cache-control supersedes pragma
+    cc = pragma.slice(:'no-cache').merge cc
+
+    %i[no-cache no-store].any? { |k| cc.key? k } ? false : true
+  end
+
+  # Validate that the response (from the origin) is cacheable.
+  #
+  # @param resp [Rack::Response] the response
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated, or just pass in the request itself
+  #
+  # @return [false, true] whether the response is cacheable
+  #
+  def cacheable_resp? resp, authed: false
+    # response code
+    return false if NO_CACHE.include?(resp.status)
+    # headers
+  end
+
+  # Determine if the request method is *safe*, per RFC9110.
+  #
+  # @param meth [#to_s, Rack::Request] the request method or the
+  #  entire request
+  #
+  # @return [false, true]
+  #
+  def safe? meth
+    meth = meth.request_method if meth.is_a? Rack::Request
+    SAFE.include?(meth.to_s)
+  end
+
+  # Determine if the request method is *not safe*, per RFC9110.
+  #
+  # @param meth [#to_s, Rack::Request] the request method or the
+  #  entire request
+  #
+  # @return [false, true]
+  #
+  def unsafe? meth
+    meth = meth.request_method if meth.is_a? Rack::Request
+    !SAFE.include?(meth.to_s)
+  end
+
+  def modified? req, resp
+  end
+
+  def stale? resp
+  end
+
+  # Unconditionally fetch a response, assuming the request has already
+  # been verified as cacheable.
+  #
+  # This metehod
+  #
+  # @param req [Rack::Request] the request to match
+  #
+  # @return [Array(Integer, Hash, URI::NI), nil] the parts
+  #  for the cached response
+  #
+  def fetch_internal req
+    raise NotImplementedError, 'drivers must implement `fetch_internal`'
+  end
+
+  # Unconditionally cache a response, assuming both it and the
+  # concomitant request have already been verified as cacheable.
+  #
+  # @param req [Rack::Request] the request to match
+  # @param resp [Rack::Response] the response to store (maybe)
+  #
+  # @return [Rack::Response] the response passed in as `resp`
+  #
+  def cache_internal req, resp
+    raise NotImplementedError, 'drivers must implement `cache_internal`'
+    # store the body
+
+    # XXX note the response could indicate that its body already
+    # exists in the store, eg by a Content-Location with an rfc6920
+    # address, or etag, or rfc9530 Content-Digest/Repr-Digest headers
+
+    # construct the cache key
+
+    # construct the cache metadata payload
+
+    # actually store the body payload?
+
+    # return the response
+  end
+
+  # Freshen the response timestamps and other elements on 304 responses.
+  #
+  def freshen_internal req
+    raise NotImplementedError, 'drivers must implement `expire_internal`'
+  end
+
+  # Forcibly expire an entry, either by full request or by URI.
+  #
+  # @param arg [Rack::Request, URI, String] the key to expire
+  #
+  # @return [void]
+  #
+  def expire_internal arg
+    raise NotImplementedError, 'drivers must implement `expire_internal`'
+  end
+
+  # Cache (and optionally execute) an upstream response.
+  #
+  # @param req [Rack::Request] the request to match
+  # @param resp [Rack::Response, nil] the response to store (maybe)
+  # @param reqt [nil, Time] the time (from our point of view) the
+  #  request was initiated or received
+  # @param respt [nil, Time] the time (from our point of view) the
+  #  response to the concomitant request was received
+  # @param force [false, true] whether to force the cache to store an
+  #  un-cacheable request/response
+  # @param block [Proc, #call] the origin/upstream request handler
+  # @yieldparam req [Rack::Request] the same request
+  # @yieldreturn [Rack::Response] the response
+  #
+  # @raise [ArgumentError] if the response is missing or the block
+  #  does not return one
+  #
+  # @return [Rack::Response] the response passed in as `resp`
+  #
+  def maybe_cache req, resp = nil, reqt: nil, respt: nil, force: false, &block
+    if resp
+      nil
+    elsif block
+      # get the time of the (sub?)request
+      reqt ||= Time.now
+
+      # execute the origin (or at least upstream) handler
+      resp = block.call req
+
+      raise ArgumentError,
+        "Block must return a Rack::Response, not #{resp.class}" unless
+        resp.is_a? Rack::Response
+
+      # get the time of the response
+      respt ||= Time.now
+    else
+      raise ArgumentError, 'either supply an explicit response or a block'
+    end
+
+    # rfc9111 §4.4 must expire an entry after successful unsafe method
+    expire(req.url) if unsafe?(req) and resp.status < 400
+
+    # resp may get replaced during processing
+    resp = cache_internal(req, resp) if force || cacheable_resp?(resp)
+
+    resp
+  end
+
+  # 
+  def cc_resp resp, auth: false
+    auth = !!auth.env['REMOTE_USER'] if auth.is_a? Rack::Request
+    # s-maxage (if public) > max-age > Expires
+    Intertwingler::Field['cache-control'][resp]
+  end
+
+  def error_504 text = nil
+    text ||= 'cached request not found'
+    headers = {
+      'content-type'     => 'text/plain',
+      'content-language' => 'en',
+      'content-length'   => text.b.size,
+    }
+    Rack::Response[504, headers, [text]]
+  end
+
+  public
+
+  # Initialize the cache index.
+  #
+  # @param engine [Intertwingler::Engine] a back-reference to the engine
+  # @param options [Hash] downstream options
+  #
+  # @return [void]
+  #
+  def initialize store: nil, log: nil, driver: :LMDB, **options
+    raise ArgumentError, "`store` must be a Store::Digest" unless
+      store.is_a? Store::Digest
+    @store = init_store store
+    @log   = log
+
+    # warn self.store
+    # warn options
+
+    # bolt on the driver or whatever
+    mod = /^(?:Driver)?::/.match?(driver.to_s) ? driver : "Driver::#{driver}"
+    raise ArgumentError, "No driver #{mod}" unless self.class.const_defined? mod
+    mod = self.class.const_get(mod)
+
+    # initialize
+    self.log.debug "Loading cache driver #{mod}"
+
+    extend mod
+
+    bootstrap **options
+  end
+
+  # Attempt to cache the response associated with a request.
+  #
+  # @note here is where it would be really handy to have something
+  #  like perl's `HTTP::Message` but that implemented the rack spec.
+  #
+  # @param req [Rack::Request] the request to match
+  # @param resp [Rack::Response, nil] the response to store (maybe)
+  # @param force [false, true] whether to force the cache to store an
+  #  un-cacheable request/response
+  # @param block [Proc, #call] the origin/upstream request handler
+  # @yieldparam req [Rack::Request] the same request
+  # @yieldreturn [Rack::Response] the origin response
+  #
+  # @return [Rack::Response] the response passed in as `resp`
+  #
+  def cache req, resp = nil, force: false, &block
+    # validate the request and response as cacheable
+    unless cacheable_req? req
+      resp ||= block.call req
+      return resp
+    end
+
+    # this will return a Rack::Response
+    maybe_cache req, resp, force: force, &block
+  end
+
+  # Attempt to fetch a cache entry based on a given request. Returns
+  # `nil` if a fresh cache entry can't be resolved.
+  #
+  # @param req [Rack::Request] the request in question.
+  # @param block [Proc, #call] the origin/upstream request handler
+  # @yieldparam req [Rack::Request] the same request
+  # @yieldreturn [Rack::Response] the origin response
+  #
+  # @return [Rack::Response, nil] the cached response (maybe)
+  #
+  def fetch req, &block
+    # get cache-control header from request
+    reqcc = cache_control req
+    m = req.request_method
+    miss = "Cache miss on #{m} #{req.url}:"
+
+    # bail out early if request is not cacheable
+    unless cacheable_req? req
+      log.debug "#{miss} request not cacheable"
+      # 504 only-if-cached
+      return error_504 if reqcc.key? :'only-if-cached'
+      return
+    end
+
+    # this should also take care of expiration
+    status, headers, cl, freshness = fetch_internal(req)
+    unless status
+      log.debug "#{miss} not found"
+      # XXX only-if-cached
+      return error_504 if reqcc.key? :'only-if-cached'
+      return
+    end
+
+    # ok things that need to happen here:
+    # * ensure we get a handle on the response body if applicable
+    # * if the body is missing from the store, we consider that a
+    #   cache miss and bail
+    # we should get the body at this point to make sure we have it
+    if cl.is_a? URI::NI
+      if blob = store.get(cl)
+        unless body = blob.content
+          log.warn "#{miss} #{cl} appears deleted"
+          return
+        end
+      else
+        log.warn "#{miss} store is missing #{cl}"
+        return
+      end
+    else
+      body = []
+    end
+
+    log.debug "Cache hit on #{m} #{req.url} with #{cl}"
+
+    # may as well construct the response at this point
+    resp = Rack::Response[status, headers.transform_values(&:to_s), body]
+
+    # the response is fresh, we can return it
+    return resp if freshness >= 0
+
+    # nothing else to do without a block to call
+    unless block
+      log.warn "Stale cache entry for #{m} #{req.url} and no block given"
+      return
+    end
+
+    # okay we have a stale response and a block, so the zeroth thing
+    # we do is doctor the request to have an `If-Modified-Since`
+    # header which is the `Last-Modified` of the cache entry, unless
+    # the request already has one which is newer (although i'm
+    # thinking if it did we wouldn't even get here)
+    subreq = req.dup
+
+    # first we test if `stale-while-revalidate` is under the threshold
+    # and then we run the validating request in a thread while
+    # returning the cached one
+
+    # finally we test if `must-revalidate` or `proxy-revalidate` (if
+    # cached response is public); if the response produces an error we
+    # can check if `stale-if-error` doesn't exceed the timeout
+
+    # (resp and block together mean resp is the existing cache)
+    maybe_cache subreq, resp, &block
+  end
+
+  # Forcibly expire an entry, either by full request or by URI.
+  #
+  # @param arg [Rack::Request, URI, String] the key to expire
+  #
+  # @return [void]
+  #
+  def expire arg
+    expire_internal arg
+  end
+
+  # Attempt to fetch a cache entry, or otherwise run the block.
+  #
+  # @param req [Rack::Request] the request
+  # @param block [Proc, #call] the origin/upstream request handler
+  # @yieldparam req [Rack::Request] the same request
+  # @yieldreturn [Rack::Response] the response if not cached
+  #
+  # @return [Rack::Response] the response, either from cache or the block
+  #
+  def fetch_or_cache req, &block
+    # attempt to fetch the cache
+    if resp = fetch(req, &block)
+      # get cache-control header from the response
+      cc = Intertwingler::Field['cache-control'][resp] || {}
+
+      # XXX yo okay so we should deal with must-revalidate and
+      # stale-while-revalidate by grabbing eg etag and last-modified
+      # headers from the cached response to inform if-none-match and
+      # if-modified-since
+
+      # also if we happen to be in the window of
+      # stale-while-revalidate then we can just ship the cached
+      # response and fork off a thread to retrieve it
+
+      return resp
+    elsif only_if_cached? req
+      return Rack::Response[504]
+    else
+      #
+      maybe_cache req, &block
+    end
+  end
 
   # This is a little toy class that encapsulates the cache key digest
   # state, which gets bifurcated twice (authenticated vs not; with
@@ -45,6 +535,7 @@ class Intertwingler::Cache
 
       # get the normalized request-URI
       uri = Intertwingler::Resolver.coerce_resource(@req.url, as: :uri)
+      @ustate = (Digest::SHA256.new << uri.normalize.to_s)
 
       # now we should get the state
       state = @states.first
@@ -111,6 +602,11 @@ class Intertwingler::Cache
       !!@states[1]
     end
 
+    # Return the URI state
+    def uri_state
+      @ustate.dup
+    end
+
     # Set which headers were found in the response's `Vary` to be
     # used for the request.
     #
@@ -120,8 +616,7 @@ class Intertwingler::Cache
       # set empty list by default
       headers ||= []
 
-      # *now* check input
-      raise ArgumentError, "headers must be an array" unless
+      headers = Intertwingler::Field['vary'].new(headers) || [] unless
         headers.is_a? Array
 
       # empty these out if there are no vary headers
@@ -130,32 +625,13 @@ class Intertwingler::Cache
         return
       end
 
-      # headers.each_with_object({}) do |name, h|
-      #   if v = Intertwingler::Field[name][req]
-      #     h[h.field_name] = v.to_s
-      #   end
-      # end
-
-      # map the canonical request headers to cgi/rack env (eyeroll)
-      # XXX FUTURE ME: rack 3.3 will have `headers`
-      mapping = headers.map do |h|
-        rh = h.upcase.tr(?-, ?_)
-
-        # these would be weird to be in here but w/e
-        rh = "HTTP_#{rh}" unless /^CONTENT_(?:TYPE|LENGTH)$/ =~ rh
-
-        [h.downcase, rh]
-      end.to_h
-
-      # give us the reverse
-      rev = mapping.invert
-
-      # take subset of headers; this is annoying
-      reqh = req.env.slice(*mapping.values).map do |k, v|
-        # normalize request headers
-        v = Intertwingler::Field[k][req].new v, message: req
-        [rev[k], v.to_s]
-      end.sort.to_h
+      # XXX FUTURE ME: rack 3.3 will have `headers` (which was
+      # relevant here but no longer is)
+      reqh = headers.each_with_object([]) do |name, a|
+        if v = Intertwingler::Field[name][req]
+          a << [v.field_name, v.to_s]
+        end
+      end.sort { |a, b| a.first <=> b.first }.to_h
 
       # now serialize them
       serialized = reqh.map { |k, v| "#{k}: {#v}" }.join("\x1f")
@@ -189,6 +665,25 @@ class Intertwingler::Cache
 
       # pick which hash state we want and return a duplicate
       @states[i | j].dup
+    end
+
+    # Return a fresh SHA-256 state.
+    #
+    # @return [Digest::Instance]
+    #
+    def self.state
+      Digest::SHA256.new
+    end
+
+    # Coerce a URI and return a SHA-256 digest state of it.
+    #
+    # @param uri [URI, RDF::URI, #to_s] the URI
+    #
+    # @return [Digest::Instance]
+    #
+    def self.uri_state uri
+      uri = Intertwingler::Resolver.coerce_resource uri, as: :uri
+      state << uri.normalize.to_s
     end
   end
 
@@ -272,16 +767,27 @@ class Intertwingler::Cache
     # 1. body hash present
     # 2. `no-transform` flag (from the *response*)
     # 3. `immutable` flag
-    # 4. `must-understand` flag
+    # 4. `last-modified` timestamp present
     # 5. `max-age` delta present
     # 6. `stale-while-revalidate` delta present
     # 7. `stale-if-error` delta present
     #
+    # For the terminal entries, these are the remaining fields:
+    #
+    # * Response code (unsigned short; we may steal up to 7 bits from it)
+    # * Time of response (signed quad)
+    # * Last-Modified time (signed quad; if control flag)
+    # * `max-age` delta (unsigned long; if control flag; negotiated)
+    # * `stale-while-revalidate` delta (unsigned long; if control flag)
+    # * `stale-if-error` delta (unsigned long; if control flag)
+    # * sha256 of response body (32 bytes; if control flag)
+    # * serialized response headers (rest of record; may be gzipped)
+    #
     # For the terminal entries, the next two bytes represent an
     # unsigned short (which we may eventually steal up to six or seven
     # bits from) containing the status code, followed by a 64-bit
-    # timestamp (overkill?) representing the original `Date` header of
-    # the origin response. Following that are uint32 deltas whose
+    # timestamp (overkill?) representing the response time measured locally
+    # the origin response, and another representing. Following those are uint32 deltas whose
     # presence are contingent on bits in the control flags for
     # `max-age`/`Expires`/`s-maxage`, `stale-while-revalidate`,
     # `stale-if-error`, followed by the sha-256 hash of the response
@@ -306,7 +812,7 @@ class Intertwingler::Cache
       BODY_PRESENT = 1 << 1
       NO_TRANSFORM = 1 << 2
       IMMUTABLE    = 1 << 3
-      M_UNDERSTAND = 1 << 4
+      LAST_MOD_P   = 1 << 4
       MAX_AGE_P    = 1 << 5
       STALE_REV_P  = 1 << 6
       STALE_ERR_P  = 1 << 7
@@ -327,7 +833,7 @@ class Intertwingler::Cache
         unless vary.is_a? Array
           vary = vary.to_s.strip
           raise ArgumentError, 'Vary header must be non-empty' if vary.empty?
-          vary = Intertwingler::Field['vary'].new vary
+          vary = Intertwingler::Field['vary'][vary]
         end
         raise ArgumentError, 'Vary contents must be non-empty' if vary.empty?
 
@@ -366,9 +872,11 @@ class Intertwingler::Cache
 
       # Detect if a terminal record is expired.
       #
-      # @param record
+      # @param record [String]
       #
-      def expired? record, now: nil
+      # @return [false, true]
+      #
+      def rec_expired? record, now: nil
         now ||= Time.now
       end
 
@@ -378,14 +886,14 @@ class Intertwingler::Cache
       #
       # @param headers [Hash, Rack::Response] the headers or response
       #
-      # @return [String] the packed headers
+      # @return [String] the packed headersnderstand
       #
       def pack_headers headers
         headers = headers.headers if headers.is_a? Rack::Response
 
         # we can use a colon to delineate headers and values
         out = headers.map { |k, v| "#{k}: #{v}" }.join("\x1f")
-        out.size > GZIP_LIMIT ? Zlib.gzip(out) : out
+        (out.size > GZIP_LIMIT) ? Zlib.gzip(out) : out
       end
 
       # Unpack headers from the record; uncompress them if need be.
@@ -401,522 +909,325 @@ class Intertwingler::Cache
 
       # Pack a "terminal" record.
       #
-      # @param record [String]
+      # @param status [Integer] the response status
+      # @param headers [Hash] the response headers
+      # @param body [URI::NI] the sha-256 URI for the body
+      # @param time [Time] the response time
+      # @param authed [false, true] whether the entry is private
       #
+      # @return [String] the record
       #
-      def pack_terminal resp
-        if cc = resp.get_header('cache-control')
-          cc = Intertwingler::Field['cache-control'].new cc
-        end
-      end
+      def pack_terminal status, headers, body, time: Time.now, authed: false
+        fmt   = +'CSq'
+        ctrl  = 0 # control byte
+        out   = []
 
-      # Unpack a "terminal" record.
-      #
-      # @param record [String]
-      #
-      # @return [Array(Integer, Hash, URI::NI)] status, headers, body URI
-      #
-      def unpack_terminal record
-        ctrl, rest = record.unpack 'Ca*'
-        raise ArgumentError, 'must be a terminal record' if signpost? ctrl
+        # we use the date header for reference or the response time
+        # if it's missing
+        dt = Intertwingler::Field['date'][headers] || time
+        delta = time - dt
 
-        # here are our little
-        cc = {
-          'no-transform':           (ctrl & NO_TRANSFORM).nonzero?,
-          immutable:                (ctrl & IMMUTABLE).nonzero?,
-          'must-understand':        (ctrl & M_UNDERSTAND).nonzero?,
-          'max-age':                (ctrl & MAX_AGE_P).nonzero?,
-          'stale-while-revalidate': (ctrl & STALE_REV_P).nonzero?,
-          'stale-if-error':         (ctrl & STALE_ERR_P).nonzero?,
-        }
-
-        # this is the pack format
-        fmt = +'SQ'
-        %i[max-age stale-while-revalidate stale-if-error].each do |s|
-          fmt << ?L if cc[s]
+        if lm = Intertwingler::Field['last-modified'][headers]
+          ctrl |= LAST_MOD_P
+          fmt << ?q
+          out << (lm + delta).to_i
         end
 
-        fmt << 'a32' if (ctrl & BODY_PRESENT).nonzero?
-        fmt << 'a*'
+          # now we get the actual cache parameters
+          cc = Intertwingler::Field['cache-control'][headers] || {}
+          ctrl |= NO_TRANSFORM if cc.key? :'no-transform'
+          ctrl |= IMMUTABLE    if cc.key? :immutable
 
-        status, date, *rest = rest.unpack fmt
+          max = if !authed and cc[:'s-maxage'].is_a?(Integer)
+                  cc[:'s-maxage']
+                elsif cc[:'max-age'].is_a?(Integer)
+                  cc[:'max-age']
+                elsif ex = Intertwingler::Field['expires'][headers] and ex > dt
+                  (ex - dt).round
+                elsif lm and lm < dt
+                  # 10% of last-modified to date/response/now
+                  ((dt - lm) * 0.1).round
+                end
 
-        %i[max-age stale-while-revalidate stale-if-error].each do |s|
-          cc[s] = rest.shift if cc[s]
+          if max && max >= 0
+            ctrl |= MAX_AGE_P
+            fmt << ?L
+            out << max
+          end
+
+          { 'stale-while-revalidate': STALE_REV_P,
+           'stale-if-error': STALE_ERR_P }.each do |d, flag|
+            if cc[d].is_a?(Integer) && cc[d] >= 0
+              ctrl |= flag
+              fmt << ?L
+              out << cc[d]
+            end
+          end
+
+          # the penultimate thing is the body hash
+          if body.is_a? URI::NI
+            ctrl |= BODY_PRESENT
+            fmt << 'a32'
+            out << body.digest
+          end
+
+          # finally, headers
+          fmt << 'a*'
+          out << pack_headers(headers)
+
+
+          ([ctrl, status, time.to_i] + out).pack fmt
         end
 
-        body, headers = rest
+        # Unpack a "terminal" record.
+        #
+        # @param record [String]
+        #
+        # @return [Array(Integer, Hash, URI::NI)] status, headers, body URI
+        #
+        def unpack_terminal record
+          ctrl, rest = record.unpack 'Ca*'
+          raise ArgumentError, 'must be a terminal record' if signpost? ctrl
 
-        body = URI("ni:///sha-256;#{[body].pack(m0).tr('+/', '-_').delete(?=)}")
+            # here are our little
+            cc = {
+              'no-transform':           (ctrl & NO_TRANSFORM).nonzero?,
+              immutable:                (ctrl & IMMUTABLE).nonzero?,
+              'must-understand':        (ctrl & M_UNDERSTAND).nonzero?,
+              'max-age':                (ctrl & MAX_AGE_P).nonzero?,
+              'stale-while-revalidate': (ctrl & STALE_REV_P).nonzero?,
+              'stale-if-error':         (ctrl & STALE_ERR_P).nonzero?,
+            }
 
-        headers = unpack_headers headers
-
-        [status, headers, body]
-      end
-    end
-
-    public
-
-    # We're sticking to LMDB because we're using it in the RDF store
-    # and {Store::Digest}.
-    module LMDB
-      include KVStore
-
-      require 'lmdb'
-
-      private
-
-      # driver-specific installation
-      def bootstrap dir: 'cache', mapsize: 2**27
-        dir = Pathname(dir).expand_path
-        dir.mkpath unless dir.exist?
-
-        @env = ::LMDB.new dir, mapsize: mapsize
-        @index = @env.database 'index', create: true
-      end
-
-      def vary_headers val
-        return unless val
-
-        # lol get all that?
-        val.to_s.strip.split(/\s*,\s*/).map do |v|
-          v = v.upcase.tr ?-, ?_
-        end.sort.map do |v|
-          # of course it would be incredibly cursed if the Vary header
-          # *did* contain these, but i'm not here to judge
-          %w[CONTENT_TYPE CONTENT_LENGTH].include?(v) ? v : "HTTP_#{v}"
-        end
-      end
-
-      def cache_internal req, resp
-        # construct the hash key state
-        vary  = vary_headers resp.get_header('vary')
-        state = KeyState.new req, vary: vary
-
-        # we use authed key if the request is authenticated, unless
-        # the response is explicitly `public`
-        authed = state.authed? && !public?(req, resp)
-
-        # if vary is nonempty we create a signpost record
-
-        # we unconditionally create a terminal record; the only
-        # difference is whether the lookup key is
-
-        # stash the response body (unless it has a `Content-Location`
-        # with an `ni:` URI, in which case it's already stashed)
-        cl = absolute_cl resp, req.url
-
-        unless cl.is_a? URI::NI
-          # this turns the body from anything weird into something less weird
-          body = Intertwingler::Representation::BodyWrap[resp.body]
-
-          # get content-type
-          # get content-encoding
-          # get last-modified
-
-          obj = store.add body # type charset encoding mtime
-          cl  = obj[:"sha-256"]
-
-          # replace the response ONLY if not an Intertwingler::Representation
-          resp = Rack::Response[resp.status, resp.headers.to_h, obj.content]
-        end
-
-        # okay NOW
-        @env.transaction do
-          # create the terminal record
-          tk  = state.state(authed: authed, vary: !!vary).digest
-          tv  = pack_terminal resp, cl
-          inc = !index.key?(tk) # determine if adding or updating
-          @index.put tk, tv
-
-          if vary
-            sk = state.state(authed: authed,  vary: false)
-
-            count = inc ? 1 : 0
-            if sv = @index.get(sk)
-              count += count_signpost sv
+            # this is the pack format
+            fmt = +'SQ'
+            %i[max-age stale-while-revalidate stale-if-error].each do |s|
+              fmt << ?L if cc[s]
             end
 
-            sv = pack_signpost count, vary
+            fmt << 'a32' if (ctrl & BODY_PRESENT).nonzero?
+            fmt << 'a*'
 
-            @index.put sk, sv
+            status, date, *rest = rest.unpack fmt
+
+            %i[max-age stale-while-revalidate stale-if-error].each do |s|
+              cc[s] = rest.shift if cc[s]
+            end
+
+            body, headers = rest
+
+            body = URI("ni:///sha-256;#{[body].pack(m0).tr('+/', '-_').delete(?=)}")
+
+            headers = unpack_headers headers
+
+            [status, headers, body]
           end
         end
 
-        # we need to return the response because we may have overwritten it
-        resp
-      end
+        public
 
-      # @return [nil, Array(Integer, Hash, Store::Digest::Object)]
-      #
-      def fetch_internal req
-        state = KeyState.new req
+        # We're sticking to LMDB because we're using it in the RDF store
+        # and {Store::Digest}.
+        module LMDB
+          include KVStore
 
-        @env.transaction do
-          if authed = state.authed?
-            # first attempt to get a private entry
-            key = state.state(authed: true).digest
-            raw = @index.get key
-            # try public
-            authed = false unless raw
+          require 'lmdb'
+
+          private
+
+          # driver-specific installation
+          def bootstrap dir: 'cache', mapsize: 2**27
+            dir = Pathname(dir).expand_path
+            dir.mkpath unless dir.exist?
+
+            @env = ::LMDB.new dir, mapsize: mapsize
+            @index = @env.database 'index', create: true
+            @uris  = @env.database 'uris',  create: true, dupsort: true
           end
 
-          # attempt to get the public record
-          raw ||= @index.get(key = state.state.digest)
+          def cache_internal req, resp
+            # construct the hash key state
+            vary  = Intertwingler::Field['vary'][resp]
+            state = KeyState.new req, vary: vary
 
-          # okay there really isn't anything here
-          break if raw.nil? or raw.empty?
+            # we use authed key if the request is authenticated, unless
+            # the response is explicitly `public`
+            authed = state.authed? && !public?(req, resp)
 
-          if is_sp = signpost?(raw)
-            count, vary = unpack_signpost raw
-            tkey = state.state(authed: authed, vary: vary).digest
-            raw  = @index.get tkey
+            # if vary is nonempty we create a signpost record
 
-            # if this is nil then there's nothing here
-            break unless raw
-          else
-            tkey  = key
-            count = 0
-            vary  = nil
-          end
+            # we unconditionally create a terminal record; the only
+            # difference is whether the lookup key is
 
-          # all expired is stale but not all stale is expired
+            # stash the response body (unless it has a `Content-Location`
+            # with an `ni:` URI, in which case it's already stashed)
+            cl = absolute_cl resp, req.url
 
-          if expired? raw
-            # delete the expired terminal
-            @index.delete tkey
+            unless cl.is_a? URI::NI
+              # this turns the body from anything weird into something less weird
+              body = Intertwingler::Representation::BodyWrap[resp.body]
 
-            # now we decrement the refcount
-            if key != tkey
-              if count > 1
-                sp = pack_signpost count - 1, vary
-                @index.put key, sp
-              else
-                index.delete key
+              if ct = Intertwingler::Field['content-type'][resp]
+                ct = ct.to_s # get content-type
+              end
+
+              if ce = Intertwingler::Field['content-encoding'][resp]
+                ce = ce.value # get content-encoding
+              end
+
+              if lm = Intertwingler::Field['last-modified'][resp]
+                lm = lm.value # get last-modified
+              end
+
+              obj = store.add body, type: ct, encoding: ce, mtime: lm
+              cl  = obj[:"sha-256"]
+
+              # replace the response ONLY if not an Intertwingler::Representation
+              resp = Rack::Response[resp.status, resp.headers.to_h, obj.content]
+            end
+
+            # okay NOW
+            @env.transaction do
+              # create the terminal record
+              tk  = state.state(authed: authed, vary: !!vary).digest
+              tv  = pack_terminal resp, cl
+              inc = !index.key?(tk) # determine if adding or updating
+              @index.put tk, tv
+
+              # put the terminal key in the uri index
+              uk = state.uri_state.digest
+              @uris.put? uk, tk
+
+              if vary
+                sk = state.state(authed: authed,  vary: false)
+
+                count = inc ? 1 : 0
+                if sv = @index.get(sk)
+                  count += count_signpost sv
+                end
+
+                sv = pack_signpost count, vary
+
+                @index.put sk, sv
+                # put the signpost key in the uri index
+                @uris.put? uk, sk
               end
             end
 
-            # now we break out
-            break
+            # we need to return the response because we may have overwritten it
+            resp
           end
 
-          # return the terminal record
-          unpack_terminal raw
+          #
+          #
+          # @return [nil, Array(Integer, Hash, Store::Digest::Object)]
+          #
+          def fetch_internal req
+            state = KeyState.new req
+            ukey  = state.uri_state.digest
+
+            @env.transaction do |txn|
+              if authed = state.authed?
+                # first attempt to get a private entry
+                key = state.state(authed: true).digest
+                # try public record
+                authed = false unless raw = @index.get(key)
+              end
+
+              # attempt to get the public record
+              raw ||= @index.get(key = state.state.digest)
+
+              # okay there really isn't anything here
+              break if raw.nil? or raw.empty?
+
+              if is_sp = signpost?(raw)
+                count, vary = unpack_signpost raw
+                tkey = state.state(authed: authed, vary: vary).digest
+                raw  = @index.get tkey
+
+                # if this is nil then there's nothing here
+                break unless raw
+              else
+                tkey  = key
+                count = 0
+                vary  = nil
+              end
+
+              # first we measure if the response is objectively stale,
+              # then we determine if the client will accept it. the
+              # client may reject a record that's still fresh, or
+              # accept a record that's stale, depending on the
+              # request's `Cache-Control` parameters.
+
+              # if the response is still fresh and the client will
+              # accept it, we could actually return 304 here
+
+              # if the response is stale then expire the record
+
+              # if 
+
+
+              # all expired is stale but not all stale is expired
+
+              if rec_expired? raw
+                # delete the expired terminal
+                @index.delete tkey
+                @uris.delete ukey, key
+
+                # now we decrement the refcount
+                if key != tkey
+                  if count > 1
+                    sp = pack_signpost count - 1, vary
+                    @index.put key, sp
+                  else
+                    @index.delete key
+                    @uris.delete? ukey, key
+                  end
+                end
+
+                # now we break out
+                break
+              end
+
+              # return the terminal record
+              unpack_terminal raw
+            end
+          end
         end
-      end
-    end
 
-    # we can do redis or whatever later lol
-  end
+        def expire_internal arg
+          if arg.is_a? Rack::Request
+            state = KeyState.new arg
+            ukey = state.uri_state.digest
+          else
+            ukey = KeyState.uri_state(arg).digest
+          end
 
-  private
+          # XXX honestly it's probably best to just obliterate the whole
+          # record until we can figure out 
 
-  # request methods show up here if they are cacheable in principle
-  # and the value refers to whether the request body is to be
-  # considered in the cache.
-  METHODS = { GET: false, HEAD: false, QUERY: true }
+          # if state
+          #   @env.transaction do
+          #     [false, true].each do |auth|
+          #       key = state.state(authed: auth).digest
+          #       raw = @index.get key
+          #       if signpost?(raw)
+          #         vary
+          #         @uris.delete? ukey, tkey
+          #       end
+          #       @index.delete? key
+          #       @uris.delete? ukey, key
+          #     end
+          #   end
+          # else
+          @env.transaction do
+            @uris.each_value(ukey) { |ikey| @index.delete? ikey }
+            @uris.delete? ukey
+          end
+          # end
+        end
 
-  # list of response codes that are okay to cache irrespective of
-  # `Cache-Control` or `Expires` header, followed by list of codes
-  # that are unconditionally never okay to cache. note that 206 would
-  # be in the OK bucket if we cached ranges but lol @ that
-  CACHE_OK = Set[200, 203, 204, 300, 301, 404, 405, 410, 414, 501]
-  NO_CACHE = Set[206, 401, 407, 412, 416, 503]
-
-  # Determine if the response is public.
-  #
-  # @param req [Rack::Request] the request
-  # @param resp [Rack::Response] the response
-  #
-  # @return [false, true] whether the response is public
-  #
-  def public? req, resp
-    # XXX this is dumb; find a better interface
-    if cc = resp.get_header('cache-control')
-      cc = Intertwingler::Field['cache-control'].new cc
-    else
-      cc = {}
-    end
-
-    # assume the response is private if the request is authenticated
-    # and the response's `Cache-Control` is not explicitly public;
-    # likewise assume it is private if the request is not
-    # authenticated and the response is explicitly private
-
-    req.env['REMOTE_USER'] ? cc.key?(:public) : !cc.key?(:private)
-  end
-
-  # Get an absolute `Content-Location` header for the response, if
-  # present. Turn it into an RFC6920 URI if possible.
-  #
-  # @param resp [Rack::Response] the response
-  # @param uri [URI, #to_s, Rack::Request] where to get the base URI from
-  #
-  def absolute_cl resp, base
-    base = req.url if base.is_a? Rack::Request
-    base = URI(base.to_s) unless base.is_a? URI
-
-    if cl = Intertwingler::Field['content-location'][resp, base]
-      # now we resolve
-      if out.scheme.downcase.start_with? 'http' and
-          m = %r{^/+\.well-known/+ni/+([^/]+)/+(.*)}.match(out.path)
-        algo, hash = m.captures
-        return URI("ni:///#{algo};#{hash}") if URI::NI.valid_algo? algo
+        # we can do redis or whatever later lol
       end
 
-      out
     end
-  end
-
-  # Validate that the request (from the client) is cacheable.
-  #
-  # @param req [Rack::Request] the request
-  #
-  # @return [false, true] whether the request is cacheable
-  #
-  def cacheable_req? req
-    # method
-    return false unless METHODS.key? req.request_method.to_sym
-    # headers
-
-  end
-
-  # Validate that the response (from the origin) is cacheable.
-  #
-  # @param resp [Rack::Response] the response
-  #
-  # @return [false, true] whether the response is cacheable
-  #
-  def cacheable_resp? resp
-    # response code
-    # headers
-  end
-
-  # Unconditionally fetch a response, assuming the request has already
-  # been verified as cacheable.
-  #
-  # @param req [Rack::Request] the request to match
-  #
-  # @return [Rack::Response, nil] the cached response, if present
-  #
-  def fetch_internal req
-    raise NotImplementedError, 'drivers must implement `fetch_internal`'
-  end
-
-  # Unconditionally cache a response, assuming both it and the
-  # concomitant request have already been verified as cacheable.
-  #
-  # @param req [Rack::Request] the request to match
-  # @param resp [Rack::Response] the response to store (maybe)
-  #
-  # @return [Rack::Response] the response passed in as `resp`
-  #
-  def cache_internal req, resp
-    raise NotImplementedError, 'drivers must implement `cache_internal`'
-    # store the body
-
-    # XXX note the response could indicate that its body already
-    # exists in the store, eg by a Content-Location with an rfc6920
-    # address, or etag, or rfc9530 Content-Digest/Repr-Digest headers
-
-    # construct the cache key
-
-    # construct the cache metadata payload
-
-    # actually store the body payload?
-
-    # return the response
-  end
-
-  # Cache (and optionally execute) an upstream response.
-  #
-  # @param req [Rack::Request] the request to match
-  # @param resp [Rack::Response, nil] the response to store (maybe)
-  # @param reqt [nil, Time] the time (from our point of view) the
-  #  request was initiated or received
-  # @param respt [nil, Time] the time (from our point of view) the
-  #  response to the concomitant request was received
-  # @param force [false, true] whether to force the cache to store an
-  #  un-cacheable request/response
-  # @param block [Proc, #call] the origin/upstream request handler
-  # @yieldparam req [Rack::Request] the same request
-  # @yieldreturn [Rack::Response] the response
-  #
-  # @raise [ArgumentError] if the response is missing or the block
-  #  does not return one
-  #
-  # @return [Rack::Response] the response passed in as `resp`
-  #
-  def cache_upstream req, resp = nil, reqt: nil, respt: nil, force: false, &block
-    if resp
-      nil
-    elsif block
-      # get the time of the (sub?)request
-      reqt ||= Time.now
-
-      # execute the origin (or at least upstream) handler
-      resp = block.call req
-
-      raise ArgumentError,
-        "Block must return a Rack::Response, not #{resp.class}" unless
-        resp.is_a? Rack::Response
-
-      # get the time of the response
-      respt ||= Time.now
-    else
-      raise ArgumentError, 'either supply an explicit response or a block'
-    end
-
-
-    # only store the response if cacheable, duh
-    resp = cache_internal req, resp if cacheable_resp?(resp) || force
-
-    resp
-  end
-
-  def cc_req req
-
-    pragma, cc = %w[HTTP_PRAGMA HTTP_CACHE_CONTROL].map do |h|
-      Intertwingler::Field[h][req] || {}
-    end
-
-    pragma.slice(:'no-cache').merge cc
-  end
-
-  def cc_resp resp
-    # s-maxage (if public) > max-age > Expires
-    Intertwingler::Field['cache-control'][resp]
-  end
-
-  def cache_control message
-  end
-
-  def cc_ message
-    headers = %w[cache-control pragma]
-    # no-
-  end
-
-  public
-
-  # Initialize the cache index.
-  #
-  # @param engine [Intertwingler::Engine] a back-reference to the engine
-  # @param options [Hash] downstream options
-  #
-  # @return [void]
-  #
-  def initialize store: nil, driver: :LMDB, **options
-    raise ArgumentError, "`store` must be a Store::Digest" unless
-      store.is_a? Store::Digest
-    @store = init_store store
-
-    # warn self.store
-    # warn options
-
-    # bolt on the driver or whatever
-    mod = /^(?:Driver)?::/.match?(driver.to_s) ? driver : "Driver::#{driver}"
-    raise ArgumentError, "No driver #{mod}" unless self.class.const_defined? mod
-    mod = self.class.const_get(mod)
-
-    # warn mod
-
-    extend mod
-
-    bootstrap **options
-  end
-
-  # Attempt to cache the response associated with a request.
-  #
-  # @note here is where it would be really handy to have something
-  #  like perl's `HTTP::Message` but that implemented the rack spec.
-  #
-  # @param req [Rack::Request] the request to match
-  # @param resp [Rack::Response, nil] the response to store (maybe)
-  # @param force [false, true] whether to force the cache to store an
-  #  un-cacheable request/response
-  # @param block [Proc, #call] the origin/upstream request handler
-  # @yieldparam req [Rack::Request] the same request
-  # @yieldreturn [Rack::Response] the response
-  #
-  # @return [Rack::Response] the response passed in as `resp`
-  #
-  def cache req, resp = nil, force: false, &block
-    # validate the request and response as cacheable
-    unless cacheable_req? req
-      resp ||= block.call req
-      return resp
-    end
-
-    # this will return a Rack::Response
-    cache_upstream req, resp, force: force, &block
-  end
-
-  # Attempt to fetch a cache entry based on a given request. Returns
-  # `nil` if a fresh cache entry can't be resolved.
-  #
-  # @param req [Rack::Request] the request in question.
-  #
-  # @return [Rack::Response, nil] the cached response (maybe)
-  #
-  def fetch req, &block
-
-    # validate the request as cacheable
-    return unless cacheable_req? req
-
-    # this should also take care of expiration
-    status, headers, cl = fetch_internal(req)
-    unless status
-      # XXX only-if-cached
-      return
-    end
-
-    # run validation request here?
-    # or maybe run it only if stale-while-revalidate
-
-    # 304 if-modified-since
-    # 304 if-none-match
-
-    # note that we necessarily should have the request body (eg in
-    # QUERY) to have hit the cache key in the first place
-
-
-    # now we reassemble the response
-  end
-
-
-  # Attempt to fetch a cache entry, or otherwise run the block.
-  #
-  # @param req [Rack::Request] the request
-  # @param block [Proc, #call] the origin/upstream request handler
-  # @yieldparam req [Rack::Request] the same request
-  # @yieldreturn [Rack::Response] the response if not cached
-  #
-  # @return [Rack::Response] the response, either from cache or the block
-  #
-  def fetch_or_cache req, &block
-    # attempt to fetch the cache
-    if resp = fetch(req)
-      # XXX this interface sucks
-      if cc = resp.get_header('cache-control')
-        cc = Intertwingler::Field['cache-control'].new cc
-      else
-        cc = {}
-      end
-
-      # XXX yo okay so we should deal with must-revalidate and
-      # stale-while-revalidate by grabbing eg etag and last-modified
-      # headers from the cached response to inform if-none-match and
-      # if-modified-since
-
-      # also if we happen to be in the window of
-      # stale-while-revalidate then we can just ship the cached
-      # response and fork off a thread to retrieve it
-
-      return resp
-    elsif only_if_cached? req
-      return Rack::Response[504]
-    end
-    #
-    cache_upstream req, &block
-  end
-end
