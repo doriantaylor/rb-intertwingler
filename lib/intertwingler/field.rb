@@ -1,4 +1,4 @@
-require_relative 'resolver'
+require_relative 'util/clean'
 require 'rack/request'
 require 'set'
 require 'strscan'
@@ -229,7 +229,7 @@ class Intertwingler::Field
 
     # we get a base URI either directly or from a request message
     @uri = if uri
-             Intertwingler::Resolver.coerce_resource uri, as: :uri
+             Intertwingler::Util::Clean.coerce_resource uri, as: :uri
            elsif message.is_a? ::Rack::Request
              URI(message.url.to_s)
            elsif message.is_a? ::Hash
@@ -688,32 +688,7 @@ class Intertwingler::Field
   RESP_HDR = /^([A-Za-z](?:-?[0-9A-Za-z]+)*)\Z/o
   HDR_RE   = %r{(?:#{REQ_HDR}|#{RESP_HDR})}o
 
-  def self.dispatch name
-    @fields ||= {}
-
-    # normalize the field name
-    name = to_http name
-
-    @fields[name] ||= Class.new(FIELDS.fetch name, Verbatim) do
-      define_singleton_method(:field_name) { name.freeze }
-    end
-  end
-
-  public
-
-  # Select the appropriate field class for the given name.
-  #
-  # @param arg [String, ]
-  #
-  def self.[] *args
-    # on-the-fly fields
-    return from(*args[0,2]) if respond_to?(:field_name)
-    dispatch args.first
-  end
-
-  # Coerce a 
-  #
-  def self.from message, uri = nil
+  FROM = -> (message, uri = nil) do
     val = case message
           when String then return new(message)
           when Rack::Request
@@ -741,6 +716,28 @@ class Intertwingler::Field
     new(val, message: mobj, uri: uri) if val
   end
 
+  public
+
+  # Select the appropriate field class for the given name.
+  #
+  # @param name [String] the field name
+  #
+  # @return [Class] a class that will parse a field value
+  #
+  def self.[] name
+    @fields ||= {}
+
+    # normalize the field name
+    name = to_http name
+
+    @fields[name] ||= Class.new(FIELDS.fetch name, Verbatim) do
+      define_singleton_method(:field_name) { name.freeze }
+      # dunno if this is better or worse than trying to alias tbh
+      define_singleton_method(:from, &FROM)
+      define_singleton_method(:[], &FROM)
+    end
+  end
+
   def self.to_req_env name
     name = name.to_s.strip.upcase.tr ?-, ?_
     raise ParseError, "Field name must not be empty" if name.empty?
@@ -764,7 +761,9 @@ class Intertwingler::Field
   end
 
   def field_name
-    self.class.field_name
-  end
+    c = self.class
+    return unless c.respond_to? :field_name
 
+    c.field_name
+  end
 end
