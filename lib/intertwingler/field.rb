@@ -337,7 +337,8 @@ class Intertwingler::Field
   #
   class Date < Verbatim
     def parse!
-      @value = Time.httpdate @original
+      # RFC9111 §5.3
+      @value = Time.httpdate(@original.strip) rescue Time.at(0).utc
     end
 
     def to_s

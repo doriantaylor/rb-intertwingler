@@ -6,22 +6,37 @@ require_relative 'representation'
 require 'digest'
 require 'uri/ni'
 require 'zlib'
+require 'time'
 
 # This is a toy cache index. Its job is to map cache keys to
-# cryptographic digests. It uses Intertwingler's onboard
-# content-addressable store to handle the blobs of message bodies, and
-# deals with headers and other metadata on its own.
+# cryptographic digests. It uses a content-addressable store,
+# {Store::Digest}, to handle the blobs of message bodies, and deals
+# with headers and other metadata on its own.
 #
-# One thing we have to avoid in this design is sending response bodies
-# _back_ to the content-addressable store they just came from. Take
-# for instance the planned case of a faux-static handler which
-# resolves human-readable URIs to content-addressed blobs. Top
-# candidate for the moment is RFC9530 headers, followed by a
-# `Content-Location` or `ETag` containing an RFC6920 address.
-# Realistically we can check all of these.
+# The role of a cache is to mediate between the _downstream_ client
+# and the _upstream_ server, either or both of which can conceivably
+# be other caches. We will refer to them, however, as they are in the
+# simplest case, as _client_ and _origin_, respectively. Whether a
+# response is _cached_ (notwithstanding a `no-store` `Cache-Control`
+# directive in the request) is up to the origin, and whether a cached
+# response is _served_ is ultimately up to the client—as long as the
+# request does not exceed the limitations set by the origin.
 #
-# @note I'm not sure if this belongs as an {Intertwingler::Handler} or
-#  not, since it could conceivably have the same interface as one.
+# The theory underpinning this separation of concerns is that the
+# origin did _work_ to produce a response: even if one particular
+# client request signals that _it_ doesn't want a cached response, a
+# subsequent request (or client) _might_. Furthermore, with the more
+# resource-consumptive aspect of the system de-duplicated through a
+# content-addressable store (indeed, potentially the very same one as
+# the origin), the additional overhead of preemptive 
+#
+# @note One thing we have to avoid in this design is sending response
+#  bodies _back_ to the content-addressable store they just came
+#  from. Take for instance the planned case of a faux-static handler
+#  which resolves human-readable URIs to content-addressed blobs. Top
+#  candidate for the moment is RFC9530 headers, followed by a
+#  `Content-Location` or `ETag` containing an RFC6920 address.
+#  Realistically we can check all of these.
 #
 class Intertwingler::Cache
   include Intertwingler::Storable
@@ -61,10 +76,10 @@ class Intertwingler::Cache
   #
   def authed? req
     user = case req
+           when FalseClass, TrueClass then return req
+           when nil then return false
            when Rack::Request then req.env['REMOTE_USER']
            when Hash then req['REMOTE_USER']
-           when false, true then return req
-           when nil then return false
            else
              raise ArgumentError, "Can't act on a #{req.class}"
            end
@@ -73,28 +88,48 @@ class Intertwingler::Cache
     !user.to_s.strip.empty?
   end
 
+  # Ensure the argument resolves to a parsed `Cache-Control` header.
+  #
+  # @param msg [Rack::Request, Rack::Response, Hash, #to_s] smome
+  #  argument or other
+  #
+  # @return [Hash] the `Cache-Control` header
+  #
+  def coerce_cache_control msg
+    if msg.is_a?(Hash) && msg.keys.all? { |k| k.is_a? Symbol }
+      msg
+    else
+      F['cache-control'][msg]&.value || {}
+    end
+  end
+
   # Determine if the response is public.
   #
-  # @param resp [Rack::Response] the response
+  # @param resp [Rack::Response, Hash] the response, or response
+  #  headers, or `Cache-Control` header
   # @param authed [false, true, Rack::Request] whether the request is
   #  authenticated (or the request itself)
   #
   # @return [false, true] whether the response is public
   #
   def public? resp, authed: false
+    # if we're handed a hash with only symbol keys, assume it's
+    # already the parsed cache control
+    cc = coerce_cache_control resp
+
     # assume the response is private if the request is authenticated
     # and the response's `Cache-Control` is not explicitly public;
     # likewise assume it is private if the request is not
     # authenticated and the response is explicitly private
 
     # get the cache-control header from the response
-    cc = F['cache-control'][resp]&.value || {}
     authed?(authed) ? cc.key?(:public) : !cc.key?(:private)
   end
 
   # Determine if the response is private.
   #
-  # @param resp [Rack::Response] the response
+  # @param resp [Rack::Response, Hash] the response, or response
+  #  headers, or `Cache-Control` header
   # @param authed [false, true, Rack::Request] whether the request is
   #  authenticated (or the request itself)
   #
@@ -127,15 +162,21 @@ class Intertwingler::Cache
   end
 
   # Return a harmonized set of `Cache-Control` values for the message.
-  # Coalesces 
+  # Coalesces in `Pragma` for requests, and for responses it folds in `Expires` and `Last-Modified`
   #
-  # @param message [Rack::Request, Rack::Response]
-  # @param reqt [nil, Time] time request was issued
-  # @param respt [nil, Time] time response was received
+  # @param message [Rack::Request, Rack::Response, Hash] the full
+  #  message or response header set in lieu
+  # @param time [Time] when the message was retrieved
+  # @param stored [Time] when the response was stored in the cache, if
+  #  different
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated, or just pass in the request to test
+  # @param default [false, true, Integer] a default value for max-age
   #
   # @return [Hash] cache-control directives
   #
-  def cache_control message, authed: false, reqt: nil, respt: nil
+  def flatten_cache_control message, time = Time.now, stored: time,
+      authed: false, default: false
     case message
     when Rack::Request
       # get both `Cache-Control` and obsolete `Pragma` header
@@ -146,12 +187,17 @@ class Intertwingler::Cache
       # cache-control supersedes pragma
       pragma.slice(:'no-cache').merge cc
     when Rack::Response, Hash
-      authed = authed?(authed)
-      # expires header
-      date = F['date'][message]&.value
-      exp  = F['expires'][message]&.value
-      cc   = F['cache-control'][message]&.value || {}
-      # 
+      # get the cache-control header
+      cc  = coerce_cache_control message
+      # determine if response is public
+      pub = public? message, authed: authed
+
+      if max = max_age(message, time, stored: stored, authed: authed, cc: cc)
+        cc[:'s-maxage'] = max if public?(message, authed: authed)
+        cc[:'max-age']  = max
+      end
+
+      cc
     else
       raise ArgumentError,
         "Rack::Request or Rack::Response (or Hash) only, not #{message.class}"
@@ -163,15 +209,27 @@ class Intertwingler::Cache
   # @param req [Rack::Request] the request
   #
   # @return [false, true] whether the request is cacheable
-  #
-  def cacheable_req? req, cc = nil
-    # method
+
+  def cacheable_req? req
+    # we can't cache if the method is not supported;
+    # also note http methods are actually case-sensitive
     return false unless METHODS.key? req.request_method.to_sym
 
-    cc ||= cache_control req
-    out = %i[no-cache no-store].any? { |k| cc.key? k } ? false : true
-    authed?(req) 
+    # obtain cache-control header (no need to fold in `Pragma:
+    # no-cache`) since it turns out the meaning of `no-cache` is
+    # actually subtler than "don't cache"
+    cc = F['cache-control'][req]&.value || {}
+
+    # we can't cache if the client explicitly says not to
+    return false if cc.key?(:'no-store')
+
+    # we can't cache if max-age is zero
+    return false if cc[:'max-age'] == 0
+
+    # otherwise it's cacheable i guess
+    true
   end
+
   # Validate that the response (from the origin) is cacheable.
   #
   # @param resp [Rack::Response] the response
@@ -180,20 +238,22 @@ class Intertwingler::Cache
   #
   # @return [false, true] whether the response is cacheable
   #
-  def cacheable_resp? resp, authed: false
+  def cacheable_resp? resp, authed: false, time: Time.now
     # these response codes are always a no
     return false if NO_CACHE.include?(resp.status)
     # headers
-    cc = cache_control resp, authed: authed
+    cc = flatten_cache_control resp, authed: authed
     return false if cc[:'max-age'] == 0
 
     # XXX RFC9111 §5.2.2.4 says an (unqualified) no-cache in the
     # response indicates that the response must not be reused without
     # being revalidated
 
-    # false if any of no-store, s-maxage=0 (if shared), max-age=0, expires in the past, age header exists and exceeds max-age
+    # false if any of no-store, s-maxage=0 (if shared), max-age=0,
+    # expires in the past, age header exists and exceeds max-age
 
-    # false if private and not authed
+    # we can't cache a private response if not logged in
+    return false if cc.key?(:private) and not req.env['REMOTE_USER']
 
     true
   end
@@ -222,11 +282,109 @@ class Intertwingler::Cache
     !SAFE.include?(meth.to_s)
   end
 
-  # def modified? req, resp
-  # end
+  # Returns a definitive `max-age` for the HTTP message (either
+  # request or response), or `nil` if one can't be derived. Attempts
+  # candidates in this order:
+  #
+  # * `s-maxage` if the response is public (and syntactically valid)
+  # * `max-age` otherwise (ditto syntax)
+  # * `Expires` header relative to `Date` (or `stored` time in lieu)
+  # * `Last-Modified` heuristic if the response is
+  #   heuristically-cacheable, delta adjusted
+  #
+  # @note A `Hash` as the first argument is assumed to be _response_
+  #  headers, unless all the keys are `Symbol`s, in which case it is
+  #  assumed to be the `Cache-Control` header itself.
+  #
+  # @param message [Rack::Request, Rack::Response, Hash] the full
+  #  message or response header set in lieu
+  # @param time [Time] when the message was retrieved
+  # @param stored [Time] when the response was stored in the cache, if
+  #  different
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated, or just pass in the request to test
+  # @param default [false, true, Integer] a default value for max-age
+  # @param cc [Hash] an already-parsed `Cache-Control` header, if one
+  #  is available
+  #
+  # @return [Integer, nil] the canonical `max-age`, or `nil` if one
+  #  can't be resolved.
+  #
+  def max_age message, time = Time.now, stored: time,
+      authed: false, default: false, cc: nil
 
-  # def stale? resp
-  # end
+    case message
+    when Rack::Request
+      cc ||= F['cache-control'][message]&.value || {}
+      cc[:'max-age'] if cc[:'max-age'].is_a? Numeric
+    when Rack::Response, Hash
+      # get definitive `Cache-Control` header
+      cc ||= coerce_cache_control message
+
+      # fake up an empty hash for the headers if just cc was passed in
+      message = {} if message == cc
+
+      # coalesce the max-ages
+      max = cc[:'s-maxage'] if public?(cc, authed: authed) &&
+        cc[:'s-maxage'].is_a?(Numeric) && cc[:'s-maxage'] >= 0
+
+      max ||= cc[:'max-age'] if
+        cc[:'max-age'].is_a?(Numeric) && cc[:'max-age'] >= 0
+
+      unless max
+        stored ||= time ||= Time.now
+        delta = time - stored
+        date  = F['date'][message]&.value || stored
+        dd    = stored - date
+        lm    = F['last-modified'][message]&.value if
+          message.respond_to?(:status) && CACHE_OK.include?(message.status)
+
+        if exp = F['expires'][message]&.value
+          # note `Expires` is gonna be relative to `Date`
+          max = exp > date ? exp - date : 0
+        elsif lm && lm.to_i > 0
+          # so is `Last-Modified` but we're calculating
+          # heuristic freshness against `now`.
+          max = date + dd - lm
+          max = max > 0 ? max * 0.1 : 0
+        elsif default
+          max = default.is_a(Numeric) ? default : @defaults[:'max-age']
+        end
+      end
+
+      max.round if max
+    else
+      raise ArgumentError,
+        "Rack::Request or Rack::Response (or Hash) only, not #{message.class}"
+    end
+  end
+
+  # Returns the "freshness" of the response as an integer.
+  #
+  # @return [Integer, nil] how much freshness is left; zero or
+  #  negative means the response is stale. `nil` means it can't be
+  #  determined.
+  #
+  def freshness resp, time = Time.now, stored: stored, authed: false, default: false,
+    cc ||= coerce_cache_control resp
+    max = max_age resp, time, stored: stored, authed: authed, 
+
+    
+    cc = flatten_cache_control resp, stored, time: time, authed: authed
+    
+  end
+
+  # Determines whether a cache entry is strictly _stale_, meaning its
+  # age exceeds its max-age
+  #
+  # @param resp [Rack::Response]
+  # @param stored [Time]
+  #
+  def stale? resp, stored = Time.now, request: nil, authed: false, time: stored
+    f = freshness resp, stored, 
+    cc = flatten_cache_control resp
+    
+  end
 
   # Determine whether the response can be served stale, optionally
   # given the request, a reference time (which defaults to now), an
@@ -264,17 +422,22 @@ class Intertwingler::Cache
     end
   end
 
-  # Unconditionally fetch a response, assuming the request has already
-  # been verified as cacheable.
+  # Fetch the components of the response, assuming the request has
+  # already been verified as cacheable in principle.
   #
-  # This metehod
+  # @note This method should always return a record if one is found in
+  #  the cache, and leave it to {#fetch} to negotiate whether the
+  #  client will accept it or if it must be revalidated. However, if
+  #  the response _is_ stale, this method is responsible for evicting
+  #  the record from the cache index.
   #
   # @param req [Rack::Request] the request to match
+  # @param time [Time] the time the request was received
   #
   # @return [Array(Integer, Hash, URI::NI), nil] the parts
   #  for the cached response
   #
-  def fetch_internal req
+  def fetch_internal req, time: Time.now
     raise NotImplementedError, 'drivers must implement `fetch_internal`'
   end
 
@@ -340,6 +503,44 @@ class Intertwingler::Cache
   # @return [Rack::Response] the response passed in as `resp`
   #
   def maybe_cache req, resp = nil, reqt: nil, respt: nil, force: false, &block
+    # before we begin:
+    #
+    # * if there is both a `resp` and a block, treat it like a
+    #   validation request.
+    #   * `time` is assumed to be the timestamp of the entry.
+    # * if there is only a `resp`, then `time` is treated as the
+    #   response time.
+    # * if there is only a `block`, then `time` is the request time.
+    # * if there is neither a `resp` or a `block`, this is an error.
+    #
+    # the procedure:
+    #
+    # * if there is a block:
+    #   * assign `resp` to `cached` if it exists
+    #   * duplicate the request in case it gets manipulated
+    #   * if cached, set the `If-Modified-Since` header of the request
+    #     to the `httpdate` serialization of `time`
+    #     * (XXX do we clear out the other `If-*` headers?)
+    #   * run the block with the subrequest and collect the response
+    #   * if the request was unsafe and the response was successful,
+    #     expire all cache entries for the request-URI (RFC9111 §4.4)
+    #   * if the response is cacheable, update `resp` with a new cached version
+    #     * (make sure to pass in the original request for the cache key)
+    #   * if the response was a (re)validation:
+    #     * if the response was an error:
+    #       * if `stale-if-error` is present and still valid and
+    #         `no-cache` is not, return the cached response
+    #       * (note `stale-if-error` holds "regardless of other freshness
+    #         information", and only covers 500, 502, 503, 504, per RFC5861 §4)
+    #     * if the response is a 304:
+    #       * freshen the cache entry for the (original) request
+    #       * if `no-cache` or `must-revalidate` is present, update
+    #         any headers that need updating and return the cached response
+    #   * return the origin response
+    # * otherwise, if there is no block:
+    #   * store `resp` in the cache if it is cacheable
+    #   * return it as a no-op
+
     if block
       # if a response is passed in then it's a cache entry, and respt
       # is its own response time
@@ -410,6 +611,12 @@ class Intertwingler::Cache
     Rack::Response[504, headers, [text]]
   end
 
+  DEFAULTS = {
+    'max-age': 5, # we want stuff to expire fairly quickly by default
+    'stale-while-revalidate': 0, # we probably don't want to do this by default
+    'stale-if-error': 0, # ditto
+  }.freeze
+
   public
 
   # Initialize the cache index.
@@ -419,11 +626,12 @@ class Intertwingler::Cache
   #
   # @return [void]
   #
-  def initialize store: nil, log: nil, driver: :LMDB, **options
+  def initialize store: nil, log: nil, driver: :LMDB, defaults: nil, **options
     raise ArgumentError, "`store` must be a Store::Digest" unless
       store.is_a? Store::Digest
-    @store = init_store store
-    @log   = log
+    @store    = init_store store
+    @log      = log
+    @defaults = DEFAULTS.merge((defaults || {}).transform_keys(&:to_sym))
 
     # warn self.store
     # warn options
@@ -466,22 +674,65 @@ class Intertwingler::Cache
   # Attempt to fetch a cache entry based on a given request. Returns
   # `nil` if a fresh cache entry can't be resolved.
   #
-  # @param req [Rack::Request] the request in question.
+  # @param req [Rack::Request] the request in question
+  # @param time [Time] the time of the request
   # @param block [Proc, #call] the origin/upstream request handler
   # @yieldparam req [Rack::Request] the same request
-  # @yieldreturn [Rack::Response] the origin response
+  # @yieldreturn [Rack::Response] the origin (or cached) response
   #
   # @return [Rack::Response, nil] the cached response (maybe)
   #
-  def fetch req, &block
-    # pretty straightforward here:
-    # * try to get something out of cache
-    # * if found, maybe have to revalidate it (including asynchronously)
+  def fetch req, time: Time.now, &block
+    # pretty straightforward here when called with a block:
+    #
+    # * check if the request is cacheable (request method OK, `no-store`
+    #   not set, `max-age - min-fresh + max-stale` greater than zero)
+    #   * if so, try to fetch the response out of cache
+    #   * if found:
+    #     * immediately determine objective response freshness
+    #       * get response age relative to THIS request's timestamp
+    #       * minimum of client `max-age` and harmonized server `max-age`
+    #     * determine if the client will accept the cached response
+    #       * `min-fresh`, minimum of (`max-stale`, `stale-while-revalidate`)
+    #       * (`stale-while-revalidate` and `stale-if-error` shall be
+    #         clipped at `max-stale` and calculated relative to `min-fresh`)
+    #     * determine if the response needs (synchronous) revalidation
+    #       * `no-cache` on either client or server
+    #         * set `If-Modified-Since` to the timestamp of the cache entry
+    #         * (304 from upstream means a cached response can be sent if fresh)
+    #         * (`no-cache="Foo Bar"` from server means replace those headers)
+    #       * `must-revalidate`
+    #         * (cached response is stale and must be revalidated before used)
+    #         * (`stale-if-error` only makes sense here as far as i can tell)
+    #         * (`stale-if-error` should also re-test
+    #       * (fall through the flow if client rejects cached response)
+    #     * determine if response needs *a*synchronous revalidation
+    #       (ie `stale-while-revalidate`)
+    #     * return a (cached or potentially revalidated) response if OK
+    # * return 504 at this point if request specifies `only-if-cached`
+    # * try to request the response from the origin
     #   * (this implies attempting to re-cache it)
-    # * otherwise return nil
+    #
+    # If there is no block, all attempts to contact the origin
+    # naturally return nil.
+
+    if cacheable_req? req
+      #
+      if block
+        resp = maybe_cache req, resp, reqt: time, &block
+      end
+    end
+
+    log.debug "#{miss} request is not cacheable"
+
+    return error_504 if reqcc.key? :'only-if-cached'
+
+    # 
+    maybe_cache req, reqt: time, &block if block
+
 
     # get cache-control header from request
-    reqcc = cache_control req
+    reqcc = flatten_cache_control req, time: time
 
     # we say this enough we might as well make a variable lol
     m = req.request_method
@@ -495,8 +746,10 @@ class Intertwingler::Cache
       return
     end
 
+    # fetch
+
     # this should also take care of expiration
-    status, headers, cl, cachet = fetch_internal req
+    status, headers, cl, stored = fetch_internal req, time: time
     unless status
       log.debug "#{miss} not found"
       # XXX only-if-cached
@@ -543,27 +796,28 @@ class Intertwingler::Cache
     # entry, unless the request already has one which is newer
     # (although i'm thinking if it did we wouldn't even get here)
     subreq = req.dup
-    srt = [cachet, F['last-modified'][resp]&.value,
-           F['if-modified-since'][req]&.value].compact.sort.last
-    subreq.set_header 'HTTP_IF_MODIFIED_SINCE', cachet.httpdate
+    srt = [stored, F['last-modified'][resp]&.value,
+           F['if-modified-since'][req]&.value
+          ].compact.sort.last
+    subreq.set_header 'HTTP_IF_MODIFIED_SINCE', stored.httpdate
 
     # first we test if `stale-while-revalidate` is under the threshold
     # and then we run the validating request in a thread while
     # returning the cached one
-    if serve?(resp, request: req, time: cachet,
+    if serve?(resp, request: req, time: stored,
               directive: :'stale-while-revalidate')
       # run the validation request in a thread
-      Thread.new { maybe_cache subreq, resp, respt: cachet, &block }
+      Thread.new { maybe_cache subreq, resp, respt: stored, &block }
       return resp
     end
 
     # finally we test if `must-revalidate` or `proxy-revalidate` (if
     # cached response is public); if the response produces an error we
     # can check if `stale-if-error` doesn't exceed the timeout
-    if serve?(resp, request: req, time: cachet,
+    if serve?(resp, request: req, time: stored,
               directive: %i[no-cache must-revalidate proxy-revalidate])
       # (resp and block together mean resp is the existing cache)
-      return maybe_cache subreq, resp, respt: cachet, &block
+      return maybe_cache subreq, resp, respt: stored, &block
     end
 
     nil # yes we have no bananas
@@ -588,9 +842,9 @@ class Intertwingler::Cache
   #
   # @return [Rack::Response] the response, either from cache or the block
   #
-  def fetch_or_cache req, &block
+  def fetch_or_cache req, time: Time.now, &block
     # attempt to fetch the cache
-    if resp = fetch(req, &block)
+    if resp = fetch(req, time: time, &block)
       # get cache-control header from the response
       cc = F['cache-control'][resp] || {}
 
@@ -955,7 +1209,7 @@ class Intertwingler::Cache
       def unpack_signpost record
         ctrl, count, vary = record.unpack 'Cla*'
         vary = Zlib.gunzip(vary) if vary.start_with?("\x1f\x8b")
-        vary = vary.split "\x1f"
+        vary = vary.split("\x1f").map(&:strip)
 
         [ctrl, count, vary]
       end
@@ -1202,7 +1456,7 @@ class Intertwingler::Cache
 
         # we use authed key if the request is authenticated, unless
         # the response is explicitly `public`
-        authed = private?(resp, authed: req)
+        priv = private?(resp, authed: req)
 
         # if vary is nonempty we create a signpost record
 
@@ -1239,7 +1493,7 @@ class Intertwingler::Cache
         # okay NOW
         @env.transaction do
           # create the terminal record
-          tk  = state.state(authed: authed, vary: !!vary).digest
+          tk  = state.state(authed: priv, vary: !!vary).digest
           tv  = pack_terminal resp.status, resp.headers, cl
           inc = !index.key?(tk) # determine if adding or updating
           @index.put tk, tv
@@ -1249,7 +1503,7 @@ class Intertwingler::Cache
           @uris.put? uk, tk
 
           if vary
-            sk = state.state(authed: authed,  vary: false)
+            sk = state.state(authed: priv,  vary: false)
 
             count = inc ? 1 : 0
             if sv = @index.get(sk)
@@ -1268,9 +1522,17 @@ class Intertwingler::Cache
         resp
       end
 
+      # Resolve a terminal record from a key state.
+      #
+      # @param state [Intertwingler::Cache::KeyState] a key state
+      #
+      # @return [nil, Array(String, String, Integer, Array, String)]
+      #  if the record is found: the terminal key, raw record,
+      #  signpost count, `Vary` headers, and signpost key.
+      #
       def resolve_terminal state
+        # first attempt to get a private record
         if authed = state.authed?
-          # first attempt to get a private entry
           tkey = state.state(authed: true).digest
           # try public record
           authed = false unless raw = @index[tkey]
@@ -1292,24 +1554,25 @@ class Intertwingler::Cache
           return if raw.nil? or raw.empty?
         else
           skey  = tkey
-          count = 1
+          count = 0
           vary  = nil
         end
 
         [tkey, raw, count, vary, skey]
       end
 
-      #
+      # @see {Intertwingler::Cache#fetch_internal} for documentation
       #
       # @return [nil, Array(Integer, Hash, Store::Digest::Object)]
       #
-      def fetch_internal req
+      def fetch_internal req, time: Time.now
         state = KeyState.new req
-        ukey  = state.uri_state.digest
 
         @env.transaction do |txn|
           tkey, raw, count, vary, skey = resolve_terminal state
 
+          # XXX THIS IS A HUGE PREMATURE OPTIMIZATION
+          #
           # first we measure if the response is objectively stale,
           # then we determine if the client will accept it. the
           # client may reject a record that's still fresh, or
@@ -1319,17 +1582,21 @@ class Intertwingler::Cache
           # if the response is still fresh and the client will
           # accept it, we could actually return 304 here
 
-
           # out = unpack_terminal(raw) do |lol|
           #   # smuggle stuff out?
           # end
 
-          out = unpack_terminal raw
+          # okay back to being normal
+
+          status, headers, body, ctime = unpack_terminal raw
 
           # all expired is stale but not all stale is expired
 
           # if the response is stale then expire the record
-          unless serve?(out[1], time: out[3])
+          if stale?(headers, ctime, authed: state.authed?, time: time)
+            # get the key for the whole uri
+            ukey = state.uri_state.digest
+
             # delete the expired terminal
             @index.delete tkey
             @uris.delete ukey, tkey
@@ -1343,13 +1610,10 @@ class Intertwingler::Cache
                 @uris.delete? ukey, skey
               end
             end
-
-            # now we break out
-            break
           end
 
           # return the terminal record
-          unpack_terminal raw
+          [status, headers, body, ctime]
         end
       end
     end
