@@ -28,7 +28,31 @@ require 'time'
 # subsequent request (or client) _might_. Furthermore, with the more
 # resource-consumptive aspect of the system de-duplicated through a
 # content-addressable store (indeed, potentially the very same one as
-# the origin), the additional overhead of preemptive 
+# the origin), the additional overhead of preemptive caching is
+# negligible.
+#
+# |Directive               |Request|Response|Type  |
+# |------------------------|-------|--------|------|
+# |`immutable`             |       | *      |      |
+# |`max-age`               | *     | *      | int  |
+# |`max-stale`             | *     |        | int  |
+# |`min-fresh`             | *     |        | int  |
+# |`must-revalidate`       |       | *      |      |
+# |`must-understand`       |       | *      |      |
+# |`no-cache`              | *     | *      | str* |
+# |`no-store`              | *     | *      |      |
+# |`no-transform`          | *     | *      |      |
+# |`only-if-cached`        | *     |        |      |
+# |`private`               |       | *      | str† |
+# |`proxy-revalidate`      |       | *      |      |
+# |`public`                |       | *      |      |
+# |`s-maxage`              |       | *      | int  |
+# |`stale-if-error`        | *     | *      | int  |
+# |`stale-while-revalidate`|       | *      | int  |
+#
+# > \* Header fields to be replaced by `304` responses
+# >
+# > † Header fields that must never be shared
 #
 # @note One thing we have to avoid in this design is sending response
 #  bodies _back_ to the content-addressable store they just came
@@ -365,13 +389,11 @@ class Intertwingler::Cache
   #  negative means the response is stale. `nil` means it can't be
   #  determined.
   #
-  def freshness resp, time = Time.now, stored: stored, authed: false, default: false,
+  def freshness resp, time = Time.now, stored: time, authed: false, default: false
     cc ||= coerce_cache_control resp
-    max = max_age resp, time, stored: stored, authed: authed, 
+    max = max_age resp, time, stored: stored, authed: authed
 
-    
     cc = flatten_cache_control resp, stored, time: time, authed: authed
-    
   end
 
   # Determines whether a cache entry is strictly _stale_, meaning its
@@ -381,9 +403,8 @@ class Intertwingler::Cache
   # @param stored [Time]
   #
   def stale? resp, stored = Time.now, request: nil, authed: false, time: stored
-    f = freshness resp, stored, 
+    # f = freshness resp, stored, 
     cc = flatten_cache_control resp
-    
   end
 
   # Determine whether the response can be served stale, optionally
@@ -502,11 +523,11 @@ class Intertwingler::Cache
   #
   # @return [Rack::Response] the response passed in as `resp`
   #
-  def maybe_cache req, resp = nil, reqt: nil, respt: nil, force: false, &block
+  def maybe_cache req, resp = nil, time: Time.now, &block
     # before we begin:
     #
     # * if there is both a `resp` and a block, treat it like a
-    #   validation request.
+    #   (re)validation request.
     #   * `time` is assumed to be the timestamp of the entry.
     # * if there is only a `resp`, then `time` is treated as the
     #   response time.
@@ -515,84 +536,97 @@ class Intertwingler::Cache
     #
     # the procedure:
     #
-    # * if there is a block:
-    #   * assign `resp` to `cached` if it exists
-    #   * duplicate the request in case it gets manipulated
-    #   * if cached, set the `If-Modified-Since` header of the request
-    #     to the `httpdate` serialization of `time`
-    #     * (XXX do we clear out the other `If-*` headers?)
-    #   * run the block with the subrequest and collect the response
-    #   * if the request was unsafe and the response was successful,
-    #     expire all cache entries for the request-URI (RFC9111 §4.4)
-    #   * if the response is cacheable, update `resp` with a new cached version
-    #     * (make sure to pass in the original request for the cache key)
-    #   * if the response was a (re)validation:
-    #     * if the response was an error:
-    #       * if `stale-if-error` is present and still valid and
-    #         `no-cache` is not, return the cached response
-    #       * (note `stale-if-error` holds "regardless of other freshness
-    #         information", and only covers 500, 502, 503, 504, per RFC5861 §4)
-    #     * if the response is a 304:
-    #       * freshen the cache entry for the (original) request
-    #       * if `no-cache` or `must-revalidate` is present, update
-    #         any headers that need updating and return the cached response
-    #   * return the origin response
-    # * otherwise, if there is no block:
-    #   * store `resp` in the cache if it is cacheable
-    #   * return it as a no-op
+    # * unless there is a block:
+    #   * raise an error if there is no `resp` argument
+    #   * if `resp` is cacheable, update `resp` with a new cached version
+    #   * RETURN `resp` (potentially a no-op)
+    # * assign `resp` to `cached` if it exists
+    # * duplicate the request in case it gets manipulated
+    # * if cached, set the `If-Modified-Since` header of the request
+    #   to the `httpdate` serialization of `time`
+    #   * (XXX do we clear out the other `If-*` headers?)
+    #     * (i wanna say yes??)
+    # * run the block with the subrequest and collect the response
+    # * if the request was unsafe and the response was successful,
+    #   expire all cache entries for the request-URI (RFC9111 §4.4)
+    # * if the response is cacheable, update `resp` with a new cached version
+    #   * (make sure to pass in the original request for the cache key)
+    # * if the response was a (re)validation:
+    #   * if the response is a 304:
+    #     * freshen the cache entry for the (original) request
+    #     * if `no-cache` or `must-revalidate` is present, update
+    #       any headers that need updating and RETURN the cached response
+    #   * if the response is an error:
+    #     * if `stale-if-error` is present and still valid and
+    #       `no-cache` is not, RETURN the cached response
+    #     * (note `stale-if-error` holds "regardless of other freshness
+    #       information", and only covers 500, 502, 503, 504, per RFC5861 §4)
+    # * RETURN the origin response
 
-    if block
-      # if a response is passed in then it's a cache entry, and respt
-      # is its own response time
-      if resp
-        cached = resp
-        cachet = respt || Time.now
-        respt  = nil # unset because we need a new one
-      end
-
-      # get the time of the (sub?)request
-      reqt ||= Time.now
-
-      # execute the origin (or at least upstream) handler
-      resp = block.call req
-
+    unless block
       raise ArgumentError,
-        "Block must return a Rack::Response, not #{resp.class}" unless
-        resp.is_a? Rack::Response
+        'must have at least either a resp or block' unless resp
 
-      # get the time of the response
-      respt ||= Time.now
-    elsif resp
-      nil
-    else
-      raise ArgumentError, 'either supply an explicit response or a block'
+      resp = cache_internal(req, resp) if cacheable_resp?(resp, request: req)
+
+      return resp
     end
 
-    # this is an error of course
-    if resp.status >= 400
-      # handle `stale-if-error` cache directive
-      if cached && serve?(cached, request: req, directive: :'stale-if-error')
-        log.debug(
-          "Serving stale cache on error for #{req.request_method} #{req.url}")
+    # preamble
+
+    cached = resp # this will obviously stay nil if `resp` is nil
+    subreq = req.dup
+    subreq.set_header('HTTP_IF_MODIFIED_SINCE', time.httpdate) if cached
+
+    # get the origin response
+    resp = block.call subreq
+
+    # nuke if bad lol
+    expire_internal(req.url) if unsafe?(req) and resp.successful?
+
+    # add to cache
+    resp = cache_internal(req, resp) if cacheable_resp?(resp, request: req)
+
+    # now deal with revalidation
+    if cached
+      # shuffle around some values
+      stored = time
+      time   = Time.now
+
+      raise ArgumentError, 'cached entry must have an Age header' unless
+        age = F['age'][cached].value
+
+      # attempt to get the cache-control headers from both responses
+      ccc = F['cache-control'][cached]&.value || {}
+      rcc = F['cache-control'][resp]&.value   || {}
+
+      if resp.status == 304
+        # freshen the index
+        freshen_internal req, resp
+        # assemble the set of headers to replace (RFC9110 §15.4.5;
+        # note the bit about how 304 MUST replace these headers)
+        nc = ccc.merge(rcc)[:'no-cache'].to_s.strip.downcase.split
+        nh = (
+          %w[content-location date etag vary cache-control expires] + nc).to_set
+        # we can just do that lol
+        cached.headers.merge!(resp.headers.slice(*nh))
         return cached
       end
-    elsif force || cacheable_resp?(resp, )
-      log.debug "Caching #{req.request_method} #{req.url}"
-      # resp may get replaced during processing so we return it
-      return cache_internal req, resp
-    elsif unsafe? req
-      # rfc9111 §4.4 must expire an entry after successful unsafe method
-      log.debug "Expiring cache for #{req.url} after #{req.request_method}"
-      expire req.url
-    elsif block && resp.status == 304
-      # freshen the age if we get here
 
-      # we should only be able to get here with a block call because
-      # 304 might also come from the cache
-      freshen_internal req, resp, time: respt
+      # deal with stale-if-error
+
+      if [500, 502, 503, 504].include?(resp.status)
+        max = max_age cached, time, stored: stored, authed: req, default: true
+        sie = rcc[:'stale-if-error']&.value || 0
+        tmp = ccc[:'stale-if-error']&.value || 0
+        sie = tmp if tmp < sie
+
+        # this says age greater than max-age but less than
+        return cached if age > max && age <= (max + sie)
+      end
     end
 
-    resp
+    resp # aaand the response
   end
 
   # Emit a 504 Gateway Timeout error for `only-if-cached`.
@@ -696,7 +730,11 @@ class Intertwingler::Cache
     #       * `min-fresh`, minimum of (`max-stale`, `stale-while-revalidate`)
     #       * (`stale-while-revalidate` and `stale-if-error` shall be
     #         clipped at `max-stale` and calculated relative to `min-fresh`)
-    #     * determine if the response needs (synchronous) revalidation
+    #     * determine if the response does NOT need synchronous revalidation
+    #       * if `stale-while-revalidate` is in force, split off a
+    #         thread to revalidate the cache entry
+    #       * RETURN the cached response
+    #     * now perform revalidation:
     #       * `no-cache` on either client or server
     #         * set `If-Modified-Since` to the timestamp of the cache entry
     #         * (304 from upstream means a cached response can be sent if fresh)
@@ -709,118 +747,72 @@ class Intertwingler::Cache
     #     * determine if response needs *a*synchronous revalidation
     #       (ie `stale-while-revalidate`)
     #     * return a (cached or potentially revalidated) response if OK
-    # * return 504 at this point if request specifies `only-if-cached`
+    # * RETURN 504 at this point if request specifies `only-if-cached`
     # * try to request the response from the origin
     #   * (this implies attempting to re-cache it)
     #
     # If there is no block, all attempts to contact the origin
     # naturally return nil.
 
+    m = req.request_method
+    u = req.url
+
     if cacheable_req? req
-      #
-      if block
-        resp = maybe_cache req, resp, reqt: time, &block
+      # attempt to get cache entry
+      resp, stored = fetch_internal req
+
+      if resp
+        # get response age vs time
+        age = time - stored
+        # may as well set the header now
+        resp.set_header('age', age.to_s)
+
+        # get the definitive `max-age` from the response
+        max = max_age resp, time, stored: stored, authed: req, default: true
+
+        # determine if request will accept a cached response
+        cc    = F['cache-control'][resp]&.value || {}
+        rcc   = F['cache-control'][req]&.value || {}
+        rmax  = rcc[:'max-age'] || max
+        max   = rmax if rmax < max
+        swr   = cc[:'stale-while-revalidate'] || 0
+        max_s = rcc[:'max-stale'] || 0
+        min_f = rcc[:'min-fresh'] || 0
+        serve = age < ((max - min_f).clamp(0..) + [max_s, swr].max)
+
+        if serve
+          log.debug "Cache hit on #{m} #{u}"
+          # determine if we don't have to revalidate synchronously
+          if !rcc.key?(:'no-cache') ||
+              cc.slice(*%i[no-cache must-revalidate]).empty?
+
+            # swr may be less than max-stale so we test it again
+            if block and age < ((max - min_f).clamp(0..) + swr)
+              log.debug "Asynchronously revalidating #{m} #{u}"
+              Thread.new { maybe_cache req, &block }
+            end
+
+            # return cached response
+            return resp
+          end
+
+          # okay now revalidate
+          if block
+            log.debug "Revalidating #{m} #{u}"
+            return maybe_cache req, resp, time: stored, &block
+          end
+        end
       end
     end
 
-    log.debug "#{miss} request is not cacheable"
+    log.debug "Cache miss on #{m} #{u}: request is not cacheable"
 
     return error_504 if reqcc.key? :'only-if-cached'
 
-    # 
-    maybe_cache req, reqt: time, &block if block
-
-
-    # get cache-control header from request
-    reqcc = flatten_cache_control req, time: time
-
-    # we say this enough we might as well make a variable lol
-    m = req.request_method
-    miss = "Cache miss on #{m} #{req.url}:"
-
-    # bail out early if request is not cacheable
-    unless cacheable_req? req
-      log.debug "#{miss} request not cacheable"
-      # 504 only-if-cached
-      return error_504 if reqcc.key? :'only-if-cached'
-      return
+    if block
+      log.debug "Attempting cache on #{m} #{u}"
+      maybe_cache req, time: time, &block
     end
-
-    # fetch
-
-    # this should also take care of expiration
-    status, headers, cl, stored = fetch_internal req, time: time
-    unless status
-      log.debug "#{miss} not found"
-      # XXX only-if-cached
-      return error_504 if reqcc.key? :'only-if-cached'
-      return
-    end
-
-    # ok things that need to happen here:
-    # * ensure we get a handle on the response body if applicable
-    # * if the body is missing from the store, we consider that a
-    #   cache miss and bail
-    # we should get the body at this point to make sure we have it
-    if cl.is_a? URI::NI
-      if blob = store.get(cl)
-        unless body = blob.content
-          log.warn "#{miss} #{cl} appears deleted"
-          return
-        end
-      else
-        log.warn "#{miss} store is missing #{cl}"
-        return
-      end
-    else
-      body = []
-    end
-
-    log.debug "Cache hit on #{m} #{req.url} with #{cl}"
-
-    # may as well construct the response at this point
-    resp = Rack::Response[status, headers.transform_values(&:to_s), body]
-
-    # the response is fresh, we can return it
-    return resp if freshness >= 0
-
-    # nothing else to do without a block to call
-    unless block
-      log.warn "Stale cache entry for #{m} #{req.url} and no block given"
-      return
-    end
-
-    # okay we have a stale response and a block, so the zeroth thing
-    # we do is doctor the request to have an `If-Modified-Since`
-    # header which should either be the `Last-Modified` of the cache
-    # entry, unless the request already has one which is newer
-    # (although i'm thinking if it did we wouldn't even get here)
-    subreq = req.dup
-    srt = [stored, F['last-modified'][resp]&.value,
-           F['if-modified-since'][req]&.value
-          ].compact.sort.last
-    subreq.set_header 'HTTP_IF_MODIFIED_SINCE', stored.httpdate
-
-    # first we test if `stale-while-revalidate` is under the threshold
-    # and then we run the validating request in a thread while
-    # returning the cached one
-    if serve?(resp, request: req, time: stored,
-              directive: :'stale-while-revalidate')
-      # run the validation request in a thread
-      Thread.new { maybe_cache subreq, resp, respt: stored, &block }
-      return resp
-    end
-
-    # finally we test if `must-revalidate` or `proxy-revalidate` (if
-    # cached response is public); if the response produces an error we
-    # can check if `stale-if-error` doesn't exceed the timeout
-    if serve?(resp, request: req, time: stored,
-              directive: %i[no-cache must-revalidate proxy-revalidate])
-      # (resp and block together mean resp is the existing cache)
-      return maybe_cache subreq, resp, respt: stored, &block
-    end
-
-    nil # yes we have no bananas
   end
 
   # Forcibly expire an entry, either by full request or by URI.
