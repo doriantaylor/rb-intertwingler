@@ -31,6 +31,8 @@ require 'time'
 # the origin), the additional overhead of preemptive caching is
 # negligible.
 #
+# Per [the index](https://www.iana.org/assignments/http-cache-directives/http-cache-directives.xhtml):
+#
 # |Directive               |Request|Response|Type  |
 # |------------------------|-------|--------|------|
 # |`immutable`             |       | *      |      |
@@ -91,27 +93,6 @@ class Intertwingler::Cache
   # been typing this a lot lol
   F = Intertwingler::Field
 
-  # Determine whether the request is authenticated.
-  #
-  # @param req [Rack::Request, Hash, false, true, nil] the request or
-  #  environment or pass-through value
-  #
-  # @return [false, true] whether the request is authenticated
-  #
-  def authed? req
-    user = case req
-           when FalseClass, TrueClass then return req
-           when nil then return false
-           when Rack::Request then req.env['REMOTE_USER']
-           when Hash then req['REMOTE_USER']
-           else
-             raise ArgumentError, "Can't act on a #{req.class}"
-           end
-
-    # coerce to string; empty means no
-    !user.to_s.strip.empty?
-  end
-
   # Ensure the argument resolves to a parsed `Cache-Control` header.
   #
   # @param msg [Rack::Request, Rack::Response, Hash, #to_s] smome
@@ -120,47 +101,9 @@ class Intertwingler::Cache
   # @return [Hash] the `Cache-Control` header
   #
   def coerce_cache_control msg
-    if msg.is_a?(Hash) && msg.keys.all? { |k| k.is_a? Symbol }
-      msg
-    else
-      F['cache-control'][msg]&.value || {}
-    end
-  end
+    return msg if msg.is_a?(Hash) && msg.keys.all? { |k| k.is_a? Symbol }
 
-  # Determine if the response is public.
-  #
-  # @param resp [Rack::Response, Hash] the response, or response
-  #  headers, or `Cache-Control` header
-  # @param authed [false, true, Rack::Request] whether the request is
-  #  authenticated (or the request itself)
-  #
-  # @return [false, true] whether the response is public
-  #
-  def public? resp, authed: false
-    # if we're handed a hash with only symbol keys, assume it's
-    # already the parsed cache control
-    cc = coerce_cache_control resp
-
-    # assume the response is private if the request is authenticated
-    # and the response's `Cache-Control` is not explicitly public;
-    # likewise assume it is private if the request is not
-    # authenticated and the response is explicitly private
-
-    # get the cache-control header from the response
-    authed?(authed) ? cc.key?(:public) : !cc.key?(:private)
-  end
-
-  # Determine if the response is private.
-  #
-  # @param resp [Rack::Response, Hash] the response, or response
-  #  headers, or `Cache-Control` header
-  # @param authed [false, true, Rack::Request] whether the request is
-  #  authenticated (or the request itself)
-  #
-  # @return [false, true] whether the response is private
-  #
-  def private? resp, authed: false
-    !public?(resp, authed: authed)
+    F['cache-control'][msg]&.value || {}
   end
 
   # Get an absolute `Content-Location` header for the response, if
@@ -184,6 +127,7 @@ class Intertwingler::Cache
       out
     end
   end
+
 
   # Return a harmonized set of `Cache-Control` values for the message.
   # Coalesces in `Pragma` for requests, and for responses it folds in `Expires` and `Last-Modified`
@@ -226,84 +170,6 @@ class Intertwingler::Cache
       raise ArgumentError,
         "Rack::Request or Rack::Response (or Hash) only, not #{message.class}"
     end
-  end
-
-  # Validate that the request (from the client) is cacheable.
-  #
-  # @param req [Rack::Request] the request
-  #
-  # @return [false, true] whether the request is cacheable
-
-  def cacheable_req? req
-    # we can't cache if the method is not supported;
-    # also note http methods are actually case-sensitive
-    return false unless METHODS.key? req.request_method.to_sym
-
-    # obtain cache-control header (no need to fold in `Pragma:
-    # no-cache`) since it turns out the meaning of `no-cache` is
-    # actually subtler than "don't cache"
-    cc = F['cache-control'][req]&.value || {}
-
-    # we can't cache if the client explicitly says not to
-    return false if cc.key?(:'no-store')
-
-    # we can't cache if max-age is zero
-    return false if cc[:'max-age'] == 0
-
-    # otherwise it's cacheable i guess
-    true
-  end
-
-  # Validate that the response (from the origin) is cacheable.
-  #
-  # @param resp [Rack::Response] the response
-  # @param authed [false, true, Rack::Request] whether the request is
-  #  authenticated, or just pass in the request itself
-  #
-  # @return [false, true] whether the response is cacheable
-  #
-  def cacheable_resp? resp, authed: false, time: Time.now
-    # these response codes are always a no
-    return false if NO_CACHE.include?(resp.status)
-    # headers
-    cc = flatten_cache_control resp, authed: authed
-    return false if cc[:'max-age'] == 0
-
-    # XXX RFC9111 §5.2.2.4 says an (unqualified) no-cache in the
-    # response indicates that the response must not be reused without
-    # being revalidated
-
-    # false if any of no-store, s-maxage=0 (if shared), max-age=0,
-    # expires in the past, age header exists and exceeds max-age
-
-    # we can't cache a private response if not logged in
-    return false if cc.key?(:private) and not req.env['REMOTE_USER']
-
-    true
-  end
-
-  # Determine if the request method is *safe*, per RFC9110.
-  #
-  # @param meth [#to_s, Rack::Request] the request method or the
-  #  entire request
-  #
-  # @return [false, true]
-  #
-  def safe? meth
-    meth = meth.request_method if meth.is_a? Rack::Request
-    SAFE.include?(meth.to_s)
-  end
-
-  # Determine if the request method is *not safe*, per RFC9110.
-  #
-  # @param meth [#to_s, Rack::Request] the request method or the
-  #  entire request
-  #
-  # @return [false, true]
-  #
-  def unsafe? meth
-    meth = meth.request_method if meth.is_a? Rack::Request
-    !SAFE.include?(meth.to_s)
   end
 
   # Returns a definitive `max-age` for the HTTP message (either
@@ -380,66 +246,6 @@ class Intertwingler::Cache
     else
       raise ArgumentError,
         "Rack::Request or Rack::Response (or Hash) only, not #{message.class}"
-    end
-  end
-
-  # Returns the "freshness" of the response as an integer.
-  #
-  # @return [Integer, nil] how much freshness is left; zero or
-  #  negative means the response is stale. `nil` means it can't be
-  #  determined.
-  #
-  def freshness resp, time = Time.now, stored: time, authed: false, default: false
-    cc ||= coerce_cache_control resp
-    max = max_age resp, time, stored: stored, authed: authed
-
-    cc = flatten_cache_control resp, stored, time: time, authed: authed
-  end
-
-  # Determines whether a cache entry is strictly _stale_, meaning its
-  # age exceeds its max-age
-  #
-  # @param resp [Rack::Response]
-  # @param stored [Time]
-  #
-  def stale? resp, stored = Time.now, request: nil, authed: false, time: stored
-    # f = freshness resp, stored, 
-    cc = flatten_cache_control resp
-  end
-
-  # Determine whether the response can be served stale, optionally
-  # given the request, a reference time (which defaults to now), an
-  # age (if not specified in the `Age` header in the presumably-cached
-  # response), and a cache directive to focus on.
-  #
-  # @note This will always return true if the response is still fresh.
-  #
-  # @param resp [Rack::Response] the (presumably cached) response
-  # @param request [Rack::Request] the concomitant request
-  # @param directive [Symbol, #to_sym] a particular directive
-  # @param time [Time] a reference time
-  # @param age [Integer, nil] an age, in seconds, which supplants `Age`
-  #
-  def serve? response, request: nil, directive: nil, time: Time.now, age: nil
-    # coerce directive
-    directive ||= []
-    directive = [directive] unless directive.is_a? Array
-    directive.map! { |d| d.to_s.downcase.to_sym }
-
-    age ||= F['age'][response]&.value || 0
-    # if the age is zero then it's ipso facto fresh
-    return true if age == 0
-
-    pub = public? response, authed: request
-
-    # response's s-maxage (if public), max-age, expires, 'heuristic'
-
-    # request's max-age, max-stale, min-fresh
-
-    # weird directives are like stale-while-revalidate (response) and stale-if-error (request)
-
-    if directive
-    else
     end
   end
 
@@ -683,6 +489,184 @@ class Intertwingler::Cache
     bootstrap **options
   end
 
+  # Determine if the request method is *safe*, per RFC9110.
+  #
+  # @param meth [#to_s, Rack::Request] the request method or the
+  #  entire request
+  #
+  # @return [false, true]
+  #
+  def safe? meth
+    meth = meth.request_method if meth.is_a? Rack::Request
+    SAFE.include?(meth.to_s)
+  end
+
+  # Determine if the request method is *not safe*, per RFC9110.
+  #
+  # @param meth [#to_s, Rack::Request] the request method or the
+  #  entire request
+  #
+  # @return [false, true]
+  #
+  def unsafe? meth
+    meth = meth.request_method if meth.is_a? Rack::Request
+    !SAFE.include?(meth.to_s)
+  end
+
+  # Determine whether the request is authenticated.
+  #
+  # @param request [Rack::Request, Hash, false, true, nil] the request or
+  #  environment or pass-through value
+  #
+  # @return [false, true] whether the request is authenticated
+  #
+  def authed? request
+    user = case request
+           when FalseClass, TrueClass then return request
+           when nil then return false
+           when Rack::Request then request.env['REMOTE_USER']
+           when Hash then request['REMOTE_USER']
+           else
+             raise ArgumentError, "Can't act on a #{request.class}"
+           end
+
+    # coerce to string; empty means no
+    !user.to_s.strip.empty?
+  end
+
+  # Determine if the response is public.
+  #
+  # @param response [Rack::Response, Hash] the response, or response
+  #  headers, or `Cache-Control` header
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated (or the request itself)
+  #
+  # @return [false, true] whether the response is public
+  #
+  def public? response, authed: false
+    # if we're handed a hash with only symbol keys, assume it's
+    # already the parsed cache control
+    cc = coerce_cache_control response
+
+    # assume the response is private if the request is authenticated
+    # and the response's `Cache-Control` is not explicitly public;
+    # likewise assume it is private if the request is not
+    # authenticated and the response is explicitly private
+
+    # get the cache-control header from the response
+    authed?(authed) ? cc.key?(:public) : !cc.key?(:private)
+  end
+
+  # Determine if the response is private.
+  #
+  # @param response [Rack::Response, Hash] the response, or response
+  #  headers, or `Cache-Control` header
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated (or the request itself)
+  #
+  # @return [false, true] whether the response is private
+  #
+  def private? response, authed: false
+    !public?(response, authed: authed)
+  end
+
+  # Validate that the request (from the client) is cacheable.
+  #
+  # @param req [Rack::Request] the request
+  #
+  # @return [false, true] whether the request is cacheable
+
+  def cacheable_req? req
+    # we can't cache if the method is not supported;
+    # also note http methods are actually case-sensitive
+    return false unless METHODS.key? req.request_method.to_sym
+
+    # obtain cache-control header (no need to fold in `Pragma:
+    # no-cache`) since it turns out the meaning of `no-cache` is
+    # actually subtler than "don't cache"
+    cc = F['cache-control'][req]&.value || {}
+
+    # we can't cache if the client explicitly says not to
+    return false if cc.key?(:'no-store')
+
+    # we can't cache if max-age is zero
+    return false if cc[:'max-age'] == 0
+
+    # otherwise it's cacheable i guess
+    true
+  end
+
+  # Validate that the response (from the origin) is cacheable.
+  #
+  # @param resp [Rack::Response] the response
+  # @param authed [false, true, Rack::Request] whether the request is
+  #  authenticated, or just pass in the request itself
+  #
+  # @return [false, true] whether the response is cacheable
+  #
+  def cacheable_resp? resp, authed: false, time: Time.now
+    # these response codes are always a no
+    return false if NO_CACHE.include?(resp.status)
+    # headers
+    cc = flatten_cache_control resp, authed: authed
+    return false if cc[:'max-age'] == 0
+
+    # XXX RFC9111 §5.2.2.4 says an (unqualified) no-cache in the
+    # response indicates that the response must not be reused without
+    # being revalidated
+
+    # false if any of no-store, s-maxage=0 (if shared), max-age=0,
+    # expires in the past, age header exists and exceeds max-age
+
+    # we can't cache a private response if not logged in
+    return false if cc.key?(:private) and not req.env['REMOTE_USER']
+
+    true
+  end
+
+  # Determines whether a cache entry is strictly _stale_, meaning its
+  # age exceeds its max-age
+  #
+  # @param response [Rack::Response, Hash] the response or its headers
+  # @param time [Time] the request time (defaults to now)
+  # @param request [Rack::Request] the request
+  # @param authed [false, true] a flag in lieu of the request if authenticated
+  # @param stored [Time] when the cache entry was stored
+  # @param default [false, true, Integer] a default max-=a
+  #
+  # @return [false, true, nil] whether the response is stale, `nil` if
+  #  indeterminate.
+  #
+  def stale? response, time = Time.now, stored: time,
+      request: nil, authed: request, default: false
+
+    # get the age of the resource
+    age = time - stored
+
+    authed = authed?(authed || request)
+
+    # obtain max_age
+    max = max_age resp, time, stored: stored, authed: authed, default: default
+
+    # indeterminate
+    return unless max
+
+    # no request to compare
+    return age > max unless request
+
+    # okay _now_ we compare against the request
+    cc    = F['cache-control'][response]&.value || {}
+    rcc   = F['cache-control'][request]&.value || {}
+    rmax  = rcc[:'max-age'] || max
+    max   = rmax if rmax < max
+    swr   = cc[:'stale-while-revalidate'] || 0
+    max_s = rcc[:'max-stale'] || 0
+    min_f = rcc[:'min-fresh'] || 0
+
+    #
+    age > ((max - min_f).clamp(0..) + [max_s, swr].max)
+  end
+
   # Attempt to cache the response associated with a request.
   #
   # @note here is where it would be really handy to have something
@@ -778,7 +762,7 @@ class Intertwingler::Cache
         swr   = cc[:'stale-while-revalidate'] || 0
         max_s = rcc[:'max-stale'] || 0
         min_f = rcc[:'min-fresh'] || 0
-        serve = age < ((max - min_f).clamp(0..) + [max_s, swr].max)
+        serve = age <= ((max - min_f).clamp(0..) + [max_s, swr].max)
 
         if serve
           log.debug "Cache hit on #{m} #{u}"
@@ -823,39 +807,6 @@ class Intertwingler::Cache
   #
   def expire arg
     expire_internal arg
-  end
-
-  # Attempt to fetch a cache entry, or otherwise run the block.
-  #
-  # @param req [Rack::Request] the request
-  # @param block [Proc, #call] the origin/upstream request handler
-  # @yieldparam req [Rack::Request] the same request
-  # @yieldreturn [Rack::Response] the response if not cached
-  #
-  # @return [Rack::Response] the response, either from cache or the block
-  #
-  def fetch_or_cache req, time: Time.now, &block
-    # attempt to fetch the cache
-    if resp = fetch(req, time: time, &block)
-      # get cache-control header from the response
-      cc = F['cache-control'][resp] || {}
-
-      # XXX yo okay so we should deal with must-revalidate and
-      # stale-while-revalidate by grabbing eg etag and last-modified
-      # headers from the cached response to inform if-none-match and
-      # if-modified-since
-
-      # also if we happen to be in the window of
-      # stale-while-revalidate then we can just ship the cached
-      # response and fork off a thread to retrieve it
-
-      return resp
-    elsif only_if_cached? req
-      return Rack::Response[504]
-    else
-      #
-      maybe_cache req, &block
-    end
   end
 
   # This is a little toy class that encapsulates the cache key digest

@@ -24,7 +24,6 @@ describe Intertwingler::Cache do
   # do not store incomplete responses (for now; 206/Content-Range header)
 
   # do not store 304 responses
-
   # do not store if response is not 200 and `must-understand` is set
 
   # do not store if `max-age=0`
