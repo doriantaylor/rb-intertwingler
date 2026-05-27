@@ -604,7 +604,7 @@ class Intertwingler::Cache
   #
   # @return [false, true] whether the response is cacheable
   #
-  def cacheable_resp? resp, authed: false, time: Time.now
+  def cacheable_resp? resp, request: nil, authed: request, time: Time.now
     # these response codes are always a no
     return false if NO_CACHE.include?(resp.status)
     # headers
@@ -741,10 +741,13 @@ class Intertwingler::Cache
     m = req.request_method
     u = req.url
 
+    rcc = F['cache-control'][req]&.value || {}
+
     if cacheable_req? req
       # attempt to get cache entry
       resp, stored = fetch_internal req
 
+      # we have a cached entry
       if resp
         # get response age vs time
         age = time - stored
@@ -787,16 +790,17 @@ class Intertwingler::Cache
           end
         end
       end
+
+      return unless block
+
+      return maybe_cache req, time: time, &block
     end
 
     log.debug "Cache miss on #{m} #{u}: request is not cacheable"
 
-    return error_504 if reqcc.key? :'only-if-cached'
+    return error_504 if rcc.key? :'only-if-cached'
 
-    if block
-      log.debug "Attempting cache on #{m} #{u}"
-      maybe_cache req, time: time, &block
-    end
+    block.call req if block
   end
 
   # Forcibly expire an entry, either by full request or by URI.
@@ -1514,6 +1518,8 @@ class Intertwingler::Cache
         @env.transaction do |txn|
           tkey, raw, count, vary, skey = resolve_terminal state
 
+          break unless tkey
+
           # XXX THIS IS A HUGE PREMATURE OPTIMIZATION
           #
           # first we measure if the response is objectively stale,
@@ -1530,13 +1536,14 @@ class Intertwingler::Cache
           # end
 
           # okay back to being normal
+          warn state
 
           status, headers, body, ctime = unpack_terminal raw
 
           # all expired is stale but not all stale is expired
 
           # if the response is stale then expire the record
-          if stale?(headers, ctime, authed: state.authed?, time: time)
+          if stale?(headers, time, authed: state.authed?, stored: ctime)
             # get the key for the whole uri
             ukey = state.uri_state.digest
 
@@ -1559,66 +1566,66 @@ class Intertwingler::Cache
           [status, headers, body, ctime]
         end
       end
-    end
 
-    def expire_internal arg
-      if arg.is_a? Rack::Request
-        state = KeyState.new arg
-        ukey = state.uri_state.digest
-      else
-        ukey = KeyState.uri_state(arg).digest
+      def expire_internal arg
+        if arg.is_a? Rack::Request
+          state = KeyState.new arg
+          ukey = state.uri_state.digest
+        else
+          ukey = KeyState.uri_state(arg).digest
+        end
+
+        # XXX honestly it's probably best to just obliterate the whole
+        # URI until we can determine a way to disambiguate between
+        # individual responses or even if it makes sense to
+
+        # if state
+        #   @env.transaction do
+        #     [false, true].each do |auth|
+        #       key = state.state(authed: auth).digest
+        #       raw = @index.get key
+        #       if signpost?(raw)
+        #         vary
+        #         @uris.delete? ukey, tkey
+        #       end
+        #       @index.delete? key
+        #       @uris.delete? ukey, key
+        #     end
+        #   end
+        # else
+        @env.transaction do
+          @uris.each_value(ukey) { |ikey| @index.delete? ikey }
+          @uris.delete? ukey
+        end
+        # end
       end
 
-      # XXX honestly it's probably best to just obliterate the whole
-      # URI until we can determine a way to disambiguate between
-      # individual responses or even if it makes sense to
+      FRESHEN_EXCEPT = %w[content-type content-length
+                          content-encoding content-location]
 
-      # if state
-      #   @env.transaction do
-      #     [false, true].each do |auth|
-      #       key = state.state(authed: auth).digest
-      #       raw = @index.get key
-      #       if signpost?(raw)
-      #         vary
-      #         @uris.delete? ukey, tkey
-      #       end
-      #       @index.delete? key
-      #       @uris.delete? ukey, key
-      #     end
-      #   end
-      # else
-      @env.transaction do
-        @uris.each_value(ukey) { |ikey| @index.delete? ikey }
-        @uris.delete? ukey
-      end
-      # end
-    end
+      def freshen_internal req, resp, time: nil
+        raise ArgumentError,
+          "response must be 304, not #{resp.status}" unless resp.status == 304
 
-    FRESHEN_EXCEPT = %w[content-type content-length
-                        content-encoding content-location]
+        time ||= Time.now
 
-    def freshen_internal req, resp, time: nil
-      raise ArgumentError,
-        "response must be 304, not #{resp.status}" unless resp.status == 304
+        state = KeyState.new req
 
-      time ||= Time.now
+        @env.transaction do
+          # resolve terminal record (or return because it's already been nuked)
+          key, raw = resolve_terminal state
+          break unless key
 
-      state = KeyState.new req
+          # get the raw record
+          status, headers, cl, _ = unpack_terminal raw
 
-      @env.transaction do
-        # resolve terminal record (or return because it's already been nuked)
-        key, raw = resolve_terminal state
-        break unless key
+          # merge the headers
+          headers.merge! resp.headers.except(*FRESHEN_EXCEPT)
 
-        # get the raw record
-        status, headers, cl, _ = unpack_terminal raw
+          raw = pack_terminal status, headers, time: time, authed: state.authed?
 
-        # merge the headers
-        headers.merge! resp.headers.except(*FRESHEN_EXCEPT)
-
-        raw = pack_terminal status, headers, time: time, authed: state.authed?
-
-        @index[key] = raw
+          @index[key] = raw
+        end
       end
     end
 

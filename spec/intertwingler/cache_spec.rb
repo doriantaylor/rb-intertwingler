@@ -1,8 +1,50 @@
 require 'spec_helper'
+require 'pathname'
+require 'tmpdir'
+require 'rack'
+require 'rack/mock'
 
 require 'intertwingler/cache'
 
+BASE = Pathname(Dir.tmpdir).expand_path + 'intertwingler-cache'
+
+describe Intertwingler::Cache::KeyState do
+  it 'should work lol' do
+    env = Rack::MockRequest.env_for 'http://lol.dongs/hurr'
+    # env['REMOTE_USER'] = 'deuce@jerkcity.com'
+    req = Rack::Request.new env
+
+    state = Intertwingler::Cache::KeyState.new req
+
+    expect(state.authed?).to be_falsey
+  end
+end
+
 describe Intertwingler::Cache do
+
+  before :context do
+    @store = Store::Digest.new dir: BASE + 'cas', mapsize: 2**27
+  end
+
+  # after :context do
+  #   @cache = nil
+  #   @store = nil
+  #   FileUtils.rm_rf BASE
+  # end
+
+  # are we cargo-culting here?
+  subject { @cache ||= Intertwingler::Cache.new store: @store, dir: BASE }
+
+  it 'should store a simple cacheable GET request' do
+    env = Rack::MockRequest.env_for 'http://lol.dongs/hurr'
+    req = Rack::Request.new env
+
+    resp = subject.fetch req do |r|
+      Rack::Response[200, { 'content-type' => 'text/plain' }, ['duhh']]
+    end
+
+  end
+
   # XXX note i am organizing this by storage and retrieval for now but
   # they will likely be intermixed because how are you gonna test this
   # thing otherwise lol
@@ -11,9 +53,9 @@ describe Intertwingler::Cache do
 
   # do not store a response to any request method other than GET (HEAD?) and QUERY
 
-  # do not store if `no-cache` is present in response (for now)
-
   # do not store if `no-store` is present (in either request or response)
+
+  # storing (confusingly) OK if `no-cache` is present in response
 
   # do not store if `private` is present and request is not authenticated
 
@@ -23,7 +65,8 @@ describe Intertwingler::Cache do
 
   # do not store incomplete responses (for now; 206/Content-Range header)
 
-  # do not store 304 responses
+  # never store 304 responses
+
   # do not store if response is not 200 and `must-understand` is set
 
   # do not store if `max-age=0`
