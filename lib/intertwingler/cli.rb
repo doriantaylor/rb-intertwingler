@@ -714,7 +714,7 @@ EOS
   desc :static, 'Generate a static site.'
   option :authority, aliases: %w[-a], type: :string, desc: 'Authority (domain)'
   option :target, aliases: %w[-t], desc: 'Target directory'
-  def static
+  def static *uris
     auth = default_authority options[:authority]
     repo = authorities[auth]
 
@@ -739,7 +739,15 @@ EOS
     r = Intertwingler::Resolver.configure repo, authority: auth, log: log
     e = Intertwingler::Engine.configure resolver: r, home: config_home, log: log
 
-    # static = Intertwingler::Static.new(e, target)
+    static = Intertwingler::Static.new(e, target)
+
+    if uris.empty?
+      static.write_all
+    else
+      now = Time.now
+      uris.each { |uri| static.write_one uri, time: now }
+    end
+
     # resp = static.get RDF::URI('urn:uuid:0dbb8813-8df2-4819-b886-3c5956ddfb2e')
 
     # body = resp.body
@@ -752,8 +760,6 @@ EOS
     #   puts chunk
     # end
 
-    Intertwingler::Static.new(e, target).write_all do |path, uri|
-    end
   end
 
   desc :sparql, 'Execute a SPARQL query.'

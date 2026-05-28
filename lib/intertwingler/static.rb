@@ -60,58 +60,61 @@ class Intertwingler::Static
   # write site map
 
   # write rewrite maps
+  def write_one subject, time: Time.now
+    subject = resolver.uuid_for(subject) or return
+
+    uuid = resolver.coerce_resource subject, as: :uri
+
+    # get types for output
+    # types = repo.types_for subject
+
+    mtime = target.glob("#{uuid.uuid}.*").map do |f|
+      break unless f.file?
+      f.stat.mtime
+    end.compact.max
+
+    # simulate GETs to everything
+    resp = get(subject, time: mtime) or return
+
+    if resp.successful?
+      lm = Intertwingler::Field['last-modified'][resp]&.value || time
+      bn = uuid.uuid
+      ct = MimeMagic[resp.content_type]
+      bn += ct.extensions.empty? ? '' : ".#{ct.extensions.first}"
+      path = target + bn
+
+      if path.exist? and path.stat.mtime >= lm
+        log.info "skipping #{path}: #{lm}"
+        return
+      end
+
+      body = Intertwingler::Representation::BodyWrap.coerce resp.body
+
+      path.open('wb') do |fh|
+        while buf = body.read(8192)
+          fh << buf
+        end
+      end
+
+      # touch the file to last-modified
+      path.utime lm, lm
+
+      log.debug "wrote #{bn}"
+    elsif resp.redirect? || resp.status == 304 # i guess 304 isn't a redirect
+      log.info "#{resp.status}: (#{subject}) #{resp.content_type} -> #{resp.body.inspect}"
+    else
+      log.error "#{resp.status}: (#{subject}) #{resp.content_type} -> #{resp.body.inspect}"
+    end
+
+    # not sure what this should return
+    resp
+  end
 
   # Write everything in the space to the file system (may take a while).
   def write_all published: nil, &block
     now = Time.now
     # gather up list of everything
-    docs = repo.all_documents.each do |subject|
-      subject = resolver.uuid_for(subject) or next
-
-      uuid = resolver.coerce_resource subject, as: :uri
-
-      # get types for output
-      # types = repo.types_for subject
-
-      mtime = target.glob("#{uuid.uuid}.*").map do |f|
-        break unless f.file?
-        f.stat.mtime
-      end.compact.max
-
-      # simulate GETs to everything
-      resp = get(subject, time: mtime) or next
-
-      if resp.successful?
-        lm = Intertwingler::Field['last-modified'][resp]&.value || now
-        bn = uuid.uuid
-        ct = MimeMagic[resp.content_type]
-        bn += ct.extensions.empty? ? '' : ".#{ct.extensions.first}"
-        path = target + bn
-
-        if path.exist? and path.stat.mtime >= lm
-          log.info "skipping #{path}: #{lm}"
-          next
-        end
-
-        body = Intertwingler::Representation::BodyWrap.coerce resp.body
-
-        path.open('wb') do |fh|
-          while buf = body.read(8192)
-            fh << buf
-          end
-        end
-
-        path.utime lm, lm
-
-        log.debug "wrote #{bn}"
-      elsif resp.redirect? || resp.status == 304
-        log.info "#{resp.status}: (#{subject}) #{resp.content_type} -> #{resp.body.inspect}"
-      else
-        log.error "#{resp.status}: (#{subject}) #{resp.content_type} -> #{resp.body.inspect}"
-      end
-      # write to target
-      # if resp.suc
-    end
+    docs = repo.all_documents.each { |subject| write_one subject, time: now }
 
     warn "got #{docs.size} documents lol"
 
