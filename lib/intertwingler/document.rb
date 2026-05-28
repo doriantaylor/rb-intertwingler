@@ -188,8 +188,8 @@ class Intertwingler::Document
       faudn = @repo.audiences_for @subject, invert: true
       faudy -= faudn
 
-      warn 'feed %s has audiences %s and non-audiences %s' %
-        [@subject, faudy.inspect, faudn.inspect]
+      log.debug('feed %s has audiences %s and non-audiences %s' %
+        [@subject, faudy.inspect, faudn.inspect])
 
       docs = @repo.all_documents external: false, published: published
 
@@ -211,8 +211,8 @@ class Intertwingler::Document
         audn = @repo.audiences_for uu, proximate: true, invert: true
         audy -= audn
 
-        warn 'doc %s has audiences %s and non-audiences %s' %
-          [uu, audy.inspect, audn.inspect]
+        log.debug('doc %s has audiences %s and non-audiences %s' %
+          [uu, audy.inspect, audn.inspect])
 
         # we begin by assuming the document is *not* included in the
         # feed, and then we try to prove otherwise
@@ -1233,13 +1233,13 @@ class Intertwingler::Document
           end
         end.flatten 1
 
-        warn recs.inspect
+        log.debug recs.inspect
         unless recs.empty?
           authors += [{ [label] => :dt }] + recs
         end
       end
 
-      warn authors.inspect
+      log.debug authors.inspect
 
       out << { authors => :dl } unless authors.empty?
 
@@ -1299,7 +1299,7 @@ class Intertwingler::Document
   #
   # @return [Nokogiri::XML::Document] the parsed document.
   #
-  def self.coerce_doc doc
+  def self.coerce_doc doc, log: nil
     # turn the document into an XML::Document
     if doc.is_a? Nokogiri::XML::Node
       # a node that is not a document should be wrapped with one
@@ -1345,7 +1345,7 @@ class Intertwingler::Document
         # just assume plain text is markdown
         doc = ::MD::Noko.new.ingest doc
       else
-        warn doc.path if doc.respond_to? :path
+        log.debug(doc.path) if log && doc.respond_to?(:path)
         raise "Don't know what to do with #{doc.inspect} (#{type.inspect})"
       end
     end
@@ -1430,8 +1430,12 @@ class Intertwingler::Document
     @types = type ? resolver.coerce_resources(type) : @repo.types_for(subject)
 
     # if a document is handed in, we read it, otherwise we generate it
-    @doc = doc ? self.class.coerce_doc(doc) :
+    @doc = doc ? self.class.coerce_doc(doc, log: resolver.log) :
       generate(published: published, backlinks: backlinks)
+  end
+
+  def log
+    resolver.log
   end
 
   # Transform the document and return it.
@@ -2285,7 +2289,7 @@ class Intertwingler::Document
       elsif !cand.empty?
         # y'know some kind of deterministic differentiation mechanism
         # would be useful here but i can't think of one
-        chosen = cand.keys.first
+        chosen = cand.keys.select { |k| k.uri? }.first
       end
 
       if chosen
@@ -2318,7 +2322,7 @@ class Intertwingler::Document
                     pp.each { |p| graph << [su, p, chosen] } if rescan
                   end
 
-                  warn "#{su} #{pp.inspect} #{chosen}"
+                  resolver.log.debug "#{su} #{pp.inspect} #{chosen}"
 
                   pp
                 else

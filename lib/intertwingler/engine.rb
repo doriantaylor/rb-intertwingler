@@ -441,8 +441,8 @@ class Intertwingler::Engine < Intertwingler::Handler
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
-      warn "dispatcher #{subrequest ? '(subrequest) ' : ''}sees " +
-        "content type: #{req.content_type.inspect}"
+      engine.log.debug("dispatcher #{subrequest ? '(subrequest) ' : ''}sees " +
+        "content type: #{req.content_type.inspect}")
 
       # the transform harness may return an empty chain; that's fine
       unless subrequest
@@ -554,18 +554,20 @@ class Intertwingler::Engine < Intertwingler::Handler
   # Resolve the engine and all of its handlers and transforms and
   # queues and such out of the graph.
   def self.configure repo: nil, store: nil, cache: nil,
-      subject: nil, resolver: nil, authority: nil, home: nil
+      subject: nil, resolver: nil, authority: nil, home: nil, log: nil
     # you either need a resolver, or a repo + { subject or authority }
 
     if resolver
-      self.new resolver: resolver, home: home, store: store, cache: cache
+      self.new resolver: resolver, home: home,
+        store: store, cache: cache, log: log
     elsif repo
       if subject
-        self.new repo: repo, subject: subject,
-          home: home, store: store, cache: cache
+        self.new repo: repo, subject: subject, home: home,
+          store: store, cache: cache, log: log
       elsif authority
         resolver = Intertwingler::Resolver.configure repo, authority: authority
-        self.new resolver: resolver, home: home, store: store, cache: cache
+        self.new resolver: resolver, home: home,
+          store: store, cache: cache, log: log
       else
         raise Intertwingler::Error::Config,
           'A repository must be accompanied by an authority or a subject URI.'
@@ -624,7 +626,7 @@ class Intertwingler::Engine < Intertwingler::Handler
   #  working directory by default.
   #
   def initialize repo: nil, subject: nil, resolver: nil,
-      home: nil, log: nil, store: nil, cache: nil
+      home: nil, store: nil, cache: nil, log: nil
     # step 1: the basics
     if resolver
       @resolver = resolver

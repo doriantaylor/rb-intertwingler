@@ -207,7 +207,7 @@ class Intertwingler::Representation
     if obj.is_a? oc
       @object = obj
     else
-      warn obj
+      # warn obj
       # @io = BodyWrap[obj]
       @io = coerce_io_like obj
     end
@@ -248,10 +248,11 @@ class Intertwingler::Representation
   def io
     # warn "hi lol #{caller}"
 
-    if @object
+    # a call to io should overwrite
+    if @object && !@io
       @io = serialize @object, tempfile
       @io.seek 0 if @io.respond_to? :seek
-      @object = nil
+      # @object = nil
     end
 
     @io
@@ -268,7 +269,7 @@ class Intertwingler::Representation
       "object must be a #{cls}, not #{obj.class}" unless object.is_a? cls
 
     # wipe out the stale io
-    @io = nil if @io
+    @io = nil
     @object = obj
   end
 
@@ -325,8 +326,9 @@ class Intertwingler::Representation
     # @return [ReadWrapper] a new around whatever this is
     #
     def self.coerce obj
-      return obj if obj.is_a? self
-      return obj.io if obj.is_a? Intertwingler::Representation
+      if [self, Intertwingler::Representation].any? { |c| obj.is_a? c}
+        return obj
+      end
 
       return obj if quacks? obj # no need for this if it can read
 

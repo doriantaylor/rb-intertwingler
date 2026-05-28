@@ -158,7 +158,7 @@ module Intertwingler
     # this gives us a set of inverse (and symmetric) properties for
     # the given input
     def invert_semantic properties, entail: false
-      # 1warn properties.inspect
+      # warn properties.inspect
       properties = assert_resources properties, empty: false
 
       inverted = properties.map do |p|
@@ -1095,7 +1095,8 @@ module Intertwingler
 
             # this will collect the candidates into a hash of scores
             # which we turn into an array of arrays [?o, scores]
-            query.execute(self, debug: true).reduce({}) do |sols, sol|
+            # query.execute(self, debug: true).reduce({}) do |sols, sol|
+            query.execute(self).reduce({}) do |sols, sol|
               solc = asserted_types sol[:o]
               unless (!except.empty? and type_is? solc, except)
               # unless (!except.empty? and type_is? sol[:c], except)
@@ -1232,18 +1233,24 @@ module Intertwingler
     #
     # @return [Array] the documents
     #
-    def all_documents internal: true, external: true,
+    def all_documents graph: nil, internal: true, external: true,
         published: false, fragments: false, exclude: []
-      docs = all_of_type document_types, exclude: exclude
-      docs.reject! do |d|
-        d.to_s.downcase.start_with? 'urn:uuid:'
-      end unless internal
-      docs.reject! do |d|
-        not d.to_s.downcase.start_with? 'urn:uuid:'
-      end unless external
-      docs.select! { |d| published? d } if published
-      docs.reject! { |d| fragment?(d) } unless fragments
-      docs
+      # transaction do
+        types = all_types(graph: graph) & document_types(fragments: fragments)
+        # warn "types: #{types.size}"
+        docs  = all_of_type types, graph: graph, exclude: exclude
+        # warn "docs: #{docs.size}"
+        docs.reject! do |d|
+          d.to_s.downcase.start_with? 'urn:uuid:'
+        end unless internal
+        docs.reject! do |d|
+          not d.to_s.downcase.start_with? 'urn:uuid:'
+        end unless external
+        docs.select! { |d| published? d, graph: graph } if published
+        docs.reject! { |d| # warn d;
+          fragment? d, graph: graph } unless fragments
+        docs
+      # end
     end
 
     # Determine whether a resource is considered to be indexed, which
@@ -1459,7 +1466,8 @@ module Intertwingler
     def all_types graph: nil
       graph = assert_resources graph
       graph << nil if graph.empty?
-      graph.map { |g| query([nil, RDF.type, nil, g]).objects }.flatten.uniq
+      graph.map { |g| q = query([nil, RDF.type, nil, g]); # warn q.inspect;
+        q.objects }.flatten.uniq
     end
 
     # Return all subjects in the graph of (a) given type(s). Takes an

@@ -674,6 +674,10 @@ class Intertwingler::Transform
       end
     end
 
+    def log
+      @harness.dispatcher.engine.log
+    end
+
     # Run the queues in the chain over the message and get back the
     # transformed message.
     #
@@ -736,7 +740,8 @@ class Intertwingler::Transform
       #
       def response_chain handler, pp: nil
         head = @harness.queue_head_for handler
-         warn "generating response chain for #{handler} lol: #{head.inspect}"
+        log.debug(
+          "generating response chain for #{handler} lol: #{head.inspect}")
         Intertwingler::Transform::Chain::Response.new @harness, head,
           pp: pp, insertions: @insertions
       end
@@ -781,7 +786,7 @@ class Intertwingler::Transform
 
       # Set the addressable queue in the chain.
       def set_addressable *pp
-        warn "path parameters: #{pp}"
+        log.debug "path parameters: #{pp}"
         self
       end
     end
@@ -827,6 +832,7 @@ class Intertwingler::Transform
     def repo ; dispatcher.engine.repo ; end
     def subject ; dispatcher.engine.subject ; end
     def resolver ; dispatcher.engine.resolver ; end
+    def log ; dispatcher.engine.log ; end
 
     public
 

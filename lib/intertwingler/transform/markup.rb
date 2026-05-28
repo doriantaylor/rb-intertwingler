@@ -130,19 +130,24 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     doc  = body.object
     type = body.type
 
+    engine.log.debug("elements: #{doc.xpath('count(//*)')}")
+
     if root = doc.root
       name = root.name.to_sym
-      ns   = root.namespace.href if root.namespace
+      ns   = root&.namespace&.href
       type = if ns
                NAMESPACES[[name, ns]] || NAMESPACES[[nil, ns]] || type
              else
                NAMESPACES[[name, nil]] || type
              end
 
-      engine.log.debug "changed type fromm #{body.type} to #{type}"
-
+      body.object = doc # we need to do this first to trigger the update
       body.type = type
+
+      engine.log.debug "changed type from #{body.type} to #{type}"
     end
+
+    engine.log.debug("elements now: #{body.object.xpath('count(//*)')}")
 
     # XXX we are smuggling out the type and i would prefer not to do it this way
     body
@@ -153,6 +158,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     doc  = body.object
 
     engine.log.debug "stripping comments lol"
+
+    engine.log.debug("elements: #{doc.xpath('count(//*)')}")
 
     # easy peasy
     doc.xpath('//comment()').each { |c| c.unlink }
@@ -287,10 +294,12 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     doc = req.body.object
 
+    # warn doc.inspect
+
     ns = doc.root&.namespace&.href
 
     return req.body unless [XHTMLNS, SVGNS, ATOMNS].include? ns or
-      %w[html svg rss].include? doc.root.name
+      %w[html svg rss].include? doc&.root&.name
 
     missing = Set[]
 

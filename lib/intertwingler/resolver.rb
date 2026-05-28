@@ -154,9 +154,11 @@ class Intertwingler::Resolver
 
   def self.configure repo, subject: nil, authority: nil, log: nil
     if subject
-      return subject.map { |s| configure_one repo, s} if subject.is_a? Array
+      return subject.map do |s|
+        configure_one repo, s, log: log
+      end if subject.is_a? Array
 
-      configure_one repo, subject
+      configure_one repo, subject, log: log
     elsif authority
       candidates = %w[http https].map do |scheme|
         base = RDF::URI("#{scheme}://#{authority}/")
@@ -164,7 +166,7 @@ class Intertwingler::Resolver
       end.flatten.uniq
 
       case candidates.size
-      when 1 then return configure_one repo, candidates.first
+      when 1 then return configure_one repo, candidates.first, log: log
       when 0 then raise Intertwingler::Error::Config,
           "No resolver found for #{authority}"
       else raise Intertwingler::Error::Config,
@@ -203,6 +205,10 @@ class Intertwingler::Resolver
 
     @documents = documents.to_set
     @fragments = fragments # this is in order
+
+    # grind grind grind why did i not do this yet lol
+    @repo.document_types = @documents
+    # fragments are a bit goofed for now
 
     # cache of subjects in the graph so we only look them up once
     @subjects = {}

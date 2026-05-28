@@ -699,7 +699,7 @@ EOS
       Host: options[:host] || base_config[:host],
       Port: options[:port] || base_config[:port],
     })
-123  end
+  end
 
   desc :pry, 'Run a debugging REPL (pry)'
   def pry
@@ -709,6 +709,51 @@ EOS
     harness = Intertwingler::Harness.new authorities, home: config_home
 
     binding.pry
+  end
+
+  desc :static, 'Generate a static site.'
+  option :authority, aliases: %w[-a], type: :string, desc: 'Authority (domain)'
+  option :target, aliases: %w[-t], desc: 'Target directory'
+  def static
+    auth = default_authority options[:authority]
+    repo = authorities[auth]
+
+    # this includes the resolver, engine, etc
+    require 'intertwingler/static'
+    require 'logger'
+
+    # XXX
+    log = Logger.new $stderr, level: Logger::INFO
+
+    target = options[:target] ||
+      base_config.dig(:authorities, auth, :static, :target)
+
+    if target
+      target = Pathname(target).expand_path
+      raise ArgumentError, "#{target} is not a writable directory" unless
+        target.directory? && target.writable?
+    else
+      raise ArgumentError, 'no target directory configured; override with -t'
+    end
+
+    r = Intertwingler::Resolver.configure repo, authority: auth, log: log
+    e = Intertwingler::Engine.configure resolver: r, home: config_home, log: log
+
+    # static = Intertwingler::Static.new(e, target)
+    # resp = static.get RDF::URI('urn:uuid:0dbb8813-8df2-4819-b886-3c5956ddfb2e')
+
+    # body = resp.body
+
+    # warn body
+
+    # chunks = 0
+    # while chunk = body.read(8192)
+    #   warn "chunk #{chunks += 1}: #{chunk.size}"
+    #   puts chunk
+    # end
+
+    Intertwingler::Static.new(e, target).write_all do |path, uri|
+    end
   end
 
   desc :sparql, 'Execute a SPARQL query.'
