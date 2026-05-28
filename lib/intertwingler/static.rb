@@ -30,16 +30,19 @@ class Intertwingler::Static
     resolver.repo
   end
 
-  def get uri, accept: nil
+  def get uri, accept: nil, time: nil
     uuid = resolver.uuid_for(uri) or return
     uri  = resolver.uri_for(uuid || uri, as: :uri, slugs: true, fragments: true)
 
     return unless resolver.base.route_to(uri).relative?
-    
+
     # warn "#{uuid} -> #{uri}"
     env  = Rack::MockRequest.env_for uri.to_s
     env['REQUEST_URI'] = uri.request_uri # for some reason not included?
     env['HTTP_CACHE_CONTROL'] = 'no-store'
+    env['HTTP_ACCEPT'] = %w[application/xhtml+xml application/xml
+                            text/html;q=0.8 */*;q=0.5].join(', ')
+    env['HTTP_IF_MODIFIED_SINCE'] = time.httpdate if time
 
     req = Rack::Request.new env
 
@@ -70,8 +73,13 @@ class Intertwingler::Static
       # get types for output
       # types = repo.types_for subject
 
+      mtime = target.glob("#{uuid.uuid}.*").map do |f|
+        break unless f.file?
+        f.stat.mtime
+      end.compact.max
+
       # simulate GETs to everything
-      resp = get(subject) or next
+      resp = get(subject, time: mtime) or next
 
       if resp.successful?
         lm = Intertwingler::Field['last-modified'][resp]&.value || now
@@ -96,14 +104,16 @@ class Intertwingler::Static
         path.utime lm, lm
 
         log.debug "wrote #{bn}"
+      elsif resp.redirect? || resp.status == 304
+        log.info "#{resp.status}: (#{subject}) #{resp.content_type} -> #{resp.body.inspect}"
       else
         log.error "#{resp.status}: (#{subject}) #{resp.content_type} -> #{resp.body.inspect}"
       end
       # write to target
       # if resp.suc
     end
+
     warn "got #{docs.size} documents lol"
 
-    # write 
   end
 end

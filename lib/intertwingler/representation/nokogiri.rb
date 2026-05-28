@@ -28,7 +28,10 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
     # warn "serializing for #{caller.inspect}"
     # warn "serializing #{obj.inspect} to #{target.inspect}"
     html = /html/i.match?(type.to_s)
-    html ? obj.write_html_to(target) : obj.write_to(target)
+    html ? obj&.root&.namespace&.href == 'http://www.w3.org/1999/xhtml' ?
+      obj.write_xhtml_to(target) :
+      obj.write_html_to(target) :
+      obj.write_to(target)
 
     target
   end
