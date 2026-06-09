@@ -366,6 +366,14 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     engine.log.debug "rehydrating lol"
 
     @lemmas ||= {}
+    @mtime = nil
+
+    # this is badly needed lol (actually a real solution is badly needed)
+    if engine.repo.respond_to? :mtime
+      mtime = engine.repo.mtime
+      @lemmas.clear if !@mtime or @mtime < mtime
+      @mtime = mtime
+    end
 
     Intertwingler::Document.rehydrate resolver, doc, base: loc, cache: @lemmas
 

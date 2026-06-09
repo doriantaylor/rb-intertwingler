@@ -337,8 +337,6 @@ class Intertwingler::Static
     out
   end
 
-  
-
   # csv output format:
   #
   # * first row: uri (uuid), type, preflabel, description, seealso

@@ -43,28 +43,28 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_development_dependency 'rspec',   '>= 3.12'
 
   # stuff we use pretty universally
-  spec.add_runtime_dependency 'dry-schema',     '>= 1.13.3'
-  spec.add_runtime_dependency 'http-negotiate', '>= 0.2.2' # mine
-  spec.add_runtime_dependency 'linkeddata',     '>= 3.1.2'
-  spec.add_runtime_dependency 'mimemagic',      '>= 0.5.3' # my patch
-  spec.add_runtime_dependency 'rack',           '~> 3.2'
-  spec.add_runtime_dependency 'rackup',         '~> 2.3'
-  spec.add_runtime_dependency 'rdf-reasoner',   '>= 0.9.0'
-  spec.add_runtime_dependency 'sparql',         '>= 3.3.0'
-  spec.add_runtime_dependency 'uri',            '~> 1',   '>= 1.0.3' # bugs
-  spec.add_runtime_dependency 'uri-urn',        '~> 0.0', '>= 0.0.5' # git
-  spec.add_runtime_dependency 'uuid-ncname',    '>= 0.4.1' # mine
-  spec.add_runtime_dependency 'uuidtools',      '>= 2.1.5'
+  spec.add_runtime_dependency 'dry-schema',       '>= 1.13.3'
+  spec.add_runtime_dependency 'http-negotiate',   '>= 0.2.2' # mine
+  spec.add_runtime_dependency 'linkeddata',       '>= 3.1.2'
+  spec.add_runtime_dependency 'mimemagic-dorian', '~> 0.5' # my patch
+  spec.add_runtime_dependency 'rack',             '~> 3.2'
+  spec.add_runtime_dependency 'rackup',           '~> 2.3'
+  spec.add_runtime_dependency 'rdf-reasoner',     '>= 0.9.0'
+  spec.add_runtime_dependency 'sparql',           '>= 3.3.0'
+  spec.add_runtime_dependency 'uri',              '~> 1',   '>= 1.0.3' # bugs
+  spec.add_runtime_dependency 'uri-urn',          '~> 0.0', '>= 0.0.5' # git
+  spec.add_runtime_dependency 'uuid-ncname',      '>= 0.4.1' # mine
+  spec.add_runtime_dependency 'uuidtools',        '>= 2.1.5'
 
   # stuff for engine specifically
-  spec.add_runtime_dependency 'lmdb',           '~> 0.7', '>= 0.7.4'
+  spec.add_runtime_dependency 'lmdb', '~> 0', '>= 0.8.0'
 
   # stuff for handlers/transforms
   spec.add_runtime_dependency 'md-noko',           '~> 0.1', '>= 0.1.1' # mine
   spec.add_runtime_dependency 'params-registry',   '~> 0.2', '>= 0.2.2' # mine
   spec.add_runtime_dependency 'rdf-kv',            '~> 0.1', '>= 0.1.8' # mine
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
-  spec.add_runtime_dependency 'store-digest',      '>= 0.3.2'  # mine
+  spec.add_runtime_dependency 'store-digest',      '~> 0', '>= 0.4.0'  # mine
   spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine
   spec.add_runtime_dependency 'vips',              '>= 8.12.2'
   spec.add_runtime_dependency 'xml-mixup',         '~> 0.2', '>= 0.2.1' # mine

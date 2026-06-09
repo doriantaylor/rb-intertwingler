@@ -128,9 +128,9 @@ class Intertwingler::Cache
     end
   end
 
-
   # Return a harmonized set of `Cache-Control` values for the message.
-  # Coalesces in `Pragma` for requests, and for responses it folds in `Expires` and `Last-Modified`
+  # Coalesces in `Pragma` for requests, and for responses it folds in
+  # `Expires` and `Last-Modified`.
   #
   # @param message [Rack::Request, Rack::Response, Hash] the full
   #  message or response header set in lieu
