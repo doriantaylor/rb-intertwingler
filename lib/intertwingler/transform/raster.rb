@@ -120,26 +120,26 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
   # knock out a colour ± radius around it
   def knockout req, params
     # this one is gonna be tough and require some thought
-    raise Intertwingler::Handler::Error::Server.new(
-      'Transform `knockout` not implemented', status: 501)
+    raise Intertwingler::Error::ServerError::NotImplemented,
+      'Transform `knockout` not implemented'
   end
 
   # adjust brightness
   def brightness req, params
-    raise Intertwingler::Handler::Error::Server.new(
-      'Transform `brightness` not implemented', status: 501)
+    raise Intertwingler::Error::ServerError::NotImplemented,
+      'Transform `brightness` not implemented'
   end
 
   # adjust contrast
   def contrast req, params
-    raise Intertwingler::Handler::Error::Server.new(
-      'Transform `contrast` not implemented', status: 501)
+    raise Intertwingler::Error::ServerError::NotImplemented,
+      'Transform `contrast` not implemented'
   end
 
   # adjust gamma
   def gamma req, params
-    raise Intertwingler::Handler::Error::Server.new(
-      'Transform `gamma` not implemented', status: 501)
+    raise Intertwingler::Error::ServerError::NotImplemented,
+      'Transform `gamma` not implemented'
   end
 
   # TODO rotate (arbitrary with speedup for 45-degree increments,

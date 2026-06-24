@@ -15,7 +15,7 @@ require 'intertwingler/graphops'
 # `.downcase.tr_s(?-, ?_)` (so `GET` becomes `get`, or
 # `VERSION-CONTROL` becomes `version_control`).  The method _must_
 # return a {::Rack::Response} and _may_ raise an
-# {Intertwingler::Handler::AnyButSuccess}.
+# {Intertwingler::Error::HTTPStatus}.
 class Intertwingler::Resource
   include Intertwingler::GraphOps::Addressable
 
@@ -81,9 +81,9 @@ class Intertwingler::Resource
   # @param user [String] the content of `REMOTE_USER`
   # @param body [nil, #read, #call, #to_s] something that can pass for a request body
   #
-  # @raise [Intertwingler::Handler::Redirect] when the response needs
+  # @raise [Intertwingler::Error::Redirect] when the response needs
   #  to be redirected
-  # @raise [Intertwingler::Handler::Error] when there is a client or
+  # @raise [Intertwingler::Error::HTTPError] when there is a client or
   #  server error
   #
   # @return [Rack::Response] the response to pass upstream
@@ -96,7 +96,7 @@ class Intertwingler::Resource
     # normalize the request method to a ruby method
     to_call = to_call.to_s.strip.downcase.tr_s(?-, ?_).to_sym
 
-    raise Intertwingler::Handler::Error::NotAllowed.new(
+    raise Intertwingler::Error::ClientError::NotAllowed.new(
       "This resource does not respond to #{method} requests.",
       method: method) unless respond_to? to_call
 

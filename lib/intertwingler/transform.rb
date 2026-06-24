@@ -593,7 +593,7 @@ class Intertwingler::Transform
 
           # basically no matter what the situation is here it's a
           # misconfiguration
-          raise Intertwingler::Handler::Error::Server,
+          raise Intertwingler::Error::ServerError,
             "Transform #{uuid} returned error #{subresp.status}: #{subresp.body}"
 
           # XXX HANDLE REDIRECTS WITH DEPTH LIMIT/CYCLE DETECTION: a
@@ -613,7 +613,7 @@ class Intertwingler::Transform
           type = btype if btype and btype != type and btype.descendant_of? type
           # warn "btype: #{btype.inspect} #{btype.descendant_of? type}"
         else
-          raise Intertwingler::Handler::Error::Server,
+          raise Intertwingler::Error::ServerError,
             'Transform #{uuid} did not return a Content-Type header'
         end
 
@@ -1028,7 +1028,7 @@ class Intertwingler::Transform
     # @param req [Rack::Request] the request object
     # @param as  [:rdf, :uri] optional type coercion
     #
-    # @raise [Intertwingler::Handler::Error::Conflict] if there is no
+    # @raise [Intertwingler::Error::ClientError::Conflict] if there is no
     #  such header present
     #
     # @return [RDF::URI] the subject URI
@@ -1038,7 +1038,7 @@ class Intertwingler::Transform
       # different regime for header names than Rack::Response?
       loc = req.get_header 'HTTP_CONTENT_LOCATION'
 
-      raise Intertwingler::Handler::Error::Conflict.new(
+      raise Intertwingler::Error::ClientError::Conflict.new(
         'Transform must have a Content-Location header',
         method: req.request_method.to_sym) unless loc
 
@@ -1161,11 +1161,11 @@ class Intertwingler::Transform
 
       rescue Intertwingler::Transform::ParamError
         return Rack::Response[409, {}, []]
-      rescue Intertwingler::Handler::Redirect => r
+      rescue Intertwingler::Error::Redirect => r
         # umm i dunno
         # r.location
         return r.response
-      rescue Intertwingler::Handler::Error => r
+      rescue Intertwingler::Error::HTTPError => r
         # umm i dunno
         # r.location
         return r.response

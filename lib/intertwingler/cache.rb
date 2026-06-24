@@ -1,3 +1,4 @@
+require_relative 'error'
 require_relative 'storable'
 require_relative 'loggable'
 require_relative 'field'
@@ -385,7 +386,11 @@ class Intertwingler::Cache
     subreq.set_header('HTTP_IF_MODIFIED_SINCE', time.httpdate) if cached
 
     # get the origin response
-    resp = block.call subreq
+    begin
+      resp = block.call subreq
+    rescue Intertwingler::Error::HTTPStatus => e
+      resp = e.response
+    end
 
     # nuke if bad lol
     expire_internal(req.url) if unsafe?(req) and resp.successful?
@@ -397,7 +402,7 @@ class Intertwingler::Cache
     if cached
       # shuffle around some values
       stored = time
-      time   = Time.now
+      time   = Time.now in: ?Z
 
       raise ArgumentError, 'cached entry must have an Age header' unless
         age = F['age'][cached].value
@@ -852,12 +857,13 @@ class Intertwingler::Cache
 
         unless cl.is_a? URI::NI
           if body = @req.body
-
+            # i *could* make this code responsible for the conversion
+            # but i don't want to
             raise TypeError,
-              'request body should be a S:D:O::IOWrapper, not %s' %
-              body.class unless body.is_a? Store::Digest::Object::IOWrapper
+              'request body should be a Store::Digest::Entry by now, not %s' %
+              body.class unless body.is_a? Store::Digest::Entry
 
-            cl = body.object[:"sha-256"]
+            cl = body[:"sha-256"]
           else
             cl = NULL_BODY.dup
           end
@@ -1510,7 +1516,7 @@ class Intertwingler::Cache
 
       # @see {Intertwingler::Cache#fetch_internal} for documentation
       #
-      # @return [nil, Array(Integer, Hash, Store::Digest::Object)]
+      # @return [nil, Array(Integer, Hash, Store::Digest::Entry)]
       #
       def fetch_internal req, time: Time.now
         state = KeyState.new req
@@ -1518,52 +1524,52 @@ class Intertwingler::Cache
         @env.transaction do |txn|
           tkey, raw, count, vary, skey = resolve_terminal state
 
-          break unless tkey
+          if tkey
+            # XXX THIS IS A HUGE PREMATURE OPTIMIZATION
+            #
+            # first we measure if the response is objectively stale,
+            # then we determine if the client will accept it. the
+            # client may reject a record that's still fresh, or
+            # accept a record that's stale, depending on the
+            # request's `Cache-Control` parameters.
 
-          # XXX THIS IS A HUGE PREMATURE OPTIMIZATION
-          #
-          # first we measure if the response is objectively stale,
-          # then we determine if the client will accept it. the
-          # client may reject a record that's still fresh, or
-          # accept a record that's stale, depending on the
-          # request's `Cache-Control` parameters.
+            # if the response is still fresh and the client will
+            # accept it, we could actually return 304 here
 
-          # if the response is still fresh and the client will
-          # accept it, we could actually return 304 here
+            # out = unpack_terminal(raw) do |lol|
+            #   # smuggle stuff out?
+            # end
 
-          # out = unpack_terminal(raw) do |lol|
-          #   # smuggle stuff out?
-          # end
+            # okay back to being normal
+            warn state
 
-          # okay back to being normal
-          warn state
+            status, headers, body, ctime = unpack_terminal raw
 
-          status, headers, body, ctime = unpack_terminal raw
+            # all expired is stale but not all stale is expired
 
-          # all expired is stale but not all stale is expired
+            # if the response is stale then expire the record
+            if stale?(headers, time, authed: state.authed?, stored: ctime)
+              # get the key for the whole uri
+              ukey = state.uri_state.digest
 
-          # if the response is stale then expire the record
-          if stale?(headers, time, authed: state.authed?, stored: ctime)
-            # get the key for the whole uri
-            ukey = state.uri_state.digest
+              # delete the expired terminal
+              @index.delete tkey
+              @uris.delete ukey, tkey
 
-            # delete the expired terminal
-            @index.delete tkey
-            @uris.delete ukey, tkey
-
-            # now we decrement the refcount
-            if skey != tkey
-              if count > 1
-                @index[skey] = pack_signpost(count - 1, vary)
-              else
-                @index.delete skey
-                @uris.delete? ukey, skey
+              # now we decrement the refcount
+              if skey != tkey
+                if count > 1
+                  @index[skey] = pack_signpost(count - 1, vary)
+                else
+                  @index.delete skey
+                  @uris.delete? ukey, skey
+                end
               end
             end
-          end
 
-          # return the terminal record
-          [status, headers, body, ctime]
+            # return the terminal record
+            [status, headers, body, ctime]
+          end
         end
       end
 
@@ -1614,17 +1620,19 @@ class Intertwingler::Cache
         @env.transaction do
           # resolve terminal record (or return because it's already been nuked)
           key, raw = resolve_terminal state
-          break unless key
 
-          # get the raw record
-          status, headers, cl, _ = unpack_terminal raw
+          if key
+            # get the raw record
+            status, headers, cl, _ = unpack_terminal raw
 
-          # merge the headers
-          headers.merge! resp.headers.except(*FRESHEN_EXCEPT)
+            # merge the headers
+            headers.merge! resp.headers.except(*FRESHEN_EXCEPT)
 
-          raw = pack_terminal status, headers, time: time, authed: state.authed?
+            raw = pack_terminal status, headers,
+              time: time, authed: state.authed?
 
-          @index[key] = raw
+            @index[key] = raw
+          end
         end
       end
     end

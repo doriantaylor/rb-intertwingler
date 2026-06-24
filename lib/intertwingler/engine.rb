@@ -5,7 +5,7 @@ require 'intertwingler/util/clean'
 require 'intertwingler/error'
 require 'intertwingler/loggable'
 require 'intertwingler/cacheable'
-require 'store/digest/object'
+require 'store/digest/entry'
 
 require 'params/registry'
 
@@ -459,12 +459,12 @@ class Intertwingler::Engine < Intertwingler::Handler
           # we're adding a smidge of logic here to not supplant a 405 with a 404
           tmp  = handler.handle req
           resp = tmp unless resp.status == 405 and tmp.status == 404
-        rescue Intertwingler::Handler::AnyButSuccess => e
+        rescue Intertwingler::Error::HTTPStatus => e
           resp = e.response
         rescue => e
           # quit now in case this blows up
           # XXX do something smarter here
-          return Intertwingler::Handler::Error::Server.new(
+          return Intertwingler::Error::ServerError.new(
             e.message + e.backtrace.join("\n")).response
         end
 
@@ -481,7 +481,6 @@ class Intertwingler::Engine < Intertwingler::Handler
         resp  = chain.run req, resp
       end
 
-      resp
     end
 
     # i don't know if this is how this is going to
@@ -828,7 +827,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       # resp = cache.fetch_or_store req { dispatcher.dispatch req }
 
       # this can do all sorts of things; it can blow up, it can redirect…
-    rescue Intertwingler::Handler::AnyButSuccess => e
+    rescue Intertwingler::Error::HTTPStatus => e
       resp = e.response
     # rescue StandardError => e
     #   resp = Rack::Response[500,

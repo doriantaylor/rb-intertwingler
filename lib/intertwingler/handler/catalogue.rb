@@ -1160,10 +1160,10 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
   # @param inferred [false, true] whether to include subjects whose
   #  types are inferred from equivalents or subclasses/properties
   #
-  # @raise [Intertwingler::Handler::Redirect] when e.g. the parameters
+  # @raise [Intertwingler::Error::Redirect] when e.g. the parameters
   #  do not match when round-tripped or otherwise require adjustment
-  # @raise [Intertwingler::Handler::Conflict] when e.g. the parameters
-  #  are wrong but only fixable by the user
+  # @raise [Intertwingler::Error::ClientError::Conflict] when e.g. the
+  #  parameters are wrong but only fixable by the user
   #
   # @return [Array] the body to pass into {XML::Mixup}
   #
@@ -1504,7 +1504,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
       # step zero: bail with a conflict error if both asserted and
       # inferred are false
-      raise Intertwingler::Handler::Error::Conflict,
+      raise Intertwingler::Error::ClientError::Conflict,
         'At least one of asserted or inferred parameters must be true' unless
         params[:asserted] or params[:inferred]
 
@@ -1513,7 +1513,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       # step 0.25: redirect
       base = params.make_uri uri, defaults: :boundary
       # engine.log.debug "#{base} <=> #{uri}"
-      raise Intertwingler::Handler::Redirect.new(
+      raise Intertwingler::Error::Redirect.new(
         'Redirecting to window', status: 303, location: base) if
         base.to_s != uri.to_s
 
@@ -1631,11 +1631,11 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
 
     log.debug "found user #{user}" if user
 
-    # XXX this may raise an Intertwingler::Handler::AnyButSuccess
+    # XXX this may raise an Intertwingler::Error::HTTPStatus
     begin
       resp = resource.call req.request_method, orig, params: query,
         headers: normalize_headers(req), user: user, body: req.body
-    rescue Intertwingler::Handler::AnyButSuccess => e
+    rescue Intertwingler::Error::HTTPSTatus => e
       return e.response
     end
 
