@@ -1390,16 +1390,36 @@ class Intertwingler::Cache
 
       require 'lmdb'
 
+      attr_reader :dir, :umask
+
       private
 
+      LMDB_OPTS =
+        %i[fixedmap nosubdir nosync rdonly nometasync writemap mapasync notls]
+
+
       # driver-specific installation
-      def bootstrap dir: 'cache', mapsize: 2**27
+      def bootstrap dir: 'cache', mapsize: 2**27, **options
         dir = Pathname(dir).expand_path
         dir.mkpath unless dir.exist?
+        @dir   = dir
+        @umask = options[:umask] || 0077
 
-        @env = ::LMDB.new dir, mapsize: mapsize
-        @index = @env.database 'index', create: true
-        @uris  = @env.database 'uris',  create: true, dupsort: true
+        @lmdb_opts = {
+          mode: 0666 & ~umask,
+          mapsize: mapsize,
+        }.merge(options.slice(*LMDB_OPTS))
+
+        lmdb.database 'index', create: true
+        lmdb.database 'uris',  create: true, dupsort: true
+      end
+
+      # Return the LMDB handle for the given process.
+      #
+      # @return [LMDB::Environment]
+      #
+      def lmdb
+        (@lmdb ||= {})[Process.pid] ||= ::LMDB.new dir, @lmdb_opts
       end
 
       def cache_internal req, resp
@@ -1444,30 +1464,30 @@ class Intertwingler::Cache
         end
 
         # okay NOW
-        @env.transaction do
+        lmdb.transaction? do
           # create the terminal record
           tk  = state.state(authed: priv, vary: !!vary).digest
           tv  = pack_terminal resp.status, resp.headers, cl
           inc = !index.key?(tk) # determine if adding or updating
-          @index.put tk, tv
+          lmdb[:index].put tk, tv
 
           # put the terminal key in the uri index
           uk = state.uri_state.digest
-          @uris.put? uk, tk
+          lmdb[:uris].put? uk, tk
 
           if vary
             sk = state.state(authed: priv,  vary: false)
 
             count = inc ? 1 : 0
-            if sv = @index.get(sk)
+            if sv = lmdb[:index].get(sk)
               count += count_signpost sv
             end
 
             sv = pack_signpost count, vary
 
-            @index.put sk, sv
+            lmdb[:index].put sk, sv
             # put the signpost key in the uri index
-            @uris.put? uk, sk
+            lmdb[:uris].put? uk, sk
           end
         end
 
@@ -1488,11 +1508,11 @@ class Intertwingler::Cache
         if authed = state.authed?
           tkey = state.state(authed: true).digest
           # try public record
-          authed = false unless raw = @index[tkey]
+          authed = false unless raw = lmdb[:index][tkey]
         end
 
         # attempt to get the public record
-        raw ||= @index[tkey = state.state.digest]
+        raw ||= lmdb[:index][tkey = state.state.digest]
 
         # okay there really isn't anything here
         return if raw.nil? or raw.empty?
@@ -1501,7 +1521,7 @@ class Intertwingler::Cache
           skey = tkey
           count, vary = unpack_signpost raw
           tkey = state.state(authed: authed, vary: vary).digest
-          raw  = @index[tkey]
+          raw  = lmdb[:index][tkey]
 
           # if this is nil then there's nothing here
           return if raw.nil? or raw.empty?
@@ -1521,7 +1541,7 @@ class Intertwingler::Cache
       def fetch_internal req, time: Time.now
         state = KeyState.new req
 
-        @env.transaction do |txn|
+        lmdb.transaction? do |txn|
           tkey, raw, count, vary, skey = resolve_terminal state
 
           if tkey
@@ -1553,16 +1573,16 @@ class Intertwingler::Cache
               ukey = state.uri_state.digest
 
               # delete the expired terminal
-              @index.delete tkey
-              @uris.delete ukey, tkey
+              lmdb[:index].delete tkey
+              lmdb[:uris].delete ukey, tkey
 
               # now we decrement the refcount
               if skey != tkey
                 if count > 1
-                  @index[skey] = pack_signpost(count - 1, vary)
+                  lmdb[:index][skey] = pack_signpost(count - 1, vary)
                 else
-                  @index.delete skey
-                  @uris.delete? ukey, skey
+                  lmdb[:index].delete skey
+                  lmdb[:uris].delete? ukey, skey
                 end
               end
             end
@@ -1599,9 +1619,9 @@ class Intertwingler::Cache
         #     end
         #   end
         # else
-        @env.transaction do
-          @uris.each_value(ukey) { |ikey| @index.delete? ikey }
-          @uris.delete? ukey
+        lmdb.transaction? do
+          lmdb[:uris].each_value(ukey) { |ikey| lmdb[:index].delete? ikey }
+          lmdb[:uris].delete? ukey
         end
         # end
       end
@@ -1617,7 +1637,7 @@ class Intertwingler::Cache
 
         state = KeyState.new req
 
-        @env.transaction do
+        lmdb.transaction? do
           # resolve terminal record (or return because it's already been nuked)
           key, raw = resolve_terminal state
 
@@ -1631,7 +1651,7 @@ class Intertwingler::Cache
             raw = pack_terminal status, headers,
               time: time, authed: state.authed?
 
-            @index[key] = raw
+            lmdb[:index][key] = raw
           end
         end
       end

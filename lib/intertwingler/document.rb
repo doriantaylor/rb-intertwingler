@@ -2248,8 +2248,8 @@ class Intertwingler::Document
       # dt   = e['datatype'] # not used currently
 
       # deal with <time> element XXX should also deal with XMLLiteral
-      text = (e.name == 'time' && e['datetime'] ||
-              e['content'] || e.content).strip
+      text = (e.name == 'time' && e['datetime'] || e['content'] ||
+              e['aria-label'] || e['title'] || e.content).strip
 
       # now we have the literals actually in the graph
       lit = cache[Intertwingler::NLP.lemmatize(text).downcase] or next

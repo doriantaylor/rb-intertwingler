@@ -458,6 +458,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         begin
           # we're adding a smidge of logic here to not supplant a 405 with a 404
           tmp  = handler.handle req
+          engine.log.debug "XXX #{handler.class}" unless tmp
           resp = tmp unless resp.status == 405 and tmp.status == 404
         rescue Intertwingler::Error::HTTPStatus => e
           resp = e.response
@@ -481,6 +482,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         resp  = chain.run req, resp
       end
 
+      resp
     end
 
     # i don't know if this is how this is going to
@@ -790,12 +792,19 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     # rewrite the input to use the content-addressable store
     # XXX do we keep this in the engine? iunno
-    if input = req.env['rack.input'] and
-        !input.is_a?(Store::Digest::Object::IOWrapper)
+    if input = req.env['rack.input'] and !input.is_a?(Store::Digest::Entry)
       # get the type
       type = req.content_type
 
-      req.env['rack.input'] = store.lazy_add input, type: type, cache: true
+      begin
+        req.env['rack.input'] = store.add input, type: type, cache: true
+      rescue LMDB::Error => e
+        log.error "store.add crashed on #{Process.pid}: (#{e}). open readers:"
+        lmdb = store.instance_variable_get(:@lmdb)
+        dead = lmdb.reader_check
+        lmdb.reader_list.each { |item| log.error item }
+        log.error "(after sweeping #{dead} dead ones)"
+      end
     end
 
     # XXX handle OPTIONS *

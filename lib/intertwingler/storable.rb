@@ -26,6 +26,10 @@ module Intertwingler::Storable
     # make path absolute if the driver has one
     store[:dir] = @home + store[:dir] if @home && store[:dir]
 
+    # try this and see if it does anything; it was on before though
+    # and didn't make a difference (and it still doesn't)
+    # store[:notls] = true
+
     # aand here's the store
     Store::Digest.new **store
   end

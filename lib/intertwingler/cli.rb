@@ -660,7 +660,6 @@ EOS
     # XXX
     log = Logger.new $stderr
 
-    # give us a harness
     app = harness = Intertwingler::Harness.new authorities,
       home: config_home, log: log, jwt: base_config[:jwt]
 
@@ -676,7 +675,7 @@ EOS
 
       require 'rack/builder'
       require 'stackprof'
-      # require 'rack-mini-profiler'
+
       tmp = app
       app = Rack::Builder.new do
         use StackProf::Middleware, enabled: true, mode: :wall, raw: true,
@@ -707,6 +706,9 @@ EOS
     require 'pry'
 
     harness = Intertwingler::Harness.new authorities, home: config_home
+
+    lmdb = harness.store.instance_variable_get(:@lmdb)
+    # warn lmdb.reader_list.join
 
     binding.pry
   end

@@ -586,6 +586,8 @@ class Intertwingler::Transform
           headers: headers, body: body
         subresp = dispatcher.dispatch subreq, subrequest: true
 
+        # raise ArgumentError, "bad #{uuid}" unless subresp
+
         # here is where we would break if this was an error or redirect
         unless subresp.successful?
           # XXX any failure in here is bad except 304 which is considered a noop

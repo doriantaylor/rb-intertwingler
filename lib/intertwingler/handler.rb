@@ -1,7 +1,7 @@
 require 'intertwingler/error'
 require 'rack/request'
 require 'rack/response'
-require 'store/digest/object'
+require 'store/digest/entry'
 
 # Everything in {Intertwingler} is a handler.
 #
