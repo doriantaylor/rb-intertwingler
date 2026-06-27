@@ -1,4 +1,5 @@
 require 'intertwingler/vocab'
+require 'intertwingler/error'
 require 'intertwingler/handler'
 require 'intertwingler/resource'
 require 'intertwingler/document'
@@ -1635,7 +1636,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     begin
       resp = resource.call req.request_method, orig, params: query,
         headers: normalize_headers(req), user: user, body: req.body
-    rescue Intertwingler::Error::HTTPSTatus => e
+    rescue Intertwingler::Error::HTTPStatus => e
       return e.response
     end
 

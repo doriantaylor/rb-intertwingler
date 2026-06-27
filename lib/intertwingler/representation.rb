@@ -2,8 +2,7 @@ require 'intertwingler/version' # for the symbol
 
 require 'forwardable'
 require 'mimemagic'
-require 'tempfile'
-require 'thread'
+require 'store/digest/readwrapper'
 
 # This class is a cheap knockoff of a
 # {https://en.wikipedia.org/wiki/Monad_(functional_programming) monad}
@@ -209,7 +208,7 @@ class Intertwingler::Representation
     else
       # warn obj
       # @io = BodyWrap[obj]
-      @io = coerce_io_like obj
+      @io = Store::Digest::ReadWrapper[obj]
     end
 
     @type     = coerce_type(type || cl.default_type)
@@ -260,7 +259,7 @@ class Intertwingler::Representation
 
   def io= obj
     @object = nil
-    @io = coerce_io_like obj
+    @io = Store::Digest::ReadWrapper[obj]
   end
 
   def object= obj
@@ -280,142 +279,6 @@ class Intertwingler::Representation
 
   def inspect
     "<#{self.class} type: #{type}, object: #{object.class}>"
-  end
-
-  # This is a wrapper class mainly intended to wrap Rack response
-  # bodies that aren't sufficiently IO-ey enough.
-  #
-  class BodyWrap
-
-    private
-
-    # Test if the object quacks like an IO.
-    #
-    # @param obj [Object] said object
-    #
-    # @return [false, true]
-    #
-    def self.quacks? obj
-      obj.is_a?(IO) or %i[getc read close].all? do |m|
-        obj.respond_to? m
-      end
-    end
-
-    # close the pipe and join the thread.
-    #
-    # @return [void]
-    #
-    def cleanup
-      @mutex.synchronize do
-        return if @done
-        @done = true
-        @read.close unless @read.closed?
-      end
-
-      @thread.join
-    end
-
-    public
-
-    # Attempt to coerce a suitable object or no-op.
-    #
-    # @param obj [Object] an object to be coerced
-    #
-    # @raise [ArgumentError] object not sufficiently coercible
-    #
-    # @return [ReadWrapper] a new around whatever this is
-    #
-    def self.coerce obj
-      if [self, Intertwingler::Representation].any? { |c| obj.is_a? c}
-        return obj
-      end
-
-      return obj if quacks? obj # no need for this if it can read
-
-      # response bodies don't do this but other stuff does
-      if obj.respond_to? :call and obj.method(:call).arity == 0
-        out = obj.call
-        raise ArgumentError,
-          'a `call` with no arguments must return an IO-like object' unless
-          quacks? out
-
-        return out
-      end
-
-      new obj
-    end
-
-    class << self
-      alias_method :[], :coerce
-    end
-
-    # Initialize a wrapper.
-    #
-    # @param obj [#call, #each] a suitable object
-    #
-    # @raise [ArgumentError] said object is unsuitable
-    #
-    def initialize obj
-      if obj.respond_to? :call
-        raise ArgumentError,
-          'Callable object needs an argument to take a write handle' if
-          obj.method(:call).arity.abs == 0
-      elsif !obj.respond_to?(:each)
-        raise ArgumentError, 'Argument must respond to #call(write_fh) or #each'
-      end
-
-      @done  = false
-      @mutex = Mutex.new
-
-      @read, @write = IO.pipe
-
-      @thread = Thread.new do
-        if obj.respond_to? :call
-          obj.call @write
-        else
-          obj.each { |x| @write << x.to_s.b }
-        end
-      rescue Errno::EPIPE # => e
-        nil # not sure if we do anything here
-      ensure
-        @write.close unless @write.closed?
-      end
-    end
-
-    # `getc` for parity with IO
-    #
-    # @return [String, nil]
-    #
-    def getc
-      unless @read.closed?
-        out = @read.getc
-        cleanup if out.nil?
-
-        out
-      end
-    end
-
-    # `read` for parity with IO
-    #
-    # @param length [Integer] the length to read
-    #
-    # @return [String, nil]
-    #
-    def read length
-      unless @read.closed?
-        out = @read.read length
-        cleanup if out.nil?
-
-        out
-      end
-    end
-
-    # `close` for parity with IO
-    #
-    def close
-      cleanup
-      nil # close returns nil
-    end
   end
 
 end

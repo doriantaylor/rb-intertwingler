@@ -5,6 +5,7 @@ require 'intertwingler/util/clean'
 require 'intertwingler/error'
 require 'intertwingler/loggable'
 require 'intertwingler/cacheable'
+require 'intertwingler/field'
 require 'store/digest/entry'
 
 require 'params/registry'
@@ -18,6 +19,8 @@ class Intertwingler::Engine < Intertwingler::Handler
 
   ITCV = Intertwingler::Vocab::ITCV
   TFO  = Intertwingler::Vocab::TFO
+
+  F = Intertwingler::Field
 
   # The dispatcher has one job, which is to dispatch an incoming
   # request to the correct handler.
@@ -452,79 +455,49 @@ class Intertwingler::Engine < Intertwingler::Handler
 
       hurn = nil
 
-      candidates.each do |urn, handler|
-        hurn = urn
+      # resp = engine.cache.fetch req do |req|
+        candidates.each do |urn, handler|
+          hurn = urn
 
-        begin
-          # we're adding a smidge of logic here to not supplant a 405 with a 404
-          tmp  = handler.handle req
-          engine.log.debug "XXX #{handler.class}" unless tmp
-          resp = tmp unless resp.status == 405 and tmp.status == 404
-        rescue Intertwingler::Error::HTTPStatus => e
-          resp = e.response
-        rescue => e
-          # quit now in case this blows up
-          # XXX do something smarter here
-          return Intertwingler::Error::ServerError.new(
-            e.message + e.backtrace.join("\n")).response
+          begin
+            # add a smidge of logic here to not supplant a 405 with a 404
+            tmp  = handler.handle req
+            engine.log.debug "XXX #{handler.class}" unless tmp
+            resp = tmp unless resp.status == 405 and tmp.status == 404
+          rescue Intertwingler::Error::HTTPStatus => e
+            resp = e.response
+          rescue => e
+            engine.log.debug "ruh roh #{req.request_method} #{req.url} blew up: #{e}"
+
+            # quit now in case this blows up
+            # XXX do something smarter here
+            resp = Intertwingler::Error::ServerError.new(
+              e.message + e.backtrace.join("\n")).response
+            break
+          end
+
+          # All response codes besides 404 and 405 are considered
+          # authoritative. (XXX a 404 followed by a 405 followed by a
+          # 404 will be represented as a 404, rather than 405, though
+          # a 405 kinda tells you more than a 404 does.)
+          break unless [404, 405].include? resp.status
         end
 
-        # All response codes besides 404 and 405 are considered
-        # authoritative. (XXX a 404 followed by a 405 followed by a
-        # 404 will be represented as a 404, rather than 405, though
-        # a 405 kinda tells you more than a 404 does.)
-        break unless [404, 405].include? resp.status
-      end
+        hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
 
-      unless subrequest
-        # generate the response chain with addressable queue
-        chain = chain.response_chain hurn, pp: pp
-        resp  = chain.run req, resp
-      end
+        engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
+                         "(#{resp.status} #{hdrs}): #{resp.body}")
 
-      resp
-    end
+        unless subrequest
+          # generate the response chain with addressable queue
+          chain = chain.response_chain hurn, pp: pp
+          resp  = chain.run req, resp
 
-    # i don't know if this is how this is going to
+          engine.log.debug "got here too (#{resp.status}): #{resp.body}"
+        end
 
-    def wrap_cache req, subrequest: false
-      # * Step zero is we determine if the request if the request is
-      #   even eligible to be cached; if not go directly to dispatch.
-
-      # disqualifying conditions:
-      #
-      # * request method: HEAD is cacheable, GET is cacheable, POST
-      #   *may* be cacheable, QUERY *is* cacheable; just about nothing
-      #   else.
-
-      # * cache-specific headers: Pragma: no-cache, Cache-Control:
-      #   no-cache, no-store, max-age, etc
-
-      # * Assuming the request is eligible, we try to match it to our
-      #   hot little key-value store. (note all response headers with
-      #   some exceptions need to be in the cache metadata; cf RFC9111 §3.1)
-
-      # * If found (and still fresh) then try retrieving the blob from
-      #   the CAS.
-
-      # (ISSUE how do resolve the blob submit/resolution resource?)
-
-      # * If the blob comes back, then reassemble the response (if the
-      #   blob doesn't come back, invalidate the cache entry).
-
-      if resp = cache.fetch(req)
-        return resp
-      end
-
-      # can just do this lol
-      cache.fetch_or_store(req) do
-        dispatch(req, subrequest: subrequest)
-      end
-
-      # * Otherwise dispatch the request and collect the response.
-
-      # * store the response in the CAS only if the response is cacheable.
-      cache.store req, dispatcher.dispatch(req, subrequest: subrequest)
+        resp
+      # end
     end
 
   end # END Dispatcher
@@ -800,7 +773,8 @@ class Intertwingler::Engine < Intertwingler::Handler
         req.env['rack.input'] = store.add input, type: type, cache: true
       rescue LMDB::Error => e
         log.error "store.add crashed on #{Process.pid}: (#{e}). open readers:"
-        lmdb = store.instance_variable_get(:@lmdb)
+        lmdb = store.lmdb
+        log.debug "WTF #{lmdb}"
         dead = lmdb.reader_check
         lmdb.reader_list.each { |item| log.error item }
         log.error "(after sweeping #{dead} dead ones)"
@@ -831,9 +805,6 @@ class Intertwingler::Engine < Intertwingler::Handler
       # from the default
 
       resp = dispatcher.dispatch req
-
-      # XXX this is how we do caching maybe?
-      # resp = cache.fetch_or_store req { dispatcher.dispatch req }
 
       # this can do all sorts of things; it can blow up, it can redirect…
     rescue Intertwingler::Error::HTTPStatus => e

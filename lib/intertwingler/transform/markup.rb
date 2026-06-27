@@ -733,6 +733,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     engine.log.debug "rewrite: #{loc}"
 
+    # engine.log.debug "wtf body: #{req.body} object: #{req.body.object}"
+
     # get a duplicate of the document
     doc = req.body.object.dup
 

@@ -524,7 +524,7 @@ class Intertwingler::Transform
       # for each transform in the queue
       # first we test if it accepts the message body (or is message/http)
 
-      # we gin up a POST subrequest for its uri + params if applicable
+      # we gin up a QUERY subrequest for its uri + params if applicable
 
       # we use the dispatcher to run the subrequest
       # we shuck off the response body from the subrequest (TODO full http msg)
@@ -542,13 +542,17 @@ class Intertwingler::Transform
       # type = out.get_header( # so is this and that is dumb af
       #   out.is_a?(Rack::Request) ? 'CONTENT_TYPE' : 'content-type') ||
       #   'application/octet-stream'
+      log.debug resp.headers.inspect if resp
 
       type = MimeMagic[type].canonical || MimeMagic['application/octet-stream']
 
       log.debug "#{resp ? 'response' : 'request'} type #{type.inspect}"
 
       # don't screw around dupping the message if there are no transforms
-      return out if @transforms.empty?
+      if @transforms.empty?
+        log.debug "no transforms in #{subject}"
+        return out
+      end
 
       # transforms could be transforms or they could be partials; in
       # the case that they're partials, we want to pull the parameters
@@ -572,7 +576,7 @@ class Intertwingler::Transform
 
         uri.query = URI.encode_www_form(params) unless params.empty?
 
-        log.debug "about to POST #{type} to #{uri}"
+        log.debug "about to QUERY #{type} to #{uri}"
 
         headers = { 'content-type' => type.to_s }
         # note we pun the content-location header to communicate to
@@ -582,8 +586,9 @@ class Intertwingler::Transform
         # but we only add this for response transforms
         headers['content-location'] = req.url if resp
 
-        subreq  = engine.dup_request req, uri: uri, method: :POST,
+        subreq  = engine.dup_request req, uri: uri, method: :QUERY,
           headers: headers, body: body
+
         subresp = dispatcher.dispatch subreq, subrequest: true
 
         # raise ArgumentError, "bad #{uuid}" unless subresp
@@ -695,6 +700,10 @@ class Intertwingler::Transform
     #
     def run request, response = nil
       message = response || request
+
+      if response
+        log.debug "WTF #{request.request_method} #{request.url} -> #{response.status} #{response.content_type}"
+      end
 
       @queues.values.each do |q|
         message = q.run request, response do |event|
@@ -911,7 +920,7 @@ class Intertwingler::Transform
 
       # XXX this will not be necessary with manifest protocol; the
       # dispatcher will just ask for the handler's manifest.
-      dispatcher.add_route uri, tfi.implementation, method: :POST
+      dispatcher.add_route uri, tfi.implementation, method: :QUERY
 
       tfi
     end
@@ -1048,8 +1057,12 @@ class Intertwingler::Transform
     end
 
     def handle req
-      # first we check if the request method is POST; if not this is over quickly
-      return Rack::Response[405, {}, []] unless req.request_method.to_sym == :POST
+      # first we check if the request method is POST or QUERY
+      # (https://datatracker.ietf.org/doc/html/rfc10008);
+      # if not this is over quickly
+
+      return Rack::Response[405, {}, []] unless
+        %i[POST QUERY].include? req.request_method.to_sym
 
       # request must have a content type or return 409
       type = req.content_type or

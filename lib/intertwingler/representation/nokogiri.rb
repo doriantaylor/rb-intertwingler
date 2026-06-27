@@ -17,11 +17,20 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
   end
 
   def parse io
-    # warn "parsing #{io.inspect}"
+    warn "parsing #{io.class} #{io.inspect}"
+
+    # rewind going in
+    io.rewind if io.respond_to? :rewind
+
     html = /^text\/html/i.match?(type.to_s)
     parser = html ? ::Nokogiri::HTML5::Document : ::Nokogiri::XML::Document
     # defaults are sane i think
-    parser.parse io
+    out = parser.parse io
+
+    # rewind going out
+    io.rewind if io.respond_to? :rewind
+
+    out
   end
 
   def serialize obj, target
@@ -37,6 +46,15 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
   end
 
   public
+
+  def inspect
+    if root = object.root
+      root = "<#{root.name}>"
+    else
+      root = root.inspect
+    end
+    "<#{self.class} type: #{type}, object: #{object.class} (#{root})>"
+  end
 
   # def each &block
   #   io.each(&block)
