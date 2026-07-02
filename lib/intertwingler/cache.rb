@@ -869,7 +869,6 @@ class Intertwingler::Cache
 
       # we change the cache key input by one bit if this is the case
       if cc = F['cache-control'][@req]&.value
-        warn "FUCKING FART LOL"
         @no_transform = cc.key? :'no-transform'
       end
 
@@ -920,17 +919,49 @@ class Intertwingler::Cache
 
     public
 
+    # Coerce a key state from a request object. For non-`GET`/`HEAD`
+    # requests (i.e., requests with a body), it's expected to either
+    # have a
+    #
+    # @param request [Rack::Request] a request object
+    # @param vary [#to_s, #to_a] the Vary header from the response,
+    #  parsed or no
+    #
+    # @return [Intertwingler::Cache::KeyState] a new cache key state
+    #
+    def self.[] request, vary = nil
+      vary = F['vary'][vary]&.value || []
+      principal = request.env['REMOTE_USER']
+      xf = !(F['cache-control'][request]&.value || {}).key?(:"no-transform")
+
+      # get the content-location header
+      if cl = F['content-location'][request]&.value
+        cl = nil unless cl.is_a? URI::NI
+      end
+
+      new request.request_method, request.url, principal: principal,
+        body: cl || request.body, transform: xf, vary: vary
+    end
+
     # Initialize the state object.
     #
     # @param req [Rack::Request] the request to be turned into a cache key
+    # @param principal [String, nil] the principal (user) of the request
+
+    # @param body [URI::NI, Store::Digest::Entry] either a hash of a
+    #  request body or a hashable request body
+
     # @param vary [nil, Array<String>] request headers to `Vary`
     #
-    def initialize req, vary: nil
+    def initialize method, uri, headers: nil, body: nil, principal: nil, vary: nil
       @states = [Digest::SHA256.new, nil, nil, nil]
-      @req    = req
+      @method = method
+      @uri    = Intertwingler::Util::Clean.coerce_resource uri, as: :uri
 
       # just parcel this out
       set_initial_state
+
+      self.principal = principal
 
       # this will just invoke the accessor
       self.vary = vary if vary.is_a?(Array) && !vary.empty?
@@ -951,6 +982,9 @@ class Intertwingler::Cache
       @ustate.dup
     end
 
+    def principal= value
+    end
+
     # Set which headers were found in the response's `Vary` to be
     # used for the request.
     #
@@ -967,7 +1001,8 @@ class Intertwingler::Cache
 
       # empty these out if there are no vary headers
       if headers.empty?
-        @states[2] = @states[3] = nil
+        [0,1].each { |i| @states[2 | i] = states[i].dup }
+
         return
       end
 
@@ -1266,7 +1301,7 @@ class Intertwingler::Cache
       #
       def unpack_headers string
         string = string.b
-        string = Zlib.gunzip(string.b) if string.start_with? "\x1f\x8b".b
+        string = Zlib.gunzip(string) if string.start_with? "\x1f\x8b".b
         string.split("\x1f").map { |pair| pair.split(/\s*:\s*/, 2) }.to_h
       end
 
@@ -1443,9 +1478,9 @@ class Intertwingler::Cache
 
       private
 
-      LMDB_OPTS =
+      LMDB_OPTS  = %i[mode maxreaders maxdbs mapsize]
+      LMDB_FLAGS =
         %i[fixedmap nosubdir nosync rdonly nometasync writemap mapasync notls]
-
 
       # driver-specific installation
       def bootstrap dir: 'cache', mapsize: 2**27, **options
@@ -1457,7 +1492,7 @@ class Intertwingler::Cache
         @lmdb_opts = {
           mode: 0666 & ~umask,
           mapsize: mapsize,
-        }.merge(options.slice(*LMDB_OPTS))
+        }.merge(options.slice(*(LMDB_OPTS + LMDB_FLAGS)))
 
         lmdb.database 'index', create: true
         lmdb.database 'uris',  create: true, dupsort: true
@@ -1466,7 +1501,7 @@ class Intertwingler::Cache
       def cache_internal req, resp
         # construct the hash key state
         vary  = F['vary'][resp]&.value
-        state = KeyState.new req, vary: vary
+        state = KeyState[req, vary]
 
         # we use authed key if the request is authenticated, unless
         # the response is explicitly `public`
@@ -1560,6 +1595,16 @@ class Intertwingler::Cache
         # first attempt to get a private record
         if authed = state.authed?
           tkey = state.state(authed: true).digest
+          # XXX THIS IS ACTUALLY WRONG: the resource *could* have
+          # different representations depending on whether or not
+          # you're logged in, so if you *are* logged in and the
+          # private cache hit fails and it falls back to the public
+          # resource, you should only treat that as a hit if the cache
+          # entry is explicitly `Cache-Control: public`, which implies
+          # whoever wrote that content handler had the presence of
+          # mind to declare that authenticated requests see the same
+          # thing as everybody else.
+
           # try public record
           authed = false unless raw = index[tkey]
         end
@@ -1592,7 +1637,7 @@ class Intertwingler::Cache
       # @return [nil, Array(Integer, Hash, Store::Digest::Entry)]
       #
       def fetch_internal req, time: Time.now
-        state = KeyState.new req
+        state = KeyState[req]
 
         lmdb.transaction? true do |txn|
           tkey, raw, count, vary, skey = resolve_terminal state
@@ -1621,6 +1666,8 @@ class Intertwingler::Cache
 
             status, headers, body, ctime = unpack_terminal raw
 
+            # XXX this may not succeed if the body is no longer in the
+            # store; it should be treated as a cache miss
             body = store.get(body) if body
 
             resp = Rack::Response[status, headers, body || []]
@@ -1655,8 +1702,8 @@ class Intertwingler::Cache
 
       def expire_internal arg
         if arg.is_a? Rack::Request
-          state = KeyState.new arg
-          ukey = state.uri_state.digest
+          state = KeyState[arg]
+          ukey  = state.uri_state.digest
         else
           ukey = KeyState.uri_state(arg).digest
         end
@@ -1697,7 +1744,7 @@ class Intertwingler::Cache
 
         time ||= Time.now
 
-        state = KeyState.new req
+        state = KeyState[req]
 
         lmdb.transaction? do
           # resolve terminal record (or return because it's already been nuked)
