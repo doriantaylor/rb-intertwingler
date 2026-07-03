@@ -1,6 +1,6 @@
 require 'intertwingler/handler'
 
-require 'mimemagic'
+require 'mimemagic-dorian'
 require 'http-negotiate'
 
 # This is a toy content handler for serving content-negotiated files

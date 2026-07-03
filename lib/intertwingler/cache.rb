@@ -863,58 +863,32 @@ class Intertwingler::Cache
 
     def set_initial_state
       # get the hash for the request body:
+      @body ||= NULL_BODY.dup
 
-      # get the request method
-      meth = @req.request_method
-
+      cc = F['cache-control'][@headers]&.value || {}
       # we change the cache key input by one bit if this is the case
-      if cc = F['cache-control'][@req]&.value
-        @no_transform = cc.key? :'no-transform'
-      end
+      @noxf = cc.key? :'no-transform'
 
       # get the normalized request-URI
-      uri = Intertwingler::Util::Clean.coerce_resource(@req.url, as: :uri)
-      @ustate = (Digest::SHA256.new << uri.normalize.to_s)
+      @ustate = (Digest::SHA256.new << @uri.normalize.to_s)
 
       # now we should get the state
       state = @states.first
 
+
       # if the request is other than HEAD/GET:
-      unless METHODS.fetch(meth.to_sym, false)
-
-        # check to see if there's a `Content-Location` request header
-        cl = F['content-location'][@req]&.value
-
-        # if the Content-Location contains an RFC6920 URI, then we
-        # will just use that. if that fails or if otherwise it's
-        # missing (likely), scan the request body i guess.
-
-        unless cl.is_a? URI::NI
-          if body = @req.body
-            # i *could* make this code responsible for the conversion
-            # but i don't want to
-            raise TypeError,
-              'request body should be a Store::Digest::Entry by now, not %s' %
-              body.class unless body.is_a? Store::Digest::Entry
-
-            cl = body[:"sha-256"]
-          else
-            cl = NULL_BODY.dup
-          end
-        end
-
+      if METHODS.fetch(@method, false) && @body != NULL_BODY
         # add the body digest to the state
-        state << "#{cl.algorithm}\x1e#{cl.digest}"
+        state << "#{@body.algorithm}\x1e#{@body.digest}"
       end
 
       # we do this to vary the key so transformed responses don't get
       # served out from `no-transform` requests
-      state << [meth, uri.normalize.to_s].join(@no_transform ? "\x1d" : "\x1e")
+      state << [@method, @uri.normalize.to_s].join(@noxf ? "\x1d" : "\x1e")
 
       # if there is a user, do the initial bifurcation
-      if user = @req.env['REMOTE_USER'] and not user.strip.empty?
-        (@states[1] = state.dup) << "\x1e#{user}"
-      end
+      @states[1] = state.dup
+      @states[1] << "\x1e#{@principal}" if @principal
     end
 
     public
@@ -930,7 +904,7 @@ class Intertwingler::Cache
     # @return [Intertwingler::Cache::KeyState] a new cache key state
     #
     def self.[] request, vary = nil
-      vary = F['vary'][vary]&.value || []
+      vary = F['vary'][vary]&.value || [] if vary
       principal = request.env['REMOTE_USER']
       xf = !(F['cache-control'][request]&.value || {}).key?(:"no-transform")
 
@@ -939,8 +913,17 @@ class Intertwingler::Cache
         cl = nil unless cl.is_a? URI::NI
       end
 
-      new request.request_method, request.url, principal: principal,
-        body: cl || request.body, transform: xf, vary: vary
+      unless cl
+        body = request.body
+        raise ArgumentError,
+          "body should be a Store::Digest::Entry, not #{body.class}" unless
+          body.is_a? Store::Digest::Entry
+        cl = body[:'sha-256']
+      end
+
+      new request.request_method, request.url,
+        headers: F.req_headers(request.env), body: cl,
+        principal: principal, vary: vary
     end
 
     # Initialize the state object.
@@ -953,18 +936,21 @@ class Intertwingler::Cache
 
     # @param vary [nil, Array<String>] request headers to `Vary`
     #
-    def initialize method, uri, headers: nil, body: nil, principal: nil, vary: nil
-      @states = [Digest::SHA256.new, nil, nil, nil]
-      @method = method
-      @uri    = Intertwingler::Util::Clean.coerce_resource uri, as: :uri
+    def initialize method, uri, headers: nil, body: nil,
+        principal: nil, vary: nil
+      @states  = [Digest::SHA256.new, nil, nil, nil]
+      @method  = method.to_sym
+      @uri     = Intertwingler::Util::Clean.coerce_resource uri, as: :uri
+      @headers = headers || {}
+      @body    = body
+
+      self.principal = principal
 
       # just parcel this out
       set_initial_state
 
-      self.principal = principal
-
       # this will just invoke the accessor
-      self.vary = vary if vary.is_a?(Array) && !vary.empty?
+      self.vary = vary
     end
 
     # Determine if the encapsulated request is authenticated and
@@ -974,7 +960,7 @@ class Intertwingler::Cache
     #
     def authed?
       # if this is set then the request is authenticated
-      !!@states[1]
+      !!@principal
     end
 
     # Return the URI state
@@ -983,6 +969,17 @@ class Intertwingler::Cache
     end
 
     def principal= value
+      value = value.to_s.strip
+      if value.empty?
+        @principal = nil
+        @states[3] = nil
+        @states[1] = @states[0].dup
+      else
+        value = value.to_s.strip
+        @principal = value unless value.empty?
+        (@states[1] = @states[0].dup) << "\x1e#{@principal}"
+        self.vary = @vary
+      end
     end
 
     # Set which headers were found in the response's `Vary` to be
@@ -992,16 +989,16 @@ class Intertwingler::Cache
     #
     def vary= headers
       # set empty list by default
-      headers ||= []
+      headers = F['vary'][headers].value
 
-      headers = F['vary'][headers]&.value || [] unless
-        headers.is_a? Array
+      # headers = F['vary'][headers]&.value || Set[] unless
+      #   headers.is_a? Array
 
       warn "vary: #{headers.inspect}"
 
       # empty these out if there are no vary headers
       if headers.empty?
-        [0,1].each { |i| @states[2 | i] = states[i].dup }
+        [0,1].each { |i| @states[2 | i] = @states[i].dup }
 
         return
       end
@@ -1035,8 +1032,8 @@ class Intertwingler::Cache
     #
     def state authed: false, vary: nil
       # overwrite new vary states
-      if vary.is_a? Array
-        self.vary = vary
+      if vary
+        self.vary = vary # this will coerce
         vary = false if vary.empty?
       end
 
@@ -1500,8 +1497,11 @@ class Intertwingler::Cache
 
       def cache_internal req, resp
         # construct the hash key state
-        vary  = F['vary'][resp]&.value
+        # vary  = F['vary'][resp]&.value
+        vary  = resp.get_header 'vary' # XXX FIX THIS
         state = KeyState[req, vary]
+
+        log.warn "vary: #{vary} #{state.instance_variable_get :@vary}"
 
         # we use authed key if the request is authenticated, unless
         # the response is explicitly `public`
@@ -1552,6 +1552,8 @@ class Intertwingler::Cache
         # okay NOW note we start a new transaction
         lmdb.transaction do
           # create the terminal record
+          log.warn "#{req.env['REMOTE_USER']} <-> #{state.instance_variable_get(:@principal).inspect}"
+          log.warn state.instance_variable_get(:@states).inspect
           tk  = state.state(authed: priv, vary: !!vary).digest
           tv  = pack_terminal resp.status, resp.headers, cl
           inc = !index.has?(tk) # determine if adding or updating
@@ -1639,7 +1641,7 @@ class Intertwingler::Cache
       def fetch_internal req, time: Time.now
         state = KeyState[req]
 
-        lmdb.transaction? true do |txn|
+        lmdb.transaction? do |txn|
           tkey, raw, count, vary, skey = resolve_terminal state
 
           # this is a pattern lol
@@ -1673,6 +1675,8 @@ class Intertwingler::Cache
             resp = Rack::Response[status, headers, body || []]
 
             # all expired is stale but not all stale is expired
+
+            # XXX KICK THIS OUT TO A THREAD???
 
             # if the response is stale then expire the record
             if stale?(headers, time, authed: state.authed?, stored: ctime)

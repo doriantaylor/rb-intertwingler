@@ -46,7 +46,7 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_runtime_dependency 'dry-schema',       '>= 1.13.3'
   spec.add_runtime_dependency 'http-negotiate',   '>= 0.2.2' # mine
   spec.add_runtime_dependency 'linkeddata',       '>= 3.1.2'
-  spec.add_runtime_dependency 'mimemagic-dorian', '~> 0.5' # my patch
+  spec.add_runtime_dependency 'mimemagic-dorian', '~> 0.5', '>= 0.5.7' # my patch
   spec.add_runtime_dependency 'rack',             '~> 3.2'
   spec.add_runtime_dependency 'rackup',           '~> 2.3'
   spec.add_runtime_dependency 'rdf-reasoner',     '>= 0.9.0'

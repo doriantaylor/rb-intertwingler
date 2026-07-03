@@ -1,7 +1,7 @@
 # bring in the namespace
 require 'intertwingler/version'
 
-require 'mimemagic'
+require 'mimemagic-dorian'
 # XXX this is not strictly correct but good enough for now, also
 # application/x-www-form-urlencoded is not in the mime types (and thus
 # has no `canonical)`, so that was fun to debug (oh look turns out

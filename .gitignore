@@ -16,3 +16,4 @@ sample.conf
 *.gem
 flow-diagram-white.png
 stackprof-*
+profile-*.json*

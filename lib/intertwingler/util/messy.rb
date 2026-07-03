@@ -7,7 +7,7 @@ require 'set'
 require 'uuidtools'
 require 'uuid-ncname'
 require 'xml-mixup'
-require 'mimemagic'
+require 'mimemagic-dorian'
 
 require 'rdf'
 require 'rdf/vocab'

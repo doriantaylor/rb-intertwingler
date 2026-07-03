@@ -2,7 +2,7 @@
 require 'dry-schema'
 require 'uri'
 require 'pathname'
-require 'mimemagic'
+require 'mimemagic-dorian'
 
 require_relative 'util/clean'
 require_relative 'rubyurn'

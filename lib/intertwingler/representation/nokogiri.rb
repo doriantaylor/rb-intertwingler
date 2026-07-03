@@ -1,8 +1,8 @@
 require 'intertwingler/representation'
 
-require 'intertwingler/document' # this will also import nokogiri
+# require 'intertwingler/document' # this will also import nokogiri
 
-# require 'nokogiri'
+require 'nokogiri'
 require 'stringio'
 
 class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
@@ -28,12 +28,12 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
     out = parser.parse io
 
     # rewind going out
-    io.rewind if io.respond_to? :rewind
+    io.rewind rescue nil if io.respond_to? :rewind
 
     out
   end
 
-  def serialize obj, target
+  def serialize obj, target = tempfile
     # warn "serializing for #{caller.inspect}"
     # warn "serializing #{obj.inspect} to #{target.inspect}"
     html = /html/i.match?(type.to_s)
@@ -41,6 +41,8 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
       obj.write_xhtml_to(target) :
       obj.write_html_to(target) :
       obj.write_to(target)
+
+    target.rewind rescue nil if target.respond_to? :rewind
 
     target
   end
@@ -56,32 +58,5 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
     "<#{self.class} type: #{type}, object: #{object.class} (#{root})>"
   end
 
-  # def each &block
-  #   io.each(&block)
-  # end
-
-
-  # def parse io
-  #   if io.respond_to? 
-
-  # def io
-  #   return @io unless @object
-  #   # XXX we want this to be
-  #   out = StringIO.new ''.b, 'wb+'
-
-  #   @object.write_to out
-
-  #   out.seek 0
-
-  #   @io = out
-  # end
-
-  # def object
-  #   unless @object
-  #     io.seek 0 if io.respond_to? :seek
-  #     @object = Intertwingler::Document.coerce_doc io
-  #   end
-
-  #   @object
-  # end
 end
+

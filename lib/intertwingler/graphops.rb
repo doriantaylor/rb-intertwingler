@@ -1,6 +1,6 @@
 require 'intertwingler/version'
 
-require 'mimemagic'
+require 'mimemagic-dorian'
 require 'set'
 require 'rdf'
 require 'rdf/vocab'

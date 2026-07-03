@@ -10,7 +10,7 @@ require 'nokogiri'
 require 'md-noko'
 require 'uuid-ncname'
 require 'xml-mixup'
-require 'mimemagic'
+require 'mimemagic-dorian'
 
 # This is the base class for (X)HTML+RDFa documents. It is a temporary
 # situation intended to absorb the dissolution of

@@ -126,11 +126,13 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   # header manipulation other than `Content-Type` should really be
   # done in a `message/http` transform (which aren't implemented yet).
   def fix_xml_content_type req, params
+    log = engine.log
+
     body = req.body
     doc  = body.object
     type = body.type
 
-    engine.log.debug("elements: #{doc.xpath('count(//*)')}")
+    engine.log.debug("#{type} elements: #{doc.xpath('count(//*)')}")
 
     if root = doc.root
       name = root.name.to_sym
@@ -140,6 +142,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
              else
                NAMESPACES[[name, nil]] || type
              end
+
+      log.debug "hwut #{type} #{MimeMagic[type]}"
 
       body.object = doc # we need to do this first to trigger the update
       body.type = type

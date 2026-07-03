@@ -19,6 +19,7 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
   end.freeze
 
   def parse io
+    # warn "hurrr #{io.inspect}"
     if io.respond_to? :fileno and io.fileno
       # seek and ye shall find
       io.seek 0 if io.respond_to? :seek
@@ -29,12 +30,12 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
       # this is weird
       src = ::Vips::SourceCustom.new
       src.on_read do |len|
-        warn "reading #{len} bytes"
+        # warn "reading #{len} bytes"
         io.read len
       end
 
       src.on_seek do |offset, whence|
-        warn "seeking #{offset} #{whence}"
+        # warn "seeking #{offset} #{whence}"
         io.seek offset, whence
       end
     end
@@ -42,8 +43,9 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
     ::Vips::Image.new_from_source src, ''
   end
 
-  def serialize obj, target
+  def serialize obj, target = tempfile
     if target.respond_to? :fileno and target.fileno
+      # warn "got here wtf lolol"
       tgt = ::Vips::Target.new_to_descriptor target.fileno
     else
       tgt = ::Vips::TargetCustom.new
@@ -57,12 +59,18 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
       end
     end
 
-    obj.write_to_target tgt, ".#{type.extensions.first}"
+    # warn target.inspect
+
+    # warn type.extensions.first
+    ext = type.extensions.first
+    # ext = 'heif'
+
+    obj.write_to_target tgt, ".#{ext}"
 
     # culta da cargo
-    target.fsync  if target.respond_to? :fsync
-    target.flush  if target.respond_to? :flush
-    target.seek 0 if target.respond_to? :seek
+    # target.fsync rescue nil  if target.respond_to? :fsync
+    # target.flush rescue nil  if target.respond_to? :flush
+    # target.seek 0 rescue nil if target.respond_to? :seek
 
     target
   end

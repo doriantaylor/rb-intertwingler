@@ -1,9 +1,11 @@
 require_relative 'util/clean'
 require 'rack/request'
+require 'rack/response'
 require 'set'
 require 'strscan'
 require 'time'
 require 'uri'
+require 'mimemagic-dorian'
 
 # This is a set of classes that represent HTTP header/trailer field
 # values of various structures. It serves the dual purpose of input
@@ -33,7 +35,22 @@ class Intertwingler::Field
   OWS   = /[ \t]*/
   FLOAT = /^[+-]?(?=\.?\d)\d*\.?\d*(?:[Ee][+-]?\d+)?\z/
 
-  def parse! ; end
+  NOMINAL_TYPE = String
+  FINAL_TYPE   = String
+
+  def parse!
+  end
+
+  def coerce!
+    nt = self.class.nominal_type
+    if nt != String && @original.is_a?(nt)
+      # don't parse
+      @value = self.class.coerce @original
+    else
+      @original = @original.to_s.strip
+      parse!
+    end
+  end
 
   public
 
@@ -212,6 +229,18 @@ class Intertwingler::Field
     '"%s"' % string.to_s.gsub(/[\x22\x5c]/, '\\&')
   end
 
+  # what the thing will accept
+  #
+  def self.nominal_type
+    const_get :NOMINAL_TYPE
+  end
+
+  # what the thing will ultimately emit
+  #
+  def self.final_type
+    const_get :FINAL_TYPE
+  end
+
   # Instantiate a parsed HTTP field.
   #
   # @param value [String, #to_s] the initial field value
@@ -222,10 +251,10 @@ class Intertwingler::Field
   #
   # @return [void]
   #
-  def initialize value, uri: nil, message: nil
-    @original = value.to_s.dup.freeze # keep the original string
-    @message  = message               # associated http message
-    @value    = nil                   # make sure something is there
+  def initialize value = nil, uri: nil, message: nil
+    @original = value.dup.freeze # keep the original string
+    @message  = message          # associated http message
+    @value    = nil              # make sure something is there
 
     # we get a base URI either directly or from a request message
     @uri = if uri
@@ -237,8 +266,8 @@ class Intertwingler::Field
              URI(@message.url.to_s)
            end
 
-    # then we parse
-    parse!
+    # then we coerce
+    coerce!
   end
 
   attr_reader :original, :uri, :message, :value
@@ -262,7 +291,7 @@ class Intertwingler::Field
     private
 
     def parse!
-      @value = @original.strip
+      @value = @original.to_s.strip
     end
 
     public
@@ -270,7 +299,7 @@ class Intertwingler::Field
     # Applies `#strip` to the original string.
     #
     def to_s
-      @value.freeze
+      @value.dup.freeze
     end
   end
 
@@ -279,6 +308,9 @@ class Intertwingler::Field
   class NonNegativeInteger < self
 
     private
+
+    NOMINAL_TYPE = ::Numeric
+    FINAL_TYPE   = ::Integer
 
     def parse!
       raise ParseError, "#{@original} is not a recognizable integer" unless
@@ -306,6 +338,8 @@ class Intertwingler::Field
   #
   class URI < self
     private
+
+    FINAL_TYPE = ::URI::Generic
 
     def parse!
       begin
@@ -336,6 +370,10 @@ class Intertwingler::Field
   # XXX add http date parsing
   #
   class Date < Verbatim
+    private
+
+    FINAL_TYPE = ::Time
+
     def parse!
       # RFC9111 §5.3
       @value = Time.httpdate(@original.strip) rescue Time.at(0).utc
@@ -354,6 +392,8 @@ class Intertwingler::Field
   #
   class MediaType < self
     private
+
+    FINAL_TYPE = ::MimeMagic
 
     def parse!
       elem = self.class.scan_element StringScanner.new(@original)
@@ -417,15 +457,22 @@ class Intertwingler::Field
   class List < self
     private
 
+    NOMINAL_TYPE = ::Enumerable
+    FINAL_TYPE   = ::Array
+
     def parse!
       @value = self.class.scan_elements(StringScanner.new @original).compact
     end
 
     public
 
+    def self.coerce_element elem
+      elem.downcase.to_sym
+    end
+
     def self.scan_element scanner
       elem = scanner.scan(TOKEN) or return
-      elem.downcase.to_sym
+      coerce_element elem
     end
 
     def to_s
@@ -439,12 +486,21 @@ class Intertwingler::Field
   class Set < List
     private
 
+    FINAL_TYPE = ::Set
+
     def parse!
       super
       @value = @value.to_set
     end
 
     public
+
+    def self.coerce value
+      raise ArgumentError, "can't coerce a #{value.class}" unless
+        value.respond_to? :to_set
+      # squash it into a set then squash it into a set again
+      value.to_set.map { |v| coerce_element v }.to_set
+    end
 
     def to_s
       @value.sort.join ', '
@@ -455,9 +511,21 @@ class Intertwingler::Field
   # (which may be a quoted string), such as `Cache-Control`.
   #
   class Pairs < List
+    private
+
+    FINAL_TYPE = Hash
+
     def parse!
       ss = StringScanner.new @original
       @value = self.class.scan_elements(ss).to_h
+    end
+
+    def self.coerce_element elem
+      name, value = elem
+      name  = name.downcase.to_sym
+      value = value.to_s.to_i if /^\d+$/.match? value.to_s
+
+      [name, value]
     end
 
     # We get a special `scan_element` here
@@ -467,15 +535,11 @@ class Intertwingler::Field
       scanner.skip OWS
 
       value = if scanner.scan(/=/)
-        scanner.skip OWS
+                scanner.skip OWS
+                scan_value scanner
+              end
 
-        scan_value scanner
-      end
-
-      name  = name.downcase.to_sym
-      value = value.to_s.to_i if /^\d+$/.match? value.to_s
-
-      [name, value]
+      coerce_element [name, value]
     end
 
     def to_s
@@ -689,32 +753,40 @@ class Intertwingler::Field
   RESP_HDR = /^([A-Za-z](?:-?[0-9A-Za-z]+)*)\Z/o
   HDR_RE   = %r{(?:#{REQ_HDR}|#{RESP_HDR})}o
 
-  FROM = -> (message, uri = nil) do
+  FROM = -> (message = nil, uri = nil) do
     val = case message
-          when String then return new(message)
+          when String, nil then message
           when Rack::Request
             uri ||= message.url
             message.get_header(to_req_env field_name)
           when Hash
             # we want rack\..* or FOO_BAR
-            if message.keys.any? { |k| /^(rack\..+|[A-Z]+(?:_[0-9A-Z]+)+)$/ }
+            if message.keys.any? { |k| /^rack\./ =~ k }
+              # warn "ARRRGH #{message.inspect}"
               message = Rack::Request.new message
               uri ||= message.url
               message.get_header(to_req_env field_name)
+            elsif message.keys.all? { |k| k.is_a?(String) && RESP_HDR =~ k }
+              message.transform_keys(&:downcase)[to_http field_name]
+            elsif final_type.ancestors.include? Hash
+              message
             else
               message[to_http field_name]
             end
+          when nominal_type then message
           when Rack::Response then message.get_header(to_http field_name)
           else
             raise ArgumentError,
-              "cannot handle message of type #{message.class}"
+              "cannot handle message of type #{message.class}: #{message}"
           end
 
     if [Rack::Request, Rack::Response].any? { |c| message.is_a? c }
       mobj = message
     end
 
-    new(val, message: mobj, uri: uri) if val
+    # warn "URI: #{uri.inspect}"
+
+    new val, message: mobj, uri: uri
   end
 
   public
@@ -749,6 +821,10 @@ class Intertwingler::Field
     raise ParseError, "invalid field name #{name}" unless
       m = HDR_RE.match(name.to_s.strip)
     m.captures.detect { |x| !x.nil? }.downcase.tr(?_, ?-)
+  end
+
+  def self.req_headers env
+    env.select { |k| REQ_HDR.match? k }.transform_keys { |k| to_http k }
   end
 
   def self.inspect

@@ -1,8 +1,8 @@
 require 'intertwingler/version' # for the symbol
 
-require 'forwardable'
-require 'mimemagic'
-require 'store/digest/readwrapper'
+require 'tempfile'
+require 'mimemagic-dorian'
+require 'store/digest/entry'
 
 # This class is a cheap knockoff of a
 # {https://en.wikipedia.org/wiki/Monad_(functional_programming) monad}
@@ -82,13 +82,9 @@ require 'store/digest/readwrapper'
 #
 # 1. use (???)
 #
-class Intertwingler::Representation
-  extend Forwardable
-
-  # just enough io methods XXX ALSO NOTE it's :io the method, not :@io
-  # the instance variable.
-  def_delegators :io, :each, :read, :gets, :seek, :pos, :tell,
-    :rewind, :length, :size, :flush, :close
+class Intertwingler::Representation < Store::Digest::Entry
+  autoload :Nokogiri, 'intertwingler/representation/nokogiri'
+  autoload :Vips,     'intertwingler/representation/vips'
 
   private
 
@@ -99,28 +95,28 @@ class Intertwingler::Representation
 
   # make a temp file with presets
   def tempfile
-    Tempfile.new 'repr-', encoding: Encoding::BINARY
+    Tempfile.new 'repr-', encoding: Encoding::BINARY, anonymous: true
   end
 
-  def coerce_io_like obj
-    # just give us the io if it's one of ours
-    return obj.io if obj.is_a? Intertwingler::Representation
+  # def coerce_io_like obj
+  #   # just give us the io if it's one of ours
+  #   return obj.io if obj.is_a? Intertwingler::Representation
 
-    if obj.respond_to? :each
-      return obj if obj.is_a? IO or
-        %i[getc read seek close].all? { |m| obj.respond_to? m }
-      # this would be where we upgrade the IO object to a seekable thing
-      io = tempfile
-      obj.each { |x| io << x }
-      return io
-    elsif obj.respond_to? :call
-      # okay then it's a rack streaming response body
-      obj.call(io = tempfile)
-      return io
-    end
+  #   if obj.respond_to? :each
+  #     return obj if obj.is_a? IO or
+  #       %i[getc read seek close].all? { |m| obj.respond_to? m }
+  #     # this would be where we upgrade the IO object to a seekable thing
+  #     io = tempfile
+  #     obj.each { |x| io << x }
+  #     return io
+  #   elsif obj.respond_to? :call
+  #     # okay then it's a rack streaming response body
+  #     obj.call(io = tempfile)
+  #     return io
+  #   end
 
-    raise ArgumentError, "object of #{obj.class} is not IO-ey enough"
-  end
+  #   raise ArgumentError, "object of #{obj.class} is not IO-ey enough"
+  # end
 
   def coerce_type type
     # this syntax sugar will automatically noop for MimeMagic objects
@@ -152,6 +148,17 @@ class Intertwingler::Representation
       'subclasses must implement private method `serialize`'
   end
 
+  protected
+
+  def set_content content
+    # warn "got here wtf"
+    type = @type # grab this
+    super content
+    @type = type
+
+    nil
+  end
+
   public
 
   def self.object_class
@@ -159,7 +166,7 @@ class Intertwingler::Representation
   end
 
   def self.default_type
-    const_get :DEFAULT_TYPE
+    MimeMagic[const_get :DEFAULT_TYPE]
   end
 
   def self.valid_types
@@ -195,9 +202,6 @@ class Intertwingler::Representation
     self.class.handles? type
   end
 
-  attr_reader :type
-  attr_accessor :language, :charset
-
   def initialize obj, type: nil, language: nil, charset: nil, **options
     oc = object_class # call this once cause self.class is slow
 
@@ -205,15 +209,15 @@ class Intertwingler::Representation
 
     if obj.is_a? oc
       @object = obj
+      super nil, type: type, language: language, charset: charset, **options do
+        # this is a cheat; you have to initialize with either content
+        # or a block, and the block is supposed to return a hash, so
+        # an empty hash will get around the guard
+        {}
+      end
     else
-      # warn obj
-      # @io = BodyWrap[obj]
-      @io = Store::Digest::ReadWrapper[obj]
+      super obj, type: type, language: language, charset: charset, **options
     end
-
-    @type     = coerce_type(type || cl.default_type)
-    @language = coerce_rfc5646 language if language
-    @charset  = coerce_charset charset  if charset
   end
 
   def self.coerce io, type: nil, language: nil, charset: nil, **options
@@ -227,58 +231,78 @@ class Intertwingler::Representation
     new io, type: type, language: language, charset: charset, **options
   end
 
+  # XXX THIS SUCKS
+  #
+  def scan
+    scan! if !scanned? && (@content || @object)
+    self
+  end
+
+  # XXX FIGURE THESE OUT
+  #
+  def scan!
+    # warn caller
+    # overwrite the content first
+    if @object && !scanned?
+      # warn 'whycome no scan'
+      # warn "extensions for #{type}: #{type.extensions.first}"
+      # set_content -> fh { warn Thread.current.backtrace.join("\n"); serialize @object, fh }
+      # tmp = serialize @object
+      set_content serialize(@object)
+      # warn tmp
+      # do super last
+      super
+    else
+      # do super first
+      super
+      @object = parse @content
+    end
+
+    self
+  end
+
   def type= newtype
     newtype = coerce_type newtype
 
     # if this is different we're converting so we need to parse the io
     # if we haven't already
     if @type != newtype
-      @type = newtype
-
-      if @io
-        @io.seek 0 if @io.respond_to? :seek
-        @object ||= parse @io
+      unless newtype.descendant_of? @type
+        # warn "unscan #{@type} #{newtype} #{@type != newtype}"
+        unscan!
       end
+      @type = newtype
     end
-
-    @type
   end
 
-  def io
-    # warn "hi lol #{caller}"
-
-    # a call to io should overwrite
-    if @object && !@io
-      @io = serialize @object, tempfile
-      @io.seek 0 if @io.respond_to? :seek
-      # @object = nil
-    end
-
-    @io
-  end
-
-  def io= obj
+  def content= content
     @object = nil
-    @io = Store::Digest::ReadWrapper[obj]
+    super content
   end
+
+  alias_method :io=, :content=
 
   def object= obj
     cls = object_class # do this because self.class is slow
     raise ArgumentError,
-      "object must be a #{cls}, not #{obj.class}" unless object.is_a? cls
-
-    # wipe out the stale io
-    @io = nil
+      "object must be a #{cls}, not #{obj.class}" unless obj.is_a? cls
     @object = obj
+    unscan!
   end
 
   # Return the in-memory representation of the object.
   def object
-    @object ||= parse @io
+    return @object if @object
+
+    scan
+
+    # warn 'okay object gooo'
+
+    @object = parse @content
   end
 
   def inspect
-    "<#{self.class} type: #{type}, object: #{object.class}>"
+    "<#{self.class} type: #{type}, object: #{@object.class}>"
   end
 
 end

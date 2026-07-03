@@ -455,7 +455,7 @@ class Intertwingler::Engine < Intertwingler::Handler
 
       hurn = nil
 
-      # resp = engine.cache.fetch req do |req|
+      resp = engine.cache.fetch req do |req|
         candidates.each do |urn, handler|
           hurn = urn
 
@@ -466,8 +466,9 @@ class Intertwingler::Engine < Intertwingler::Handler
             resp = tmp unless resp.status == 405 and tmp.status == 404
           rescue Intertwingler::Error::HTTPStatus => e
             resp = e.response
-          rescue => e
+          rescue StandardError => e
             engine.log.debug "ruh roh #{req.request_method} #{req.url} blew up: #{e}"
+            engine.log.debug e.backtrace
 
             # quit now in case this blows up
             # XXX do something smarter here
@@ -483,6 +484,10 @@ class Intertwingler::Engine < Intertwingler::Handler
           break unless [404, 405].include? resp.status
         end
 
+        # XXX rename this something less dumb
+        resp = engine.ensure_store_object resp unless
+          resp.body.is_a? Store::Digest::Entry
+
         hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
 
         engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
@@ -497,7 +502,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         end
 
         resp
-      # end
+      end
     end
 
   end # END Dispatcher
@@ -714,6 +719,13 @@ class Intertwingler::Engine < Intertwingler::Handler
 
     # why oh why no body=
     Rack::Response[resp.status, headers, body]
+  end
+
+  def ensure_store_object resp
+    ct = resp.content_type
+    lm = resp.get_header 'last-modified'
+    lm = Intertwingler::Field['last-modified'][lm]&.value if lm
+    replace_response_body resp, store.add(resp.body, type: ct, mtime: lm)
   end
 
   # Fake up a request and run the main handler. Returns the

@@ -484,13 +484,13 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         end
       end
 
+      terms |= types = (repo.types_for(subject) + [CGTO.Index]).uniq
+
       pfx = resolver.prefixes.slice(
         :cgto, :rdf, :rdfs, :xsd, :foaf, :xhv, nil).merge(
       resolver.prefix_subset(terms)).map do |k, v|
         [(k.nil? ? :@vocab : k), v.to_s]
       end.sort { |a, b| a.first.to_s <=> b.first.to_s }.to_h
-
-      types = (repo.types_for(subject) + [CGTO.Index]).uniq
 
       {
         "@context": {
@@ -502,7 +502,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
     end
 
     WEIGHTS = {
-      'application/ld+json' => 0.5,
+      'application/ld+json'   => 0.9,
       'application/xhtml+xml' => 1,
     }
 
@@ -745,6 +745,7 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
         body = generate_body uri, params do |yp|
           yp[:class_type].each do |t|
             p = /^([^:]+):/.match(t)&.captures&.first&.to_sym
+            # warn "prefix wut: #{t}, #{p.inspect}"
             pfx << p if p
           end
 

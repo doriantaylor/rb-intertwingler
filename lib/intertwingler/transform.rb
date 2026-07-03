@@ -4,7 +4,7 @@ require 'intertwingler/vocab/tfo'
 require 'intertwingler/graphops'
 require 'intertwingler/util'
 require 'set'
-require 'mimemagic'
+require 'mimemagic-dorian'
 require 'http/negotiate'
 require 'time'
 
@@ -1067,6 +1067,7 @@ class Intertwingler::Transform
       # request must have a content type or return 409
       type = req.content_type or
         return Rack::Response[409, {}, ['Missing Content-Type header']]
+      log.debug "ouate de phoque #{type} (#{MimeMagic[type]})"
       type = MimeMagic[type].canonical # XXX do we preserve type parameters??
 
       # warn "from inside transform handler: #{type}"
