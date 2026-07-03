@@ -88,15 +88,15 @@ class Intertwingler::Cache
   # that are unconditionally never okay to cache. note that 206 would
   # be in the OK bucket if we cached ranges but lol @ that
   CACHE_OK = Set[200, 203, 204, 300, 301, 404, 405, 410, 414, 501]
-  # these responses are never cacheable (except maybe 206 one day)
-  NO_CACHE = Set[206, 401, 407, 412, 416, 503]
+  # these responses are never cacheable (except maybe 206 or 304 one day)
+  NO_CACHE = Set[206, 304, 401, 407, 412, 416, 503]
 
   # been typing this a lot lol
   F = Intertwingler::Field
 
   # Ensure the argument resolves to a parsed `Cache-Control` header.
   #
-  # @param msg [Rack::Request, Rack::Response, Hash, #to_s] smome
+  # @param msg [Rack::Request, Rack::Response, Hash, #to_s] some
   #  argument or other
   #
   # @return [Hash] the `Cache-Control` header
@@ -414,7 +414,7 @@ class Intertwingler::Cache
 
     # now deal with revalidation
     if cached
-      log.debug "Attempting to revalidate #{rstmt}"
+      log.debug "Revalidating response to #{rstmt}"
 
       # shuffle around some values
       stored = time
@@ -428,6 +428,8 @@ class Intertwingler::Cache
       rcc = F['cache-control'][resp]&.value   || {}
 
       if resp.status == 304
+        log.debug "Revalidating response returned 304; freshening cache entry."
+
         # freshen the index
         freshen_internal req, resp
         # assemble the set of headers to replace (RFC9110 §15.4.5;
@@ -438,6 +440,8 @@ class Intertwingler::Cache
         # we can just do that lol
         cached.headers.merge!(resp.headers.slice(*nh))
         return cached
+      else
+        log.debug "Revalidating response returned #{resp.status}"
       end
 
       # deal with stale-if-error
@@ -787,7 +791,7 @@ class Intertwingler::Cache
       # we have a cached entry
       if resp
         log.debug(
-          "Got cached response #{resp.status} #{resp.content_type || '(null)'}")
+          "Tentative cache hit: #{resp.status} #{resp.content_type || '(null)'}")
 
         # get response age vs time
         age = time - stored
@@ -808,16 +812,16 @@ class Intertwingler::Cache
         serve = age <= ((max - min_f).clamp(0..) + [max_s, swr].max)
 
         if serve
-          log.debug "Cache hit on #{rstmt}"
-          # determine if we don't have to revalidate synchronously
-          if !rcc.key?(:'no-cache') ||
-              cc.slice(*%i[no-cache must-revalidate]).empty?
+          # we don't need to revalidate unless we do it asynchronously
+          if cc.slice(*%i[no-cache must-revalidate]).empty? && !rcc.key?(:'no-cache')
 
-            # # swr may be less than max-stale so we test it again
-            # if block and age < ((max - min_f).clamp(0..) + swr)
-            #   log.debug "Asynchronously revalidating #{rstmt}"
-            #   Thread.new { maybe_cache req.dup, &block }
-            # end
+            # swr may be less than max-stale so we test it again
+            if block and swr > 0 and age < ((max - min_f).clamp(0..) + swr)
+              log.debug "Asynchronously revalidating #{rstmt}"
+              Thread.new { maybe_cache req.dup, resp, time: stored, &block }
+            end
+
+            log.debug "Cache hit on #{rstmt}"
 
             # return cached response
             return resp
@@ -825,7 +829,7 @@ class Intertwingler::Cache
 
           # okay now revalidate
           if block
-            log.debug "Revalidating #{rstmt}"
+            log.debug "Revalidating #{rstmt} from stored time #{stored}"
             return maybe_cache req, resp, time: stored, &block
           end
         end
@@ -851,6 +855,11 @@ class Intertwingler::Cache
   #
   def expire arg
     expire_internal arg
+  end
+
+  def close
+    close_internal
+    nil
   end
 
   # This is a little toy class that encapsulates the cache key digest
@@ -987,23 +996,28 @@ class Intertwingler::Cache
       end
     end
 
+    def vary?
+      !@vary.empty?
+    end
+
     # Set which headers were found in the response's `Vary` to be
     # used for the request.
     #
     # @param headers [Array<String>]
     #
     def vary= headers
-      # set empty list by default
+      # set the headers by which we vary
       @vary = F['vary'][headers].value.freeze
 
       # headers = F['vary'][headers]&.value || Set[] unless
       #   headers.is_a? Array
 
-      warn "keystate vary: #{@vary.inspect}"
+      # warn "keystate vary: #{@vary.inspect}"
 
       # empty these out if there are no vary headers
       if @vary.empty?
-        [0,1].each { |i| @states[2 | i] = @states[i].dup }
+        @states[2] = @states[3] = nil
+        # [0,1].each { |i| @states[2 | i] = @states[i].dup }
 
         return
       end
@@ -1011,9 +1025,8 @@ class Intertwingler::Cache
       # XXX FUTURE ME: rack 3.3 will have `headers` (which was
       # relevant here but no longer is)
       reqh = @vary.each_with_object([]) do |name, a|
-        if v = F[name][@headers]
-          a << [v.field_name, v.to_s]
-        end
+        v = F[name][@headers]
+        a << [v.field_name, v.to_s] unless v.default?
       end.sort { |a, b| a.first <=> b.first }.to_h
 
       warn "varying by #{reqh.inspect}"
@@ -1037,7 +1050,10 @@ class Intertwingler::Cache
     # @return [Digest::SHA256, nil] a duplicate of the hash state,
     #  if it exists.
     #
-    def state authed: false, vary: nil
+    def state authed: nil, vary: nil
+      authed = authed? if authed.nil?
+      vary   = vary?   if vary.nil?
+
       # overwrite new vary states
       if vary
         self.vary = vary if [String, Enumerable].any? { |c| vary.is_a? c }
@@ -1261,6 +1277,7 @@ class Intertwingler::Cache
       def signpost? record
         # get the control byte
         ctrl = record.is_a?(Integer) ? record : record.to_s.bytes.first
+        warn "checking signpost for #{record.is_a?(Integer) ? record : record.unpack1('H*')}"
         # now check it
         (ctrl & IS_SIGNPOST).nonzero?
       end
@@ -1514,11 +1531,9 @@ class Intertwingler::Cache
 
       def cache_internal req, resp
         # construct the hash key state
-        # vary  = F['vary'][resp]&.value
-        vary  = resp.get_header 'vary' # XXX FIX THIS
-        state = KeyState[req, vary]
+        state = KeyState[req, resp.get_header('vary')]
 
-        log.warn "vary: #{vary} #{state.instance_variable_get :@vary}"
+        # log.warn "vary: #{vary} #{state.instance_variable_get :@vary}"
 
         # we use authed key if the request is authenticated, unless
         # the response is explicitly `public`
@@ -1569,9 +1584,9 @@ class Intertwingler::Cache
         # okay NOW note we start a new transaction
         lmdb.transaction do
           # create the terminal record
-          log.warn "#{req.env['REMOTE_USER']} <-> #{state.instance_variable_get(:@principal).inspect}"
+          # log.warn "#{req.env['REMOTE_USER']} <-> #{state.instance_variable_get(:@principal).inspect}"
           log.warn state.instance_variable_get(:@states).inspect
-          tk  = state.state(authed: priv, vary: !!vary).digest
+          tk  = state.state(authed: priv, vary: state.vary?).digest
           tv  = pack_terminal resp.status, resp.headers, cl
           inc = !index.has?(tk) # determine if adding or updating
           index.put tk, tv
@@ -1580,15 +1595,19 @@ class Intertwingler::Cache
           uk = state.uri_state.digest
           uris.put? uk, tk
 
-          if !state.vary.empty?
+          if state.vary?
             sk = state.state(authed: priv, vary: false).digest
+
+            raise RuntimeError, "Signpost and terminal keys should not match" \
+              " (#{sk.unpack1}, vary: #{state.vary})" if sk == tk
 
             count = inc ? 1 : 0
             if sv = index.get(sk)
+              log.debug "what the heck signpost: #{sv.unpack1 'H*'}"
               count += count_signpost sv
             end
 
-            sv = pack_signpost count, vary
+            sv = pack_signpost count, state.vary
 
             log.debug "signpost: #{sk.unpack1 'H*'} -> #{sv.unpack1 'H*'}"
 
@@ -1615,7 +1634,7 @@ class Intertwingler::Cache
 
         # first attempt to get a private record
         if authed = state.authed?
-          tkey = state.state(authed: true).digest
+          tkey = state.state(authed: true, vary: false).digest
           # XXX THIS IS ACTUALLY WRONG: the resource *could* have
           # different representations depending on whether or not
           # you're logged in, so if you *are* logged in and the
@@ -1631,7 +1650,7 @@ class Intertwingler::Cache
         end
 
         # attempt to get the public record
-        raw ||= index[tkey = state.state.digest]
+        raw ||= index[tkey = state.state(authed: false, vary: false).digest]
 
         # okay there really isn't anything here
         return if raw.nil? or raw.empty?
@@ -1639,8 +1658,12 @@ class Intertwingler::Cache
         if signpost?(raw)
           skey = tkey
           count, vary = unpack_signpost raw
+          log.warn "signpost count: #{count}, vary: #{vary.inspect}"
           tkey = state.state(authed: authed, vary: vary).digest
           raw  = index[tkey]
+
+          # this is actually possible if the request is different
+          # raise RuntimeError, "Corrupt database: signpost #{skey.unpack1 'H*'} points to missing terminal #{tkey.unpack1 'H*'}" if raw.nil? or raw.empty?
 
           # if this is nil then there's nothing here
           return if raw.nil? or raw.empty?
@@ -1767,7 +1790,7 @@ class Intertwingler::Cache
 
         time ||= Time.now(in: ?Z)
 
-        state = KeyState[req]
+        state = KeyState[req, resp.get_header('vary')]
 
         lmdb.transaction? do
           # resolve terminal record (or return because it's already been nuked)
@@ -1780,12 +1803,17 @@ class Intertwingler::Cache
             # merge the headers
             headers.merge! resp.headers.except(*FRESHEN_EXCEPT)
 
-            raw = pack_terminal status, headers,
+            raw = pack_terminal status, headers, cl,
               time: time, authed: state.authed?
 
-            lmdb[:index][key] = raw
+            lmdb[:index].put key, raw
           end
         end
+      end
+
+      def close_internal
+        lmdb.sync
+        lmdb.close
       end
     end
 

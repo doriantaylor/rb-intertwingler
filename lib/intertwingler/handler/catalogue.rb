@@ -1620,8 +1620,8 @@ class Intertwingler::Handler::Catalogue < Intertwingler::Handler
       'content-type' => 'text/plain',
     }, ['no catalogue']] unless subject and resource
 
-    # okay NOW check if it's cacheable
-    if resource.cacheable? and repo.respond_to?(:mtime) and
+    # handle 304 responses
+    if repo.respond_to?(:mtime) and
         ims = req.get_header('HTTP_IF_MODIFIED_SINCE')
       ims = (Time.httpdate(ims) rescue Time.at(0)).utc
       lm  = repo.mtime

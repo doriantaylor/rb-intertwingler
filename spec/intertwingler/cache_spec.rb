@@ -11,12 +11,17 @@ BASE = Pathname(Dir.tmpdir).expand_path + 'intertwingler-cache'
 describe Intertwingler::Cache::KeyState do
   it 'should work lol' do
     env = Rack::MockRequest.env_for 'http://lol.dongs/hurr'
-    # env['REMOTE_USER'] = 'deuce@jerkcity.com'
+    # env['HTTP_ACCEPT'] = '*/*'
+    env['REMOTE_USER'] = 'deuce@jerkcity.com'
     req = Rack::Request.new env
 
     state = Intertwingler::Cache::KeyState[req, 'accept']
 
-    expect(state.authed?).to be_falsey
+    expect(state.authed?).to be_truthy
+    expect(state.state authed: true).to_not eq(state.state authed: false)
+    # this should return something even if the header is empty
+    expect(state.state vary: true).to_not be_nil
+    expect(state.state(vary: false).hexdigest).to_not eq(state.state(vary: true).hexdigest)
   end
 end
 
@@ -26,11 +31,11 @@ describe Intertwingler::Cache do
     @store = Store::Digest.new dir: BASE + 'cas', mapsize: 2**27
   end
 
-  # after :context do
-  #   @cache = nil
-  #   @store = nil
-  #   FileUtils.rm_rf BASE
-  # end
+  after :context do
+    @cache = nil
+    @store = nil
+    FileUtils.rm_rf BASE
+  end
 
   # are we cargo-culting here?
   subject { @cache ||= Intertwingler::Cache.new store: @store, dir: BASE }
@@ -40,8 +45,23 @@ describe Intertwingler::Cache do
     req = Rack::Request.new env
 
     resp = subject.fetch req do |r|
-      Rack::Response[200, { 'content-type' => 'text/plain' }, ['duhh']]
+      Rack::Response[200, { 'cache-control' => 'no-cache',
+        'content-type' => 'text/plain', 'vary' => 'Accept' }, ['duhh']]
     end
+
+    expect(resp.status).to eq(200)
+
+    resp = subject.fetch req do |r|
+      Rack::Response[304, { 'x-potato' => 'lol',
+        'cache-control' => 'no-cache', 'vary' => 'Accept' }, []]
+    end
+
+    resp = subject.fetch req do |r|
+      Rack::Response[304, {
+        'cache-control' => 'no-cache', 'vary' => 'Accept' }, []]
+    end
+
+    expect(resp.get_header 'x-potato').to eq('lol')
 
   end
 

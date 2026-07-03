@@ -47,7 +47,7 @@ class Intertwingler::Field
       # don't parse
       @value = self.class.coerce @original
     else
-      @original = @original.to_s.strip
+      # @original = @original.to_s.strip
       parse!
     end
   end
@@ -214,7 +214,7 @@ class Intertwingler::Field
   # @return [Array]
   #
   def self.parse value
-    ss = StringScanner.new value
+    ss = StringScanner.new value.to_s
     scan_elements ss
   end
 
@@ -284,6 +284,10 @@ class Intertwingler::Field
     "<#{self.class} \"#{to_s}\">"
   end
 
+  def default?
+    @original.nil?
+  end
+
   # Leaves header value untouched, except for `#strip` around the
   # entire string.
   #
@@ -313,10 +317,11 @@ class Intertwingler::Field
     FINAL_TYPE   = ::Integer
 
     def parse!
-      raise ParseError, "#{@original} is not a recognizable integer" unless
-        /^\s*\d+\s*$/ =~ @original
+      m = /^\s*([+-]?\d+)/.match @original.to_s
+      raise ParseError,
+        "#{@original.inspect} is not a recognizable integer" unless m
 
-      @value = @original.strip.to_i
+      @value = m.captures.first.strip.to_i.clamp(0..)
     end
 
     public
@@ -397,7 +402,7 @@ class Intertwingler::Field
 
     def parse!
       c = self.class
-      if elem = c.scan_element(StringScanner.new(@original))
+      if elem = c.scan_element(StringScanner.new(@original.to_s))
         type, params = elem
 
         # get rid of q
@@ -469,7 +474,7 @@ class Intertwingler::Field
     FINAL_TYPE   = ::Array
 
     def parse!
-      @value = self.class.scan_elements(StringScanner.new @original).compact
+      @value = self.class.scan_elements(StringScanner.new @original.to_s).compact
     end
 
     public
@@ -524,7 +529,7 @@ class Intertwingler::Field
     FINAL_TYPE = Hash
 
     def parse!
-      ss = StringScanner.new @original
+      ss = StringScanner.new @original.to_s
       @value = self.class.scan_elements(ss).to_h
     end
 
@@ -570,7 +575,7 @@ class Intertwingler::Field
     private
 
     def parse!
-      ss = StringScanner.new @original
+      ss = StringScanner.new @original.to_s
       @value = self.class.scan_elements(ss).each_with_object({}) do |pair, h|
         q = (pair.last[:q] || 1.0).to_f.clamp(0.0, 1.0).round 3
         h[pair.first] = q
@@ -600,7 +605,7 @@ class Intertwingler::Field
 
     # we override here to preserve
     def parse!
-      ss = StringScanner.new @original
+      ss = StringScanner.new @original.to_s
       @value = self.class.scan_elements(ss).each_with_object({}) do |pair, h|
         q = (pair.last.delete(:q) || 1.0).to_f.clamp(0.0, 1.0).round 3
         (h[pair.first] ||= []) << [pair.last, q]
