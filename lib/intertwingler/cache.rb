@@ -234,7 +234,8 @@ class Intertwingler::Cache
           # so is `Last-Modified` but we're calculating
           # heuristic freshness against `now`.
           max = date + dd - lm
-          max = max > 0 ? max * 0.1 : 0
+          max = max > 0 ? (max * 0.1).round : 0
+
           log.debug "heuristic freshness: #{max}"
         elsif default
           max = default.is_a?(Numeric) && default > 0 ?
@@ -391,7 +392,13 @@ class Intertwingler::Cache
 
     cached = resp # this will obviously stay nil if `resp` is nil
     subreq = req.dup
-    subreq.set_header('HTTP_IF_MODIFIED_SINCE', time.httpdate) if cached
+
+    if cached
+      # we'll do a conditional request
+      ims = F['if-modified-since'][subreq].value || time
+      subreq.set_header(
+        'HTTP_IF_MODIFIED_SINCE', (ims > time ? ims : time).httpdate)
+    end
 
     # get the origin response
     begin
@@ -1277,7 +1284,7 @@ class Intertwingler::Cache
       def signpost? record
         # get the control byte
         ctrl = record.is_a?(Integer) ? record : record.to_s.bytes.first
-        warn "checking signpost for #{record.is_a?(Integer) ? record : record.unpack1('H*')}"
+        # warn "checking signpost for #{record.is_a?(Integer) ? record : record.unpack1('H*')}"
         # now check it
         (ctrl & IS_SIGNPOST).nonzero?
       end
