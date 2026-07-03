@@ -260,10 +260,10 @@ class Intertwingler::Field
     @uri = if uri
              Intertwingler::Util::Clean.coerce_resource uri, as: :uri
            elsif message.is_a? ::Rack::Request
-             URI(message.url.to_s)
+             Kernel.URI(message.url.to_s)
            elsif message.is_a? ::Hash
              @message = Rack::Request.new message
-             URI(@message.url.to_s)
+             Kernel.URI(@message.url.to_s)
            end
 
     # then we coerce
@@ -343,8 +343,8 @@ class Intertwingler::Field
 
     def parse!
       begin
-        orig = @original.strip
-        @value = (@uri ? @uri + orig : ::URI.new(orig)).normalize
+        orig = @original.to_s.strip
+        @value = (@uri ? (@uri + orig) : Kernel.URI(orig)).normalize
       rescue ::URI::Error => e
         # re-raise with a different message
         raise ParseError, e.message
@@ -376,15 +376,15 @@ class Intertwingler::Field
 
     def parse!
       # RFC9111 §5.3
-      @value = Time.httpdate(@original.strip) rescue Time.at(0).utc
+      @value = Time.httpdate(@original.to_s.strip) rescue nil
     end
 
     def to_s
-      @value.httpdate
+      @value ? @value.httpdate : ''
     end
 
     def inspect
-      "<#{self.class} (#{@value.iso8601})>"
+      "<#{self.class} (#{@value ? @value.iso8601 : ''})>"
     end
   end
 
@@ -396,9 +396,16 @@ class Intertwingler::Field
     FINAL_TYPE = ::MimeMagic
 
     def parse!
-      elem = self.class.scan_element StringScanner.new(@original)
-      elem.last.delete :q # there should not be a q key
-      @value = elem
+      c = self.class
+      if elem = c.scan_element(StringScanner.new(@original))
+        type, params = elem
+
+        # get rid of q
+        params.delete :q
+
+        # we reserialize this because shrug
+        @value = MimeMagic[c.serialize(type, params)]
+      end
     end
 
     public
@@ -410,11 +417,12 @@ class Intertwingler::Field
     # @return [Array(String, Hash)] the parsed type
     #
     def self.scan_element scanner
-      type = scanner.scan /#{TOKEN}\/#{TOKEN}/
-      scanner.skip OWS
-      params = scan_params scanner
+      if type = scanner.scan(/#{TOKEN}\/#{TOKEN}/)
+        scanner.skip OWS
+        params = scan_params scanner
 
-      [type.downcase, params]
+        [type.downcase, params]
+      end
     end
 
     # Serialize a normalized media type.
@@ -423,7 +431,7 @@ class Intertwingler::Field
     # @param params [Hash{Symbol=>Object}, nil] its parameters
     #
     def self.serialize type, params
-      params ||= {}
+      params = (params || {}).transform_keys(&:to_sym)
 
       # we include q here for Accept
       keys = params.keys.sort - [:q]
@@ -447,7 +455,7 @@ class Intertwingler::Field
     # @return [String]
     #
     def to_s
-      self.class.serialize(*@value)
+      self.class.serialize @value.type, @value.params if @value
     end
   end
 

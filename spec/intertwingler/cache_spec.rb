@@ -14,7 +14,7 @@ describe Intertwingler::Cache::KeyState do
     # env['REMOTE_USER'] = 'deuce@jerkcity.com'
     req = Rack::Request.new env
 
-    state = Intertwingler::Cache::KeyState.new req
+    state = Intertwingler::Cache::KeyState[req, 'accept']
 
     expect(state.authed?).to be_falsey
   end

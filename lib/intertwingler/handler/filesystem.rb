@@ -129,7 +129,7 @@ class Intertwingler::Handler::FileSystem < Intertwingler::Handler
 
     # we'll just make a big chonkin' hash of variants which we can
     # use for the negotiation and afterwards
-    variants = paths.reduce({}) do |h, p|
+    variants = paths.each_with_object({}) do |p, h|
 
       # don't do this if this is the root
       unless r = roots.include?(p)
@@ -154,8 +154,6 @@ class Intertwingler::Handler::FileSystem < Intertwingler::Handler
           end
         end
       end unless !r and resolver.uuid? bn
-
-      h
     end
 
     # if there are no variants then this is a genuine 404
@@ -212,11 +210,17 @@ class Intertwingler::Handler::FileSystem < Intertwingler::Handler
         return Rack::Response[304, {}, []] if var[:mtime].to_i <= ims.to_i
       end
 
-      return Rack::Response[200, {
-        'content-type'   => var[:type],
+      headers = {
+        'content-type'   => var[:type].to_s,
         'content-length' => var[:size].to_s, # rack should do this
         'last-modified'  => var[:mtime].httpdate,
-      }, selected.open]
+      }
+
+      # add vary header
+      headers['vary'] = 'Accept' if
+        variants.values.map { |v| v[:type] }.uniq.size > 1
+
+      return Rack::Response[200, headers, selected.open]
     end
 
     engine.log.debug "No acceptable variant for #{path}"
