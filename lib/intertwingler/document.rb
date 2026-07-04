@@ -108,6 +108,11 @@ class Intertwingler::Document
     sanitize: ".//html:*[%s][not(self::html:base)]" %
       (%i[about resource] + URL_ATTRS.keys).map { |x| ?@ + x.to_s }.join(?|),
     dehydrate: './/html:a[count(*|text())=1][html:dfn|html:abbr|html:span]',
+    # rehydrate: (
+    #   './/html:*%s[%s]' %
+    #     [RH_BP, (%w[abbr[not(ancestor::html:dfn)]] +
+    #              (INLINES - %w[a abbr])).map { |e| "self::html:#{e}" }.join(?|)]
+    # ).freeze,
     rehydrate: (
       %w[abbr[not(ancestor::html:dfn)]] + (INLINES - %w[a abbr])).map { |e|
       ".//html:#{e}#{RH_BP}" }.join(?|).freeze,
@@ -2230,7 +2235,7 @@ class Intertwingler::Document
   def self.rehydrate resolver, elem, base: nil, cache: {}, rescan: false, &block
     repo = resolver.repo
 
-    # collect all the literals
+    # collect all the literals in the graph
     if cache.empty?
       repo.each_object do |o|
         if o.literal?
@@ -2239,6 +2244,10 @@ class Intertwingler::Document
         end
       end
     end
+
+
+    candidates = {} # { literal => { subject => { types: [], preds: [] } } )
+    rev        = {} # { rdfa subject => { graph object => predicates } }
 
     elem.xpath(XPATH[:rehydrate], XPATHNS).each do |e|
       # split the xpath up so it isn't as costly to run
@@ -2250,6 +2259,8 @@ class Intertwingler::Document
       # deal with <time> element XXX should also deal with XMLLiteral
       text = (e.name == 'time' && e['datetime'] || e['content'] ||
               e['aria-label'] || e['title'] || e.content).strip
+
+      # we may have multiple literals for a given lemma
 
       # now we have the literals actually in the graph
       lit = cache[Intertwingler::NLP.lemmatize(text).downcase] or next
@@ -2269,17 +2280,31 @@ class Intertwingler::Document
         end
       end
 
-      # candidates
+      # compile candidates
       cand = {}
-      lit.map { |t| repo.query([nil, nil, t]).to_a }.flatten.each do |x|
-        y = cand[x.subject] ||= {}
-        (y[:stmts] ||= []) << x
-        y[:types]  ||= repo.query([x.subject, RDF.type, nil]).objects.sort
+
+      lit.each do |term|
+        unless candidates[term]
+          c = candidates[term] ||= {}
+          repo.query([nil, nil, term]).each do |stmt|
+            struct = cand[stmt.subject] ||= c[stmt.subject] ||= {}
+            struct[:types] ||= repo.types_for(stmt.subject)
+            (struct[:stmts] ||= []) << stmt
+          end
+        end
       end
+
+      # candidates
+      # cand = {}
+      # lit.map { |t| repo.query([nil, nil, t]).to_a }.flatten.each do |x|
+      #   y = cand[x.subject] ||= {}
+      #   (y[:stmts] ||= []) << x
+      #   y[:types]  ||= repo.query([x.subject, RDF.type, nil]).objects.sort
+      # end
 
       # passing a block to this method enables e.g. interactive
       # control over which candidates, if any, get applied to the tag.
-      if block_given?
+      if block
         # the block is expected to return one of the candidates or
         # nil. we call the block with the graph so that the block can
         # manipulate its contents.
@@ -2296,6 +2321,7 @@ class Intertwingler::Document
         # we assume this has been retrieved from the graph
         cc = cand[chosen]
         unless cc
+          # XXX why exactly am i doing this
           cc = cand[chosen] = {}
           cc[:stmts] = repo.query([chosen, nil, lit.first]).to_a.sort
           cc[:types] = repo.query([chosen, RDF.type, nil]).objects.sort
@@ -2315,11 +2341,12 @@ class Intertwingler::Document
         subject = subject_for(resolver, e, prefixes: pfx, base: ebase)
         preds = if subject
                   su = resolver.uuid_for(subject) || subject
-                  pp = repo.query([su, nil, chosen]).predicates.uniq
+                  pp = rev[su] ||= repo.query(
+                    [su, nil, chosen]).predicates.sort.uniq
 
                   if pp.empty?
                     pp << Intertwingler::Vocab::CI.mentions
-                    pp.each { |p| graph << [su, p, chosen] } if rescan
+                    pp.each { |p| repo << [su, p, chosen] } if rescan
                   end
 
                   resolver.log.debug "#{su} #{pp.inspect} #{chosen}"

@@ -9,6 +9,7 @@ require 'http/negotiate'
 require 'time'
 
 require 'intertwingler/handler'
+require 'intertwingler/field'
 require 'http/negotiate'
 
 # This class represents the metadata about an individual service
@@ -26,6 +27,8 @@ class Intertwingler::Transform
   TFO  = Intertwingler::Vocab::TFO
   CI   = Intertwingler::Vocab::CI
   OWL  = ::RDF::OWL
+
+  F = Intertwingler::Field
 
   def engine ; harness.dispatcher.engine ; end
 
@@ -303,12 +306,10 @@ class Intertwingler::Transform
 
         # get properties
         @params = transform.process(
-          transform.params.keys.reduce({}) do |hash, k|
+          transform.params.keys.each_with_object({}) do |k, hash|
             hash[k] = objects(k, entail: false).map do |o|
               o.literal? ? o.object : o.to_s
             end
-
-            hash
           end)
       end
 
@@ -579,12 +580,18 @@ class Intertwingler::Transform
         log.debug "about to QUERY #{type} to #{uri}"
 
         headers = { 'content-type' => type.to_s }
+
         # note we pun the content-location header to communicate to
         # the subrequest what entity it's looking at; this is totally
         # legal to use this header in a request, go look it up:
         # https://datatracker.ietf.org/doc/html/rfc9110#section-8.7
         # but we only add this for response transforms
-        headers['content-location'] = req.url if resp
+        if resp
+          headers['content-location'] = req.url
+          if lm = resp.get_header('last-modified')
+            headers['if-modified-since'] = lm
+          end
+        end
 
         subreq  = engine.dup_request req, uri: uri, method: :QUERY,
           headers: headers, body: body
@@ -596,7 +603,10 @@ class Intertwingler::Transform
         # here is where we would break if this was an error or redirect
         unless subresp.successful?
           # XXX any failure in here is bad except 304 which is considered a noop
-          next if subresp.status == 304
+          if subresp.status == 304
+            log.debug "Response to #{subreq.url} was 304"
+            next
+          end
 
           # basically no matter what the situation is here it's a
           # misconfiguration
@@ -1061,13 +1071,15 @@ class Intertwingler::Transform
       # (https://datatracker.ietf.org/doc/html/rfc10008);
       # if not this is over quickly
 
+      # log.debug "env: #{F.req_headers req}"
+
       return Rack::Response[405, {}, []] unless
         %i[POST QUERY].include? req.request_method.to_sym
 
       # request must have a content type or return 409
       type = req.content_type or
         return Rack::Response[409, {}, ['Missing Content-Type header']]
-      log.debug "ouate de phoque #{type} (#{MimeMagic[type]})"
+      # log.debug "ouate de phoque #{type} (#{MimeMagic[type]})"
       type = MimeMagic[type].canonical # XXX do we preserve type parameters??
 
       # warn "from inside transform handler: #{type}"
@@ -1163,15 +1175,18 @@ class Intertwingler::Transform
         # unconditionally would actually be bad.
 
         # run the transform, get back the body
-        out = send func, req, params
+        unless out = send(func, req, params)
 
-        # note `out` can be nil which should be interpreted as 304
-        return Rack::Response[304, {}, []] unless out
+          # note `out` can be nil which should be interpreted as 304
+          return Rack::Response[304, {}, []]
+        end
 
         # warn "still inside: #{out.type}"
 
         # this should be it
         return Rack::Response[200, {
+          # 'cache-control'  => 'max-age=86400, must-revalidate',
+          'cache-control'  => 'max-age=86400',
           'content-type'   => out.type.to_s,
           'content-length' => out.size.to_s }, out]
 

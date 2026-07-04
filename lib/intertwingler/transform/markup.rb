@@ -1,4 +1,5 @@
 require 'intertwingler/transform'
+require 'intertwingler/field'
 
 # most of the actual substantive code lives in this
 require 'intertwingler/document'
@@ -119,6 +120,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   XPATHNS = { html: XHTMLNS }.freeze
 
   D = Intertwingler::Document
+  F = Intertwingler::Field
 
   public
 
@@ -143,7 +145,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
                NAMESPACES[[name, nil]] || type
              end
 
-      log.debug "hwut #{type} #{MimeMagic[type]}"
+      # log.debug "hwut #{type} #{MimeMagic[type]}"
 
       body.object = doc # we need to do this first to trigger the update
       body.type = type
@@ -367,7 +369,9 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     loc = subject_from req
     doc = req.body.object
 
-    engine.log.debug "rehydrating lol"
+    # engine.log.debug "rehydrating lol"
+
+    engine.log.debug "Rehydrating from #{req.body[:'sha-256']}, #{req.body.type}, #{req.body.size}, #{F.req_headers req}"
 
     @lemmas ||= {}
     @mtime = nil
@@ -377,6 +381,12 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       mtime = engine.repo.mtime
       @lemmas.clear if !@mtime or @mtime < mtime
       @mtime = mtime
+      ims = F['if-modified-since'][req].value
+      if ims && ims >= mtime
+        # this gets picked up from the harness and turned into a 304
+        engine.log.debug "IMS: #{ims} >= mtime: #{mtime}"
+          return
+      end
     end
 
     Intertwingler::Document.rehydrate resolver, doc, base: loc, cache: @lemmas

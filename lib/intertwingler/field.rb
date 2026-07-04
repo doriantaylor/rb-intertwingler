@@ -837,6 +837,7 @@ class Intertwingler::Field
   end
 
   def self.req_headers env
+    env = env.env if env.is_a? Rack::Request
     env.select { |k| REQ_HDR.match? k }.transform_keys { |k| to_http k }
   end
 

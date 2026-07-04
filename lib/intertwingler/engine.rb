@@ -393,6 +393,9 @@ class Intertwingler::Engine < Intertwingler::Handler
       uri      = resolver.uri_for uri, as: :uri # canonicalize the uri
       uuid     = resolver.uuid_for uri, as: :uri # also get the uuid
 
+      # for the logs
+      rstmt = "#{req.request_method} #{uri} (#{uuid})"
+
       # default response
       resp = Rack::Response[404,
         { 'content-type' => 'text/plain' }, ['legit nothing bro']]
@@ -444,8 +447,9 @@ class Intertwingler::Engine < Intertwingler::Handler
       # an empty list of handlers means nothing to see here
       return resp if candidates.empty?
 
-      engine.log.debug("dispatcher #{subrequest ? '(subrequest) ' : ''}sees " +
-        "content type: #{req.content_type.inspect}")
+      engine.log.debug(
+        "Dispatching #{subrequest ? 'sub' : ''}request to #{rstmt} " \
+        "(#{req.content_type.inspect})")
 
       # the transform harness may return an empty chain; that's fine
       unless subrequest
@@ -490,15 +494,15 @@ class Intertwingler::Engine < Intertwingler::Handler
 
         hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
 
-        engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
-                         "(#{resp.status} #{hdrs}): #{resp.body}")
+        # engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
+        #                  "(#{resp.status} #{hdrs}): #{resp.body}")
 
         unless subrequest
           # generate the response chain with addressable queue
           chain = chain.response_chain hurn, pp: pp
           resp  = chain.run req, resp
 
-          engine.log.debug "got here too (#{resp.status}): #{resp.body}"
+          # engine.log.debug "got here too (#{resp.status}): #{resp.body}"
         end
 
         resp
