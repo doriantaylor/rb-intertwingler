@@ -1621,6 +1621,7 @@ class Intertwingler::Cache
             resp = Rack::Response[resp.status, resp.headers.to_h, obj]
           end
 
+          # DON'T FORGET TO SET THIS DUM DUM
           cl = resp.body[:"sha-256"]
         end
 

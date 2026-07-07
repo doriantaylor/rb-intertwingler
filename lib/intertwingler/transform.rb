@@ -5,7 +5,6 @@ require 'intertwingler/graphops'
 require 'intertwingler/util'
 require 'set'
 require 'mimemagic-dorian'
-require 'http/negotiate'
 require 'time'
 
 require 'intertwingler/handler'
@@ -808,6 +807,37 @@ class Intertwingler::Transform
       # Set the addressable queue in the chain.
       def set_addressable *pp
         log.debug "path parameters: #{pp}"
+
+        # XXX HERE IS WHERE THE CODE TO HOOK IN ADDRESSABLE TRANSFORMS
+        # OUGHT TO GO.
+        #
+        # The sequence of addressable transforms might be in an
+        # indeterminate state until a request hits them. Since they
+        # are identified by path parameters it is possible that they
+        # may not be uniquely identified in advance. This is actually
+        # a feature. We *want* to be able to use the same name to
+        # identify the same logical operation that runs different
+        # implementations over different media types.
+        #
+        # Certain combinations of addressable transforms will be
+        # incompatible under any interpretation and unable to be
+        # satisfied. That said, however, the *entire ensemble* of path
+        # parameters can be used to inform the addressable
+        # transformation queue, and Furthermore, the presence of
+        # addressable transforms in the URI should inform what
+        # `Accept` header the *content* handler ultimately sees. In
+        # other words, the dispatcher needs to act both before *and*
+        # after the content handler in the presence of path parameters.
+        #
+        # how do we see that algorithm going? something like, take the
+        # set of all individual implementations identified by each
+        # path parameter, then try to model them end to end, then
+        # eliminate all the impossible combinations. ideally there
+        # will be exactly one remaining, but there could be zero (a
+        # 4xx error, leaning toward 409, as 406 or 415 would be
+        # confusing, although a direct request to the transform should
+        # produce these errors).
+
         self
       end
     end
