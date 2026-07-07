@@ -388,6 +388,7 @@ class Intertwingler::Engine < Intertwingler::Handler
     #
     def dispatch req, subrequest: false
       resolver = engine.resolver
+      req      = engine.store_message req
       method   = req.request_method.to_sym # we always want this as a symbol
       uri, *pp = resolver.split_pp req.url # split out the path parameters
       uri      = resolver.uri_for uri, as: :uri # canonicalize the uri
@@ -488,19 +489,16 @@ class Intertwingler::Engine < Intertwingler::Handler
           break unless [404, 405].include? resp.status
         end
 
-        # XXX rename this something less dumb
-        resp = engine.ensure_store_object resp unless
-          resp.body.is_a? Store::Digest::Entry
+        resp = engine.store_message resp
 
-        hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
-
+        # hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
         # engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
         #                  "(#{resp.status} #{hdrs}): #{resp.body}")
 
         unless subrequest
           # generate the response chain with addressable queue
-          chain = chain.response_chain hurn, pp: pp
-          resp  = chain.run req, resp
+          chain   = chain.response_chain hurn, pp: pp
+          resp = chain.run req, resp
 
           # engine.log.debug "got here too (#{resp.status}): #{resp.body}"
         end

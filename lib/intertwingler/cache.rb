@@ -1573,7 +1573,7 @@ class Intertwingler::Cache
 
         rstmt = "#{state.request_method} #{state.uri}"
 
-        log.debug "Storing cache key #{rstmt} #{state.no_transform? ? '(no-transform) ' : ''}(#{state.body}) (#{state.vary_by})"
+        log.debug "Storing cache key #{rstmt} #{state.no_transform? ? '(no-transform) ' : ''}(request body #{state.body}) (#{state.vary_by})"
 
         # log.warn "vary: #{vary} #{state.instance_variable_get :@vary}"
 
@@ -1613,13 +1613,15 @@ class Intertwingler::Cache
             resp.body.rewind
             resp.body.add store
           else
-            log.debug "Storing body #{resp.body.class}"
+            log.debug "Storing response body #{resp.body.class}"
             obj = store.add resp.body, type: ct, encoding: ce, mtime: lm
             cl  = obj[:"sha-256"]
 
             # replace the response ONLY if not an Intertwingler::Representation
             resp = Rack::Response[resp.status, resp.headers.to_h, obj]
           end
+
+          cl = resp.body[:"sha-256"]
         end
 
         # yank these out since we use them lots

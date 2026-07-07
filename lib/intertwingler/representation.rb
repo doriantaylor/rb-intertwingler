@@ -255,7 +255,9 @@ class Intertwingler::Representation < Store::Digest::Entry
     else
       # do super first
       super
-      @object = parse @content
+      dereference?
+      # @object = parse @content
+      @object = parse self
     end
 
     self
@@ -298,7 +300,9 @@ class Intertwingler::Representation < Store::Digest::Entry
 
     # warn 'okay object gooo'
 
+    dereference?
     @object = parse @content
+    # @object = parse self
   end
 
   def inspect

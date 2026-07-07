@@ -50,12 +50,12 @@ class Intertwingler::Representation::Nokogiri < Intertwingler::Representation
   public
 
   def inspect
-    if root = object.root
+    if @object and root = @object.root
       root = "<#{root.name}>"
     else
       root = root.inspect
     end
-    "<#{self.class} type: #{type}, object: #{object.class} (#{root})>"
+    "<#{self.class} type: #{type}, object: #{@object.class} (#{root})>"
   end
 
 end

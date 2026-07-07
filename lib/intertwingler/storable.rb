@@ -2,11 +2,10 @@ require_relative 'types'
 require_relative 'field'
 require 'store/digest'
 
-# 
 require 'rack/request'
 require 'rack/response'
 
-# Add content-addressable store functionality to a handler.
+# Add content-addressable store functionality to a class.
 #
 module Intertwingler::Storable
   private
@@ -50,8 +49,8 @@ module Intertwingler::Storable
     if body.is_a? Store::Digest::Entry
       body.add store
     else
-      ct = F['content-type'][message].value
-      ce = F['content-encoding'][message].value
+      ct = Intertwingler::Field['content-type'][message].value
+      ce = Intertwingler::Field['content-encoding'][message].value
       body = store.add body, type: ct, encoding: ce
     end
   end
@@ -70,12 +69,24 @@ module Intertwingler::Storable
   def store_message message
     case message
     when Rack::Request
-      env = message.env.dup
-      env['rack.input'] = add_body message
-      Rack::Request.new env
+      # for some reason this needs an explicit transaction because it
+      # tries to write to a read-only one somehow
+      store.transaction do
+        return message if message.body.is_a?(Store::Digest::Entry) &&
+          store.has?(message.body)
+
+        env = message.env.dup
+        env['rack.input'] = add_body message
+        Rack::Request.new env
+      end
     when Rack::Response
-      body = add_body message
-      Rack::Response[message.status, message.headers, body]
+      store.transaction do
+        return message if message.body.is_a?(Store::Digest::Entry) &&
+          store.has?(message.body)
+
+        body = add_body message
+        Rack::Response[message.status, message.headers, body]
+      end
     else
       raise TypeError, "Can't manipulate an object of type #{message.class}"
     end

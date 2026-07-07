@@ -508,7 +508,8 @@ class Intertwingler::Transform
     # @note {::Rack::Response} has no reference back to the
     #  {::Rack::Request} that it responds to, so the request is always needed.
     #
-    # @note A cache intervention should happen at the beginning of the queue, but per RFC 9110 § 
+    # @note A cache intervention should happen at the beginning of the
+    #  queue, but per RFC 9110 §
     #
     # @param req [Rack::Request] the request, upon which to base the subrequest.
     # @param resp [Rack::Response, nil] the response, to use in response queues.
@@ -618,7 +619,6 @@ class Intertwingler::Transform
           # parameters/values is legitimate and should bubble up IF
           # AND ONLY IF the queue is addressable, otherwise we should
           # silently follow the redirects (and blow up if it loops).
-
         end
 
         # warn "dios mio: " + subresp.inspect
@@ -646,7 +646,7 @@ class Intertwingler::Transform
 
       # we shouldn't do this if nothing has been run
       if resp
-        out = engine.replace_response_body out, body, headers: hdr
+        out = engine.replace_response_body resp, body, headers: hdr
       else
         out = engine.dup_request req, body: body, headers: hdr
       end
