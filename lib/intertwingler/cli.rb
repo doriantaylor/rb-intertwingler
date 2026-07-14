@@ -660,8 +660,9 @@ EOS
     # XXX
     log = Logger.new $stderr
 
+    #  log.debug base_config.
     app = harness = Intertwingler::Harness.new authorities,
-      home: config_home, log: log, jwt: base_config[:jwt]
+      home: config_home, log: log, **base_config.slice(:store, :cache, :jwt)
 
     # gin up a quick lil middleware to override REMOTE_USER
     app = -> env do
@@ -705,9 +706,10 @@ EOS
     require 'intertwingler/harness'
     require 'pry'
 
-    harness = Intertwingler::Harness.new authorities, home: config_home
+    harness = Intertwingler::Harness.new authorities,
+      home: config_home, **base_config.slice(:store, :cache)
 
-    lmdb = harness.store.instance_variable_get(:@lmdb)
+    # lmdb = harness.store.instance_variable_get(:@lmdb)
     # warn lmdb.reader_list.join
 
     binding.pry

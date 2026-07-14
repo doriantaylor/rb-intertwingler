@@ -20,6 +20,7 @@ class Intertwingler::Harness < Intertwingler::Handler
   # @param log [Logger] a {Logger} instance
   #
   def initialize mapping, home: nil, store: nil, cache: nil, log: nil, jwt: {}
+    # log.debug store.inspect
     @home  = home
     @log   = log
     @store = init_store store
