@@ -132,7 +132,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     body = req.body
     doc  = body.object
-    type = body.type
+    type = body.type.to_s
 
     engine.log.debug("#{type} elements: #{doc.xpath('count(//*)')}")
 
@@ -146,6 +146,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
              end
 
       # log.debug "hwut #{type} #{MimeMagic[type]}"
+
+      # add doctype
+      XML::Mixup.markup spec: { '#dtd' => 'html' }, before: doc.root if
+        /html/i.match?(type) && !(doc.external_subset || doc.internal_subset)
 
       body.object = doc # we need to do this first to trigger the update
       body.type = type
@@ -360,6 +364,22 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       a.first <=> b.first
     end.map { |k, v| "#{k}: #{v}" }.join(' ')
 
+    descs = resolver.repo.property_set RDF::Vocab::DC.description
+
+    # engine.log.debug "allll the descs: #{descs}"
+    # warn "DESCS LOL #{descs}"
+
+    # warn doc.at_xpath('/html:html/html:head', XPATHNS)
+
+    doc.xpath('/html:html/html:head/html:meta[@property]' \
+              '/html/head/meta[@property]', XPATHNS).each do |meta|
+      preds = resolver.resolve_curies meta[:property].to_s.strip
+      # warn "PREDS #{preds}"
+      unless (descs & preds).empty?
+        meta[:name] = 'description' if meta[:name].to_s.strip.empty?
+      end
+    end
+
     req.body.object = doc
     req.body
   end
@@ -371,7 +391,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     # engine.log.debug "rehydrating lol"
 
-    engine.log.debug "Rehydrating from #{req.body[:'sha-256']}, #{req.body.type}, #{req.body.size}, #{F.req_headers req}"
+    engine.log.debug "Rehydrating from #{req.body[:'sha-256']}," \
+      " #{req.body.type}, #{req.body.size}, #{F.req_headers req}"
 
     @lemmas ||= {}
     @mtime = nil
@@ -560,6 +581,8 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
     rel = reverse ? :rev : :rel
 
+    descs = resolver.repo.property_set RDF::Vocab::DC.description
+
     # now let's create the nav structure
     structs.each do |s, struct|
       # only make the ul if there are links
@@ -583,8 +606,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       lcmp = resolver.repo.cmp_literal &:first
 
       struct.select { |k, _| k.literal? }.sort(&lcmp).each do |o, ps|
-        metas += [Intertwingler::Document.literal_tag(
-          resolver, o, property: ps, name: :meta), "\n"]
+        meta = Intertwingler::Document.literal_tag(
+          resolver, o, property: ps, name: :meta)
+        meta[:name] = 'description' unless (descs & ps).empty?
+        metas += [meta, "\n"]
       end
     end
 

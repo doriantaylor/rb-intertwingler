@@ -718,6 +718,7 @@ EOS
   desc :static, 'Generate a static site.'
   option :authority, aliases: %w[-a], type: :string, desc: 'Authority (domain)'
   option :target, aliases: %w[-t], desc: 'Target directory'
+  option :force, aliases: %w[-F], desc: 'No conditional requests'
   def static *uris
     auth = default_authority options[:authority]
     repo = authorities[auth]
@@ -748,7 +749,7 @@ EOS
     if uris.empty?
       static.write_all
     else
-      now = Time.now
+      now = Time.now in: ?Z if options[:force]
       uris.each { |uri| static.write_one uri, time: now }
     end
 

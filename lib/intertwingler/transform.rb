@@ -235,6 +235,10 @@ class Intertwingler::Transform
     @params.process values
   end
 
+  def inspect
+    "<#{self.class} id: #{id} accepts: #{@accepts.sort} " \
+      "returns: #{@returns.sort} params: #{params}>"
+  end
 
   ### BELOW THIS IS HANDLER/QUEUE STUFF
 
@@ -319,6 +323,9 @@ class Intertwingler::Transform
     #  @return [Intertwingler::Transform::Harness]
     def harness ; transform.harness ; end
 
+    def inspect
+      "<#{self.class} id: #{subject} transform: #{transform} params: #{params}>"
+    end
   end
 
   # This is a union type to represent transforms in addressable queues
@@ -488,6 +495,11 @@ class Intertwingler::Transform
     #
     def addressable?
       is_a? Addressable
+    end
+
+    #
+    def inspect
+      "#{self.class} id: #{id} transforms: (#{@transforms.join ', '})>"
     end
 
     private
@@ -665,6 +677,8 @@ class Intertwingler::Transform
   #
   class Chain
 
+    attr_reader :harness
+
     # Initialize a new queue chain. The `head` is the leading queue in
     # the chain. We successively call `next` on the queues to build up
     # a sequence and check for cycles.
@@ -710,9 +724,9 @@ class Intertwingler::Transform
     def run request, response = nil
       message = response || request
 
-      if response
-        log.debug "WTF #{request.request_method} #{request.url} -> #{response.status} #{response.content_type}"
-      end
+      # if response
+      #   log.debug "WTF #{request.request_method} #{request.url} -> #{response.status} #{response.content_type}"
+      # end
 
       @queues.values.each do |q|
         message = q.run request, response do |event|
@@ -730,6 +744,10 @@ class Intertwingler::Transform
       end
 
       message
+    end
+
+    def inspect
+      "<#{self.class} queues: (#{@queues.values.join ', '})>"
     end
 
     # A request chain differs from a response chain insofar as it
@@ -806,6 +824,7 @@ class Intertwingler::Transform
 
       # Set the addressable queue in the chain.
       def set_addressable *pp
+
         log.debug "path parameters: #{pp}"
 
         # XXX HERE IS WHERE THE CODE TO HOOK IN ADDRESSABLE TRANSFORMS
@@ -837,6 +856,30 @@ class Intertwingler::Transform
         # 4xx error, leaning toward 409, as 406 or 415 would be
         # confusing, although a direct request to the transform should
         # produce these errors).
+        #
+        # ⁂
+        #
+        # * split each transform from any sequence of values present
+        # * resolve slug to uuid(s)
+        # * resolve positional second-order parameters to the
+        #   appropriate Params::Registry::Group
+        # * (use parameter values/cardinality as a hint)
+        # * construct URI for subsequent QUERY request
+        #
+        resolved = pp.each_with_object({}) do |param, hash|
+          name, vals = param.split ?=, 2
+          vals = vals.split ?,
+
+          uuids = harness.resolver.uuid_for(name, scalar: false).map do |uuid|
+            harness.resolve uuid, transforms: true
+          end.compact.uniq
+
+          # 
+
+          hash[name] = [uuids, vals]
+        end
+
+        log.debug "path parameters: #{pp} #{resolved.inspect}"
 
         self
       end
@@ -880,12 +923,12 @@ class Intertwingler::Transform
 
     private
 
+    public
+
     def repo ; dispatcher.engine.repo ; end
     def subject ; dispatcher.engine.subject ; end
     def resolver ; dispatcher.engine.resolver ; end
     def log ; dispatcher.engine.log ; end
-
-    public
 
     # Inititalize the harness and populate it with configuration from
     # the graph.
@@ -948,8 +991,12 @@ class Intertwingler::Transform
 
     # just making a mess here really
 
+    # XXX what the heck does `state` even do???
+
     def resolve_queue uri, state, force: nil
       return @queues[uri] if @queues.key? uri and !force
+
+      # note bare assignment to deal with `force`
       @queues[uri] = Intertwingler::Transform::Queue.configure self, uri
     end
 

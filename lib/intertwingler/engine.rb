@@ -489,6 +489,7 @@ class Intertwingler::Engine < Intertwingler::Handler
           break unless [404, 405].include? resp.status
         end
 
+        # update the response body with a Store::Digest::Entry
         resp = engine.store_message resp
 
         # hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
@@ -497,8 +498,8 @@ class Intertwingler::Engine < Intertwingler::Handler
 
         unless subrequest
           # generate the response chain with addressable queue
-          chain   = chain.response_chain hurn, pp: pp
-          resp = chain.run req, resp
+          chain = chain.response_chain hurn, pp: pp
+          resp  = chain.run req, resp
 
           # engine.log.debug "got here too (#{resp.status}): #{resp.body}"
         end
@@ -788,7 +789,7 @@ class Intertwingler::Engine < Intertwingler::Handler
       rescue LMDB::Error => e
         log.error "store.add crashed on #{Process.pid}: (#{e}). open readers:"
         lmdb = store.lmdb
-        log.debug "WTF #{lmdb}"
+        # log.debug "WTF #{lmdb}"
         dead = lmdb.reader_check
         lmdb.reader_list.each { |item| log.error item }
         log.error "(after sweeping #{dead} dead ones)"

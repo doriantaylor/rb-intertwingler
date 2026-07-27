@@ -1,5 +1,7 @@
 require 'intertwingler/engine'
 require 'intertwingler/field'
+require 'intertwingler/vocab/ci'
+require 'store/digest/readwrapper'
 require 'rack'
 require 'rack/mock'
 require 'time'
@@ -8,6 +10,8 @@ require 'time'
 # years ago instead of jerking around in `pry`, lol.
 #
 class Intertwingler::Static
+
+  CI = Intertwingler::Vocab::CI
 
   # initialize with engine
   def initialize engine, target, private: Pathname('.private')
@@ -60,7 +64,7 @@ class Intertwingler::Static
   # write site map
 
   # write rewrite maps
-  def write_one subject, time: Time.now
+  def write_one subject, time: nil
     subject = resolver.uuid_for(subject) or return
 
     uuid = resolver.coerce_resource subject, as: :uri
@@ -88,7 +92,7 @@ class Intertwingler::Static
         return
       end
 
-      body = Intertwingler::Representation::BodyWrap.coerce resp.body
+      body = Store::Digest::ReadWrapper.coerce resp.body
 
       path.open('wb') do |fh|
         while buf = body.read(8192)
@@ -112,7 +116,7 @@ class Intertwingler::Static
 
   # Write everything in the space to the file system (may take a while).
   def write_all published: nil, &block
-    now = Time.now
+    now = Time.now in: ?Z
     # gather up list of everything
     docs = repo.all_documents.each { |subject| write_one subject, time: now }
 
