@@ -454,20 +454,25 @@ class Intertwingler::Engine < Intertwingler::Handler
 
       # the transform harness may return an empty chain; that's fine
       unless subrequest
-        chain = transforms.request_chain
-        req   = chain.run req
+        begin
+          chain = transforms.request_chain
+          req   = chain.run req
+        rescue Intertwingler::Error::HTTPStatus => e
+          return e.response
+        end
       end
 
       hurn = nil
 
       resp = engine.cache.fetch req do |req|
+        # cycle through the candidates until one hits
         candidates.each do |urn, handler|
           hurn = urn
 
           begin
             # add a smidge of logic here to not supplant a 405 with a 404
             tmp  = handler.handle req
-            engine.log.debug "XXX #{handler.class}" unless tmp
+            # engine.log.debug "XXX #{handler.class}" unless tmp
             resp = tmp unless resp.status == 405 and tmp.status == 404
           rescue Intertwingler::Error::HTTPStatus => e
             resp = e.response
@@ -495,12 +500,17 @@ class Intertwingler::Engine < Intertwingler::Handler
         # hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
         # engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
         #                  "(#{resp.status} #{hdrs}): #{resp.body}")
+        engine.log.debug "Getting response chain for #{hurn}"
 
         unless subrequest
-          # generate the response chain with addressable queue
-          chain = chain.response_chain hurn, pp: pp
-          resp  = chain.run req, resp
-
+          begin
+            # generate the response chain with addressable queue
+            chain = chain.response_chain hurn, pp: pp
+            # engine.log.debug chain.inspect
+            resp  = chain.run req, resp
+          rescue Intertwingler::Error::HTTPStatus => e
+            return e.response
+          end
           # engine.log.debug "got here too (#{resp.status}): #{resp.body}"
         end
 

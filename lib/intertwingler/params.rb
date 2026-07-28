@@ -118,6 +118,10 @@ class Intertwingler::Params < Params::Registry
 
       self
     end
+
+    def inspect
+      "<#{self.class} id: #{subject} templates: (#{templates.map(&:inspect).join ', '})>"
+    end
   end
 
   # This is the template class with additional functionality for fetching
@@ -305,6 +309,10 @@ class Intertwingler::Params < Params::Registry
       super
     end
 
+    def inspect
+      sl = slug ? " slug: #{slug}" : ''
+      "<#{self.class} id: #{subject}#{sl}>"
+    end
   end
 
   def refresh!

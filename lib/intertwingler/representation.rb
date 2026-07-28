@@ -264,7 +264,9 @@ class Intertwingler::Representation < Store::Digest::Entry
   end
 
   def type= newtype
+    # warn "new type: #{newtype}"
     newtype = coerce_type newtype
+    # warn "coerced type: #{newtype}"
 
     # if this is different we're converting so we need to parse the io
     # if we haven't already

@@ -235,9 +235,16 @@ class Intertwingler::Transform
     @params.process values
   end
 
+  def partial_for params
+    params = @params.keys.zip(params).to_h if
+      params.is_a?(Array) && !params.first.is_a?(Array)
+
+    Partial.new self, values: params
+  end
+
   def inspect
-    "<#{self.class} id: #{id} accepts: #{@accepts.sort} " \
-      "returns: #{@returns.sort} params: #{params}>"
+    "<#{self.class} id: #{id} accepts: (#{@accepts.sort.join ', '}) " \
+      "returns: (#{@returns.sort.join ', '}) params: #{params.inspect}>"
   end
 
   ### BELOW THIS IS HANDLER/QUEUE STUFF
@@ -384,7 +391,11 @@ class Intertwingler::Transform
     class Strict < self
       #
       def can_serve! uri, type
-        raise "nope can't serve, lol"
+        ok = super uri, type
+        # XXX this is just for now lol
+        raise Intertwingler::Error::ClientError::Conflict,
+          "#{uri} cannot handle #{type}" unless ok
+        ok
       end
     end
 
@@ -409,6 +420,11 @@ class Intertwingler::Transform
       super
     end
 
+    DISPATCH = {
+      TFO.StrictQueue      => Strict,
+      TFO.AddressableQueue => Addressable,
+    }.freeze
+
     public
 
     # Configure the queue out of the graph.
@@ -419,7 +435,10 @@ class Intertwingler::Transform
     # @return [Intertwingler::Transform::Queue]
     #
     def self.configure harness, subject
-      new(harness, subject).refresh
+      repo = harness.dispatcher.engine.repo
+      type = (DISPATCH.keys & repo.types_for(subject)).sort.first
+      cls  = DISPATCH.fetch(type, self)
+      cls.new(harness, subject).refresh
     end
 
     # Initialize a (potentially empty) queue.
@@ -475,7 +494,10 @@ class Intertwingler::Transform
     #
     def push member
       # XXX this may blow up?
-      member = harness.resolve member
+      member = harness.resolve member unless
+        [Intertwingler::Transform,
+         Intertwingler::Transform::Partial].any? { |c| member.is_a? c }
+
       @transforms << member
     end
 
@@ -499,7 +521,7 @@ class Intertwingler::Transform
 
     #
     def inspect
-      "#{self.class} id: #{id} transforms: (#{@transforms.join ', '})>"
+      "#{self.class} id: #{id} transforms: (#{@transforms.map(&:inspect).join ', '})>"
     end
 
     private
@@ -779,7 +801,7 @@ class Intertwingler::Transform
       def response_chain handler, pp: nil
         head = @harness.queue_head_for handler
         log.debug(
-          "generating response chain for #{handler} lol: #{head.inspect}")
+          "generating response chain for #{handler}, queue head: #{head.inspect}")
         Intertwingler::Transform::Chain::Response.new @harness, head,
           pp: pp, insertions: @insertions
       end
@@ -813,19 +835,29 @@ class Intertwingler::Transform
         super request, response
       end
 
+      # Obtain any addressable queues, if any exist.
+      #
+      # @return [Array] the queues, possibly empty
+      #
+      def get_addressable
+        @queues.values.select { |q| q.addressable? }
+      end
+
       # Determine if the chain contains an addressable queue.
       #
       # @return [false, true] whether or not the chain has an
       #  addressable queue.
       #
       def has_addressable?
-        @queues.values.any? { |q| q.addressable? }
+        !get_addressable.empty?
       end
 
       # Set the addressable queue in the chain.
       def set_addressable *pp
 
-        log.debug "path parameters: #{pp}"
+        # log.debug "path parameters: #{pp}"
+
+        # log.debug @queues.inspect
 
         # XXX HERE IS WHERE THE CODE TO HOOK IN ADDRESSABLE TRANSFORMS
         # OUGHT TO GO.
@@ -865,21 +897,44 @@ class Intertwingler::Transform
         #   appropriate Params::Registry::Group
         # * (use parameter values/cardinality as a hint)
         # * construct URI for subsequent QUERY request
-        #
+
+        queue = get_addressable.first
+
+        raise Intertwingler::Error::ServerError::NotImplemented,
+          "No addressable queues configured" unless queue
+
         resolved = pp.each_with_object({}) do |param, hash|
           name, vals = param.split ?=, 2
-          vals = vals.split ?,
+          next if name.to_s.strip.empty?
+          vals = vals.to_s.split ?,
 
-          uuids = harness.resolver.uuid_for(name, scalar: false).map do |uuid|
-            harness.resolve uuid, transforms: true
+          transforms = harness.resolver.uuid_for(name, scalar: false).map do |u|
+            harness.resolve u, transforms: true, queues: false, partials: false
           end.compact.uniq
 
-          # 
+          raise Intertwingler::Error::ClientError::NotFound,
+            "Can't resolve transform #{name}" if transforms.empty?
 
-          hash[name] = [uuids, vals]
+          transforms.map! do |t|
+            begin
+              t.partial_for vals
+            rescue Params::Registry::Error => e
+              log.debug e
+              nil
+            end
+          end.compact!
+
+          raise Intertwingler::Error::ClientError::Conflict,
+            "Invalid parameters #{vals} for Transform #{name}" if
+            transforms.empty?
+
+          # hash[name] = transforms.first
+
+          # add the partial to the queue
+          queue << transforms.first
         end
 
-        log.debug "path parameters: #{pp} #{resolved.inspect}"
+        # log.debug "path parameters: #{resolved.inspect}"
 
         self
       end

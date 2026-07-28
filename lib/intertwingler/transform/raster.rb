@@ -48,7 +48,7 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
 
     # this will have been set
 
-    accept = accept_header req
+    accept = accept_header(req)
 
     engine.log.debug "body: #{body.type} accept: #{accept}"
 
@@ -56,7 +56,7 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     return if body.type == accept
 
     # setting the body type (if different) invalidates the io
-    body.type = accept
+    body.type = accept if accept
 
     body
   end
@@ -72,7 +72,10 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     img  = body.object
     img  = img.crop x, y, width, height
 
-    body.type   = accept_header req
+    if type = accept_header(req)
+      body.type = type
+    end
+
     body.object = img
     body
   end
@@ -88,10 +91,14 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
 
     body = req.body
     img  = body.object
-    img  = img.thumbnail_image params[:width].first.to_i
+    img  = img.thumbnail_image params[:width].to_i
 
-    body.type   = accept_header req
     body.object = img
+
+    if type = accept_header(req)
+      body.type = type
+    end
+
     body
   end
 
@@ -102,8 +109,13 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     img  = body.object
     img  = img.colourspace :b_w
 
-    body.type   = accept_header req
     body.object = img
+
+    if type = accept_header(req)
+      engine.log.debug "old type: #{body.type}, new type: #{type}"
+      body.type = type
+    end
+
     body
   end
 
@@ -112,7 +124,10 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     # okay so apparently posterize involves chonking out the colours;
     # the parameter is the number of steps
 
-    body.type   = accept_header req
+    if type = accept_header(req)
+      body.type = type
+    end
+
     body.object = img
     body
   end

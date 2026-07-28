@@ -61,6 +61,8 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
 
     # warn target.inspect
 
+    warn "type: #{type}, extensions: #{type.extensions}"
+
     # warn type.extensions.first
     ext = type.extensions.first
     # ext = 'heif'
