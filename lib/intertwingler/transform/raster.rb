@@ -64,9 +64,7 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
   # crops the image by xywh
   def crop req, params
     # XXX sanitize params
-    x, y, width, height = params.values_at(:x, :y, :width, :height).map do |x|
-      x.first.to_i
-    end
+    x, y, width, height = params.to_h.values_at(:x, :y, :width, :height)
 
     body = req.body
     img  = body.object
@@ -77,6 +75,7 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     end
 
     body.object = img
+    body.type   = type
     body
   end
 
@@ -90,14 +89,16 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
     engine.log.debug "scaling #{loc} by #{params}"
 
     body = req.body
-    img  = body.object
+    type = body.type
+    img  = body.object.dup
     img  = img.thumbnail_image params[:width].to_i
 
     body.object = img
-
-    if type = accept_header(req)
-      body.type = type
-    end
+    body.type   = type
+    body.scan!
+    # if type = accept_header(req)
+    #   body.type = type
+    # end
 
     body
   end
@@ -107,14 +108,17 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
 
     body = req.body
     img  = body.object
+    type = body.type
     img  = img.colourspace :b_w
 
     body.object = img
+    body.type   = type
+    body.scan!
 
-    if type = accept_header(req)
-      engine.log.debug "old type: #{body.type}, new type: #{type}"
-      body.type = type
-    end
+    # if type = accept_header(req)
+    #   engine.log.debug "old type: #{body.type}, new type: #{type}"
+    #   body.type = type
+    # end
 
     body
   end
@@ -135,8 +139,25 @@ class Intertwingler::Transform::Raster < Intertwingler::Transform::Handler
   # knock out a colour ± radius around it
   def knockout req, params
     # this one is gonna be tough and require some thought
-    raise Intertwingler::Error::ServerError::NotImplemented,
-      'Transform `knockout` not implemented'
+
+    # * desaturate, invert, luminosity becomes alpha
+    # * use resulting mask to knock out a flood fill of a given colour
+    #   (defaults to black)
+
+    body  = req.body
+    type  = body.type
+    img   = body.object
+    rgb   = img.bands > 3 ? img.extract_band(0, n: 3) : img
+    alpha = rgb.colourspace(:b_w).invert
+    out   = rgb.new_from_image([0, 0, 0]).bandjoin alpha
+    # out   = out.bandjoin alpha
+
+    engine.log.debug "#{out.width}x#{out.height} #{out.bands}"
+
+    body.object = out
+    body.type   = type
+    body.scan!
+    body
   end
 
   # adjust brightness

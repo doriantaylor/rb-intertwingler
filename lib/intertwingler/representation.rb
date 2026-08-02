@@ -244,12 +244,11 @@ class Intertwingler::Representation < Store::Digest::Entry
     # warn caller
     # overwrite the content first
     if @object && !scanned?
-      # warn 'whycome no scan'
-      # warn "extensions for #{type}: #{type.extensions.first}"
-      # set_content -> fh { warn Thread.current.backtrace.join("\n"); serialize @object, fh }
-      # tmp = serialize @object
-      set_content serialize(@object)
-      # warn tmp
+      obj     = @object
+      # content = @content
+      set_content -> fh { content; serialize obj, fh }
+      # set_content serialize(obj)
+
       # do super last
       super
     else

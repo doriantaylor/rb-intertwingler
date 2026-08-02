@@ -386,13 +386,15 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
 
   # this one relinks
   def rehydrate req, params
-    loc = subject_from req
-    doc = req.body.object
+    loc  = subject_from req
+    body = req.body
+    doc  = body.object
+    type = body.type
 
     # engine.log.debug "rehydrating lol"
 
-    engine.log.debug "Rehydrating from #{req.body[:'sha-256']}," \
-      " #{req.body.type}, #{req.body.size}, #{F.req_headers req}"
+    engine.log.debug "Rehydrating from #{body[:'sha-256']}," \
+      " #{type}, #{body.size}, #{F.req_headers req}"
 
     @lemmas ||= {}
     @mtime = nil
@@ -402,28 +404,70 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       mtime = engine.repo.mtime
       @lemmas.clear if !@mtime or @mtime < mtime
       @mtime = mtime
+
+      # define the etag:
+      # * request body hash
+      # * graph mtime
+      # * response content type (same as request)
+      ni = [body[:'sha-256'].digest, mtime.to_i, type.to_s].pack('a32Q>Z*')
+      ni = URI::NI.compute ni
+
+      etag = '"%s"' % ni.b64digest
+
+      inm = (F['if-none-match'][req].value || []).map do |e|
+        e.to_s.gsub /^[Ww]\//, ''
+      end
       ims = F['if-modified-since'][req].value
-      if ims && ims >= mtime
+      if inm.include? etag
+        engine.log.debug "Matched ETag #{etag}"
+        return
+      elsif ims && ims >= mtime
         # this gets picked up from the harness and turned into a 304
         engine.log.debug "IMS: #{ims} >= mtime: #{mtime}"
-          return
+        return
       end
     end
 
     Intertwingler::Document.rehydrate resolver, doc, base: loc, cache: @lemmas
 
-    req.body.object = doc
-    req.body
+    body.object = doc  # this resets the monad-y thing
+    body.type   = type # this needs to be reset if that is reset
+
+    hdrs = {}
+    hdrs['etag'] = etag if etag
+
+    Rack::Response[200, hdrs, body]
   end
 
   # what would be really sneaky is to do this exclusively based on
   # rdfa and never look at the graph
   def add_social_meta req, params
-    # add schema dot org
-    # add ogp
-    # add twitter meta
-    engine.log.debug "adding social media metadata lol"
-    req.body
+    body = req.body
+    doc  = body.object
+    type = body.type
+
+    if head = doc.at_xpath('/html:html/html:head[1]|/html/head[1]', XPATHNS)
+      loc  = subject_from req
+      uuid = resolver.uuid_for loc
+      spec = []
+      # add schema dot org
+      # add ogp
+      # add twitter meta
+      spec += Intertwingler::Document.twitter_meta resolver, uuid
+
+      # engine.log.warn "got here on socials: #{loc} #{uuid}"
+
+      # now we add newlines so it doesn't look like a damn mess
+      spec = spec.each_with_object([]) { |s, a| a += ["\n", s] } + ["\n"]
+
+      XML::Mixup.markup spec: spec, parent: head
+
+      # reassign
+      body.object = doc
+      body.type   = type # put this back Just Because™
+    end
+
+    body
   end
 
   private

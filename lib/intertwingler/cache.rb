@@ -410,6 +410,12 @@ class Intertwingler::Cache
       ims = F['if-modified-since'][subreq].value || time
       subreq.set_header(
         'HTTP_IF_MODIFIED_SINCE', (ims > time ? ims : time).httpdate)
+
+      if etag = F['etag'][cached].value
+        # etags
+        etag = "W/#{etag}" unless /^[Ww]\//.match? etag
+        subreq.set_header 'HTTP_IF_NONE_MATCH', etag
+      end
     end
 
     # get the origin response

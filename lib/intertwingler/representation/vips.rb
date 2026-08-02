@@ -20,7 +20,7 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
 
   def parse io
     # warn "hurrr #{io.inspect}"
-    if io.respond_to? :fileno and io.fileno
+    if io.respond_to?(:stat) && io.stat.file? && io.respond_to?(:fileno)
       # seek and ye shall find
       io.seek 0 if io.respond_to? :seek
 
@@ -44,24 +44,34 @@ class Intertwingler::Representation::Vips < Intertwingler::Representation
   end
 
   def serialize obj, target = tempfile
-    if target.respond_to? :fileno and target.fileno
-      # warn "got here wtf lolol"
+    fd_ok = target.respond_to?(:stat) &&
+      target.stat.file? && target.respond_to?(:fileno)
+
+    if fd_ok
+      # warn "got here wtf lolol #{target} #{target.fileno}"
       tgt = ::Vips::Target.new_to_descriptor target.fileno
     else
+      # warn "okay i'm here on the custom target"
       tgt = ::Vips::TargetCustom.new
-      tgt.on_write { |bytes| target << bytes }
+
+      tgt.on_write do |bytes|
+        # warn "sup #{bytes.size} bytes"
+        target.write bytes
+      end
+
       tgt.on_finish do
-        if target.respond_to? :fsync
+        # warn "sup done lol"
+        if fd_ok && target.respond_to?(:fsync)
           target.fsync
         elsif target.respond_to? :flush
-          target.flush
+          target.flush rescue nil
         end
       end
     end
 
     # warn target.inspect
 
-    warn "type: #{type}, extensions: #{type.extensions}"
+    # warn "type: #{type}, extensions: #{type.extensions}"
 
     # warn type.extensions.first
     ext = type.extensions.first

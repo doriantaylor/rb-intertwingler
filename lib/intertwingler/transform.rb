@@ -589,6 +589,12 @@ class Intertwingler::Transform
         return out
       end
 
+      if resp && resp.status == 304
+        log.debug 'Skipping transforms for 304 response to ' \
+          "#{req.request_method} #{req.url}"
+        return out
+      end
+
       # transforms could be transforms or they could be partials; in
       # the case that they're partials, we want to pull the parameters
       # out and append them to the uri
@@ -1312,15 +1318,42 @@ class Intertwingler::Transform
           # note `out` can be nil which should be interpreted as 304
           return Rack::Response[304, {}, []]
         end
-
-        # warn "still inside: #{out.type}"
-
-        # this should be it
-        return Rack::Response[200, {
+        headers = {
+          'vary'           => 'content-type',
           # 'cache-control'  => 'max-age=86400, must-revalidate',
           'cache-control'  => 'max-age=86400',
-          'content-type'   => out.type.to_s,
-          'content-length' => out.size.to_s }, out]
+        }
+
+        if out.is_a? Rack::Response
+          headers.each do |name, value|
+            out.set_header(name, value) unless out.has_header? name
+          end
+
+          if out.body.is_a? Store::Digest::Entry
+            body = out.body
+
+            out.set_header('content-type', body.type.to_s) unless
+              out.has_header? 'content-type'
+            out.set_header('content-length', body.size.to_s) unless
+              out.has_header? 'content-length'
+          else
+            raise TypeError, 'Response body should be a Store::Digest::Entry,' \
+              " not #{out.body.class}"
+          end
+
+          return out
+        elsif out.is_a? Store::Digest::Entry
+          headers.merge!({
+            'content-type'   => out.type.to_s,
+            'content-length' => out.size.to_s,
+          })
+          # this should be it
+          return Rack::Response[200, headers, out]
+        else
+          raise TypeError,
+            "Transform response must be a Store::Digest::Entry " \
+            "or Rack::Response, not #{out.class}"
+        end
 
       rescue Intertwingler::Transform::ParamError
         return Rack::Response[409, {}, []]
