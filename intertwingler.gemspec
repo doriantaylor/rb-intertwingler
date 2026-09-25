@@ -66,7 +66,7 @@ discussion of the problems Intertwingler was designed to solve.
   spec.add_runtime_dependency 'sassc',             '>= 2.2.1'
   spec.add_runtime_dependency 'store-digest',      '~> 0', '>= 0.4.6'  # mine
   spec.add_runtime_dependency 'store-digest-http', '>= 0.1.1'  # mine
-  spec.add_runtime_dependency 'vips',              '>= 8.12.2'
+  spec.add_runtime_dependency 'ruby-vips',         '~> 2',   '>= 2.3'
   spec.add_runtime_dependency 'xml-mixup',         '~> 0.2', '>= 0.2.1' # mine
 
   # stuff for cli

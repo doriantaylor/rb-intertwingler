@@ -197,6 +197,7 @@ class Intertwingler::Document
         [@subject, faudy.inspect, faudn.inspect])
 
       docs = @repo.all_documents external: false, published: published
+      docs -= [@subject]
 
       # now we create a hash keyed by uuid containing the metadata
       authors = {}
@@ -287,7 +288,6 @@ class Intertwingler::Document
 
             x['#author'].push({ '#uri' => hp.to_s }) if hp
           end
-
           al.push authors[a]
         end
 
@@ -2414,8 +2414,18 @@ class Intertwingler::Document
       return text unless base and /^_:/ !~ text.strip
 
       # dereference with doc_base
-      uri = doc_base ? resolver.as_alias(
-        doc_base.merge(resolver.preproc text), base) : base.dup
+      uri = if doc_base
+              # absolutize against the document base, then switch out
+              # the authority
+              resolver.to_authority(
+                doc_base.merge(resolver.preproc text.strip),
+                base, scope: doc_base)
+            else
+              # otherwise no base is provided
+              base.merge(resolver.preproc text.strip)
+            end
+      uri = resolver.uri_for uri, as: :uri, slugs: true, fragments: true
+
       # re-relativize with new base
       rel = base.route_to uri
 

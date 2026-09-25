@@ -2454,6 +2454,8 @@ module Intertwingler
     # @return [SPARQL::Algebra::Operator] the corresponding piece of algebra.
     #
     def self.parse_property_path sparql, prefixes, entail: false
+      return sparql if [RDF::URI, SAO].any? { |c| sparql.is_a? c }
+
       begin
         out = SPARQL::Grammar::Parser.new(
           sparql.to_s, prefixes: prefixes).parse(:Path) # .last # not sure why

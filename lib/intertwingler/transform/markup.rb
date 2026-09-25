@@ -184,14 +184,67 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
          'self::html:%s|self::%s' % [x, x]
        end.join ?|)
 
-  # mkay the question is what do we actually want this to _do_? given
-  # that it's in the milieu of a bunch of other things that are going
-  # to do a bunch of other operations to various parts of the document
+  # This rehabilitates the `<head>` contents (ex social media links):
+  #
+  # * title
+  # * base
+  # * link
+  # * meta
+  # * style
+  # * script
+  # * (anything else)
+  #
+  # how do we want to treat any existing tags?
+  #
+  # * don't destroy any information they contain
+  # * sort them by tag name
+  # * otherwise keep them in the order they were presented in the document
+  #
+  # how about incorporating new statements from the graph?
+  #
+  # * skip RDF statements that have already been asserted in the markup
+  # * pun RDF statements onto existing assertions (where possible)
+  #
+  # the following conditions apply:
+  #
+  # * any one of these elements can have an explicit subject
+  # * link can have a resource in addition to href
+  # * script can have a resource in addition to src
+  # * meta can have rel/rev and resource
+  # * link and script can have property and content
+  # * every other element can exhibit any RDFa
+  # * elements can have attributes besides RDFa
+  # * statements can be duplicated across tags
+  # * `meta` and `link` can express non-statements (ie no rdf predicate)
+  # * `meta` in particular can be keyed by `name` or `http-equiv`
+  # * `link` can have un-prefixed `rel` attributes that imply xhv terms
+  # * (`vocab` may nevertheless not be declared)
+  #
+  # we should also backfill to o-g meta names:
+  #
+  # * description (label_for subject desc: true)
+  # * author (authors.map { |author| label_for author })
+  # * keywords? is there any point? dct:subject
+  #
+  #
+  #
+  # procedure:
+  #
+  # * we want to catalogue existing tags and reuse them where possible
+  # * append new tags once existing ones have been exhausted
+  # * we don't want to introduce confounding or duplicate information
+  #
+  # maybe a lookup table like subject -> str(object) -> object|nil -> tag(s)?
+  #
+  # also a sequence of sequences of tag names to append to
+  #
+  # plus another one for o-g meta names
+  #
   #
   def rewrite_head req, params
     loc = subject_from req
 
-    engine.log.debug "rewriting head on #{loc}"
+    engine.log.debug "Rewriting head on #{loc}"
 
     doc = req.body.object
 
@@ -215,19 +268,17 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     # source may not have a head (but we aren't dealing with that rn)
     if head
       # fetch any existing nodes
-      title  = head.xpath('(html:title|title)[1]', XPATHNS).map(&:unlink)
-      base   = head.xpath('(html:base|base)[1]', XPATHNS).map(&:unlink)
-      link   = head.xpath('html:link|link', XPATHNS).map(&:unlink)
-      meta   = head.xpath('html:meta|meta', XPATHNS).map(&:unlink)
-      script = head.xpath('html:script|script', XPATHNS).map(&:unlink)
-      style  = head.xpath('html:style|style', XPATHNS).map(&:unlink)
-      other  = head.xpath(HTML_HEAD_OTHER, XPATHNS).map(&:unlink)
+      h = {}
+      %i[title base link meta script style].each do |sym|
+        h[sym] = head.xpath("html:#{sym}|#{sym}", XPATHNS).map(&:unlink)
+      end
+      h[:other] = head.xpath(HTML_HEAD_OTHER, XPATHNS).map(&:unlink)
       # nuke remaining child nodes
       head.children.each(&:unlink)
 
       # do title
       lp, lo = resolver.repo.label_for subject
-      if title && !title.empty?
+      if title = h[:title] and !title.empty?
         title = title.first
         head << "\n"
         head << title
@@ -246,7 +297,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       end
 
       # base href is request uri but just add it, don't touch it
-      if base && !base.empty?
+      if base = h[:base] and !base.empty?
         base = base.first
         head << "\n"
         head << base
@@ -255,18 +306,17 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
           spec: ["\n", { '#base' => nil, href: loc.to_s }]
       end
 
-      # next is all links
-      link.each   { |el| head << "\n"; head << el }
-      # next is all metas
-      meta.each   { |el| head << "\n"; head << el }
-      # next is all scripts
-      script.each { |el| head << "\n"; head << el }
-      # next is all inline stylesheets
-      style.each  { |el| head << "\n"; head << el }
-      # next is all other
-      other.each  { |el| head << "\n"; head << el }
-      # add a newline for the subsequent indenter
+      # this is the order we want the elements in
+      %i[link meta style script other].each do |key|
+        h[key].each do |el|
+          head << "\n"
+          head << el
+        end
+      end
+      # add a newline for the subsequent indenter function
       head << "\n"
+    else
+      engine.log.debug "No <head> element found for #{loc}"
     end
 
     # body set id to canonical slug or compact uuid if not already set
@@ -288,6 +338,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     types = resolver.repo.types_for subject
     body[:typeof] = resolver.abbreviate(
       types, scalar: false, prefixes: bpfx).sort.join(' ') unless types.empty?
+
+    # okay this just cleans up and rearranges stuff; now we need to scan the rdfa
+
+    # meta content, link href, script src
 
     # XXX do something about this one day lol
     req.body.object = doc
@@ -449,6 +503,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     if head = doc.at_xpath('/html:html/html:head[1]|/html/head[1]', XPATHNS)
       loc  = subject_from req
       uuid = resolver.uuid_for loc
+      return unless uuid and resolver.repo.has_subject? uuid
       spec = []
       # add schema dot org
       # add ogp
@@ -485,30 +540,28 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   TFO = Intertwingler::Vocab::TFO
 
   # this is used to grab the rdfa; it will return the graph or nil
-  def get_rdfa req, role = CI.links
+  def get_rdfa doc, role = nil
 
     resolver = engine.resolver
-
-    # don't get this unless we have a subject, since it autovivifies
-    # if it isn't already in there
-    doc = req.body.object
 
     # we should have already determined this is an html document
     return unless body = doc.at_xpath(
       '/html:html/html:body|/html/body', XPATHNS)
 
-    slug = role.to_s.delete_prefix(role.vocab.to_s)
+    if role
+      slug = role.to_s.delete_prefix(role.vocab.to_s)
 
-    # bail out if there are already backlinks in here
-    return if
-      doc.xpath(".//*[contains(@role, '#{slug}')]").any? do |node|
-        pfx = {
-          nil => RDF::Vocab::XHV
-        }.merge Intertwingler::Document.get_prefixes(node, coerce: :term)
+      # bail out if there are already backlinks in here
+      return if
+        doc.xpath(".//*[contains(@role, '#{slug}')]").any? do |node|
+          pfx = {
+            nil => RDF::Vocab::XHV
+          }.merge Intertwingler::Document.get_prefixes(node, coerce: :term)
 
-        resolver.resolve_curies(
-          node['role'], prefixes: pfx, noop: true).include? role
-      end
+          resolver.resolve_curies(
+            node['role'], prefixes: pfx, noop: true).include? role
+        end
+    end
 
     # XXX THESE CIRCUMVENT A DEFICIENCY IN THE RDFA PARSER <= 3.3.0
     version = /RDFa 1.0/ =~ (
@@ -525,6 +578,10 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
   def add_ambi_links req, reverse: false
     loc = subject_from req
 
+    if principal = req.env['REMOTE_USER']
+      principal = nil if principal.strip.empty?
+    end
+
     resolver = engine.resolver
 
     role = CI[reverse ? :backlinks : :links]
@@ -539,7 +596,7 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
     engine.log.debug "subject: #{subject}"
     return unless subject
 
-    rdfa    = get_rdfa(req, role)
+    rdfa    = get_rdfa(req.body.object, role)
     engine.log.debug "rdfa: #{rdfa}"
     return unless rdfa
 
@@ -580,16 +637,22 @@ class Intertwingler::Transform::Markup < Intertwingler::Transform::Handler
       q = [resource, nil, nil].send(reverse ? :reverse : :to_a)
 
       resolver.repo.query(q).each do |stmt|
+        # the subject must always must be an iri
+        next unless stmt.subject.iri?
+
         # we don't want to duplicate existing statements; note
         # whatever's coming out of the repo is going to have a graph
         # name and we don't need to know/care what it is, so we use
         # has_triples? rather than has_statement?
         tmts = resolver.repo.invert_statement stmt
-        next if !stmt.subject.iri? or graph.has_triple?(stmt.to_triple) or
+        next if graph.has_triple?(stmt.to_triple) or
           (tmts and graph.has_triple? tmts.to_triple)
 
-        # c wut i did thar?
+        # c wut i did thar? we revert the statement back if reversed
         s, p, o = stmt.to_triple.send(reverse ? :reverse : :to_a)
+
+        # no leaky leaky (also o had better be an iri)
+        next unless principal || (o.iri? && resolver.repo.published?(o))
 
         # okay now remap to routable URIs
         [s, p, o].select(&:iri?).each do |x|

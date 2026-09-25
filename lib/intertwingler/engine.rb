@@ -500,7 +500,7 @@ class Intertwingler::Engine < Intertwingler::Handler
         # hdrs = resp.headers.map { |k, v| "#{k}: #{v}" }.join ' | '
         # engine.log.debug("got here lol #{req.request_method} #{req.url} -> " \
         #                  "(#{resp.status} #{hdrs}): #{resp.body}")
-        engine.log.debug "Getting response chain for #{hurn}"
+        engine.log.debug "Response handled by #{hurn}"
 
         unless subrequest
           begin

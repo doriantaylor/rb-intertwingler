@@ -83,6 +83,38 @@ class Intertwingler::Resolver
 
   public
 
+  # Swap out the scheme/authority of the URI in question. Uses the
+  # resolver's baked-in base URI by default. Will rewrite any HTTP(S)
+  # URI without an explicit scope. Returns the same type it is given.
+  #
+  # @param uri [URI, RDF::URI] the URI over which to operate
+  # @param base [nil, URI, RDF::URI] the base URI to take the authority from
+  # @param scope [URI, RDF::URI] a reference URI to limit source authorities
+  #
+  # @return [URI, RDF::URI] the transformed URI
+  #
+  def to_authority uri, base = nil, scope: nil
+    # we have to dup in case it's frozen
+    uri = uri.dup
+
+    return uri unless
+      /^https?$/i.match? uri.scheme and uri.respond_to? :authority
+
+    if scope
+      scope = coerce_resource scope
+
+      return uri unless uri.authority&.downcase == scope.authority&.downcase
+    end
+
+    base ||= self.base
+
+    uri.scheme = base.scheme
+    uri.host   = base.host
+    uri.port   = base.port
+
+    uri
+  end
+
   # Return a copy of the given ({::URI}, {::RDF::URI}) with the given
   # scheme and authority.
   #
@@ -101,13 +133,7 @@ class Intertwingler::Resolver
       authorities.include? u.authority.downcase
     end
 
-    # we have to dup in case it's frozen
-    uri = uri.dup
-    uri.scheme = base.scheme
-    uri.host   = base.host
-    uri.port   = base.port
-
-    uri
+    to_authority uri, base
   end
 
   # @!method sanitize_vocab(vocab)
@@ -208,7 +234,10 @@ class Intertwingler::Resolver
 
     # grind grind grind why did i not do this yet lol
     @repo.document_types = @documents
-    # fragments are a bit goofed for now
+    # fragments are a bit goofed for now (or are they?)
+    @repo.fragment_spec = @fragments.map do |c, v, h, e|
+      [c, v.map { |term| @repo.parse_property_path term, @prefixes }, h, e]
+    end
 
     # cache of subjects in the graph so we only look them up once
     @subjects = {}
@@ -233,6 +262,9 @@ class Intertwingler::Resolver
   def flush
     # empty em all out
     [@subjects, @hosts, @uuids, @uris, @vocabs].each(&:clear)
+
+    # do this too lol
+    @repo.flush_cache
 
     # this is a throwaway result mainly intended to mask what would
     # otherwise return the array
